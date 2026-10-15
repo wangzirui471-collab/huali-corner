@@ -1,4 +1,5 @@
 import time, json, re, secrets, hashlib, io, sqlite3, zipfile, tempfile
+from contextlib import closing
 from pathlib import Path
 from PIL import Image, ImageOps, UnidentifiedImageError
 from db import Store
@@ -347,9 +348,12 @@ class Market(Store,Community,PasswordAuth):
         directory=self.root/'backups';directory.mkdir(exist_ok=True);path=directory/f'market-{time.time_ns()}.zip'
         with tempfile.TemporaryDirectory() as tmp:
             dbpath=Path(tmp)/'market.sqlite3'
-            with self.connect() as c:
-                dest=sqlite3.connect(dbpath);c.backup(dest);dest.close()
-            with sqlite3.connect(dbpath) as c:uploads=c.execute('SELECT path FROM uploads').fetchall()
+            # SQLite's transaction context does not close the connection. Windows
+            # requires every snapshot handle to be closed before temporary cleanup.
+            with closing(self.connect()) as source,closing(sqlite3.connect(dbpath)) as dest:
+                source.backup(dest)
+            with closing(sqlite3.connect(dbpath)) as snapshot:
+                uploads=snapshot.execute('SELECT path FROM uploads').fetchall()
             with zipfile.ZipFile(path,'w',zipfile.ZIP_DEFLATED) as archive:
                 archive.write(dbpath,'market.sqlite3')
                 for upload in uploads:

@@ -21,6 +21,8 @@ python server.py --trial --port 8080
 
 默认数据目录为 `var-trial/`，包括账号、商品、订单、图片与备份。旧演示版的 `var/` 保留，两个模式不能共用同一个数据库；程序会拒绝混用。重启后账号与数据保留，不用每次注册。
 
+如果旧包在Windows上自动备份时报临时 `market.sqlite3` 的 `NotADirectoryError / WinError 267`，下载 `artifacts/huali-corner-windows-backup-fix.zip`。先按Ctrl+C停止服务，只用补丁内的 `market.py` 替换当前项目同名文件，再运行 `start-trial.bat`。不要删除或覆盖 `var-trial/`。修复明确关闭备份使用的SQLite连接后再清理临时目录，不需要重装Python或重建账号。新版完整试用ZIP也已包含该修复。
+
 ## 设置你自己的客服/管理员
 
 本版不预设管理员手机号、默认密码或快捷客服登录。先在服务器或本机项目目录执行：
