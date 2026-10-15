@@ -1,10 +1,11 @@
 import json,time,html
 from pathlib import Path
 
-def seed(m):
+def seed(m,assets=None):
     if m.row('SELECT 1 FROM products LIMIT 1'):return
     books=[('计算机网络','谢希仁','第八版','电子工业出版社',1800,'#efae52','NETWORK'),('Python程序设计','董付国','第三版','清华大学出版社',1600,'#426c59','PYTHON'),('数据结构','严蔚敏','第二版','清华大学出版社',1200,'#64829c','DATA'),('高等数学 上册','同济大学','第七版','高等教育出版社',800,'#c97159','MATH'),('大学英语综合教程','李荫华','第二版','上海外语教育出版社',600,'#967eae','ENGLISH'),('操作系统概念','Silberschatz','第九版','高等教育出版社',2200,'#4e6975','SYSTEM')]
-    assets=Path(__file__).parent/'web'/'assets'
+    assets=Path(assets) if assets is not None else Path(__file__).parent/'web'/'assets'
+    assets.mkdir(parents=True,exist_ok=True)
     for i,(title,author,edition,publisher,price,color,english) in enumerate(books):
         fname=f'book{i}.svg'
         svg=f'''<svg xmlns="http://www.w3.org/2000/svg" width="600" height="650" viewBox="0 0 600 650"><rect width="600" height="650" fill="#f2eee5"/><ellipse cx="305" cy="568" rx="170" ry="17" fill="#ddd6c8"/><g transform="translate(135 72) rotate(-5 155 220)"><rect x="6" y="6" width="317" height="463" rx="6" fill="#ded6c7"/><rect width="310" height="455" rx="4" fill="{color}"/><rect x="15" width="2" height="455" fill="white" opacity=".35"/><text x="42" y="68" font-size="14" font-family="sans-serif" fill="white" opacity=".8">A CAMPUS SECOND CHAPTER</text><text x="40" y="135" font-size="28" font-family="sans-serif" fill="white">{html.escape(title)}</text><text x="42" y="177" font-size="16" font-family="sans-serif" fill="white">{edition} · {html.escape(author)}</text><path d="M40 235H270M40 258H220M40 281H245" stroke="white" opacity=".35" stroke-width="2"/><text x="38" y="365" font-size="34" font-family="sans-serif" fill="white" font-weight="bold">{english}</text><text x="40" y="415" font-size="13" font-family="sans-serif" fill="white">演示封面 · 非商品实拍</text></g></svg>'''

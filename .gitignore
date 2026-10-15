@@ -5,3 +5,4 @@ __pycache__/
 *.xlsx
 .env
 .DS_Store
+dist/
