@@ -1,4 +1,4 @@
-import argparse,base64,json,mimetypes,os,time,threading,traceback
+import argparse,base64,ipaddress,json,mimetypes,os,time,threading,traceback
 from pathlib import Path
 from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
 from urllib.parse import urlsplit,parse_qs,unquote
@@ -7,6 +7,8 @@ from seed import seed as seed_data
 WEB=Path(__file__).parent/'web'
 
 class Handler(BaseHTTPRequestHandler):
+    def setup(self):
+        super().setup();self.connection.settimeout(20)
     def log_message(self,*args):pass
     def respond(self,data,status=200,kind='application/json; charset=utf-8'):
         body=json.dumps(data,ensure_ascii=False).encode() if kind.startswith('application/json') else data
@@ -28,7 +30,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             origin=self.headers.get('Origin')
             if origin:
-                expected='http://'+self.headers.get('Host','')
+                expected=self.server.public_origin or 'http://'+self.headers.get('Host','')
                 m.require(origin==expected,'不允许跨站请求',403)
             data={}
             if method=='POST':
@@ -36,13 +38,25 @@ class Handler(BaseHTTPRequestHandler):
                 try:data=json.loads(self.rfile.read(length))
                 except (ValueError,UnicodeDecodeError):raise DomainError('无效JSON')
                 m.require(isinstance(data,dict),'请求需为对象')
-                self.server.limit(self.client_address[0],p)
+                client_ip=self.client_address[0]
+                if self.server.trust_proxy:
+                    # Single trusted ingress overwrites or appends the actual peer.
+                    # Ignore user-supplied prefixes in an appended forwarded chain.
+                    forwarded=self.headers.get('X-Forwarded-For','').split(',')[-1].strip()
+                    try:client_ip=str(ipaddress.ip_address(forwarded))
+                    except ValueError:pass
+                self.server.limit(client_ip,p)
+            if p=='/api/health' and method=='GET':
+                m.row('SELECT 1');return self.respond({'ok':True,'trial':m.trial})
             if p=='/api/config':
                 directory=Path(__file__).parent/'docs/research/guangzhou-college-options.json'
                 colleges=json.loads(directory.read_text(encoding='utf-8'))['colleges'] if directory.exists() else []
-                return self.respond({'simulation':True,'name':'华立转角','pilot':'计算机工程学院','campus':'广州校区','support_hours':'08:00–20:00','colleges':colleges,'buildings':['本科综合楼','行政楼','L17','L18','G1主楼','G1副楼','G2','G3','G4主楼','G4副楼','A1','A2','A3','A4','L16','L13','L12','L11','L10','L9','L8','L7','L4','L3','L2','L1','L5','L6','L15','7号楼仓库','D2','D6','D5']})
+                if m.trial:colleges=[{'source_name':'计算机工程学院'}]
+                return self.respond({'simulation':True,'trial':m.trial,'auth_mode':'password' if m.trial else 'demo','phone_verified':False,'name':'华立转角','pilot':'计算机工程学院','campus':'广州校区','support_hours':'08:00–20:00','colleges':colleges,'buildings':['本科综合楼','行政楼','L17','L18','G1主楼','G1副楼','G2','G3','G4主楼','G4副楼','A1','A2','A3','A4','L16','L13','L12','L11','L10','L9','L8','L7','L4','L3','L2','L1','L5','L6','L15','7号楼仓库','D2','D6','D5']})
             if p=='/api/auth/code' and method=='POST':return self.respond(m.request_code(data.get('phone')))
-            if p=='/api/auth/login' and method=='POST':return self.respond(m.login(data.get('phone'),data.get('code')))
+            if p=='/api/auth/login' and method=='POST':return self.respond(m.login_password(data.get('phone'),data.get('password')) if m.trial else m.login(data.get('phone'),data.get('code')))
+            if p=='/api/auth/register' and method=='POST':return self.respond(m.register_password(data.get('phone'),data.get('password'),data.get('nickname')))
+            if p=='/api/auth/recover' and method=='POST':return self.respond(m.recover_password(data.get('phone'),data.get('recovery_code'),data.get('new_password')))
             if p=='/api/products' and method=='GET':return self.respond(m.products(self.optional_user(),query))
             if p=='/api/product' and method=='GET':return self.respond(m.product(int(query['id']),self.optional_user()))
             if p=='/api/profile' and method=='GET':
@@ -66,6 +80,7 @@ class Handler(BaseHTTPRequestHandler):
                 m.require(file.is_file(),'页面不存在',404)
                 return self.respond(file.read_bytes(),kind=mimetypes.guess_type(str(file))[0] or 'application/octet-stream')
             u=self.uid()
+            if p=='/api/auth/password' and method=='POST':return self.respond(m.change_password(u,data.get('old_password'),data.get('new_password')))
             if p=='/api/me':return self.respond(m.update_profile(u,data) if method=='POST' else m.profile(u))
             if p=='/api/auth/logout':m.logout(self.token());return self.respond({'ok':True})
             if p=='/api/publish' and method=='POST':return self.respond(m.publish(u,data))
@@ -117,6 +132,16 @@ class Handler(BaseHTTPRequestHandler):
 
 class Server(ThreadingHTTPServer):
     daemon_threads=True
+    def __init__(self,*args,**kwargs):
+        self.slots=threading.BoundedSemaphore(32)
+        super().__init__(*args,**kwargs)
+    def process_request(self,request,client_address):
+        if not self.slots.acquire(blocking=False):self.shutdown_request(request);return
+        try:super().process_request(request,client_address)
+        except Exception:self.slots.release();raise
+    def process_request_thread(self,request,client_address):
+        try:super().process_request_thread(request,client_address)
+        finally:self.slots.release()
     def limit(self,ip,path):
         now=time.time();key=(ip,path)
         with self.rate_lock:
@@ -125,24 +150,39 @@ class Server(ThreadingHTTPServer):
             if len(hist)>=cap:raise DomainError('操作过于频繁，请稍后再试',429)
             hist.append(now);self.rates[key]=hist
 
-def make_server(root,port=8080,seed=False):
-    server=Server(('127.0.0.1',port),Handler);server.market=Market(root);server.rates={};server.rate_lock=threading.Lock()
+def make_server(root,port=8080,seed=False,trial=False,host='127.0.0.1',public_origin=None,trust_proxy=False,admin=None):
+    if trial and seed:raise ValueError('学院试用不能载入共享演示账号或商品')
+    if host not in ['127.0.0.1','localhost'] and not trial:raise ValueError('本地演示版只能绑定本机地址')
+    if public_origin:
+        public_origin=public_origin.rstrip('/');parsed=urlsplit(public_origin)
+        if parsed.scheme!='https' or not parsed.netloc or parsed.path or parsed.query or parsed.fragment or parsed.username or parsed.password:
+            raise ValueError('公网地址必须是完整HTTPS源地址，不含路径或账号密码')
+    if host not in ['127.0.0.1','localhost'] and not public_origin:raise ValueError('公网绑定前需配置HUALI_PUBLIC_ORIGIN并通过HTTPS代理访问')
+    market=Market(root,trial=trial)
+    if admin:market.bootstrap_admin(*admin)
+    server=Server((host,port),Handler);server.market=market;server.public_origin=public_origin;server.trust_proxy=trust_proxy;server.rates={};server.rate_lock=threading.Lock()
     if seed:seed_data(server.market)
     return server
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--port',type=int,default=8080);ap.add_argument('--data',default=str(Path(__file__).parent/'var'));ap.add_argument('--no-seed',action='store_true');args=ap.parse_args()
-    server=make_server(args.data,args.port,not args.no_seed)
+    ap=argparse.ArgumentParser();ap.add_argument('--port',type=int,default=int(os.environ.get('PORT','8080')));ap.add_argument('--data',default=os.environ.get('HUALI_DATA_DIR'));ap.add_argument('--no-seed',action='store_true');ap.add_argument('--trial',action='store_true');ap.add_argument('--host',default='127.0.0.1');ap.add_argument('--public-origin',default=os.environ.get('HUALI_PUBLIC_ORIGIN') or os.environ.get('RENDER_EXTERNAL_URL'));ap.add_argument('--trust-proxy',action='store_true');args=ap.parse_args()
+    root=args.data or str(Path(__file__).parent/('var-trial' if args.trial else 'var'))
+    phone=os.environ.get('HUALI_ADMIN_PHONE');password=os.environ.get('HUALI_ADMIN_PASSWORD')
+    if bool(phone)!=bool(password):ap.error('管理员手机号与密码必须同时配置，或均不配置')
+    if phone and not args.trial:ap.error('管理员初始化仅供--trial模式使用')
+    try:server=make_server(root,args.port,not args.trial and not args.no_seed,trial=args.trial,host=args.host,public_origin=args.public_origin,trust_proxy=args.trust_proxy,admin=(phone,password) if phone else None)
+    except (DomainError,ValueError) as error:ap.error(str(error))
     def timer():
         while True:
             try:
                 server.market.tick()
                 backups=list((server.market.root/'backups').glob('*.zip')) if (server.market.root/'backups').exists() else []
-                if not backups or time.time()-max(x.stat().st_mtime for x in backups)>86400:server.market.backup(3)
+                if not backups or time.time()-max(x.stat().st_mtime for x in backups)>86400:server.market._backup()
             except Exception:traceback.print_exc()
             time.sleep(30)
     threading.Thread(target=timer,daemon=True).start()
-    print(f'华立转角 · 本地模拟版 · port {server.server_port} · Ctrl+C停止',flush=True)
+    mode='计算机学院试用版 · 手机号密码登录 · 模拟交易' if args.trial else '本地模拟版'
+    print(f'华立转角 · {mode} · port {server.server_port} · Ctrl+C停止',flush=True)
     try:server.serve_forever()
     except KeyboardInterrupt:pass
     finally:server.server_close()

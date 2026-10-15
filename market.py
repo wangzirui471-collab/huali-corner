@@ -3,11 +3,12 @@ from pathlib import Path
 from PIL import Image, ImageOps, UnidentifiedImageError
 from db import Store
 from community import Community
+from auth import PasswordAuth
 
 class DomainError(Exception):
     def __init__(self,message,status=400):super().__init__(message);self.status=status
 
-class Market(Store,Community):
+class Market(Store,Community,PasswordAuth):
     @staticmethod
     def require(ok,message,status=400):
         if not ok:raise DomainError(message,status)
@@ -18,20 +19,26 @@ class Market(Store,Community):
     @staticmethod
     def cents(v,label='金额'):
         Market.require(type(v) is int and 0<=v<=1000000,f'{label}须为0至10000元之间的整数分');return v
-    def __init__(self,root):
-        super().__init__(root)
+    def __init__(self,root,trial=False):
+        self.trial=trial;super().__init__(root)
         with self.tx() as c:
+            mode='trial' if trial else 'demo';previous=c.execute("SELECT value FROM settings WHERE key='auth_mode'").fetchone()
+            self.require(not previous or previous['value']==mode,'演示和学院试用必须使用不同的数据目录',409)
+            self.require(previous or not trial or not c.execute('SELECT 1 FROM users LIMIT 1').fetchone(),'旧演示数据不能用作试用账号库，请指定新的数据目录',409)
+            c.execute("INSERT OR IGNORE INTO settings VALUES('auth_mode',?)",(mode,))
             for upload in c.execute('SELECT id,path FROM uploads').fetchall():
                 local=self.root/'uploads'/Path(upload['path']).name
                 if local.exists():c.execute('UPDATE uploads SET path=? WHERE id=?',(str(local),upload['id']))
-            for phone,nick,role in [('13800000001','林同学','user'),('13800000002','小陈同学','user'),('13800000003','转角客服','admin')]:
+            for phone,nick,role in ([] if trial else [('13800000001','林同学','user'),('13800000002','小陈同学','user'),('13800000003','转角客服','admin')]):
                 c.execute('INSERT OR IGNORE INTO users(phone,nickname,role,major) VALUES(?,?,?,?)',(phone,nick,role,'计算机科学与技术'))
     def request_code(self,phone):
+        self.require(not self.trial,'学院试用采用密码登录，测试验证码已关闭',403)
         self.require(isinstance(phone,str) and re.fullmatch(r'1[3-9]\d{9}',phone),'请输入11位手机号')
         code=str(secrets.randbelow(900000)+100000)
         with self.tx() as c:c.execute('INSERT OR REPLACE INTO otp VALUES(?,?,?,0)',(phone,hashlib.sha256(code.encode()).hexdigest(),time.time()+300))
         return {'demo_code':code,'simulation':True,'message':'本地测试验证码，不会发送短信'}
     def login(self,phone,code):
+        self.require(not self.trial,'学院试用采用密码登录，测试验证码已关闭',403)
         with self.tx() as c:
             r=c.execute('SELECT * FROM otp WHERE phone=?',(phone,)).fetchone()
             valid=r and r['expires']>time.time() and r['attempts']<5 and secrets.compare_digest(r['digest'],hashlib.sha256(str(code).encode()).hexdigest())
@@ -53,7 +60,7 @@ class Market(Store,Community):
         r=self.row('SELECT id,nickname,college,major,education,bio,role,score FROM users WHERE id=?',(u,))
         self.require(r,'用户不存在',404);return r
     def update_profile(self,u,d):
-        nickname=self.text(d.get('nickname'),24,'昵称');college=str(d.get('college',''))[:80];major=str(d.get('major',''))[:80]
+        nickname=self.text(d.get('nickname'),24,'昵称');college='计算机工程学院' if self.trial else str(d.get('college',''))[:80];major=str(d.get('major',''))[:80]
         education=d.get('education','本科');self.require(education in ['本科','专科','已毕业','其他'],'暂不开放该层次')
         with self.tx() as c:c.execute('UPDATE users SET nickname=?,college=?,major=?,education=?,bio=? WHERE id=?',(nickname,college,major,education,str(d.get('bio',''))[:300],u))
         return self.profile(u)
@@ -335,7 +342,9 @@ class Market(Store,Community):
             result.append({**o,'payment':amounts.get('payment',0),'refund':amounts.get('refund',0),'net_settlement':net,'held':held,'consistent':held>=0 and (o['status'] not in ['completed','refunded','cancelled'] or held==0),'simulation':True})
         return result
     def backup(self,u):
-        self.staff(u);directory=self.root/'backups';directory.mkdir(exist_ok=True);path=directory/f'market-{time.time_ns()}.zip'
+        self.staff(u);return self._backup()
+    def _backup(self):
+        directory=self.root/'backups';directory.mkdir(exist_ok=True);path=directory/f'market-{time.time_ns()}.zip'
         with tempfile.TemporaryDirectory() as tmp:
             dbpath=Path(tmp)/'market.sqlite3'
             with self.connect() as c:

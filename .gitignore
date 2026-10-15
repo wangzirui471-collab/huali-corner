@@ -1,4 +1,5 @@
 var/
+var-trial/
 __pycache__/
 *.pyc
 .venv/
