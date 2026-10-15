@@ -9,7 +9,7 @@ from market import Market,DomainError
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=['create-admin','reset-password'])
+    parser.add_argument('action',choices=['create-admin','create-support','reset-password'])
     parser.add_argument('--data',default=os.environ.get('HUALI_DATA_DIR') or str(Path(__file__).parent/'var-trial'))
     args=parser.parse_args()
     phone=input('手机号（仅作账号，不验证号码归属）：').strip()
@@ -21,6 +21,10 @@ def main():
         if args.action=='create-admin':
             result=market.bootstrap_admin(phone,password)
             print('管理员已配置，账号ID：'+str(result['id'])+'。若已存在，不会覆盖原密码。')
+        elif args.action=='create-support':
+            nickname=input('客服昵称：').strip() or '转角客服'
+            result=market.bootstrap_support(phone,password,nickname)
+            print('独立客服已配置，账号ID：'+str(result['id'])+'。不包含退款审批或信誉处罚权限。')
         else:
             market._phone(phone);market._password(password)
             user=market.row('SELECT id FROM users WHERE phone=?',(phone,))

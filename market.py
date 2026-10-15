@@ -6,11 +6,12 @@ from db import Store
 from community import Community
 from auth import PasswordAuth
 from publishing import Publishing
+from operations import Operations
 
 class DomainError(Exception):
     def __init__(self,message,status=400):super().__init__(message);self.status=status
 
-class Market(Store,Community,PasswordAuth,Publishing):
+class Market(Store,Community,PasswordAuth,Publishing,Operations):
     @staticmethod
     def require(ok,message,status=400):
         if not ok:raise DomainError(message,status)
@@ -54,7 +55,7 @@ class Market(Store,Community,PasswordAuth,Publishing):
             c.execute('INSERT INTO sessions VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),uid,time.time()+86400*7))
         return {'token':token,'user':self.profile(uid),'simulation':True}
     def user(self,token):
-        r=self.row('SELECT user_id FROM sessions WHERE token=? AND expires>?',(hashlib.sha256(token.encode()).hexdigest(),time.time()))
+        r=self.row('SELECT s.user_id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires>? AND u.is_active=1',(hashlib.sha256(token.encode()).hexdigest(),time.time()))
         self.require(r,'请先登录',401);return r['user_id']
     def logout(self,token):
         with self.tx() as c:c.execute('DELETE FROM sessions WHERE token=?',(hashlib.sha256(token.encode()).hexdigest(),))
@@ -82,6 +83,7 @@ class Market(Store,Community,PasswordAuth,Publishing):
         return {'id':fid,'url':'/media/'+fid,'angle':angle,'private':private}
     def publish(self,u,d,*,connection=None,stock_key=None,source_draft_id=None):
         self.require(self.profile(u)['score']>=60,'信誉分低于60，暂不能发布；可在客服中心申诉',403)
+        self.require(not self.row('SELECT trading_blocked FROM users WHERE id=?',(u,))['trading_blocked'],'当前账号已限制新交易，可申请申诉',403)
         title=self.text(d.get('title'),80,'标题');description=self.text(d.get('description'),3000,'商品介绍')
         self.require(d.get('category') in ['books','living','sports'],'请选择二手书、宿舍生活或运动闲置')
         price=self.cents(d.get('price'));fee=self.cents(d.get('delivery_fee',0),'送货费')
@@ -144,6 +146,7 @@ class Market(Store,Community,PasswordAuth,Publishing):
             c.execute('UPDATE offers SET status=? WHERE id=?',('accepted' if accept else 'rejected',oid))
         return {'ok':True}
     def checkout(self,u,d):
+        self.require(not self.row('SELECT trading_blocked FROM users WHERE id=?',(u,))['trading_blocked'],'当前账号已限制新交易，可申请申诉',403)
         ids=d.get('product_ids');self.require(isinstance(ids,list) and 1<=len(ids)<=20 and len(set(ids))==len(ids),'请选择1至20件不同商品')
         key=self.text(d.get('key'),100,'请求标识');delivery=d.get('delivery');self.require(delivery in ['pickup','delivery'],'交付方式错误')
         try:appointment=float(d.get('appointment',0))
@@ -241,6 +244,8 @@ class Market(Store,Community,PasswordAuth,Publishing):
     def create_ticket(self,u,d):
         typ=d.get('type','other');self.require(typ in ['refund','report','appeal','reschedule','other'],'工单类型错误')
         subject=self.text(d.get('subject'),80,'问题标题');body=self.text(d.get('body'),3000,'问题说明');oid=d.get('order_id') or None;pid=d.get('product_id') or None
+        refund_mode=d.get('refund_mode','refund_only')
+        self.require(refund_mode in ['refund_only','return_refund'],'退款方式无效')
         with self.tx() as c:
             if oid:
                 r=c.execute('SELECT * FROM orders WHERE id=?',(int(oid),)).fetchone()
@@ -252,6 +257,7 @@ class Market(Store,Community,PasswordAuth,Publishing):
             else:self.require(typ!='refund','退款必须关联订单')
             if pid:self.product(int(pid))
             tid=c.execute('INSERT INTO tickets(user_id,order_id,product_id,type,subject,body,created) VALUES(?,?,?,?,?,?,?)',(u,oid,pid,typ,subject,body,time.time())).lastrowid
+            c.execute('UPDATE tickets SET refund_mode=? WHERE id=?',(refund_mode,tid))
         return self.ticket(u,tid)
     def ticket(self,u,tid):
         r=self.row('SELECT t.*,u.nickname FROM tickets t JOIN users u ON u.id=t.user_id WHERE t.id=?',(tid,));self.require(r,'工单不存在',404)
@@ -285,15 +291,26 @@ class Market(Store,Community,PasswordAuth,Publishing):
         with self.tx() as c:
             t=c.execute('SELECT * FROM tickets WHERE id=?',(tid,)).fetchone()
             if t['status']=='resolved':return {'ok':True}
-            outcome=d.get('outcome','resolved');self.require(outcome in ['refund','reject','resolved','review','claim'],'处理方式无效')
-            if outcome=='claim':c.execute("UPDATE tickets SET assignee=?,status='processing' WHERE id=?",(u,tid))
+            outcome=d.get('outcome','resolved');self.require(outcome in ['refund','reject','resolved','review','claim','request_refund'],'处理方式无效')
+            if t['type']=='refund' and outcome in ['refund','reject','resolved']:
+                self.require(self.profile(u)['role']=='admin','退款审批仅限平台管理员；客服请提交处理建议',403)
+            if outcome=='claim':
+                self.require(not t['assignee'] or t['assignee']==u or self.profile(u)['role']=='admin','工单已由其他客服认领',409)
+                c.execute("UPDATE tickets SET assignee=?,status='processing' WHERE id=?",(u,tid))
             elif outcome=='review':c.execute("UPDATE tickets SET assignee=?,status='review',reason=? WHERE id=?",(u,reason,tid))
+            elif outcome=='request_refund':
+                self.require(t['type']=='refund' and t['order_id'],'只有售后工单可提交退款建议')
+                order=c.execute('SELECT total FROM orders WHERE id=?',(t['order_id'],)).fetchone()
+                amount=self.cents(d.get('amount',order['total']))
+                self.require(0<amount<=order['total'],'退款建议金额无效')
+                c.execute("UPDATE tickets SET assignee=?,status='review',reason=?,requested_amount=? WHERE id=?",(u,reason,amount,tid))
             else:
                 if t['order_id']:
                     r=c.execute('SELECT * FROM orders WHERE id=?',(t['order_id'],)).fetchone()
                     self.require(u not in [r['buyer_id'],r['seller_id']],'不能审核自己的交易',403)
                     if outcome=='refund':
                         self.require(t['type']=='refund' and r['status']=='disputed','只有争议退款工单可以退款')
+                        self.require(t['refund_mode']!='return_refund' or t['return_received_at'],'请先由卖家确认收到退回实物，再批准退款')
                         amount=self.cents(d.get('amount',r['total']));self.require(0<amount<=r['total'],'退款不能超过订单金额')
                         self.journal(c,r['id'],'refund',amount)
                         settled=c.execute("SELECT amount FROM ledger WHERE order_id=? AND kind='settlement'",(r['id'],)).fetchone()
@@ -328,7 +345,7 @@ class Market(Store,Community,PasswordAuth,Publishing):
             c.execute('INSERT INTO audit(actor,target,type,delta,reason,ticket_id,created) VALUES(?,?,?,?,?,?,?)',(u,target,'credit',delta,reason,tid,time.time()))
         return self.profile(target)
     def credit_history(self,u):
-        return self.rows("SELECT delta,reason,ticket_id,created FROM audit WHERE target=? AND type='credit' ORDER BY id DESC",(u,))
+        return self.rows("SELECT id,delta,reason,ticket_id,created,rule_key,reversal_of,score_before,score_after FROM audit WHERE target=? AND type IN ('credit','credit_warning','credit_reversal','credit_recovery') ORDER BY id DESC",(u,))
     def review(self,u,oid,rating,body):
         o=self.order(u,oid);self.require(o['status']=='completed' and u in [o['buyer_id'],o['seller_id']],'完成真实有效订单后才能评价')
         self.require(type(rating) is int and 1<=rating<=5,'评分需1至5分')

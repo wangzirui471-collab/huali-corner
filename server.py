@@ -4,6 +4,7 @@ from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
 from urllib.parse import urlsplit,parse_qs,unquote
 from market import Market,DomainError
 from seed import seed as seed_data
+from operations import CREDIT_RULES
 WEB=Path(__file__).parent/'web'
 # Windows registry associations can label .js as text/plain. Core web types
 # must be deterministic because browsers enforce nosniff for scripts/styles.
@@ -87,6 +88,15 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/draft':return self.respond(m.save_draft(u,data) if method=='POST' else m.get_draft(u,query.get('id','')))
             if p=='/api/draft/delete' and method=='POST':return self.respond(m.delete_draft(u,data.get('id')))
             if p=='/api/draft/publish' and method=='POST':return self.respond(m.publish_draft(u,data.get('id'),data.get('version')))
+            if p=='/api/seller/products' and method=='GET':return self.respond(m.seller_products(u))
+            if p=='/api/relist' and method=='POST':return self.respond(m.relist_draft(u,int(data['product_id'])))
+            if p=='/api/admin/support':return self.respond(m.create_support(u,data) if method=='POST' else m.support_accounts(u))
+            if p=='/api/admin/support/active' and method=='POST':return self.respond(m.set_support_active(u,int(data['user_id']),data.get('is_active')))
+            if p=='/api/ticket/return' and method=='POST':return self.respond(m.return_action(u,int(data['id']),data['action']))
+            if p=='/api/credit/rules' and method=='GET':return self.respond([{'key':key,**rule} for key,rule in CREDIT_RULES.items()])
+            if p=='/api/credit/penalty' and method=='POST':return self.respond(m.apply_penalty(u,int(data['target_user_id']),int(data['ticket_id']),data['rule_key'],data['reason']))
+            if p=='/api/credit/reverse' and method=='POST':return self.respond(m.reverse_penalty(u,int(data['audit_id']),int(data['ticket_id']),data['reason']))
+            if p=='/api/credit/recover' and method=='POST':return self.respond(m.recover_credit(u,int(data['target_user_id']),int(data['ticket_id']),data['reason']))
             if p=='/api/auth/password' and method=='POST':return self.respond(m.change_password(u,data.get('old_password'),data.get('new_password')))
             if p=='/api/me':return self.respond(m.update_profile(u,data) if method=='POST' else m.profile(u))
             if p=='/api/auth/logout':m.logout(self.token());return self.respond({'ok':True})

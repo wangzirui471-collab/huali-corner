@@ -22,6 +22,7 @@ class PasswordAuth:
         salt=secrets.token_hex(16);recovery=secrets.token_urlsafe(32)
         return salt,self._derive(password,salt),ROUNDS,hashlib.sha256(recovery.encode()).hexdigest(),recovery
     def _session(self,c,uid):
+        self.require(c.execute('SELECT is_active FROM users WHERE id=?',(uid,)).fetchone()['is_active'],'账号已停用，请联系运营者',403)
         token=secrets.token_urlsafe(32)
         c.execute('INSERT INTO sessions VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),uid,time.time()+86400*7))
         return token

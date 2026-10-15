@@ -45,6 +45,19 @@ class Store:
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS products_source_draft ON products(source_draft_id) WHERE source_draft_id IS NOT NULL')
             c.execute("CREATE UNIQUE INDEX IF NOT EXISTS products_live_stock ON products(stock_key) WHERE status IN ('available','reserved','sold')")
             c.execute('CREATE INDEX IF NOT EXISTS drafts_user_status ON drafts(user_id,status,updated_at)')
+            additions = {
+                'users': [('is_active', 'INTEGER NOT NULL DEFAULT 1'), ('trading_blocked', 'INTEGER NOT NULL DEFAULT 0')],
+                'tickets': [('refund_mode', "TEXT NOT NULL DEFAULT 'refund_only'"), ('return_sent_at', 'REAL'),
+                            ('return_received_at', 'REAL'), ('requested_amount', 'INTEGER')],
+                'audit': [('rule_key', "TEXT NOT NULL DEFAULT ''"), ('reversal_of', 'INTEGER'),
+                          ('score_before', 'INTEGER'), ('score_after', 'INTEGER')],
+            }
+            for table, columns in additions.items():
+                existing = {column[1] for column in c.execute('PRAGMA table_info('+table+')')}
+                for name, definition in columns:
+                    if name not in existing:
+                        c.execute('ALTER TABLE '+table+' ADD COLUMN '+name+' '+definition)
+            c.execute('CREATE UNIQUE INDEX IF NOT EXISTS audit_reversal_once ON audit(reversal_of) WHERE reversal_of IS NOT NULL')
             c.execute("INSERT OR IGNORE INTO rooms(id,kind,name) VALUES(1,'general','广州校区总聊')")
     def connect(self):
         c=sqlite3.connect(self.path,timeout=20)
