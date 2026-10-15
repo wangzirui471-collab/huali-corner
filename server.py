@@ -5,6 +5,9 @@ from urllib.parse import urlsplit,parse_qs,unquote
 from market import Market,DomainError
 from seed import seed as seed_data
 WEB=Path(__file__).parent/'web'
+# Windows registry associations can label .js as text/plain. Core web types
+# must be deterministic because browsers enforce nosniff for scripts/styles.
+ASSET_TYPES={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml; charset=utf-8','.png':'image/png','.webp':'image/webp','.ico':'image/x-icon'}
 
 class Handler(BaseHTTPRequestHandler):
     def setup(self):
@@ -78,7 +81,7 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError:inside=False
                 m.require(inside,'页面不存在',404)
                 m.require(file.is_file(),'页面不存在',404)
-                return self.respond(file.read_bytes(),kind=mimetypes.guess_type(str(file))[0] or 'application/octet-stream')
+                return self.respond(file.read_bytes(),kind=ASSET_TYPES.get(file.suffix.lower()) or mimetypes.guess_type(str(file))[0] or 'application/octet-stream')
             u=self.uid()
             if p=='/api/auth/password' and method=='POST':return self.respond(m.change_password(u,data.get('old_password'),data.get('new_password')))
             if p=='/api/me':return self.respond(m.update_profile(u,data) if method=='POST' else m.profile(u))

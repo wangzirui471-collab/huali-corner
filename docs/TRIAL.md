@@ -23,6 +23,10 @@ python server.py --trial --port 8080
 
 如果旧包在Windows上自动备份时报临时 `market.sqlite3` 的 `NotADirectoryError / WinError 267`，下载 `artifacts/huali-corner-windows-backup-fix.zip`。先按Ctrl+C停止服务，只用补丁内的 `market.py` 替换当前项目同名文件，再运行 `start-trial.bat`。不要删除或覆盖 `var-trial/`。修复明确关闭备份使用的SQLite连接后再清理临时目录，不需要重装Python或重建账号。新版完整试用ZIP也已包含该修复。
 
+如果主页一直停留在「正在打开校园的另一个转角」，但 `/api/config` 能正常显示JSON，可使用合并修复包 `artifacts/huali-corner-windows-fix.zip`。它包含修复后的 `server.py`、`market.py` 和 `start-trial-8081.bat`，复制到项目目录替换程序文件，保留 `var/` 与 `var-trial/`。双击 `start-trial-8081.bat` 后访问 `http://127.0.0.1:8081`。该启动器明确使用密码试用模式，避免与8080上的旧演示进程混淆。
+
+Windows的文件关联可能把JavaScript标为普通文本，浏览器在严格类型检查下会拒绝执行并停在初始加载提示。服务端已固定HTML/JS/CSS及图片类型，不需要修改Windows注册表、关闭浏览器检查或关闭安全响应头。如果检查配置，应在**8081**的 `/api/config` 看到 `"trial": true` 和 `"auth_mode": "password"`。目前仅复现并修复了这种类型映射导致的卡住，用户实际响应头仍需本机确认。
+
 ## 设置你自己的客服/管理员
 
 本版不预设管理员手机号、默认密码或快捷客服登录。先在服务器或本机项目目录执行：

@@ -21,6 +21,16 @@ class HttpTests(unittest.TestCase):
         status,body,h=self.req('/');self.assertEqual(status,200);self.assertIn('华立转角',body.decode())
         status,body,h=self.req('/api/products');self.assertEqual(status,200);self.assertIsInstance(json.loads(body),list)
         self.assertEqual(h['Cache-Control'],'no-store')
+    def test_core_asset_types_ignore_incorrect_windows_registry_mappings(self):
+        with patch('server.mimetypes.guess_type',return_value=('text/plain',None)):
+            for path,expected in [('/','text/html'),('/app.js','text/javascript'),('/market.css','text/css')]:
+                with self.subTest(path=path):
+                    status,body,headers=self.req(path)
+                    self.assertEqual(status,200)
+                    self.assertTrue(headers['Content-Type'].startswith(expected),headers['Content-Type'])
+                    self.assertIn('charset=utf-8',headers['Content-Type'])
+                    self.assertEqual(headers['X-Content-Type-Options'],'nosniff')
+                    self.assertTrue(body)
     def test_static_files_without_python39_path_method(self):
         with patch.object(Path,'is_relative_to',side_effect=AttributeError('unavailable before Python 3.9'),create=True):
             self.assertEqual(self.req('/')[0],200)
