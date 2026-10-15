@@ -1,15 +1,16 @@
 import time, json, re, secrets, hashlib, io, sqlite3, zipfile, tempfile
-from contextlib import closing
+from contextlib import closing, nullcontext
 from pathlib import Path
 from PIL import Image, ImageOps, UnidentifiedImageError
 from db import Store
 from community import Community
 from auth import PasswordAuth
+from publishing import Publishing
 
 class DomainError(Exception):
     def __init__(self,message,status=400):super().__init__(message);self.status=status
 
-class Market(Store,Community,PasswordAuth):
+class Market(Store,Community,PasswordAuth,Publishing):
     @staticmethod
     def require(ok,message,status=400):
         if not ok:raise DomainError(message,status)
@@ -79,7 +80,7 @@ class Market(Store,Community,PasswordAuth):
         path=self.root/'uploads'/(fid+'.webp');path.write_bytes(out.getvalue())
         with self.tx() as c:c.execute('INSERT INTO uploads VALUES(?,?,?,?,?,?)',(fid,u,str(path),digest,angle,int(private)))
         return {'id':fid,'url':'/media/'+fid,'angle':angle,'private':private}
-    def publish(self,u,d):
+    def publish(self,u,d,*,connection=None,stock_key=None,source_draft_id=None):
         self.require(self.profile(u)['score']>=60,'信誉分低于60，暂不能发布；可在客服中心申诉',403)
         title=self.text(d.get('title'),80,'标题');description=self.text(d.get('description'),3000,'商品介绍')
         self.require(d.get('category') in ['books','living','sports'],'请选择二手书、宿舍生活或运动闲置')
@@ -99,8 +100,8 @@ class Market(Store,Community,PasswordAuth):
         if proof:
             pr=self.row('SELECT * FROM uploads WHERE id=?',(proof,));self.require(pr and pr['user_id']==u and pr['private'],'凭证无效');clean['proof']=proof
         clean['original_price']=self.cents(d.get('original_price',0),'原价');clean['simulation']=False
-        with self.tx() as c:
-            pid=c.execute('INSERT INTO products(seller_id,title,category,price,delivery_fee,delivery,region,data,created) VALUES(?,?,?,?,?,?,?,?,?)',(u,title,d['category'],price,fee,delivery,region,json.dumps(clean,ensure_ascii=False),time.time())).lastrowid
+        with (self.tx() if connection is None else nullcontext(connection)) as c:
+            pid=c.execute('INSERT INTO products(seller_id,title,category,price,delivery_fee,delivery,region,data,created,stock_key,source_draft_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(u,title,d['category'],price,fee,delivery,region,json.dumps(clean,ensure_ascii=False),time.time(),stock_key or secrets.token_hex(16),source_draft_id)).lastrowid
         return {'id':pid}
     def product(self,p,u=None):
         r=self.row('SELECT p.*,u.nickname,u.college seller_college,u.score FROM products p JOIN users u ON u.id=p.seller_id WHERE p.id=?',(p,))

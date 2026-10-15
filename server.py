@@ -83,6 +83,10 @@ class Handler(BaseHTTPRequestHandler):
                 m.require(file.is_file(),'页面不存在',404)
                 return self.respond(file.read_bytes(),kind=ASSET_TYPES.get(file.suffix.lower()) or mimetypes.guess_type(str(file))[0] or 'application/octet-stream')
             u=self.uid()
+            if p=='/api/drafts' and method=='GET':return self.respond(m.list_drafts(u))
+            if p=='/api/draft':return self.respond(m.save_draft(u,data) if method=='POST' else m.get_draft(u,query.get('id','')))
+            if p=='/api/draft/delete' and method=='POST':return self.respond(m.delete_draft(u,data.get('id')))
+            if p=='/api/draft/publish' and method=='POST':return self.respond(m.publish_draft(u,data.get('id'),data.get('version')))
             if p=='/api/auth/password' and method=='POST':return self.respond(m.change_password(u,data.get('old_password'),data.get('new_password')))
             if p=='/api/me':return self.respond(m.update_profile(u,data) if method=='POST' else m.profile(u))
             if p=='/api/auth/logout':m.logout(self.token());return self.respond({'ok':True})
@@ -179,6 +183,7 @@ def main():
         while True:
             try:
                 server.market.tick()
+                server.market.cleanup_drafts()
                 backups=list((server.market.root/'backups').glob('*.zip')) if (server.market.root/'backups').exists() else []
                 if not backups or time.time()-max(x.stat().st_mtime for x in backups)>86400:server.market._backup()
             except Exception:traceback.print_exc()

@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS posts(id INTEGER PRIMARY KEY,user_id INTEGER,topic TE
 CREATE TABLE IF NOT EXISTS comments(id INTEGER PRIMARY KEY,post_id INTEGER,user_id INTEGER,body TEXT,created REAL);
 CREATE TABLE IF NOT EXISTS offers(id INTEGER PRIMARY KEY,product_id INTEGER,buyer_id INTEGER,amount INTEGER,status TEXT DEFAULT 'pending',created REAL);
 CREATE TABLE IF NOT EXISTS nominations(id INTEGER PRIMARY KEY,user_id INTEGER,room_id INTEGER,reason TEXT,status TEXT DEFAULT 'pending',created REAL);
+CREATE TABLE IF NOT EXISTS drafts(id TEXT PRIMARY KEY,user_id INTEGER NOT NULL,fields TEXT NOT NULL,version INTEGER NOT NULL DEFAULT 1,status TEXT NOT NULL DEFAULT 'active',updated_at REAL NOT NULL,published_product_id INTEGER,source_product_id INTEGER);
 '''
 
 class Store:
@@ -37,6 +38,13 @@ class Store:
         with self.connect() as c:
             c.executescript(SCHEMA)
             if 'schedule_confirmed' not in [x[1] for x in c.execute('PRAGMA table_info(orders)')]:c.execute('ALTER TABLE orders ADD COLUMN schedule_confirmed INTEGER DEFAULT 0')
+            for name, definition in [('stock_key', 'TEXT'), ('source_draft_id', 'TEXT')]:
+                if name not in [column[1] for column in c.execute('PRAGMA table_info(products)')]:
+                    c.execute('ALTER TABLE products ADD COLUMN '+name+' '+definition)
+            c.execute("UPDATE products SET stock_key='legacy:'||id WHERE stock_key IS NULL")
+            c.execute('CREATE UNIQUE INDEX IF NOT EXISTS products_source_draft ON products(source_draft_id) WHERE source_draft_id IS NOT NULL')
+            c.execute("CREATE UNIQUE INDEX IF NOT EXISTS products_live_stock ON products(stock_key) WHERE status IN ('available','reserved','sold')")
+            c.execute('CREATE INDEX IF NOT EXISTS drafts_user_status ON drafts(user_id,status,updated_at)')
             c.execute("INSERT OR IGNORE INTO rooms(id,kind,name) VALUES(1,'general','广州校区总聊')")
     def connect(self):
         c=sqlite3.connect(self.path,timeout=20)
