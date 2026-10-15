@@ -36,7 +36,7 @@ def run():
     page.get_by_role('button',name='退出登录').click()
     page.get_by_role('button',name='登录 / 注册').click();page.get_by_role('button',name='买家体验').click()
     page.get_by_role('button',name='逛逛',exact=True).first.click()
-    page.get_by_text('浏览器测试教材',exact=True).click()
+    page.locator('.card-title').filter(has_text='浏览器测试教材').click()
     page.get_by_role('button',name='收藏',exact=True).click()
     page.get_by_role('button',name='加入取货清单').click()
     page.get_by_role('button',name='取货清单',exact=False).first.click()

@@ -20,3 +20,8 @@ Deferred minors: full group member administration interface; advanced support an
 Final verification: 24 Python domain/HTTP tests passed; native privacy/session/cursor and seller-order rendering regression tests passed. Browser exercised real image upload, persistence-backed publish/favorite/checkout/payment/refund/group chat and responsive layout without JavaScript errors.
 Backup restoration: actual ZIP extracted to a new directory; database reopened and image paths rebound successfully.
 No external publication or purchase; original /workspace/- checkout unchanged. WeChat tool compilation and real-device checks remain unrun.
+
+## Marketplace visual redesign (2026-10-15)
+User requested a closer reference to their Xianyu/Zhuanzhuan screenshots. Replaced sidebar/large promotional hero with top search, channel icons, compact campus promos and photo-first feed; increased card typography and highlighted delivery-aware prices. Bright yellow/black marketplace accents replace the muted green palette.
+Original AI-generated contact-sheet asset is used only for clearly labeled seeded demo goods; real uploads retain original photos. Native source theme/home/detail updated, not tool/device validated.
+New UI acceptance script verifies search at top, early product feed, real category/search navigation, details, and no horizontal overflow at375/390/768/1440. Existing purchase-flow locator updated to account for visible pickup badge inside item title.

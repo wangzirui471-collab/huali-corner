@@ -60,11 +60,14 @@ node tests/native_client.test.js
 node tests/native_order.test.js
 node --check web/app.js
 python3 tests/browser_smoke.py
+python3 tests/ui_redesign_smoke.py
 ```
 
 浏览器验证需安装 Python Playwright 和 Chromium。当前环境已有，脚本使用 `/usr/bin/chromium`；新机器请自行按官方方式安装，勿禁用包签名或TLS验证。脚本用临时数据库和自建测试图，不污染实际数据。
 
-截图在 `artifacts/desktop-home.png` 和 `artifacts/mobile-home.png`。
+新版截图在 `artifacts/redesign-desktop.png`、`artifacts/redesign-mobile.png` 和 `artifacts/redesign-small-mobile.png`。
+
+2026-10-15界面改版：参考用户提供的闲鱼/转转的信息层次，改为顶置搜索、频道分类、快捷入口、校园专题与大图商品列表，使用明亮黄色强调色。网页和小程序源码样式同步调整。`web/assets/market-demo-photos.png` 是原创AI生成的4×4示意图素材，仅用于明确标为演示的种子商品，通过界面裁切展示，不代表实物照片或版次核验。真实商品仍展示用户上传的照片，且不使用这份示意图。
 
 ## 数据备份、恢复与运维
 
