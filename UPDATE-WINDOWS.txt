@@ -1,9 +1,11 @@
 ﻿华立转角 Windows 页面与备份修复
 
 1. 在原终端按 Ctrl+C 停止网站。
-2. 把本补丁全部文件复制到 E:\zi\huali-corner-trial，选择替换程序文件。
+2. 后端程序文件放进 E:\zi\huali-corner-trial\Backend mission\，前端放进 E:\zi\huali-corner-trial\web 7M\，
+   选择替换程序文件。（2026-10-15 已按前后端分家整理，不再直接放在项目根目录）
 3. 保留原有 var 和 var-trial 文件夹，不要删除数据。
-4. 双击 start-trial-8081.bat。
+4. 双击 start-trial-8081.bat（已自动切到 Backend mission 目录）。
 5. 打开 http://127.0.0.1:8081 （注意本次端口是8081）。
 
 这会以手机号密码试用模式启动。无需重装Python。
+端口占用时，先 netstat -ano | findstr 8081 找到 PID，再 taskkill /PID <PID> /F。

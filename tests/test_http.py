@@ -2,7 +2,7 @@ import unittest, tempfile, threading, json, urllib.request, urllib.error, sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'Backend mission'))
 from server import Handler, make_server
 
 class HttpTests(unittest.TestCase):

@@ -2,16 +2,41 @@
 
 一个已经连接真实 SQLite 数据库的本地模拟交易原型，包含手机/电脑网站、原生微信小程序源码、社区聊天及客服后台。不是公开运营版本；未接真实短信、身份核验、微信收款或学校系统。
 
-**计算机工程学院可登录试用版**：下载 `artifacts/huali-corner-trial.zip`，解压后双击 `start-trial.bat`，或运行 `python server.py --trial`。同学使用手机号＋密码独立注册，不发送短信、号码未验证；支持发布、收藏、聊天与模拟交易。独立的 `var-trial/` 保留账号和图片，关闭共享测试验证码与客服快捷登录。管理员由运营者单独创建。见[试用与后端部署说明](docs/TRIAL.md)；仍需真实部署后才有同学可访问的公网网址。
+**计算机工程学院可登录试用版**：下载 `artifacts/huali-corner-trial.zip`，解压后双击 `start-trial.bat`，或运行 `python "Backend mission/server.py" --trial`。同学使用手机号＋密码独立注册，不发送短信、号码未验证；支持发布、收藏、聊天与模拟交易。独立的 `var-trial/` 保留账号和图片，关闭共享测试验证码与客服快捷登录。管理员由运营者单独创建。见[试用与后端部署说明](docs/TRIAL.md)；仍需真实部署后才有同学可访问的公网网址。
 
 要发链接给同学看效果，可使用独立的[公开演示版部署说明](docs/PUBLIC_DEMO.md)。仓库 `artifacts/huali-corner-public-demo.zip` 可直接解压后上传静态托管平台，不需要让自己的电脑持续运行。该包只展示虚构数据，未提供真实注册、地址填写、交易或后台入口。公网网址需要在托管平台实际部署后生成。
 
+## 目录结构
+
+2026-10-15 整理后的布局：前后端分家。
+
+```
+huali-corner-trial/
+├── Backend mission/     后端：入口 + 业务模块 + 部署配置
+│   ├── server.py      HTTP 服务与路由
+│   ├── market.py      核心业务：商品、订单、工单、信誉、审核
+│   ├── paths.py       路径统一出口（根目录在这里算一次）
+│   └── seed.py db.py auth.py community.py manage_trial.py
+│            render.yaml requirements.txt
+├── web 7M/              前端：网页静态文件 + 小程序
+│   ├── index.html app.js market.css styles.css public-demo.js
+│   ├── assets/        图片、Logo、演示素材
+│   └── miniprogram/   微信小程序
+├── docs/                TRIAL.md、ASSET-CREDITS.md、research/
+├── var/                 演示模式数据
+├── var-trial/           学院试用数据（真实账号与上传图片，勿删）
+└── start-trial.bat / start-trial-8081.bat   启动脚本
+```
+
+路径全部由 `Backend mission/paths.py` 推导：它先看上一级有没有 `web 7M`，
+有就把根目录定为上一级（正常项目结构）；没有就退回自身目录
+（后端被单独拷出去部署时走这个分支）。
 ## 启动网站
 
 Python 3.12+。当前云环境已安装 Pillow；新机器需先安装依赖：
 
 ```bash
-cd /workspace/campus-market
+cd "/workspace/campus-market/Backend mission"
 python3 -m pip install -r requirements.txt
 python3 server.py --port 8080
 ```
@@ -25,14 +50,14 @@ python3 server.py --port 8080
 在 PowerShell 中先进入解压后的项目目录，逐行运行（路径按实际位置调整）：
 
 ```powershell
-cd "E:\zi\huali-corner-main"
+cd "E:\zi\huali-corner-trial\Backend mission"
 python -m pip install -r requirements.txt
 python server.py
 ```
 
 保持终端开启，在本机浏览器访问 `http://127.0.0.1:8080`。命令是 `python`，前面没有点号。PowerShell 的个人配置脚本被执行策略阻止，与 Python 网站启动是不同问题，不需要为此放宽执行策略。
 
-若旧下载包打开首页时报 `WindowsPath ... no attribute 'is_relative_to'`，是旧代码调用了 Python 3.9 才提供的方法。本次修复同时移除了登录使用的 `str.removeprefix`，并明确用 UTF-8 读取学院目录。先按 Ctrl+C 停止网站，用 GitHub 最新版 `server.py` 替换项目内的同名文件，再运行 `python server.py`；保留原有 `var/` 数据目录，无需为此重装依赖。推荐新环境使用 Python 3.12+；兼容回归在 Python 3.12 下模拟缺少新方法进行验证，未在旧版 Windows Python 上实机测试。
+若旧下载包打开首页时报 `WindowsPath ... no attribute 'is_relative_to'`，是旧代码调用了 Python 3.9 才提供的方法。本次修复同时移除了登录使用的 `str.removeprefix`，并明确用 UTF-8 读取学院目录。先按 Ctrl+C 停止网站，用 GitHub 最新版 `server.py` 替换 `Backend mission/` 内的同名文件，再运行 `python server.py`；保留原有 `var/` 数据目录，无需为此重装依赖。推荐新环境使用 Python 3.12+；兼容回归在 Python 3.12 下模拟缺少新方法进行验证，未在旧版 Windows Python 上实机测试。
 
 若 pip 报 `Cannot connect to proxy`，应先检查本机代理及 pip 代理配置；连接失败后的 `No matching distribution` 不能单独证明依赖版本不存在。不要通过禁用 TLS 校验来解决代理问题。
 
@@ -64,7 +89,7 @@ python server.py
 
 ## 微信小程序
 
-用微信开发者工具导入 `miniprogram/`；填写自己的 AppID，`touristappid` 仅作开发配置。`app.js` 的 `globalData.baseURL` 默认指向本地后端。
+用微信开发者工具导入 `web 7M/miniprogram/`；填写自己的 AppID，`touristappid` 仅作开发配置。`app.js` 的 `globalData.baseURL` 默认指向本地后端。
 
 代码包含首页、商品详情/收藏分享、三图发布、手机号测试登录、清单合并订单、订单交付与售后、个人资料、社区及私聊群聊、客服工单。
 
@@ -78,7 +103,7 @@ python server.py
 python3 -m unittest discover -s tests -v
 node tests/native_client.test.js
 node tests/native_order.test.js
-node --check web/app.js
+node --check "web 7M/app.js"
 python3 tests/browser_smoke.py
 python3 tests/ui_redesign_smoke.py
 ```

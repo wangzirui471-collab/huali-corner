@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('nod
 let definition,calls=[],stored={},notice='';
 const app={globalData:{user:null,sessionVersion:0},request:async(path,data)=>{calls.push({path,data});return path==='/config'?{auth_mode:'password'}:{token:'test-session',user:{id:7,nickname:'同学',role:'user'},recovery_code:'fictional-recovery-code'};}};
 const wx={setStorageSync:(key,value)=>stored[key]=value,getStorageSync:()=>null,removeStorageSync(){},showToast(){},showModal:options=>{notice=options.content;}};
-vm.runInNewContext(fs.readFileSync('miniprogram/pages/hub/index.js','utf8'),{getApp:()=>app,Page:d=>definition=d,require:()=>require('../miniprogram/utils'),wx,console,setInterval,clearInterval,Date,Math,Number,Error});
+vm.runInNewContext(fs.readFileSync('web 7M/miniprogram/pages/hub/index.js','utf8'),{getApp:()=>app,Page:d=>definition=d,require:()=>require('../web 7M/miniprogram/utils'),wx,console,setInterval,clearInterval,Date,Math,Number,Error});
 const page={...definition,data:{...definition.data},setData(data){Object.assign(this.data,data);}};
 (async()=>{
  assert.equal(page.data.authMode,'password','Until config loads, shared demo login must stay hidden');

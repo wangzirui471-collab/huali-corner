@@ -1,3 +1,316 @@
-page{background:#f7f7ef;color:#2d392f;font-family:system-ui;font-size:28rpx}view,text,input,textarea,button{box-sizing:border-box}button{font-size:26rpx;border-radius:16rpx;line-height:1.4;padding:20rpx 24rpx;background:#fff;color:#435342}button::after{border:0}.page{padding:28rpx 28rpx 155rpx}.brand{font-size:42rpx;font-weight:800}.muted{color:#8c9682;font-size:23rpx;line-height:1.8}.notice{padding:16rpx 22rpx;background:#f9eed7;border-radius:14rpx;color:#9c8553;font-size:22rpx;margin:20rpx 0}.panel{background:white;border:1rpx solid #e4e8dc;border-radius:24rpx;padding:28rpx;margin-bottom:24rpx}.primary{background:#ed7046;color:white}.secondary{background:#edf1e6;color:#6f845e}.row{display:flex;align-items:center;gap:16rpx}.between{justify-content:space-between}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20rpx}.card{background:white;border:1rpx solid #e4e8dc;border-radius:20rpx;overflow:hidden}.card image,.cover{width:100%;height:320rpx;background:#ecefe2}.cover{display:flex;align-items:center;justify-content:center;padding:40rpx;background:#e8ecd9;color:#6b8057;font-size:36rpx;font-weight:bold;text-align:center}.card-content{padding:20rpx}.title{font-weight:650;line-height:1.6}.price{color:#e36c42;font-weight:700;margin:14rpx 0}.nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;padding:18rpx 10rpx calc(18rpx + env(safe-area-inset-bottom));border-top:1rpx solid #e5e9dc;z-index:20}.nav button{flex:1;padding:12rpx 4rpx;font-size:23rpx}.nav .primary{border-radius:20rpx}.search{background:white;border-radius:18rpx;padding:16rpx;margin:22rpx 0}.search input{flex:1;min-width:0}.tabs{display:flex;gap:12rpx;flex-wrap:wrap;margin:20rpx 0}.tabs button{font-size:24rpx;padding:16rpx}.field{margin:22rpx 0}.field>text{display:block;font-size:25rpx;color:#718064;margin-bottom:10rpx}input,textarea,picker{background:#f6f8f0;border:1rpx solid #e2e8d8;padding:20rpx;border-radius:14rpx;width:100%}textarea{height:190rpx;line-height:1.7}.stack button{margin:14rpx 0}.photo{height:200rpx;border:2rpx dashed #cbd7be;border-radius:18rpx;display:flex;align-items:center;justify-content:center;position:relative;background:#f1f4e9}.photo image{position:absolute;width:100%;height:100%;opacity:.4}.photo text{z-index:2}.photos{display:grid;grid-template-columns:repeat(3,1fr);gap:12rpx}.photo-swiper{height:680rpx;background:#e9eddc;border-radius:25rpx;overflow:hidden}.photo-swiper image{height:100%;width:100%}.photo-swiper .cover{height:100%}.section-title{font-size:35rpx;font-weight:700;margin:24rpx 0}.pill{display:inline-block;background:#eef3e6;border-radius:10rpx;padding:9rpx 16rpx;color:#7c8c6b;font-size:23rpx}.message{padding:20rpx;background:#f1f4e9;border-radius:16rpx;margin:16rpx 0;word-break:break-all;white-space:pre-wrap}.message.mine{background:#fbe6d8}.chat{height:650rpx;overflow:auto}.divider{height:1rpx;background:#e6eadf;margin:24rpx 0}.small{font-size:23rpx}.hero{background:#eaeedb;border-radius:24rpx;padding:36rpx;margin:20rpx 0}.hero-title{font-size:52rpx;font-weight:750;line-height:1.4}.hero-title text{color:#ed7046}.danger{color:#cf694a}
-/* Marketplace refresh: clearer search, compact channels, product-first feed. */
-page{background:#f5f6f8;color:#25262a}.page{padding:28rpx 24rpx 160rpx}.brand{font-size:38rpx;letter-spacing:0}.campus-text{font-size:19rpx;color:#a0a3ab}.search{border:3rpx solid #28292d;border-radius:50rpx;padding:5rpx 6rpx 5rpx 22rpx;gap:5rpx;margin:22rpx 0 14rpx}.search input{border:0;background:none;font-size:25rpx;padding:10rpx 0}.search button{background:#25262a;color:white;padding:15rpx 40rpx;border-radius:50rpx;font-size:25rpx}.native-notice{text-align:center;font-size:18rpx;color:#b7a56a;background:#fff8df;padding:9rpx;border-radius:8rpx}.native-channels{display:grid;grid-template-columns:repeat(4,1fr);background:white;border-radius:20rpx;margin:16rpx 0;padding:22rpx 0}.native-channels button{padding:0;background:none;display:flex;flex-direction:column;align-items:center;gap:10rpx;font-size:27rpx}.channel-icon{height:80rpx;width:80rpx;display:flex;align-items:center;justify-content:center;border-radius:25rpx;font-size:43rpx;font-weight:750;box-shadow:inset 0 -6rpx 0 #00000005}.yellow{background:#fff1ab;color:#dba828}.orange{background:#ffe4d6;color:#df8553}.green{background:#e0f0e5;color:#6c9c7d}.purple{background:#eee5f9;color:#9e8abc}.native-promos{display:grid;grid-template-columns:1fr 1fr;gap:16rpx;margin:18rpx 0 30rpx}.native-promo{border-radius:19rpx;padding:26rpx 21rpx;min-height:180rpx}.warm{background:linear-gradient(120deg,#fff0d3,#fbe7b8)}.cool{background:linear-gradient(120deg,#e9f0ff,#dce7f8)}.promo-caption{font-size:18rpx;color:#a7977b;line-height:1.8}.cool .promo-caption{color:#8b9db8}.promo-heading{font-size:31rpx;font-weight:750;margin:8rpx 0;color:#343136}.native-feed-heading{margin:0 0 22rpx}.native-feed-heading>text:first-child{font-size:36rpx;font-weight:800}.native-feed-heading .muted{font-size:20rpx}.grid{gap:20rpx 16rpx}.card{border:0;border-radius:22rpx;box-shadow:0 2rpx 0 #00000003}.cover,.card image{height:350rpx}.native-photo{background-repeat:no-repeat;position:relative}.native-photo .photo-label{position:absolute;right:12rpx;top:12rpx;background:#ffffffcc;color:#8f8d87;border-radius:6rpx;padding:5rpx 9rpx;font-size:16rpx;font-weight:400}.card-content{padding:20rpx}.title{font-size:27rpx;font-weight:500;line-height:1.6}.pickup-label{font-size:19rpx;background:#fff0b9;color:#9a7a2d;padding:2rpx 5rpx;margin-right:7rpx;border-radius:5rpx}.card-content .muted{font-size:20rpx;color:#aaadb4;line-height:1.8}.price{color:#ff5d3d;font-size:34rpx;font-weight:800;margin:12rpx 0 3rpx}.seller-line{margin-top:15rpx}.seller-avatar{font-size:21rpx;color:#9b9fa8}.primary{background:#ffcd3e;color:#252525;font-weight:700}.secondary{background:#fff4d3;color:#9b7e37}.notice{background:#fff8e4;color:#ac9864}.panel{border-color:#e9ecf0;border-radius:25rpx}.field>text{color:#848995}input,textarea,picker{background:#fafbfd;border-color:#e7eaf0}.nav{border-color:#eef0f3;padding-top:15rpx}.nav button{font-size:22rpx;color:#9398a1}.nav .primary{color:#252525;border-radius:24rpx;font-weight:750}.message{background:#f1f3f6}.message.mine{background:#fff1ba}.pill{background:#fff5d7;color:#b29752}
+/* ==========================================================================
+   华立转角 · 小程序全局样式
+   视觉基准与网页端保持一致：亮黄品牌色 + 中性灰阶 + 珊瑚红价格色。
+   单位统一使用 rpx（750rpx = 屏幕宽度）。
+   ========================================================================== */
+
+/* --- 1. 基础 ------------------------------------------------------------- */
+page {
+  background: #f4f5f7;
+  color: #1c1d21;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans SC", system-ui, sans-serif;
+  font-size: 28rpx;
+}
+
+view, text, input, textarea, button, picker { box-sizing: border-box; }
+
+button {
+  font-size: 26rpx;
+  border-radius: 18rpx;
+  line-height: 1.4;
+  padding: 20rpx 24rpx;
+  background: #ffffff;
+  color: #44474e;
+  transition: opacity .18s ease;
+}
+
+button::after { border: 0; }
+button:active { opacity: .78; }
+
+.page { padding: 28rpx 24rpx 170rpx; }
+
+/* --- 2. 品牌区 ----------------------------------------------------------- */
+.brand-lockup { display: flex; align-items: center; gap: 16rpx; min-width: 0; }
+
+.brand-mark {
+  width: 68rpx;
+  height: 68rpx;
+  border-radius: 20rpx;
+  flex-shrink: 0;
+  box-shadow: 0 4rpx 12rpx rgba(240, 180, 19, .26);
+}
+
+.brand { font-size: 38rpx; font-weight: 800; letter-spacing: 0; line-height: 1.15; }
+.brand-copy { display: flex; flex-direction: column; min-width: 0; }
+.campus-text { font-size: 19rpx; color: #a0a3ab; margin-top: 6rpx; }
+
+/* --- 3. 搜索 ------------------------------------------------------------- */
+.search {
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border: 3rpx solid #1c1d21;
+  border-radius: 50rpx;
+  padding: 5rpx 6rpx 5rpx 24rpx;
+  gap: 5rpx;
+  margin: 24rpx 0 16rpx;
+}
+.search input { flex: 1; min-width: 0; border: 0; background: none; font-size: 25rpx; padding: 12rpx 0; }
+.search button { background: #1c1d21; color: #ffffff; padding: 15rpx 40rpx; border-radius: 50rpx; font-size: 25rpx; }
+
+/* --- 4. 提示条 ----------------------------------------------------------- */
+.native-notice {
+  text-align: center;
+  font-size: 18rpx;
+  color: #a08c46;
+  background: linear-gradient(92deg, #fffaea, #fff4d0 50%, #fffaea);
+  padding: 10rpx;
+  border-radius: 10rpx;
+}
+
+/* --- 5. 频道区（推荐 / 二手书 / 宿舍生活 / 运动好物 / 电子产品） -------- */
+.native-channels {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  background: #ffffff;
+  border-radius: 22rpx;
+  margin: 18rpx 0;
+  padding: 24rpx 4rpx;
+}
+
+.native-channels button {
+  padding: 0;
+  background: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10rpx;
+  font-size: 24rpx;
+  color: #6b6f77;
+}
+
+.channel-icon {
+  height: 82rpx;
+  width: 82rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 26rpx;
+  font-size: 40rpx;
+  font-weight: 750;
+  box-shadow: inset 0 -6rpx 0 rgba(0, 0, 0, .02);
+  transition: transform .22s ease;
+}
+
+.native-channels button:active .channel-icon { transform: scale(.94); }
+
+.yellow { background: linear-gradient(150deg, #fff6c9, #ffea9c); color: #c99a1c; }
+.orange { background: linear-gradient(150deg, #ffece1, #ffd6c2); color: #d97b45; }
+.green { background: linear-gradient(150deg, #e8f7ee, #cfeade); color: #5f9a74; }
+.purple { background: linear-gradient(150deg, #f4eefe, #e3d8f8); color: #907cb8; }
+.steel { background: linear-gradient(150deg, #eff5fb, #d3e0ee); color: #4f6d8e; }
+
+/* --- 6. 校园专题位 ------------------------------------------------------- */
+.native-promos { display: grid; grid-template-columns: 1fr 1fr; gap: 16rpx; margin: 18rpx 0 30rpx; }
+
+.native-promo { border-radius: 22rpx; padding: 26rpx 21rpx; min-height: 184rpx; }
+.warm { background: linear-gradient(120deg, #fff3dc, #fbe4b4); }
+.cool { background: linear-gradient(120deg, #eaf1ff, #dbe7f8); }
+
+.promo-caption { font-size: 18rpx; color: #a7977b; line-height: 1.8; }
+.cool .promo-caption { color: #8b9db8; }
+.promo-heading { font-size: 31rpx; font-weight: 800; margin: 8rpx 0; color: #33302b; letter-spacing: -.4rpx; }
+
+/* --- 7. 商品流 ----------------------------------------------------------- */
+.native-feed-heading { margin: 0 0 22rpx; }
+.native-feed-heading > text:first-child { font-size: 36rpx; font-weight: 800; }
+.native-feed-heading .muted { font-size: 20rpx; }
+
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20rpx 16rpx; }
+
+.card {
+  background: #ffffff;
+  border: 2rpx solid #edeef2;
+  border-radius: 22rpx;
+  overflow: hidden;
+  box-shadow: 0 2rpx 8rpx rgba(22, 26, 35, .05);
+}
+
+.card image, .cover { width: 100%; height: 350rpx; background: #eef0f2; }
+.cover { display: flex; align-items: center; justify-content: center; }
+
+.native-photo { background-repeat: no-repeat; background-size: 400% 400%; position: relative; }
+.native-photo .photo-label {
+  position: absolute;
+  right: 12rpx;
+  top: 12rpx;
+  background: rgba(255, 255, 255, .84);
+  color: #8a8880;
+  border-radius: 8rpx;
+  padding: 5rpx 10rpx;
+  font-size: 16rpx;
+  font-weight: 400;
+}
+
+.card-content { padding: 20rpx; }
+.title { font-size: 27rpx; font-weight: 600; line-height: 1.6; color: #1c1d21; }
+
+.pickup-label {
+  font-size: 19rpx;
+  background: #fff6d8;
+  color: #7d5c07;
+  padding: 2rpx 6rpx;
+  margin-right: 7rpx;
+  border-radius: 5rpx;
+  font-weight: 700;
+}
+
+.card-content .muted { font-size: 20rpx; color: #aaadb4; line-height: 1.8; }
+
+.price { color: #ff4f33; font-size: 34rpx; font-weight: 800; margin: 12rpx 0 3rpx; letter-spacing: -.5rpx; }
+
+.seller-line { margin-top: 15rpx; }
+.seller-avatar { font-size: 21rpx; color: #9b9fa8; }
+
+/* --- 8. 面板与文字 ------------------------------------------------------- */
+.panel {
+  background: #ffffff;
+  border: 2rpx solid #edeef2;
+  border-radius: 26rpx;
+  padding: 28rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 2rpx 8rpx rgba(22, 26, 35, .04);
+}
+
+.section-title { font-size: 35rpx; font-weight: 800; margin: 24rpx 0; letter-spacing: -.5rpx; }
+.muted { color: #8b8f98; font-size: 23rpx; line-height: 1.8; }
+.small { font-size: 23rpx; }
+.danger { color: #d8563f; }
+.divider { height: 2rpx; background: #edeef2; margin: 24rpx 0; }
+
+.notice {
+  padding: 16rpx 22rpx;
+  background: #fffaea;
+  border-radius: 16rpx;
+  color: #907a3f;
+  font-size: 22rpx;
+  line-height: 1.7;
+  margin: 20rpx 0;
+}
+
+.pill {
+  display: inline-block;
+  background: #fff6d8;
+  border-radius: 999rpx;
+  padding: 8rpx 18rpx;
+  color: #7d5c07;
+  font-size: 22rpx;
+  font-weight: 650;
+}
+
+/* --- 9. 按钮 ------------------------------------------------------------- */
+.primary {
+  background: #ffcc38;
+  color: #2c2408;
+  font-weight: 750;
+  box-shadow: 0 6rpx 16rpx rgba(240, 180, 19, .26);
+}
+
+.secondary { background: #fff6d8; color: #7d5c07; font-weight: 600; }
+
+.row { display: flex; align-items: center; gap: 16rpx; }
+.between { justify-content: space-between; }
+.stack button { margin: 14rpx 0; width: 100%; }
+
+/* --- 10. 表单 ------------------------------------------------------------ */
+.field { margin: 22rpx 0; }
+.field > text { display: block; font-size: 25rpx; color: #6b6f77; font-weight: 600; margin-bottom: 10rpx; }
+
+input, textarea, picker {
+  background: #fafbfc;
+  border: 2rpx solid #e6e9ee;
+  padding: 20rpx;
+  border-radius: 16rpx;
+  width: 100%;
+  font-size: 26rpx;
+}
+
+textarea { height: 190rpx; line-height: 1.7; }
+
+.photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12rpx; }
+
+.photo {
+  height: 200rpx;
+  border: 2rpx dashed #d6d9e0;
+  border-radius: 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: #fafbfc;
+  overflow: hidden;
+}
+
+.photo image { position: absolute; width: 100%; height: 100%; }
+.photo text {
+  position: relative;
+  z-index: 2;
+  color: #6b6f77;
+  font-size: 23rpx;
+  background: rgba(255, 255, 255, .86);
+  padding: 6rpx 14rpx;
+  border-radius: 10rpx;
+}
+
+/* --- 11. 商品详情 -------------------------------------------------------- */
+.photo-swiper {
+  height: 680rpx;
+  background: #eef0f2;
+  border-radius: 26rpx;
+  overflow: hidden;
+}
+.photo-swiper image { height: 100%; width: 100%; }
+.photo-swiper .cover { height: 100%; }
+
+/* --- 12. 社区与聊天 ------------------------------------------------------ */
+.tabs { display: flex; gap: 12rpx; flex-wrap: wrap; margin: 20rpx 0; }
+.tabs button { font-size: 24rpx; padding: 16rpx 20rpx; }
+
+.message {
+  padding: 20rpx;
+  background: #f1f3f6;
+  border-radius: 18rpx;
+  margin: 16rpx 0;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+.message.mine { background: #fff6d8; }
+.chat { height: 650rpx; overflow: auto; }
+
+/* --- 13. 底部导航 -------------------------------------------------------- */
+.nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  background: rgba(255, 255, 255, .97);
+  padding: 16rpx 10rpx calc(18rpx + env(safe-area-inset-bottom));
+  border-top: 2rpx solid #edeef2;
+  z-index: 20;
+}
+
+.nav button { flex: 1; padding: 12rpx 4rpx; font-size: 22rpx; color: #8b8f98; }
+.nav .primary {
+  background: #ffcc38;
+  color: #2c2408;
+  border-radius: 24rpx;
+  font-weight: 750;
+  box-shadow: 0 6rpx 16rpx rgba(240, 180, 19, .3);
+}
+
+/* --- 14. 兼容保留 -------------------------------------------------------- */
+.hero { background: #f3f5f8; border-radius: 26rpx; padding: 36rpx; margin: 20rpx 0; }
+.hero-title { font-size: 52rpx; font-weight: 750; line-height: 1.4; }
+.hero-title text { color: #f0b413; }
+.market-page { padding-top: 20rpx; }

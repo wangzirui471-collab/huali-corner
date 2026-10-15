@@ -26,7 +26,7 @@ class PublicDemoTests(unittest.TestCase):
             self.assertFalse(any(p.suffix in {'.py','.sqlite3','.xlsx','.zip'} or 'var' in p.parts for p in files))
             data=json.loads((output/'demo-data.json').read_text(encoding='utf-8'))
             self.assertTrue(data['config']['public_demo'])
-            self.assertEqual(len(data['products']),9)
+            self.assertEqual(len(data['products']),13)
             self.assertTrue(all(p['simulation'] for p in data['products']))
             raw=json.dumps(data,ensure_ascii=False)
             for forbidden in ['phone','token','138000000','uploads/','proof','market.sqlite3']:
@@ -45,11 +45,11 @@ class PublicDemoTests(unittest.TestCase):
             self.assertFalse((output/'index.html').exists())
 
     def test_export_does_not_write_source_artwork(self):
-        sys.path.insert(0,str(ROOT))
+        sys.path.insert(0,str(ROOT/'Backend mission'))
         from scripts.build_public_demo import build
         write_text=Path.write_text
         def protected_write(path,*args,**kwargs):
-            self.assertNotIn(ROOT/'web/assets',path.parents,'Export must not modify source artwork')
+            self.assertNotIn(ROOT/'web 7M/assets',path.parents,'Export must not modify source artwork')
             return write_text(path,*args,**kwargs)
         with tempfile.TemporaryDirectory() as tmp,patch.object(Path,'write_text',protected_write):
             build(Path(tmp)/'site')

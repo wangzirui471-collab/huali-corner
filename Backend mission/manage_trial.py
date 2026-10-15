@@ -5,12 +5,13 @@ import os
 import time
 from pathlib import Path
 from market import Market,DomainError
+from paths import data_dir
 
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action',choices=['create-admin','reset-password'])
-    parser.add_argument('--data',default=os.environ.get('HUALI_DATA_DIR') or str(Path(__file__).parent/'var-trial'))
+    parser.add_argument('--data',default=os.environ.get('HUALI_DATA_DIR') or data_dir(True))
     args=parser.parse_args()
     phone=input('手机号（仅作账号，不验证号码归属）：').strip()
     password=getpass.getpass('新密码（12至128个字符）：')

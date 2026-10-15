@@ -7,9 +7,10 @@ import tempfile
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
-sys.path.insert(0,str(ROOT))
+sys.path.insert(0,str(ROOT/'Backend mission'))
 from market import Market
 from seed import seed
+from paths import WEB,ASSETS
 
 
 def build(output):
@@ -29,11 +30,13 @@ def build(output):
               'products':products,'profiles':profiles,'posts':market.posts(),'comments':{}}
     output.mkdir(parents=True,exist_ok=True)
     for name in ['app.js','public-demo.js','styles.css','market.css']:
-        shutil.copy2(ROOT/'web'/name,output/name)
+        shutil.copy2(WEB/name,output/name)
     assets=output/'assets';assets.mkdir(exist_ok=True)
-    for name in ['market-demo-photos.png']+['book%d.svg'%n for n in range(6)]+['item%d.svg'%n for n in range(3)]:
-        shutil.copy2(ROOT/'web/assets'/name,assets/name)
-    html=(ROOT/'web/index.html').read_text(encoding='utf-8')
+    for name in (['market-demo-photos.png']+['book%d.svg'%n for n in range(6)]
+                 +['item%d.svg'%n for n in range(3)]
+                 +['electronics%d.jpg'%n for n in range(4)]):
+        shutil.copy2(ASSETS/name,assets/name)
+    html=(WEB/'index.html').read_text(encoding='utf-8')
     html=html.replace('href="/','href="./').replace('src="/app.js"','src="./app.js"')
     html=html.replace('<script src="./app.js"','<script src="./public-demo.js" defer></script><script src="./app.js"')
     html=html.replace('</head>','<meta name="robots" content="noindex,nofollow"></head>')

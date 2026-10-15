@@ -4,7 +4,7 @@ from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
 from urllib.parse import urlsplit,parse_qs,unquote
 from market import Market,DomainError
 from seed import seed as seed_data
-WEB=Path(__file__).parent/'web'
+from paths import WEB,COLLEGES_JSON,data_dir
 # Windows registry associations can label .js as text/plain. Core web types
 # must be deterministic because browsers enforce nosniff for scripts/styles.
 ASSET_TYPES={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml; charset=utf-8','.png':'image/png','.webp':'image/webp','.ico':'image/x-icon'}
@@ -52,7 +52,7 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/health' and method=='GET':
                 m.row('SELECT 1');return self.respond({'ok':True,'trial':m.trial})
             if p=='/api/config':
-                directory=Path(__file__).parent/'docs/research/guangzhou-college-options.json'
+                directory=COLLEGES_JSON
                 colleges=json.loads(directory.read_text(encoding='utf-8'))['colleges'] if directory.exists() else []
                 if m.trial:colleges=[{'source_name':'计算机工程学院'}]
                 return self.respond({'simulation':True,'trial':m.trial,'auth_mode':'password' if m.trial else 'demo','phone_verified':False,'name':'华立转角','pilot':'计算机工程学院','campus':'广州校区','support_hours':'08:00–20:00','colleges':colleges,'buildings':['本科综合楼','行政楼','L17','L18','G1主楼','G1副楼','G2','G3','G4主楼','G4副楼','A1','A2','A3','A4','L16','L13','L12','L11','L10','L9','L8','L7','L4','L3','L2','L1','L5','L6','L15','7号楼仓库','D2','D6','D5']})
@@ -75,8 +75,9 @@ class Handler(BaseHTTPRequestHandler):
                     uid=self.optional_user();m.require(listed or uid==upload['user_id'],'图片尚未发布',403)
                 return self.respond(Path(upload['path']).read_bytes(),kind='image/webp')
             if not p.startswith('/api/'):
-                file=(WEB/(unquote(p).lstrip('/') if p!='/' else 'index.html')).resolve()
-                root=str(WEB.resolve())
+                web=self.server.web
+                file=(web/(unquote(p).lstrip('/') if p!='/' else 'index.html')).resolve()
+                root=str(web)
                 try:inside=os.path.commonpath([root,str(file)])==root
                 except ValueError:inside=False
                 m.require(inside,'页面不存在',404)
@@ -153,7 +154,7 @@ class Server(ThreadingHTTPServer):
             if len(hist)>=cap:raise DomainError('操作过于频繁，请稍后再试',429)
             hist.append(now);self.rates[key]=hist
 
-def make_server(root,port=8080,seed=False,trial=False,host='127.0.0.1',public_origin=None,trust_proxy=False,admin=None):
+def make_server(root,port=8080,seed=False,trial=False,host='127.0.0.1',public_origin=None,trust_proxy=False,admin=None,web=None):
     if trial and seed:raise ValueError('学院试用不能载入共享演示账号或商品')
     if host not in ['127.0.0.1','localhost'] and not trial:raise ValueError('本地演示版只能绑定本机地址')
     if public_origin:
@@ -164,16 +165,17 @@ def make_server(root,port=8080,seed=False,trial=False,host='127.0.0.1',public_or
     market=Market(root,trial=trial)
     if admin:market.bootstrap_admin(*admin)
     server=Server((host,port),Handler);server.market=market;server.public_origin=public_origin;server.trust_proxy=trust_proxy;server.rates={};server.rate_lock=threading.Lock()
+    server.web=Path(web).resolve() if web else WEB
     if seed:seed_data(server.market)
     return server
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--port',type=int,default=int(os.environ.get('PORT','8080')));ap.add_argument('--data',default=os.environ.get('HUALI_DATA_DIR'));ap.add_argument('--no-seed',action='store_true');ap.add_argument('--trial',action='store_true');ap.add_argument('--host',default='127.0.0.1');ap.add_argument('--public-origin',default=os.environ.get('HUALI_PUBLIC_ORIGIN') or os.environ.get('RENDER_EXTERNAL_URL'));ap.add_argument('--trust-proxy',action='store_true');args=ap.parse_args()
-    root=args.data or str(Path(__file__).parent/('var-trial' if args.trial else 'var'))
+    ap=argparse.ArgumentParser();ap.add_argument('--port',type=int,default=int(os.environ.get('PORT','8080')));ap.add_argument('--data',default=os.environ.get('HUALI_DATA_DIR'));ap.add_argument('--no-seed',action='store_true');ap.add_argument('--trial',action='store_true');ap.add_argument('--host',default='127.0.0.1');ap.add_argument('--public-origin',default=os.environ.get('HUALI_PUBLIC_ORIGIN') or os.environ.get('RENDER_EXTERNAL_URL'));ap.add_argument('--trust-proxy',action='store_true');ap.add_argument('--web',default=os.environ.get('HUALI_WEB_DIR'));args=ap.parse_args()
+    root=args.data or data_dir(args.trial)
     phone=os.environ.get('HUALI_ADMIN_PHONE');password=os.environ.get('HUALI_ADMIN_PASSWORD')
     if bool(phone)!=bool(password):ap.error('管理员手机号与密码必须同时配置，或均不配置')
     if phone and not args.trial:ap.error('管理员初始化仅供--trial模式使用')
-    try:server=make_server(root,args.port,not args.trial and not args.no_seed,trial=args.trial,host=args.host,public_origin=args.public_origin,trust_proxy=args.trust_proxy,admin=(phone,password) if phone else None)
+    try:server=make_server(root,args.port,not args.trial and not args.no_seed,trial=args.trial,host=args.host,public_origin=args.public_origin,trust_proxy=args.trust_proxy,admin=(phone,password) if phone else None,web=args.web)
     except (DomainError,ValueError) as error:ap.error(str(error))
     def timer():
         while True:

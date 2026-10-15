@@ -1,6 +1,6 @@
 import unittest, tempfile, sys, io, time, concurrent.futures
 from pathlib import Path
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'Backend mission'))
 from market import Market, DomainError
 from PIL import Image
 

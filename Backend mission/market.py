@@ -82,7 +82,7 @@ class Market(Store,Community,PasswordAuth):
     def publish(self,u,d):
         self.require(self.profile(u)['score']>=60,'信誉分低于60，暂不能发布；可在客服中心申诉',403)
         title=self.text(d.get('title'),80,'标题');description=self.text(d.get('description'),3000,'商品介绍')
-        self.require(d.get('category') in ['books','living','sports'],'请选择二手书、宿舍生活或运动闲置')
+        self.require(d.get('category') in ['books','living','sports','electronics'],'请选择二手书、宿舍生活、运动闲置或电子产品')
         price=self.cents(d.get('price'));fee=self.cents(d.get('delivery_fee',0),'送货费')
         delivery=d.get('delivery','pickup');self.require(delivery in ['pickup','delivery','both'],'请选择交付方式')
         region=self.text(d.get('region'),80,'自提/送货区域')

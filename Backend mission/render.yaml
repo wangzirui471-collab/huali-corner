@@ -1,0 +1,23 @@
+# Optional hosted deployment. Starter service + persistent disk are paid resources.
+# Creating a deployment and approving its price is performed by the account owner.
+services:
+  - type: web
+    name: huali-corner-trial
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r "Backend mission/requirements.txt"
+    startCommand: python "Backend mission/server.py" --trial --host 0.0.0.0 --trust-proxy
+    healthCheckPath: /api/health
+    disk:
+      name: huali-trial-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.12
+      - key: HUALI_DATA_DIR
+        value: /var/data/huali
+      - key: HUALI_ADMIN_PHONE
+        sync: false
+      - key: HUALI_ADMIN_PASSWORD
+        sync: false

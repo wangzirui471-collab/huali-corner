@@ -1,7 +1,7 @@
 """Marketplace visual hierarchy, responsive behavior and preserved interactions."""
 import tempfile,threading,sys
 from pathlib import Path
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'Backend mission'))
 from server import make_server
 from playwright.sync_api import sync_playwright,expect
 

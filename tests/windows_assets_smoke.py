@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 from playwright.sync_api import sync_playwright,expect
 
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'Backend mission'))
 from server import make_server
 
 guess_type=mimetypes.guess_type

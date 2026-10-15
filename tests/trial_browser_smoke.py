@@ -8,7 +8,7 @@ from pathlib import Path
 from PIL import Image
 from playwright.sync_api import sync_playwright, expect
 
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'Backend mission'))
 from server import make_server
 
 with tempfile.TemporaryDirectory() as root:

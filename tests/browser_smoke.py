@@ -1,7 +1,7 @@
 """End-to-end browser run; uses isolated server data and real generated test photos."""
 import tempfile,threading,sys,io,time
 from pathlib import Path
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'Backend mission'))
 from server import make_server
 from PIL import Image
 from playwright.sync_api import sync_playwright

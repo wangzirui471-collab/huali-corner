@@ -1,10 +1,35 @@
 import json,time,html
 from pathlib import Path
+from paths import ASSETS
+
+def seed_electronics(m):
+    """电子产品演示商品。可增量补齐：已存在的同标题商品会跳过，
+    这样老数据目录在下次以演示模式启动时也能拿到新的频道内容。"""
+    rows=[
+        ('无线迷你键盘 · 带触控板',8900,'electronics0.jpg','宿舍躺着看课件用的，自带触控板，USB 接收器收在电池仓里，附收纳袋。',16900),
+        ('真无线蓝牙耳机 · 含充电盒',12900,'electronics1.jpg','听了半年，双耳连接稳定；充电盒有轻微使用痕迹，已清洁消毒。',39900),
+        ('便携蓝牙音箱 · 单手可握',8500,'electronics2.jpg','宿舍氛围担当，低音够用，充一次能放一下午，附原装充电线。',24900),
+        ('静音无线鼠标 · 附接收器',2900,'electronics3.jpg','自习室用得多，按键静音不打扰别人，滚轮顺滑，接收器一起给你。',6900),
+    ]
+    for i,(name,price,photo,note,original) in enumerate(rows):
+        if m.row('SELECT 1 FROM products WHERE category=? AND title=?',('electronics',name)):continue
+        data={'description':note+' 演示商品，非真实出售；性能与成色以当面验机为准。','photos':[{'url':'/assets/'+photo,'angle':a} for a in ['front','side','top']],'simulation':True,'condition':'正常使用痕迹','college':'计算机工程学院','major':'计算机科学与技术','bought':'2024-10','original_price':original}
+        with m.tx() as c:c.execute('INSERT INTO products(seller_id,title,category,price,delivery_fee,delivery,region,data,created) VALUES(?,?,?,?,?,?,?,?,?)',(1 if i%2==0 else 2,name,'electronics',price,400,'both','L17楼下入口',json.dumps(data,ensure_ascii=False),time.time()-i*1200))
+
 
 def seed(m,assets=None):
-    if m.row('SELECT 1 FROM products LIMIT 1'):return
+    """演示数据入口。基础部分只在空库时播种；电子产品每次启动都尝试补齐，
+    这样老数据目录在下次以演示模式启动时也能拿到新频道的内容。
+    注意顺序：电子产品必须放在基础播种之后判断空库，否则它自己插进去的商品
+    会让空库判断为假，导致书籍、宿舍、运动三类全部被跳过。"""
+    if not m.row('SELECT 1 FROM products LIMIT 1'):
+        seed_base(m,assets)
+    seed_electronics(m)
+
+
+def seed_base(m,assets=None):
     books=[('计算机网络','谢希仁','第八版','电子工业出版社',1800,'#efae52','NETWORK'),('Python程序设计','董付国','第三版','清华大学出版社',1600,'#426c59','PYTHON'),('数据结构','严蔚敏','第二版','清华大学出版社',1200,'#64829c','DATA'),('高等数学 上册','同济大学','第七版','高等教育出版社',800,'#c97159','MATH'),('大学英语综合教程','李荫华','第二版','上海外语教育出版社',600,'#967eae','ENGLISH'),('操作系统概念','Silberschatz','第九版','高等教育出版社',2200,'#4e6975','SYSTEM')]
-    assets=Path(assets) if assets is not None else Path(__file__).parent/'web'/'assets'
+    assets=Path(assets) if assets is not None else ASSETS
     assets.mkdir(parents=True,exist_ok=True)
     for i,(title,author,edition,publisher,price,color,english) in enumerate(books):
         fname=f'book{i}.svg'

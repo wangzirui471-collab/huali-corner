@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 376 120" width="376" height="120" role="img" aria-label="华立转角 · 闲置遇见下一位同学">
+  <title>华立转角</title>
+  <defs>
+    <linearGradient id="hlBadgeW" x1="0.08" y1="0" x2="0.78" y2="1">
+      <stop offset="0" stop-color="#ffe08a"/>
+      <stop offset="0.42" stop-color="#ffcc38"/>
+      <stop offset="1" stop-color="#eda90b"/>
+    </linearGradient>
+  </defs>
+  <g>
+    <path d="M42 8H78A34 34 0 0 1 112 42V106A6 6 0 0 1 106 112H42A34 34 0 0 1 8 78V42A34 34 0 0 1 42 8Z" fill="url(#hlBadgeW)"/>
+    <path d="M8 42A34 34 0 0 1 42 8H78A34 34 0 0 1 112 42" fill="none" stroke="#ffffff" stroke-opacity=".34" stroke-width="5" stroke-linecap="round"/>
+    <path d="M36 46V72A10 10 0 0 0 46 82H65" fill="none" stroke="#2b2c30" stroke-width="12.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M61 65 87 82 61 99Z" fill="#2b2c30" stroke="#2b2c30" stroke-width="6" stroke-linejoin="round"/>
+  </g>
+  <text x="142" y="65" font-family="PingFang SC, Hiragino Sans GB, Microsoft YaHei, system-ui, sans-serif" font-size="45" font-weight="800" letter-spacing="1.5" fill="#1c1d21">华立转角</text>
+  <text x="144" y="96" font-family="PingFang SC, Hiragino Sans GB, Microsoft YaHei, system-ui, sans-serif" font-size="15.5" font-weight="400" letter-spacing="2" fill="#a2a6ae">闲置遇见下一位同学</text>
+</svg>
