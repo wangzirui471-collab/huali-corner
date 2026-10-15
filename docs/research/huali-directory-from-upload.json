@@ -1,0 +1,691 @@
+{
+  "source": "用户上传的2026-2027学年第一学期在校生补考学生信息数据（8.19）.xlsx",
+  "extracted_fields": [
+    "校区",
+    "学院",
+    "专业",
+    "层次"
+  ],
+  "privacy": "仅导出目录字段的去重组合，不含姓名、学号、班级、成绩或个人记录。",
+  "coverage_warning": "补考名单不是学校完整组织目录。未出现的学院、专业、学校或层次不能视为不存在；学校名称无法由这四个字段单独验证。",
+  "entries": [
+    {
+      "campus": "广州校区",
+      "college": "会计学院",
+      "major": "会计学",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "会计学院",
+      "major": "会计学S",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "会计学院",
+      "major": "财务管理",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "商学院",
+      "major": "互联网金融",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "商学院",
+      "major": "会计学",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "商学院",
+      "major": "会计学（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "商学院",
+      "major": "国际经济与贸易",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "商学院",
+      "major": "国际经济与贸易（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "商学院",
+      "major": "审计学",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "商学院",
+      "major": "经济与金融",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "商学院",
+      "major": "经济与金融C",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "商学院",
+      "major": "经济学",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "商学院",
+      "major": "财务管理",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "商学院",
+      "major": "财务管理（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "商学院",
+      "major": "金融工程",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "城建与资源勘探学院",
+      "major": "土木工程",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "城建与资源勘探学院",
+      "major": "土木工程（专升本三二分段）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "城建与资源勘探学院",
+      "major": "土木工程（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "城建与资源勘探学院",
+      "major": "工程管理",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "城建与资源勘探学院",
+      "major": "工程管理（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "城建与资源勘探学院",
+      "major": "工程造价",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "城建与资源勘探学院",
+      "major": "工程造价C",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "城建与资源勘探学院",
+      "major": "工程造价（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "城建与资源勘探学院",
+      "major": "建筑学",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "城建与资源勘探学院",
+      "major": "风景园林",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "城建与资源勘探学院",
+      "major": "风景园林（创新班）",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "城建学院",
+      "major": "土木工程",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "城建学院",
+      "major": "工程管理",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "城建学院",
+      "major": "工程管理（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "城建学院",
+      "major": "工程造价（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "城建学院",
+      "major": "建筑学",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "城建学院",
+      "major": "给排水科学与工程",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "城建学院",
+      "major": "给排水科学与工程（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "城建学院",
+      "major": "风景园林（创新班）",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "外国语学院",
+      "major": "英语（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "应用外国语学院/国际教育学院",
+      "major": "会计学（国际班）",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "应用外国语学院/国际教育学院",
+      "major": "国际经济与贸易（国际班）",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "应用外国语学院/国际教育学院",
+      "major": "工商管理（国际班）",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "应用外国语学院/国际教育学院",
+      "major": "护理学（国际班）",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "应用外国语学院/国际教育学院",
+      "major": "新闻学（国际班）",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "应用外国语学院/国际教育学院",
+      "major": "日语",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "应用外国语学院/国际教育学院",
+      "major": "电气工程及其自动化（国际班）",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "应用外国语学院/国际教育学院",
+      "major": "经济与金融（国际班）",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "应用外国语学院/国际教育学院",
+      "major": "网络与新媒体（国际班）",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "应用外国语学院/国际教育学院",
+      "major": "英语",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "应用外国语学院/国际教育学院",
+      "major": "英语（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "应用外国语学院/国际教育学院",
+      "major": "计算机科学与技术（国际班）",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "教育学院",
+      "major": "汉语言文学",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "新影视与动画学院",
+      "major": "动画",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "新影视与动画学院",
+      "major": "广播电视编导",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "新影视与动画学院",
+      "major": "影视摄影与制作",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "新艺术与设计学院",
+      "major": "环境设计",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "新艺术与设计学院",
+      "major": "视觉传达设计",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "新闻与智能传播学院",
+      "major": "广播电视学",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "新闻与智能传播学院",
+      "major": "新闻学",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "新闻与智能传播学院",
+      "major": "新闻学（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "新闻与智能传播学院",
+      "major": "网络与新媒体",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "新闻与智能传播学院",
+      "major": "网络与新媒体（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "智能制造学院",
+      "major": "信息工程",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "智能制造学院",
+      "major": "机器人工程",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "智能制造学院",
+      "major": "机械设计制造及其自动化",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "智能制造学院",
+      "major": "电气工程及其自动化",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "智能制造学院",
+      "major": "自动化",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "机电工程学院",
+      "major": "机器人工程",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "机电工程学院",
+      "major": "机械设计制造及其自动化",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "机电工程学院",
+      "major": "电气工程及其自动化",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "管理学院",
+      "major": "人力资源管理",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "管理学院",
+      "major": "人力资源管理（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "管理学院",
+      "major": "信息管理与信息系统",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "管理学院",
+      "major": "信息管理与信息系统（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "管理学院",
+      "major": "工商管理",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "管理学院",
+      "major": "工商管理（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "管理学院",
+      "major": "市场营销",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "管理学院",
+      "major": "市场营销（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "管理学院",
+      "major": "物流管理",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "管理学院",
+      "major": "物流管理（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "经贸学院",
+      "major": "经济学",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "计算机工程学院",
+      "major": "区块链工程",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "计算机工程学院",
+      "major": "数据科学与大数据技术",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "计算机工程学院",
+      "major": "网络工程",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "计算机工程学院",
+      "major": "计算机科学与技术",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "计算机工程学院",
+      "major": "计算机科学与技术（3+证书）",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "计算机工程学院",
+      "major": "计算机科学与技术（AI创新实验班）",
+      "level": "本科"
+    },
+    {
+      "campus": "广州校区",
+      "college": "计算机工程学院",
+      "major": "计算机科学与技术（专升本三二分段）",
+      "level": "专升本"
+    },
+    {
+      "campus": "广州校区",
+      "college": "计算机工程学院",
+      "major": "计算机科学与技术（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "江门校区",
+      "college": "体育学院",
+      "major": "体育教育",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "健康与护理学院",
+      "major": "护理学",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "健康与护理学院",
+      "major": "护理学（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "江门校区",
+      "college": "城建与资源勘探学院",
+      "major": "土木工程",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "城建与资源勘探学院",
+      "major": "工程管理",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "城建与资源勘探学院",
+      "major": "工程造价",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "城建与资源勘探学院",
+      "major": "资源勘查工程",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "城建与资源勘探学院",
+      "major": "资源勘查工程（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "江门校区",
+      "college": "城建与资源勘探学院",
+      "major": "风景园林",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "教育学院",
+      "major": "学前教育",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "教育学院",
+      "major": "小学教育",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "教育学院",
+      "major": "小学教育（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "江门校区",
+      "college": "教育学院",
+      "major": "汉语言文学",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "教育学院",
+      "major": "音乐教育",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "教育学院",
+      "major": "音乐教育（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "江门校区",
+      "college": "智能制造学院",
+      "major": "人工智能",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "智能制造学院",
+      "major": "信息工程",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "智能制造学院",
+      "major": "智能制造工程",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "智能制造学院",
+      "major": "机器人工程",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "智能制造学院",
+      "major": "机械设计制造及其自动化",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "智能制造学院",
+      "major": "电气工程及其自动化",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "智能制造学院",
+      "major": "电气工程及其自动化（3+证书）",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "智能制造学院",
+      "major": "自动化",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "药学院",
+      "major": "中药学",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "药学院",
+      "major": "中药学（专升本）",
+      "level": "专升本"
+    },
+    {
+      "campus": "江门校区",
+      "college": "药学院",
+      "major": "口腔医学技术",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "药学院",
+      "major": "药学",
+      "level": "本科"
+    },
+    {
+      "campus": "江门校区",
+      "college": "药学院",
+      "major": "药学（专升本）",
+      "level": "专升本"
+    }
+  ]
+}
