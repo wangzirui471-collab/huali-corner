@@ -14,7 +14,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('X-Frame-Options','DENY')
         self.send_header('Referrer-Policy','same-origin');self.send_header('Content-Security-Policy',"default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'")
         self.end_headers();self.wfile.write(body)
-    def token(self):return self.headers.get('Authorization','').removeprefix('Bearer ')
+    def token(self):
+        authorization=self.headers.get('Authorization','')
+        return authorization[len('Bearer '):] if authorization.startswith('Bearer ') else ''
     def uid(self):return self.server.market.user(self.token())
     def optional_user(self):
         try:return self.uid()
@@ -37,7 +39,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.server.limit(self.client_address[0],p)
             if p=='/api/config':
                 directory=Path(__file__).parent/'docs/research/guangzhou-college-options.json'
-                colleges=json.loads(directory.read_text())['colleges'] if directory.exists() else []
+                colleges=json.loads(directory.read_text(encoding='utf-8'))['colleges'] if directory.exists() else []
                 return self.respond({'simulation':True,'name':'华立转角','pilot':'计算机工程学院','campus':'广州校区','support_hours':'08:00–20:00','colleges':colleges,'buildings':['本科综合楼','行政楼','L17','L18','G1主楼','G1副楼','G2','G3','G4主楼','G4副楼','A1','A2','A3','A4','L16','L13','L12','L11','L10','L9','L8','L7','L4','L3','L2','L1','L5','L6','L15','7号楼仓库','D2','D6','D5']})
             if p=='/api/auth/code' and method=='POST':return self.respond(m.request_code(data.get('phone')))
             if p=='/api/auth/login' and method=='POST':return self.respond(m.login(data.get('phone'),data.get('code')))
@@ -56,8 +58,12 @@ class Handler(BaseHTTPRequestHandler):
                     uid=self.optional_user();m.require(listed or uid==upload['user_id'],'图片尚未发布',403)
                 return self.respond(Path(upload['path']).read_bytes(),kind='image/webp')
             if not p.startswith('/api/'):
-                file=(WEB/unquote(p).lstrip('/')).resolve() if p!='/' else WEB/'index.html'
-                m.require(file.is_relative_to(WEB.resolve()) and file.is_file(),'页面不存在',404)
+                file=(WEB/(unquote(p).lstrip('/') if p!='/' else 'index.html')).resolve()
+                root=str(WEB.resolve())
+                try:inside=os.path.commonpath([root,str(file)])==root
+                except ValueError:inside=False
+                m.require(inside,'页面不存在',404)
+                m.require(file.is_file(),'页面不存在',404)
                 return self.respond(file.read_bytes(),kind=mimetypes.guess_type(str(file))[0] or 'application/octet-stream')
             u=self.uid()
             if p=='/api/me':return self.respond(m.update_profile(u,data) if method=='POST' else m.profile(u))

@@ -1,7 +1,9 @@
 import unittest, tempfile, threading, json, urllib.request, urllib.error, sys
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from server import make_server
+from server import Handler, make_server
 
 class HttpTests(unittest.TestCase):
     def setUp(self):
@@ -19,6 +21,35 @@ class HttpTests(unittest.TestCase):
         status,body,h=self.req('/');self.assertEqual(status,200);self.assertIn('华立转角',body.decode())
         status,body,h=self.req('/api/products');self.assertEqual(status,200);self.assertIsInstance(json.loads(body),list)
         self.assertEqual(h['Cache-Control'],'no-store')
+    def test_static_files_without_python39_path_method(self):
+        with patch.object(Path,'is_relative_to',side_effect=AttributeError('unavailable before Python 3.9'),create=True):
+            self.assertEqual(self.req('/')[0],200)
+            self.assertEqual(self.req('/market.css')[0],200)
+            self.assertEqual(self.req('/..%2fserver.py')[0],404)
+    def test_static_root_rejects_sibling_and_symlink_escape(self):
+        with tempfile.TemporaryDirectory() as root:
+            root=Path(root);web=root/'web';web.mkdir()
+            outside=root/'web-private';outside.mkdir();(outside/'secret.txt').write_text('private')
+            (web/'index.html').write_text('home')
+            (web/'escape').symlink_to(outside,target_is_directory=True)
+            with patch('server.WEB',web):
+                self.assertEqual(self.req('/')[0],200)
+                self.assertEqual(self.req('/..%2fweb-private/secret.txt')[0],404)
+                self.assertEqual(self.req('/escape/secret.txt')[0],404)
+    def test_bearer_token_without_python39_string_method(self):
+        class LegacyString(str):
+            def removeprefix(self,*args):raise AttributeError('unavailable before Python 3.9')
+        for header,expected in [('Bearer session-token','session-token'),('Basic other',''),('','')]:
+            self.assertEqual(Handler.token(SimpleNamespace(headers={'Authorization':LegacyString(header)})),expected)
+    def test_college_directory_with_non_utf8_system_default(self):
+        read_text=Path.read_text
+        def legacy_read_text(path,*args,**kwargs):
+            if 'encoding' not in kwargs:kwargs['encoding']='ascii'
+            return read_text(path,*args,**kwargs)
+        with patch.object(Path,'read_text',legacy_read_text):
+            status,body,_=self.req('/api/config')
+        self.assertEqual(status,200)
+        self.assertTrue(json.loads(body)['colleges'])
     def test_auth_required_and_origin_guard(self):
         self.assertEqual(self.req('/api/orders')[0],401)
         req=urllib.request.Request(self.base+'/api/auth/code',data=b'{}',headers={'Content-Type':'application/json','Origin':'https://evil.example'})

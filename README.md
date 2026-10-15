@@ -16,6 +16,22 @@ python3 server.py --port 8080
 
 数据默认在 `var/`，可指定 `--data /path/to/private-data`。重新启动会保留数据，不会覆盖已发布商品。不需要修改原来的点云网站仓库 `/workspace/-`。
 
+### Windows 启动与旧版本更新
+
+在 PowerShell 中先进入解压后的项目目录，逐行运行（路径按实际位置调整）：
+
+```powershell
+cd "E:\zi\huali-corner-main"
+python -m pip install -r requirements.txt
+python server.py
+```
+
+保持终端开启，在本机浏览器访问 `http://127.0.0.1:8080`。命令是 `python`，前面没有点号。PowerShell 的个人配置脚本被执行策略阻止，与 Python 网站启动是不同问题，不需要为此放宽执行策略。
+
+若旧下载包打开首页时报 `WindowsPath ... no attribute 'is_relative_to'`，是旧代码调用了 Python 3.9 才提供的方法。本次修复同时移除了登录使用的 `str.removeprefix`，并明确用 UTF-8 读取学院目录。先按 Ctrl+C 停止网站，用 GitHub 最新版 `server.py` 替换项目内的同名文件，再运行 `python server.py`；保留原有 `var/` 数据目录，无需为此重装依赖。推荐新环境使用 Python 3.12+；兼容回归在 Python 3.12 下模拟缺少新方法进行验证，未在旧版 Windows Python 上实机测试。
+
+若 pip 报 `Cannot connect to proxy`，应先检查本机代理及 pip 代理配置；连接失败后的 `No matching distribution` 不能单独证明依赖版本不存在。不要通过禁用 TLS 校验来解决代理问题。
+
 ## 测试登录
 
 登录弹窗提供卖家、买家、客服三个快捷体验账号。也可以填写合法格式手机号并获取页面显示的本地测试验证码。**没有短信发出，任何人知道测试号码均可模拟登录，绝不可用于公开运营。** 本地验证码5分钟有效、一次使用、错误次数受限。
