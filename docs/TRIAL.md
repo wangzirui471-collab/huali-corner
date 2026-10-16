@@ -98,3 +98,7 @@ python3 tests/ui_redesign_smoke.py
 参阅[发布与售后试用指南](PUBLISHING-SUPPORT.md)：简化发布、账号草稿与图片恢复、独立客服账号、证据工单、退货后重售、信誉规则及申诉。完整包更新，保留原数据，勿仅替换server.py。订单推送、手机权限与新增地址按用户要求推迟；客服队列目前手动刷新。
 
 新增验证：`node tests/native_publishing.test.js`、`node tests/native_support.test.js`、`python3 tests/publishing_browser_smoke.py`、`python3 tests/support_browser_smoke.py`。
+
+## 订单消息与地址更新（2026-10-16）
+
+[通知和公共地点说明](NOTIFICATIONS-LOCATIONS.md)：站内消息与红点已接入，通知保存在账号中；浏览器提醒手动开启且需要页面保持运行。微信系统订阅尚需实际AppID、模板、服务端发送功能和外部验证，本轮不声称完成。发布、下单和改约支持楼栋选择及自由填写。使用完整试用包更新并保留原数据。

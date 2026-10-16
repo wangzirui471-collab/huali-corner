@@ -5,6 +5,7 @@ from urllib.parse import urlsplit,parse_qs,unquote
 from market import Market,DomainError
 from seed import seed as seed_data
 from operations import CREDIT_RULES
+from locations import BUILDINGS, BUILDING_GROUPS
 WEB=Path(__file__).parent/'web'
 # Windows registry associations can label .js as text/plain. Core web types
 # must be deterministic because browsers enforce nosniff for scripts/styles.
@@ -56,7 +57,7 @@ class Handler(BaseHTTPRequestHandler):
                 directory=Path(__file__).parent/'docs/research/guangzhou-college-options.json'
                 colleges=json.loads(directory.read_text(encoding='utf-8'))['colleges'] if directory.exists() else []
                 if m.trial:colleges=[{'source_name':'计算机工程学院'}]
-                return self.respond({'simulation':True,'trial':m.trial,'auth_mode':'password' if m.trial else 'demo','phone_verified':False,'name':'转角','pilot':'计算机工程学院','campus':'广州校区','support_hours':'08:00–20:00','colleges':colleges,'buildings':['本科综合楼','行政楼','L17','L18','G1主楼','G1副楼','G2','G3','G4主楼','G4副楼','A1','A2','A3','A4','L16','L13','L12','L11','L10','L9','L8','L7','L4','L3','L2','L1','L5','L6','L15','7号楼仓库','D2','D6','D5']})
+                return self.respond({'simulation':True,'trial':m.trial,'auth_mode':'password' if m.trial else 'demo','phone_verified':False,'name':'转角','pilot':'计算机工程学院','campus':'广州校区','support_hours':'08:00–20:00','colleges':colleges,'buildings':BUILDINGS,'building_groups':BUILDING_GROUPS,'custom_location_allowed':True})
             if p=='/api/auth/code' and method=='POST':return self.respond(m.request_code(data.get('phone')))
             if p=='/api/auth/login' and method=='POST':return self.respond(m.login_password(data.get('phone'),data.get('password')) if m.trial else m.login(data.get('phone'),data.get('code')))
             if p=='/api/auth/register' and method=='POST':return self.respond(m.register_password(data.get('phone'),data.get('password'),data.get('nickname')))
@@ -84,6 +85,8 @@ class Handler(BaseHTTPRequestHandler):
                 m.require(file.is_file(),'页面不存在',404)
                 return self.respond(file.read_bytes(),kind=ASSET_TYPES.get(file.suffix.lower()) or mimetypes.guess_type(str(file))[0] or 'application/octet-stream')
             u=self.uid()
+            if p=='/api/notifications' and method=='GET':return self.respond(m.notifications(u,int(query.get('before',0))))
+            if p=='/api/notifications/read' and method=='POST':return self.respond(m.read_notifications(u,data))
             if p=='/api/drafts' and method=='GET':return self.respond(m.list_drafts(u))
             if p=='/api/draft':return self.respond(m.save_draft(u,data) if method=='POST' else m.get_draft(u,query.get('id','')))
             if p=='/api/draft/delete' and method=='POST':return self.respond(m.delete_draft(u,data.get('id')))

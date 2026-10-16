@@ -103,7 +103,10 @@ with tempfile.TemporaryDirectory() as root:
             # Local edits made before closing remain available if another device saved a newer version.
             stale = server.market.save_draft(session['user']['id'], {'fields': {'title': '关闭时的初版'}, 'version': 0})
             page.goto(base + '/#publish/' + stale['id'], wait_until='networkidle')
+            expect(page.locator('[name=title]')).to_have_value('关闭时的初版')
             page.locator('[name=title]').fill('本机尚未同步的修改')
+            local = page.evaluate('(id)=>JSON.parse(localStorage.getItem("zj-draft-"+id))', session['user']['id'])
+            assert local['id'] == stale['id'] and local['fields']['title'] == '本机尚未同步的修改'
             page.close()
             server.market.save_draft(session['user']['id'], {'id': stale['id'], 'version': stale['version'], 'fields': {'title': '另一台设备的新版'}})
             page = context.new_page()

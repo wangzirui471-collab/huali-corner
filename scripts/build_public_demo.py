@@ -28,7 +28,7 @@ def build(output):
         data={'config':{'name':'转角','simulation':True,'public_demo':True,'campus':'广州校区','pilot':'计算机工程学院','support_hours':'08:00–20:00','colleges':[]},
               'products':products,'profiles':profiles,'posts':market.posts(),'comments':{}}
     output.mkdir(parents=True,exist_ok=True)
-    for name in ['app.js','public-demo.js','publishing.js','operations.js','styles.css','market.css','publishing.css']:
+    for name in ['app.js','public-demo.js','publishing.js','operations.js','styles.css','market.css','publishing.css','locations.js','inbox.js','inbox.css']:
         shutil.copy2(ROOT/'web'/name,output/name)
     assets=output/'assets';assets.mkdir(exist_ok=True)
     for name in ['market-demo-photos.png']+['book%d.svg'%n for n in range(6)]+['item%d.svg'%n for n in range(3)]:

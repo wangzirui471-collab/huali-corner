@@ -6,7 +6,7 @@
 
 要发链接给同学看效果，可使用独立的[公开演示版部署说明](docs/PUBLIC_DEMO.md)。仓库 `artifacts/huali-corner-public-demo.zip` 可直接解压后上传静态托管平台，不需要让自己的电脑持续运行。该包只展示虚构数据，未提供真实注册、地址填写、交易或后台入口。公网网址需要在托管平台实际部署后生成。
 
-**本轮新增**：一页点选发布、私密草稿自动保存与恢复、独立客服账号、证据工单、退货确认后重新上架，以及有依据的信誉处罚/申诉。[操作与升级指南](docs/PUBLISHING-SUPPORT.md)。订单推送和新增地址在下一批。
+**本轮新增**：一页点选发布、私密草稿自动保存与恢复、独立客服账号、证据工单、退货确认后重新上架，以及有依据的信誉处罚/申诉。[操作与升级指南](docs/PUBLISHING-SUPPORT.md)。本轮已补站内订单/售后通知、未读红点和楼栋/自由填写地点；[通知设置与限制](docs/NOTIFICATIONS-LOCATIONS.md)。微信系统订阅消息仍未接入。
 
 ## 启动网站
 
@@ -83,11 +83,14 @@ node tests/native_order.test.js
 node tests/native_trial_auth.test.js
 node tests/native_publishing.test.js
 node tests/native_support.test.js
+node tests/native_notifications.test.js
+node tests/native_locations.test.js
 node --check web/app.js
 python3 tests/browser_smoke.py
 python3 tests/ui_redesign_smoke.py
 python3 tests/publishing_browser_smoke.py
 python3 tests/support_browser_smoke.py
+python3 tests/notifications_browser_smoke.py
 ```
 
 浏览器验证需安装 Python Playwright 和 Chromium。当前环境已有，脚本使用 `/usr/bin/chromium`；新机器请自行按官方方式安装，勿禁用包签名或TLS验证。脚本用临时数据库和自建测试图，不污染实际数据。

@@ -68,6 +68,7 @@ class Operations:
             connection.execute("UPDATE tickets SET assignee=?,status='processing' WHERE id=?", (support_user_id, ticket_id))
             connection.execute('INSERT INTO audit(actor,target,type,reason,ticket_id,created) VALUES(?,?,?,?,?,?)',
                                (administrator_id, support_user_id, 'ticket_assignment', reason, ticket_id, time.time()))
+            self.notify(connection,[support_user_id],f'ticket:{ticket_id}:assign:{connection.execute("SELECT MAX(id) FROM audit").fetchone()[0]}','有工单指派给你，请查看工作台','ticket',ticket_id)
         return self.ticket(administrator_id, ticket_id)
 
     def _administrator(self, user_id):
@@ -138,6 +139,7 @@ class Operations:
                 self.require(False, '无效退货操作')
             connection.execute('INSERT INTO audit(actor,type,reason,ticket_id,created) VALUES(?,?,?,?,?)',
                                (user_id, action, '交易当事人确认实物退回进度', ticket_id, time.time()))
+            self.notify_ticket(connection,ticket_id,f'ticket:{ticket_id}:{action}','退货交接进度已更新',actor=user_id)
         return self.ticket(user_id, ticket_id)
 
     def _relist_source(self, connection, user_id, product_id):

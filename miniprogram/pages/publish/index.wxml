@@ -27,7 +27,7 @@
       <view class="field"><text>售价（元，可免费送）*</text><input type="digit" value="{{fields.price}}" data-field="price" bindinput="input"/></view>
       <view class="field"><text>交付方式</text><picker range="{{deliveries}}" data-field="delivery" bindchange="choose">{{fields.delivery==='pickup'?'自提':fields.delivery==='delivery'?'校内送货':'自提或送货'}}</picker></view>
       <view class="field" wx:if="{{fields.delivery!=='pickup'}}"><text>送货费（元）</text><input type="digit" value="{{fields.delivery_fee}}" data-field="delivery_fee" bindinput="input"/></view>
-      <view class="field"><text>公共交付区域 *</text><input value="{{fields.region}}" data-field="region" bindinput="input" placeholder="如A1楼下公共入口"/></view>
+      <view class="field"><text>公共交付区域 *</text><picker range="{{buildingChoices}}" bindchange="locationBuilding">选择楼栋／自由填写</picker><input value="{{fields.region}}" data-field="region" bindinput="input" maxlength="80" placeholder="也可自由填写，如图书馆南门"/></view>
     </view>
     <view class="panel"><view class="row"><text>补充信息与缺陷说明（选填）</text><switch checked="{{showExtra}}" bindchange="toggleExtra"/></view>
       <block wx:if="{{showExtra}}">

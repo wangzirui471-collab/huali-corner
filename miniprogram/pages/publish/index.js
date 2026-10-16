@@ -47,6 +47,11 @@ Page({
     const stamp = this._stamp;
     let cached = wx.getStorageSync(this._cacheKey);
     if (!cached || typeof cached !== 'object') cached = null;
+    try {
+      const config = await app.request('/config');
+      if (!this.current(stamp)) return;
+      this.setData({buildingChoices:['自由填写',...(config.buildings || [])]});
+    } catch { if (this.current(stamp)) this.setData({buildingChoices:['自由填写']}); }
     const wanted = options.id || (!options.fresh ? cached?.id : null);
     if (!wanted) { if (options.drafts) await this.listDrafts(); return; }
     try {
@@ -226,6 +231,15 @@ Page({
   },
 
   toggleExtra(event) { this.setData({ showExtra: event.detail.value }); },
+
+  locationBuilding(event) {
+    if (!this.current()) return;
+    const building=this.data.buildingChoices[Number(event.detail.value)];
+    if (building && building!=='自由填写') {
+      this.setData({fields:{...this.data.fields,region:building+'楼下公共入口'}});
+      this.changed();
+    }
+  },
 
   async listDrafts() {
     if (!this.current()) return;

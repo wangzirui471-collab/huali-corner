@@ -7,11 +7,12 @@ from community import Community
 from auth import PasswordAuth
 from publishing import Publishing
 from operations import Operations
+from notifications import Notifications
 
 class DomainError(Exception):
     def __init__(self,message,status=400):super().__init__(message);self.status=status
 
-class Market(Store,Community,PasswordAuth,Publishing,Operations):
+class Market(Store,Community,PasswordAuth,Publishing,Operations,Notifications):
     @staticmethod
     def require(ok,message,status=400):
         if not ok:raise DomainError(message,status)
@@ -170,6 +171,7 @@ class Market(Store,Community,PasswordAuth,Publishing,Operations):
             subtotal=sum(p['price'] for p in items);fee=max(p['delivery_fee'] for p in products) if delivery=='delivery' else 0
             oid=c.execute('INSERT INTO orders(buyer_id,seller_id,items,subtotal,delivery_fee,total,delivery,address,appointment,status,created,request_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(u,seller,json.dumps(items,ensure_ascii=False),subtotal,fee,subtotal+fee,delivery,address,appointment,'awaiting_payment',time.time(),key)).lastrowid
             for p in products:c.execute("UPDATE products SET status='reserved' WHERE id=?",(p['id'],))
+            self.notify(c,[seller],f'order:{oid}:created','有新订单，等待买家模拟付款','order',oid)
         return self.order(u,oid)
     def order(self,u,oid):
         r=self.row('SELECT * FROM orders WHERE id=?',(oid,));self.require(r,'订单不存在',404)
@@ -185,6 +187,7 @@ class Market(Store,Community,PasswordAuth,Publishing,Operations):
         c.execute("UPDATE orders SET status='completed',completed_at=? WHERE id=?",(now,r['id']))
         self.journal(c,r['id'],'settlement',r['total'])
         for p in json.loads(r['items']):c.execute("UPDATE products SET status='sold' WHERE id=?",(p['id'],))
+        self.notify(c,[r['buyer_id'],r['seller_id']],f"order:{r['id']}:completed",'订单已确认收货并完成模拟结算','order',r['id'])
     def order_action(self,u,oid,action,d):
         with self.tx() as c:
             r=c.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone();self.require(r,'订单不存在',404)
@@ -195,6 +198,7 @@ class Market(Store,Community,PasswordAuth,Publishing,Operations):
                 if status=='awaiting_payment':
                     self.require(now-r['created']<1800,'订单付款已超时')
                     c.execute("UPDATE orders SET status='paid',paid_at=? WHERE id=?",(now,oid));self.journal(c,oid,'payment',r['total'])
+                    self.notify(c,[r['seller_id']],f'order:{oid}:paid','买家已模拟付款，请确认交付安排','order',oid)
                 else:self.require(status in ['paid','awaiting_handover','awaiting_receipt','completed'],'当前不可支付')
             elif action=='cancel':
                 self.require(buyer,'仅买家可取消',403)
@@ -202,24 +206,29 @@ class Market(Store,Community,PasswordAuth,Publishing,Operations):
                 if status!='cancelled':
                     if status=='paid':self.journal(c,oid,'refund',r['total'])
                     c.execute("UPDATE orders SET status='cancelled' WHERE id=?",(oid,));self.release(c,r)
+                    self.notify(c,[r['seller_id']],f'order:{oid}:cancelled','买家已取消订单','order',oid)
             elif action=='deliver':
                 self.require(not buyer and status=='paid','仅卖家可在付款后标记交付')
                 c.execute("UPDATE orders SET status='awaiting_handover',schedule_confirmed=1,delivered_at=? WHERE id=?",(now,oid))
+                self.notify(c,[r['buyer_id']],f'order:{oid}:delivered','卖家已标记交付，请核对实物','order',oid)
             elif action=='handover':
                 self.require(buyer and status=='awaiting_handover','请在实际交接后确认')
                 c.execute("UPDATE orders SET status='awaiting_receipt',handover_at=? WHERE id=?",(now,oid))
+                self.notify(c,[r['seller_id']],f'order:{oid}:handover','买家已确认实物交接','order',oid)
             elif action=='receive':
                 self.require(buyer and status in ['awaiting_handover','awaiting_receipt','completed'],'当前不能确认收货')
                 if status!='completed':self.complete(c,r,now)
             elif action=='confirm_schedule':
                 self.require(not buyer and status=='paid','仅卖家可在付款后确认时间')
                 c.execute('UPDATE orders SET schedule_confirmed=1 WHERE id=?',(oid,))
+                self.notify(c,[r['buyer_id']],f'order:{oid}:scheduled','卖家已确认交付时间','order',oid)
             elif action=='reschedule':
                 self.require(status in ['paid','awaiting_handover'],'当前不能申请改约')
                 appointment=d.get('appointment');self.require(type(appointment) in [int,float] and now+60<appointment<now+86400*30,'请选择未来30天内的改约时间')
                 address=self.text(d.get('address') or r['address'] or json.loads(r['items'])[0]['region'],150,'改约地点')
                 self.require(not c.execute("SELECT 1 FROM order_changes WHERE order_id=? AND status='pending'",(oid,)).fetchone(),'已有待对方确认的改约')
-                c.execute('INSERT INTO order_changes(order_id,proposer,appointment,address,created) VALUES(?,?,?,?,?)',(oid,u,appointment,address,now))
+                change_id=c.execute('INSERT INTO order_changes(order_id,proposer,appointment,address,created) VALUES(?,?,?,?,?)',(oid,u,appointment,address,now)).lastrowid
+                self.notify(c,[r['seller_id'] if buyer else r['buyer_id']],f'change:{change_id}:proposed','对方申请改约，请确认新的时间和地点','order',oid)
             else:raise DomainError('不支持此订单操作')
         return self.order(u,oid)
     def respond_change(self,u,change_id,accept):
@@ -230,6 +239,7 @@ class Market(Store,Community,PasswordAuth,Publishing,Operations):
             self.require(o['status'] in ['paid','awaiting_handover'] and change['status']=='pending','改约已失效')
             self.require(change['appointment']>time.time()+60 or not accept,'该时段已过期')
             if accept:c.execute('UPDATE orders SET appointment=?,address=?,schedule_confirmed=1 WHERE id=?',(change['appointment'],change['address'],o['id']))
+            self.notify(c,[change['proposer']],f'change:{change_id}:answered','对方已'+('接受' if accept else '拒绝')+'改约','order',o['id'])
             c.execute('UPDATE order_changes SET status=? WHERE id=?',('accepted' if accept else 'rejected',change_id))
         return {'ok':True}
     def tick(self,now=None):
@@ -237,8 +247,10 @@ class Market(Store,Community,PasswordAuth,Publishing,Operations):
         with self.tx() as c:
             for r in c.execute("SELECT * FROM orders WHERE status='awaiting_payment' AND created<?",(now-1800,)).fetchall():
                 c.execute("UPDATE orders SET status='cancelled' WHERE id=?",(r['id'],));self.release(c,r)
+                self.notify(c,[r['buyer_id'],r['seller_id']],f"order:{r['id']}:expired",'订单已超时取消；已模拟付款的金额自动模拟退回','order',r['id'])
             for r in c.execute("SELECT * FROM orders WHERE status='paid' AND schedule_confirmed=0 AND created<?",(now-86400,)).fetchall():
                 self.journal(c,r['id'],'refund',r['total']);c.execute("UPDATE orders SET status='cancelled' WHERE id=?",(r['id'],));self.release(c,r)
+                self.notify(c,[r['buyer_id'],r['seller_id']],f"order:{r['id']}:expired",'订单已超时取消；已模拟付款的金额自动模拟退回','order',r['id'])
             for r in c.execute("SELECT * FROM orders WHERE status='awaiting_receipt' AND handover_at<?",(now-86400,)).fetchall():
                 if not c.execute("SELECT 1 FROM tickets WHERE order_id=? AND type='refund' AND status NOT IN ('resolved','rejected')",(r['id'],)).fetchone():self.complete(c,r,now)
     def create_ticket(self,u,d):
@@ -260,6 +272,7 @@ class Market(Store,Community,PasswordAuth,Publishing,Operations):
             tid=c.execute('INSERT INTO tickets(user_id,order_id,product_id,type,subject,body,created) VALUES(?,?,?,?,?,?,?)',(u,oid,pid,typ,subject,body,time.time())).lastrowid
             c.execute('UPDATE tickets SET refund_mode=? WHERE id=?',(refund_mode,tid))
             self.save_evidence(c,tid,u,evidence,False)
+            self.notify_ticket(c,tid,f'ticket:{tid}:created','有新的售后／反馈工单',actor=u,queue=True)
         return self.ticket(u,tid)
     def ticket(self,u,tid):
         r=self.row('SELECT t.*,u.nickname FROM tickets t JOIN users u ON u.id=t.user_id WHERE t.id=?',(tid,));self.require(r,'工单不存在',404)
@@ -281,8 +294,9 @@ class Market(Store,Community,PasswordAuth,Publishing,Operations):
         if internal:self.staff(u)
         evidence=self.validate_evidence(u,d.get('evidence',[]))
         with self.tx() as c:
-            c.execute('INSERT INTO ticket_messages(ticket_id,user_id,body,internal,created) VALUES(?,?,?,?,?)',(tid,u,self.text(d.get('body') or ('补充图片证据' if evidence else ''),2000,'回复'),int(internal),time.time()))
+            message_id=c.execute('INSERT INTO ticket_messages(ticket_id,user_id,body,internal,created) VALUES(?,?,?,?,?)',(tid,u,self.text(d.get('body') or ('补充图片证据' if evidence else ''),2000,'回复'),int(internal),time.time())).lastrowid
             self.save_evidence(c,tid,u,evidence,internal)
+            self.notify_ticket(c,tid,f'ticket:{tid}:reply:{message_id}','工单有新的回复或材料',actor=u,internal=internal)
         return self.ticket(u,tid)
     def check_conflict(self,u,t):
         if t.get('product_id'):
@@ -332,6 +346,7 @@ class Market(Store,Community,PasswordAuth,Publishing,Operations):
                         c.execute('UPDATE orders SET status=? WHERE id=?',(prior,r['id']))
                 c.execute("UPDATE tickets SET status='resolved',assignee=?,outcome=?,reason=? WHERE id=?",(u,outcome,reason,tid))
             c.execute('INSERT INTO audit(actor,type,reason,ticket_id,created) VALUES(?,?,?,?,?)',(u,'ticket_'+outcome,reason,tid,time.time()))
+            self.notify_ticket(c,tid,f'ticket:{tid}:{outcome}', '工单处理进度已更新',actor=u,internal=outcome in ['review','request_refund'])
         return {'ok':True}
     def credit_action(self,u,target,delta,reason,tid):
         self.staff(u)

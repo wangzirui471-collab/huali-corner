@@ -26,3 +26,5 @@
   .publish-submit { align-items:flex-start; flex-direction:column; }
   .publish-submit .btn { width:100%; }
 }
+.simple-publish .upload-slot>.upload-preview { position:static; inset:auto; width:100%; }
+.simple-publish .upload-preview img { opacity:1; }

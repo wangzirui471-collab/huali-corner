@@ -6,7 +6,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_FILES = [
     'auth.py', 'community.py', 'db.py', 'manage_trial.py', 'market.py',
-    'operations.py', 'publishing.py', 'seed.py', 'server.py', 'requirements.txt',
+    'operations.py', 'publishing.py', 'notifications.py', 'locations.py', 'seed.py', 'server.py', 'requirements.txt',
     'README.md', 'start-trial.bat', 'start-trial-8081.bat', 'render.yaml',
     '.python-version', '.gitignore',
 ]

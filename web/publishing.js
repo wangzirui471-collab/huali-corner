@@ -212,7 +212,7 @@
           ${input('售价（元）*', 'price', value.price, 'type="number" min="0" max="10000" step="0.01" required placeholder="例如12，也可以免费送"')}
           ${select('交付方式', 'delivery', [['pickup', '自提'], ['delivery', '校内送货'], ['both', '自提或送货']], value.delivery)}
           <div class="delivery-fee" ${value.delivery === 'pickup' ? 'hidden' : ''}>${input('送货费（元）', 'delivery_fee', value.delivery_fee, 'type="number" min="0" max="10000" step="0.01"')}</div>
-          ${value.region ? input('公共交付地点 *', 'region', value.region, 'required maxlength="80"') : `${select('公共碰面楼栋', 'building', buildings, value.building)}${select('碰面位置', 'point', ['楼下公共入口', '一楼大厅', '门口公共区域'], value.point)}`}
+          ${window.ZJLocations.control(deps.config,'region',value.region || value.building + value.point,true,80)}
         </div><p class="muted">地点和费用会展示给买家；具体交付时间在订单中双方确认。</p></section>
         <details class="panel publish-extra"><summary>补充信息与缺陷说明（选填）</summary><label class="field"><span>补充说明／已知缺陷</span><textarea name="description" maxlength="3000" placeholder="不填时只根据已选情况生成介绍，不承诺正版或无瑕疵">${escape(value.description)}</textarea></label><div class="form-grid">
           ${input('出版社（未知可留空）', 'publisher', value.publisher)}${input('作者（可选）', 'author', value.author)}
