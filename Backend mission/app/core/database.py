@@ -50,6 +50,10 @@ CREATE TABLE IF NOT EXISTS posts(id INTEGER PRIMARY KEY,user_id INTEGER,topic TE
 CREATE TABLE IF NOT EXISTS comments(id INTEGER PRIMARY KEY,post_id INTEGER,user_id INTEGER,body TEXT,created REAL);
 CREATE TABLE IF NOT EXISTS offers(id INTEGER PRIMARY KEY,product_id INTEGER,buyer_id INTEGER,amount INTEGER,status TEXT DEFAULT 'pending',created REAL);
 CREATE TABLE IF NOT EXISTS nominations(id INTEGER PRIMARY KEY,user_id INTEGER,room_id INTEGER,reason TEXT,status TEXT DEFAULT 'pending',created REAL);
+CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY,user_id INTEGER NOT NULL,event_key TEXT NOT NULL,title TEXT NOT NULL,entity_type TEXT NOT NULL,entity_id INTEGER NOT NULL,created_at REAL NOT NULL,read_at REAL,UNIQUE(user_id,event_key));
+CREATE INDEX IF NOT EXISTS notifications_user_cursor ON notifications(user_id,id);
+CREATE TABLE IF NOT EXISTS drafts(id TEXT PRIMARY KEY,user_id INTEGER NOT NULL,fields TEXT NOT NULL,version INTEGER NOT NULL DEFAULT 1,status TEXT NOT NULL DEFAULT 'active',updated_at REAL NOT NULL,published_product_id INTEGER,source_product_id INTEGER);
+CREATE TABLE IF NOT EXISTS ticket_evidence(ticket_id INTEGER NOT NULL,upload_id TEXT NOT NULL,user_id INTEGER NOT NULL,internal INTEGER NOT NULL DEFAULT 0,created_at REAL NOT NULL,PRIMARY KEY(ticket_id,upload_id));
 '''
 
 class Store:
@@ -69,6 +73,26 @@ class Store:
             c.execute('PRAGMA journal_mode=DELETE')
             c.executescript(SCHEMA)
             if 'schedule_confirmed' not in [x[1] for x in c.execute('PRAGMA table_info(orders)')]:c.execute('ALTER TABLE orders ADD COLUMN schedule_confirmed INTEGER DEFAULT 0')
+            for name, definition in [('stock_key', 'TEXT'), ('source_draft_id', 'TEXT')]:
+                if name not in [column[1] for column in c.execute('PRAGMA table_info(products)')]:
+                    c.execute('ALTER TABLE products ADD COLUMN '+name+' '+definition)
+            c.execute("UPDATE products SET stock_key='legacy:'||id WHERE stock_key IS NULL")
+            c.execute('CREATE UNIQUE INDEX IF NOT EXISTS products_source_draft ON products(source_draft_id) WHERE source_draft_id IS NOT NULL')
+            c.execute("CREATE UNIQUE INDEX IF NOT EXISTS products_live_stock ON products(stock_key) WHERE status IN ('available','reserved','sold')")
+            c.execute('CREATE INDEX IF NOT EXISTS drafts_user_status ON drafts(user_id,status,updated_at)')
+            additions = {
+                'users': [('is_active', 'INTEGER NOT NULL DEFAULT 1'), ('trading_blocked', 'INTEGER NOT NULL DEFAULT 0')],
+                'tickets': [('refund_mode', "TEXT NOT NULL DEFAULT 'refund_only'"), ('return_sent_at', 'REAL'),
+                            ('return_received_at', 'REAL'), ('requested_amount', 'INTEGER')],
+                'audit': [('rule_key', "TEXT NOT NULL DEFAULT ''"), ('reversal_of', 'INTEGER'),
+                          ('score_before', 'INTEGER'), ('score_after', 'INTEGER')],
+            }
+            for table, columns in additions.items():
+                existing = {column[1] for column in c.execute('PRAGMA table_info('+table+')')}
+                for name, definition in columns:
+                    if name not in existing:
+                        c.execute('ALTER TABLE '+table+' ADD COLUMN '+name+' '+definition)
+            c.execute('CREATE UNIQUE INDEX IF NOT EXISTS audit_reversal_once ON audit(reversal_of) WHERE reversal_of IS NOT NULL')
             c.execute("INSERT OR IGNORE INTO rooms(id,kind,name) VALUES(1,'general','广州校区总聊')")
     def connect(self):
         c=sqlite3.connect(self.path,timeout=20)

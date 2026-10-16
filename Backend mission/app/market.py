@@ -25,10 +25,17 @@ from .community.service import CommunityService
 from .support.service import SupportService
 from .ops.service import OpsService
 from pathlib import Path
+from .catalog.drafts import DraftService
+from .support.accounts import SupportAccounts
+from .support.evidence import TicketEvidence
+from .support.returns import PhysicalReturns
+from .support.credit import CreditService
+from .notifications.service import NotificationService
 
 
 class Market(Store, AccountService, CatalogService, TradeService,
-             CommunityService, SupportService, OpsService):
+             CommunityService, SupportService, OpsService, DraftService,
+             SupportAccounts, TicketEvidence, PhysicalReturns, CreditService, NotificationService):
     """试用版应用的组合根。"""
 
     def __init__(self,root,trial=False):

@@ -1,5 +1,6 @@
 """商品模块：发布、三图校验、浏览筛选、收藏点赞、出价、下架与重新上架。"""
 import hashlib, io, json, secrets, time
+from contextlib import nullcontext
 from PIL import Image, ImageOps, UnidentifiedImageError
 from ..core.errors import ValidationMixin, DomainError
 
@@ -19,8 +20,9 @@ class CatalogService(ValidationMixin):
         with self.tx() as c:c.execute('INSERT INTO uploads VALUES(?,?,?,?,?,?)',(fid,u,str(path),digest,angle,int(private)))
         return {'id':fid,'url':'/media/'+fid,'angle':angle,'private':private}
 
-    def publish(self,u,d):
+    def publish(self,u,d,*,connection=None,stock_key=None,source_draft_id=None):
         self.require(self.profile(u)['score']>=60,'信誉分低于60，暂不能发布；可在客服中心申诉',403)
+        self.require(not self.row('SELECT trading_blocked FROM users WHERE id=?',(u,))['trading_blocked'],'当前账号已限制新交易，可申请申诉',403)
         title=self.text(d.get('title'),80,'标题');description=self.text(d.get('description'),3000,'商品介绍')
         self.require(d.get('category') in ['books','living','sports','electronics'],'请选择二手书、宿舍生活、运动闲置或电子产品')
         price=self.cents(d.get('price'));fee=self.cents(d.get('delivery_fee',0),'送货费')
@@ -39,8 +41,8 @@ class CatalogService(ValidationMixin):
         if proof:
             pr=self.row('SELECT * FROM uploads WHERE id=?',(proof,));self.require(pr and pr['user_id']==u and pr['private'],'凭证无效');clean['proof']=proof
         clean['original_price']=self.cents(d.get('original_price',0),'原价');clean['simulation']=False
-        with self.tx() as c:
-            pid=c.execute('INSERT INTO products(seller_id,title,category,price,delivery_fee,delivery,region,data,created) VALUES(?,?,?,?,?,?,?,?,?)',(u,title,d['category'],price,fee,delivery,region,json.dumps(clean,ensure_ascii=False),time.time())).lastrowid
+        with (self.tx() if connection is None else nullcontext(connection)) as c:
+            pid=c.execute('INSERT INTO products(seller_id,title,category,price,delivery_fee,delivery,region,data,created,stock_key,source_draft_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(u,title,d['category'],price,fee,delivery,region,json.dumps(clean,ensure_ascii=False),time.time(),stock_key or secrets.token_hex(16),source_draft_id)).lastrowid
         return {'id':pid}
 
     def product(self,p,u=None):

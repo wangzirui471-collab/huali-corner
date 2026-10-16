@@ -5,6 +5,7 @@ from ..core.errors import ValidationMixin, DomainError
 
 class TradeService(ValidationMixin):
     def checkout(self,u,d):
+        self.require(not self.row('SELECT trading_blocked FROM users WHERE id=?',(u,))['trading_blocked'],'当前账号已限制新交易，可申请申诉',403)
         ids=d.get('product_ids');self.require(isinstance(ids,list) and 1<=len(ids)<=20 and len(set(ids))==len(ids),'请选择1至20件不同商品')
         key=self.text(d.get('key'),100,'请求标识');delivery=d.get('delivery');self.require(delivery in ['pickup','delivery'],'交付方式错误')
         try:appointment=float(d.get('appointment',0))
@@ -28,6 +29,7 @@ class TradeService(ValidationMixin):
             subtotal=sum(p['price'] for p in items);fee=max(p['delivery_fee'] for p in products) if delivery=='delivery' else 0
             oid=c.execute('INSERT INTO orders(buyer_id,seller_id,items,subtotal,delivery_fee,total,delivery,address,appointment,status,created,request_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(u,seller,json.dumps(items,ensure_ascii=False),subtotal,fee,subtotal+fee,delivery,address,appointment,'awaiting_payment',time.time(),key)).lastrowid
             for p in products:c.execute("UPDATE products SET status='reserved' WHERE id=?",(p['id'],))
+            self.notify(c,[seller],f'order:{oid}:created','有新订单，等待买家模拟付款','order',oid)
         return self.order(u,oid)
 
     def order(self,u,oid):
@@ -49,6 +51,7 @@ class TradeService(ValidationMixin):
         c.execute("UPDATE orders SET status='completed',completed_at=? WHERE id=?",(now,r['id']))
         self.journal(c,r['id'],'settlement',r['total'])
         for p in json.loads(r['items']):c.execute("UPDATE products SET status='sold' WHERE id=?",(p['id'],))
+        self.notify(c,[r['buyer_id'],r['seller_id']],f"order:{r['id']}:completed",'订单已确认收货并完成模拟结算','order',r['id'])
 
     def order_action(self,u,oid,action,d):
         with self.tx() as c:
@@ -60,6 +63,7 @@ class TradeService(ValidationMixin):
                 if status=='awaiting_payment':
                     self.require(now-r['created']<1800,'订单付款已超时')
                     c.execute("UPDATE orders SET status='paid',paid_at=? WHERE id=?",(now,oid));self.journal(c,oid,'payment',r['total'])
+                    self.notify(c,[r['seller_id']],f'order:{oid}:paid','买家已模拟付款，请确认交付安排','order',oid)
                 else:self.require(status in ['paid','awaiting_handover','awaiting_receipt','completed'],'当前不可支付')
             elif action=='cancel':
                 self.require(buyer or status=='awaiting_payment','卖家只能在买家付款前取消订单；已付款的请走客服流程退款',403)
@@ -67,24 +71,29 @@ class TradeService(ValidationMixin):
                 if status!='cancelled':
                     if status=='paid':self.journal(c,oid,'refund',r['total'])
                     c.execute("UPDATE orders SET status='cancelled' WHERE id=?",(oid,));self.release(c,r)
+                    self.notify(c,[r['seller_id']],f'order:{oid}:cancelled','买家已取消订单','order',oid)
             elif action=='deliver':
                 self.require(not buyer and status=='paid','仅卖家可在付款后标记交付')
                 c.execute("UPDATE orders SET status='awaiting_handover',schedule_confirmed=1,delivered_at=? WHERE id=?",(now,oid))
+                self.notify(c,[r['buyer_id']],f'order:{oid}:delivered','卖家已标记交付，请核对实物','order',oid)
             elif action=='handover':
                 self.require(buyer and status=='awaiting_handover','请在实际交接后确认')
                 c.execute("UPDATE orders SET status='awaiting_receipt',handover_at=? WHERE id=?",(now,oid))
+                self.notify(c,[r['seller_id']],f'order:{oid}:handover','买家已确认实物交接','order',oid)
             elif action=='receive':
                 self.require(buyer and status in ['awaiting_handover','awaiting_receipt','completed'],'当前不能确认收货')
                 if status!='completed':self.complete(c,r,now)
             elif action=='confirm_schedule':
                 self.require(not buyer and status=='paid','仅卖家可在付款后确认时间')
                 c.execute('UPDATE orders SET schedule_confirmed=1 WHERE id=?',(oid,))
+                self.notify(c,[r['buyer_id']],f'order:{oid}:scheduled','卖家已确认交付时间','order',oid)
             elif action=='reschedule':
                 self.require(status in ['paid','awaiting_handover'],'当前不能申请改约')
                 appointment=d.get('appointment');self.require(type(appointment) in [int,float] and now+60<appointment<now+86400*30,'请选择未来30天内的改约时间')
                 address=self.text(d.get('address') or r['address'] or json.loads(r['items'])[0]['region'],150,'改约地点')
                 self.require(not c.execute("SELECT 1 FROM order_changes WHERE order_id=? AND status='pending'",(oid,)).fetchone(),'已有待对方确认的改约')
-                c.execute('INSERT INTO order_changes(order_id,proposer,appointment,address,created) VALUES(?,?,?,?,?)',(oid,u,appointment,address,now))
+                change_id=c.execute('INSERT INTO order_changes(order_id,proposer,appointment,address,created) VALUES(?,?,?,?,?)',(oid,u,appointment,address,now)).lastrowid
+                self.notify(c,[r['seller_id'] if buyer else r['buyer_id']],f'change:{change_id}:proposed','对方申请改约，请确认新的时间和地点','order',oid)
             else:raise DomainError('不支持此订单操作')
         return self.order(u,oid)
 
@@ -148,6 +157,7 @@ class TradeService(ValidationMixin):
             self.require(o['status'] in ['paid','awaiting_handover'] and change['status']=='pending','改约已失效')
             self.require(change['appointment']>time.time()+60 or not accept,'该时段已过期')
             if accept:c.execute('UPDATE orders SET appointment=?,address=?,schedule_confirmed=1 WHERE id=?',(change['appointment'],change['address'],o['id']))
+            self.notify(c,[change['proposer']],f'change:{change_id}:answered','对方已'+('接受' if accept else '拒绝')+'改约','order',o['id'])
             c.execute('UPDATE order_changes SET status=? WHERE id=?',('accepted' if accept else 'rejected',change_id))
         return {'ok':True}
 
@@ -156,7 +166,9 @@ class TradeService(ValidationMixin):
         with self.tx() as c:
             for r in c.execute("SELECT * FROM orders WHERE status='awaiting_payment' AND created<?",(now-1800,)).fetchall():
                 c.execute("UPDATE orders SET status='cancelled' WHERE id=?",(r['id'],));self.release(c,r)
+                self.notify(c,[r['buyer_id'],r['seller_id']],f"order:{r['id']}:expired",'订单已超时取消；已模拟付款的金额自动模拟退回','order',r['id'])
             for r in c.execute("SELECT * FROM orders WHERE status='paid' AND schedule_confirmed=0 AND created<?",(now-86400,)).fetchall():
                 self.journal(c,r['id'],'refund',r['total']);c.execute("UPDATE orders SET status='cancelled' WHERE id=?",(r['id'],));self.release(c,r)
+                self.notify(c,[r['buyer_id'],r['seller_id']],f"order:{r['id']}:expired",'订单已超时取消；已模拟付款的金额自动模拟退回','order',r['id'])
             for r in c.execute("SELECT * FROM orders WHERE status='awaiting_receipt' AND handover_at<?",(now-86400,)).fetchall():
                 if not c.execute("SELECT 1 FROM tickets WHERE order_id=? AND type='refund' AND status NOT IN ('resolved','rejected')",(r['id'],)).fetchone():self.complete(c,r,now)

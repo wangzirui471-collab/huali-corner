@@ -4,6 +4,8 @@ from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
 from urllib.parse import urlsplit,parse_qs,unquote
 from app.market import Market,DomainError
 from app.seed import seed as seed_data
+from app.support.credit import CREDIT_RULES
+from app.catalog.locations import BUILDINGS, BUILDING_GROUPS
 from app.core.config import WEB,COLLEGES_JSON,data_dir
 # Windows registry associations can label .js as text/plain. Core web types
 # must be deterministic because browsers enforce nosniff for scripts/styles.
@@ -55,7 +57,7 @@ class Handler(BaseHTTPRequestHandler):
                 directory=COLLEGES_JSON
                 colleges=json.loads(directory.read_text(encoding='utf-8'))['colleges'] if directory.exists() else []
                 if m.trial:colleges=[{'source_name':'计算机工程学院'}]
-                return self.respond({'simulation':True,'trial':m.trial,'auth_mode':'password' if m.trial else 'demo','phone_verified':False,'name':'华立转角','pilot':'计算机工程学院','campus':'广州校区','support_hours':'08:00–20:00','colleges':colleges,'buildings':['本科综合楼','行政楼','L17','L18','G1主楼','G1副楼','G2','G3','G4主楼','G4副楼','A1','A2','A3','A4','L16','L13','L12','L11','L10','L9','L8','L7','L4','L3','L2','L1','L5','L6','L15','7号楼仓库','D2','D6','D5']})
+                return self.respond({'simulation':True,'trial':m.trial,'auth_mode':'password' if m.trial else 'demo','phone_verified':False,'name':'转角','pilot':'计算机工程学院','campus':'广州校区','support_hours':'08:00–20:00','colleges':colleges,'buildings':BUILDINGS,'building_groups':BUILDING_GROUPS,'custom_location_allowed':True})
             if p=='/api/auth/code' and method=='POST':return self.respond(m.request_code(data.get('phone')))
             if p=='/api/auth/login' and method=='POST':return self.respond(m.login_password(data.get('phone'),data.get('password')) if m.trial else m.login(data.get('phone'),data.get('code')))
             if p=='/api/auth/register' and method=='POST':return self.respond(m.register_password(data.get('phone'),data.get('password'),data.get('nickname')))
@@ -69,7 +71,7 @@ class Handler(BaseHTTPRequestHandler):
             if p.startswith('/media/'):
                 fid=p.split('/')[-1];upload=m.row('SELECT * FROM uploads WHERE id=?',(fid,));m.require(upload,'图片不存在',404)
                 if upload['private']:
-                    uid=self.uid();m.require(uid==upload['user_id'] or m.profile(uid)['role'] in ['admin','support'],'无权读取私密图片',403)
+                    uid=self.uid();m.require(uid==upload['user_id'] or m.can_view_evidence(uid,fid),'无权读取私密图片',403)
                 else:
                     listed=any(fid in json.loads(r['data']).get('photos',[]).__str__() for r in m.rows("SELECT data FROM products WHERE status<>'removed'"))
                     uid=self.optional_user();m.require(listed or uid==upload['user_id'],'图片尚未发布',403)
@@ -84,6 +86,22 @@ class Handler(BaseHTTPRequestHandler):
                 m.require(file.is_file(),'页面不存在',404)
                 return self.respond(file.read_bytes(),kind=ASSET_TYPES.get(file.suffix.lower()) or mimetypes.guess_type(str(file))[0] or 'application/octet-stream')
             u=self.uid()
+            if p=='/api/notifications' and method=='GET':return self.respond(m.notifications(u,int(query.get('before',0))))
+            if p=='/api/notifications/read' and method=='POST':return self.respond(m.read_notifications(u,data))
+            if p=='/api/drafts' and method=='GET':return self.respond(m.list_drafts(u))
+            if p=='/api/draft':return self.respond(m.save_draft(u,data) if method=='POST' else m.get_draft(u,query.get('id','')))
+            if p=='/api/draft/delete' and method=='POST':return self.respond(m.delete_draft(u,data.get('id')))
+            if p=='/api/draft/publish' and method=='POST':return self.respond(m.publish_draft(u,data.get('id'),data.get('version')))
+            if p=='/api/seller/products' and method=='GET':return self.respond(m.seller_products(u))
+            if p=='/api/relist' and method=='POST':return self.respond(m.relist_draft(u,int(data['product_id'])))
+            if p=='/api/admin/support':return self.respond(m.create_support(u,data) if method=='POST' else m.support_accounts(u))
+            if p=='/api/admin/support/active' and method=='POST':return self.respond(m.set_support_active(u,int(data['user_id']),data.get('is_active')))
+            if p=='/api/ticket/return' and method=='POST':return self.respond(m.return_action(u,int(data['id']),data['action']))
+            if p=='/api/ticket/assign' and method=='POST':return self.respond(m.assign_ticket(u,int(data['id']),int(data['support_user_id']),data['reason']))
+            if p=='/api/credit/rules' and method=='GET':return self.respond([{'key':key,**rule} for key,rule in CREDIT_RULES.items()])
+            if p=='/api/credit/penalty' and method=='POST':return self.respond(m.apply_penalty(u,int(data['target_user_id']),int(data['ticket_id']),data['rule_key'],data['reason']))
+            if p=='/api/credit/reverse' and method=='POST':return self.respond(m.reverse_penalty(u,int(data['audit_id']),int(data['ticket_id']),data['reason']))
+            if p=='/api/credit/recover' and method=='POST':return self.respond(m.recover_credit(u,int(data['target_user_id']),int(data['ticket_id']),data['reason']))
             if p=='/api/auth/password' and method=='POST':return self.respond(m.change_password(u,data.get('old_password'),data.get('new_password')))
             if p=='/api/me':return self.respond(m.update_profile(u,data) if method=='POST' else m.profile(u))
             if p=='/api/auth/logout':m.logout(self.token());return self.respond({'ok':True})
@@ -107,7 +125,9 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/tickets':return self.respond(m.create_ticket(u,data) if method=='POST' else m.tickets(u))
             if p=='/api/ticket':return self.respond(m.ticket(u,int(query['id'])))
             if p=='/api/ticket/reply' and method=='POST':return self.respond(m.reply_ticket(u,int(data['id']),data))
-            if p=='/api/ticket/resolve' and method=='POST':return self.respond(m.resolve_ticket(u,int(data['id']),data))
+            if p=='/api/ticket/resolve' and method=='POST':
+                if 'amount_yuan' in data:data['amount']=m._yuan_to_cents(data['amount_yuan'])
+                return self.respond(m.resolve_ticket(u,int(data['id']),data))
             if p=='/api/credit' and method=='POST':return self.respond(m.credit_action(u,int(data['target']),data['delta'],data['reason'],int(data['ticket_id'])))
             if p=='/api/credit/history':return self.respond(m.credit_history(u))
             if p=='/api/review' and method=='POST':return self.respond(m.review(u,int(data['order_id']),data['rating'],data['body']))
@@ -184,13 +204,14 @@ def main():
         while True:
             try:
                 server.market.tick()
+                server.market.cleanup_drafts()
                 backups=list((server.market.root/'backups').glob('*.zip')) if (server.market.root/'backups').exists() else []
                 if not backups or time.time()-max(x.stat().st_mtime for x in backups)>86400:server.market._backup()
             except Exception:traceback.print_exc()
             time.sleep(30)
     threading.Thread(target=timer,daemon=True).start()
     mode='计算机学院试用版 · 手机号密码登录 · 模拟交易' if args.trial else '本地模拟版'
-    print(f'华立转角 · {mode} · port {server.server_port} · Ctrl+C停止',flush=True)
+    print(f'转角 · {mode} · port {server.server_port} · Ctrl+C停止',flush=True)
     try:server.serve_forever()
     except KeyboardInterrupt:pass
     finally:server.server_close()

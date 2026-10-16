@@ -7,6 +7,9 @@ class SupportService(ValidationMixin):
     def create_ticket(self,u,d):
         typ=d.get('type','other');self.require(typ in ['refund','report','appeal','reschedule','other'],'工单类型错误')
         subject=self.text(d.get('subject'),80,'问题标题');body=self.text(d.get('body'),3000,'问题说明');oid=d.get('order_id') or None;pid=d.get('product_id') or None
+        refund_mode=d.get('refund_mode','refund_only')
+        self.require(refund_mode in ['refund_only','return_refund'],'退款方式无效')
+        evidence=self.validate_evidence(u,d.get('evidence',[]))
         with self.tx() as c:
             if oid:
                 r=c.execute('SELECT * FROM orders WHERE id=?',(int(oid),)).fetchone()
@@ -18,6 +21,9 @@ class SupportService(ValidationMixin):
             else:self.require(typ!='refund','退款必须关联订单')
             if pid:self.product(int(pid))
             tid=c.execute('INSERT INTO tickets(user_id,order_id,product_id,type,subject,body,created) VALUES(?,?,?,?,?,?,?)',(u,oid,pid,typ,subject,body,time.time())).lastrowid
+            c.execute('UPDATE tickets SET refund_mode=? WHERE id=?',(refund_mode,tid))
+            self.save_evidence(c,tid,u,evidence,False)
+            self.notify_ticket(c,tid,f'ticket:{tid}:created','有新的售后／反馈工单',actor=u,queue=True)
         return self.ticket(u,tid)
 
     def ticket(self,u,tid):
@@ -26,7 +32,9 @@ class SupportService(ValidationMixin):
         if r['order_id']:
             o=self.row('SELECT buyer_id,seller_id FROM orders WHERE id=?',(r['order_id'],));allowed=allowed or u in [o['buyer_id'],o['seller_id']]
         self.require(allowed or staff,'不能查看他人工单',403)
+        staff=staff and not allowed
         r['messages']=self.rows('SELECT m.*,u.nickname FROM ticket_messages m JOIN users u ON u.id=m.user_id WHERE ticket_id=? AND (?=1 OR internal=0) ORDER BY m.id',(tid,int(staff)))
+        r['evidence']=[{'id':x['upload_id'],'url':'/media/'+x['upload_id'],'internal':bool(x['internal'])} for x in self.rows('SELECT upload_id,internal FROM ticket_evidence WHERE ticket_id=? AND (?=1 OR internal=0) ORDER BY created_at',(tid,int(staff)))]
         return r
 
     def tickets(self,u):
@@ -35,9 +43,14 @@ class SupportService(ValidationMixin):
         return [self.ticket(u,r['id']) for r in ids]
 
     def reply_ticket(self,u,tid,d):
-        self.ticket(u,tid);internal=bool(d.get('internal',False))
+        self.ticket(u,tid);internal=d.get('internal',False)
+        self.require(type(internal) is bool,'内部备注状态必须为布尔值')
         if internal:self.staff(u)
-        with self.tx() as c:c.execute('INSERT INTO ticket_messages(ticket_id,user_id,body,internal,created) VALUES(?,?,?,?,?)',(tid,u,self.text(d.get('body'),2000,'回复'),int(internal),time.time()))
+        evidence=self.validate_evidence(u,d.get('evidence',[]))
+        with self.tx() as c:
+            message_id=c.execute('INSERT INTO ticket_messages(ticket_id,user_id,body,internal,created) VALUES(?,?,?,?,?)',(tid,u,self.text(d.get('body') or ('补充图片证据' if evidence else ''),2000,'回复'),int(internal),time.time())).lastrowid
+            self.save_evidence(c,tid,u,evidence,internal)
+            self.notify_ticket(c,tid,f'ticket:{tid}:reply:{message_id}','工单有新的回复或材料',actor=u,internal=internal)
         return self.ticket(u,tid)
 
     def check_conflict(self,u,t):
@@ -56,15 +69,26 @@ class SupportService(ValidationMixin):
         with self.tx() as c:
             t=c.execute('SELECT * FROM tickets WHERE id=?',(tid,)).fetchone()
             if t['status']=='resolved':return {'ok':True}
-            outcome=d.get('outcome','resolved');self.require(outcome in ['refund','reject','resolved','review','claim'],'处理方式无效')
-            if outcome=='claim':c.execute("UPDATE tickets SET assignee=?,status='processing' WHERE id=?",(u,tid))
+            outcome=d.get('outcome','resolved');self.require(outcome in ['refund','reject','resolved','review','claim','request_refund'],'处理方式无效')
+            if t['type']=='refund' and outcome in ['refund','reject','resolved']:
+                self.require(self.profile(u)['role']=='admin','退款审批仅限平台管理员；客服请提交处理建议',403)
+            self.require(not t['assignee'] or t['assignee']==u or self.profile(u)['role']=='admin','工单已由其他客服认领，请由管理员转派',409)
+            if outcome=='claim':
+                c.execute("UPDATE tickets SET assignee=?,status='processing' WHERE id=?",(u,tid))
             elif outcome=='review':c.execute("UPDATE tickets SET assignee=?,status='review',reason=? WHERE id=?",(u,reason,tid))
+            elif outcome=='request_refund':
+                self.require(t['type']=='refund' and t['order_id'],'只有售后工单可提交退款建议')
+                order=c.execute('SELECT total FROM orders WHERE id=?',(t['order_id'],)).fetchone()
+                amount=self.cents(d.get('amount',order['total']))
+                self.require(0<amount<=order['total'],'退款建议金额无效')
+                c.execute("UPDATE tickets SET assignee=?,status='review',reason=?,requested_amount=? WHERE id=?",(u,reason,amount,tid))
             else:
                 if t['order_id']:
                     r=c.execute('SELECT * FROM orders WHERE id=?',(t['order_id'],)).fetchone()
                     self.require(u not in [r['buyer_id'],r['seller_id']],'不能审核自己的交易',403)
                     if outcome=='refund':
                         self.require(t['type']=='refund' and r['status']=='disputed','只有争议退款工单可以退款')
+                        self.require(t['refund_mode']!='return_refund' or t['return_received_at'],'请先由卖家确认收到退回实物，再批准退款')
                         amount=self.cents(d.get('amount',r['total']));self.require(0<amount<=r['total'],'退款不能超过订单金额')
                         self.journal(c,r['id'],'refund',amount)
                         settled=c.execute("SELECT amount FROM ledger WHERE order_id=? AND kind='settlement'",(r['id'],)).fetchone()
@@ -78,30 +102,15 @@ class SupportService(ValidationMixin):
                         c.execute('UPDATE orders SET status=? WHERE id=?',(prior,r['id']))
                 c.execute("UPDATE tickets SET status='resolved',assignee=?,outcome=?,reason=? WHERE id=?",(u,outcome,reason,tid))
             c.execute('INSERT INTO audit(actor,type,reason,ticket_id,created) VALUES(?,?,?,?,?)',(u,'ticket_'+outcome,reason,tid,time.time()))
+            self.notify_ticket(c,tid,f'ticket:{tid}:{outcome}', '工单处理进度已更新',actor=u,internal=outcome in ['review','request_refund'])
         return {'ok':True}
 
     def credit_action(self,u,target,delta,reason,tid):
-        self.staff(u);self.require(self.profile(u)['role']=='admin','仅平台管理员可处理信誉',403)
-        self.require(u!=target,'不能处理自己的信誉');self.text(reason,1000,'处罚/复核理由');t=self.ticket(u,tid)
-        self.require(type(delta) is int and -100<=delta<=100 and delta!=0,'分值变动无效')
-        self.require(t['status']=='resolved','请先核实工单并记录处理结论')
-        self.check_conflict(u,t)
-        related=set()
-        if t['product_id']:related.add(self.product(t['product_id'])['seller_id'])
-        if t['order_id']:
-            order=self.order(u,t['order_id']);related.update([order['buyer_id'],order['seller_id']])
-            self.require(u not in related,'不能处理自己交易的信誉')
-        if t['type']=='appeal' and delta>0:related.add(t['user_id'])
-        self.require(target in related,'工单与该用户无处罚或复核关联')
-        with self.tx() as c:
-            self.require(c.execute('SELECT 1 FROM users WHERE id=?',(target,)).fetchone(),'用户不存在')
-            self.require(not c.execute("SELECT 1 FROM audit WHERE target=? AND ticket_id=? AND type='credit'",(target,tid)).fetchone(),'该工单已处理过此用户信誉，请另行复核')
-            c.execute('UPDATE users SET score=MAX(0,MIN(100,score+?)) WHERE id=?',(delta,target))
-            c.execute('INSERT INTO audit(actor,target,type,delta,reason,ticket_id,created) VALUES(?,?,?,?,?,?,?)',(u,target,'credit',delta,reason,tid,time.time()))
-        return self.profile(target)
+        self.staff(u)
+        self.require(False,'自由调整分数已停用，请使用规则处罚、申诉冲回或整改恢复接口',410)
 
     def credit_history(self,u):
-        return self.rows("SELECT delta,reason,ticket_id,created FROM audit WHERE target=? AND type='credit' ORDER BY id DESC",(u,))
+        return self.rows("SELECT id,delta,reason,ticket_id,created,rule_key,reversal_of,score_before,score_after FROM audit WHERE target=? AND type IN ('credit','credit_warning','credit_reversal','credit_recovery') ORDER BY id DESC",(u,))
 
     def review(self,u,oid,rating,body):
         o=self.order(u,oid);self.require(o['status']=='completed' and u in [o['buyer_id'],o['seller_id']],'完成真实有效订单后才能评价')
