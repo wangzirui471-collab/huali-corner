@@ -25,7 +25,7 @@ from pathlib import Path
 _WRITE = threading.RLock()
 
 SCHEMA='''
-CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,phone TEXT UNIQUE,nickname TEXT NOT NULL,college TEXT DEFAULT '计算机工程学院',major TEXT DEFAULT '',education TEXT DEFAULT '本科',bio TEXT DEFAULT '',role TEXT DEFAULT 'user',score INTEGER DEFAULT 100 CHECK(score BETWEEN 0 AND 100));
+CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,phone TEXT UNIQUE,nickname TEXT NOT NULL,college TEXT DEFAULT '计算机工程学院',major TEXT DEFAULT '',education TEXT DEFAULT '本科',bio TEXT DEFAULT '',role TEXT DEFAULT 'user',score INTEGER DEFAULT 100 CHECK(score BETWEEN 0 AND 100),status TEXT DEFAULT 'active');
 CREATE TABLE IF NOT EXISTS otp(phone TEXT PRIMARY KEY,digest TEXT,expires REAL,attempts INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INTEGER,expires REAL);
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
@@ -69,6 +69,8 @@ class Store:
             c.execute('PRAGMA journal_mode=DELETE')
             c.executescript(SCHEMA)
             if 'schedule_confirmed' not in [x[1] for x in c.execute('PRAGMA table_info(orders)')]:c.execute('ALTER TABLE orders ADD COLUMN schedule_confirmed INTEGER DEFAULT 0')
+            # 账号状态：active / banned(封禁) / deactivated(注销)。老库自动补列。
+            if 'status' not in [x[1] for x in c.execute('PRAGMA table_info(users)')]:c.execute("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'")
             c.execute("INSERT OR IGNORE INTO rooms(id,kind,name) VALUES(1,'general','广州校区总聊')")
     def connect(self):
         c=sqlite3.connect(self.path,timeout=20)

@@ -100,9 +100,25 @@ class SupportService(ValidationMixin):
             c.execute('INSERT INTO audit(actor,target,type,delta,reason,ticket_id,created) VALUES(?,?,?,?,?,?,?)',(u,target,'credit',delta,reason,tid,time.time()))
         return self.profile(target)
 
+    def ban_user(self,u,target,banned,reason):
+        """封禁 / 解封账号：比扣信誉分更硬的约束。封禁后账号立即下线、
+        在售商品下架、无法登录或发起任何操作（鉴权层会拦）。
+        仅平台管理员可操作，且不能封禁管理员或自己。"""
+        self.staff(u);self.require(self.profile(u)['role']=='admin','仅平台管理员可封禁账号',403)
+        self.require(u!=target,'不能封禁自己')
+        self.text(reason,500,'封禁/解封理由')
+        with self.tx() as c:
+            self.require(c.execute('SELECT 1 FROM users WHERE id=?',(target,)).fetchone(),'用户不存在',404)
+            self.require(c.execute('SELECT role FROM users WHERE id=?',(target,)).fetchone()['role']!='admin','不能封禁管理员',403)
+            c.execute("UPDATE users SET status=? WHERE id=?",('banned' if banned else 'active',target))
+            if banned:
+                c.execute('DELETE FROM sessions WHERE user_id=?',(target,))
+                c.execute("UPDATE products SET status='removed' WHERE seller_id=? AND status='available'",(target,))
+            c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',(u,target,'ban' if banned else 'unban',reason,time.time()))
+        return self.profile(target)
+
     def credit_history(self,u):
         return self.rows("SELECT delta,reason,ticket_id,created FROM audit WHERE target=? AND type='credit' ORDER BY id DESC",(u,))
-
     def review(self,u,oid,rating,body):
         o=self.order(u,oid);self.require(o['status']=='completed' and u in [o['buyer_id'],o['seller_id']],'完成真实有效订单后才能评价')
         self.require(type(rating) is int and 1<=rating<=5,'评分需1至5分')

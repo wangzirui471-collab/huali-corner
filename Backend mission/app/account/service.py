@@ -59,13 +59,14 @@ class AccountService(ValidationMixin):
         self._trial_only();phone=self._phone(phone)
         self.require(isinstance(password,str) and len(password)<=128,'手机号、密码或恢复码不正确',401)
         with self.connect() as c:self._lock_check(c,phone)
-        credential=self.row('SELECT p.* FROM password_credentials p JOIN users u ON u.id=p.user_id WHERE u.phone=?',(phone,))
+        credential=self.row('SELECT p.*,u.status FROM password_credentials p JOIN users u ON u.id=p.user_id WHERE u.phone=?',(phone,))
         # Perform the KDF even for an unknown phone; do not disclose account existence.
         digest=self._derive(password,credential['salt'] if credential else '00'*16,credential['rounds'] if credential else ROUNDS)
         with self.tx() as c:
             self._lock_check(c,phone)
-            current=c.execute('SELECT p.* FROM password_credentials p JOIN users u ON u.id=p.user_id WHERE u.phone=?',(phone,)).fetchone()
+            current=c.execute('SELECT p.*,u.status FROM password_credentials p JOIN users u ON u.id=p.user_id WHERE u.phone=?',(phone,)).fetchone()
             if not current or not secrets.compare_digest(current['digest'],digest):self._failed_auth(c,phone)
+            self.require(current['status']=='active','该账号已注销或已被封禁',403)
             c.execute('DELETE FROM auth_attempts WHERE phone=?',(phone,));uid=current['user_id'];token=self._session(c,uid)
         return self._trial_result(uid,token)
     def change_password(self,uid,old_password,new_password):
@@ -124,6 +125,8 @@ class AccountService(ValidationMixin):
                 if r:c.execute('UPDATE otp SET attempts=attempts+1 WHERE phone=?',(phone,))
                 c.commit();raise DomainError('验证码错误、过期或已使用',401)
             c.execute('DELETE FROM otp WHERE phone=?',(phone,))
+            existing=c.execute('SELECT status FROM users WHERE phone=?',(phone,)).fetchone()
+            self.require(not existing or existing['status']=='active','该账号已注销或已被封禁',403)
             c.execute('INSERT OR IGNORE INTO users(phone,nickname) VALUES(?,?)',(phone,'同学'+phone[-4:]))
             uid=c.execute('SELECT id FROM users WHERE phone=?',(phone,)).fetchone()[0]
             token=secrets.token_urlsafe(32)
@@ -131,14 +134,32 @@ class AccountService(ValidationMixin):
         return {'token':token,'user':self.profile(uid),'simulation':True}
 
     def user(self,token):
-        r=self.row('SELECT user_id FROM sessions WHERE token=? AND expires>?',(hashlib.sha256(token.encode()).hexdigest(),time.time()))
-        self.require(r,'请先登录',401);return r['user_id']
+        r=self.row('SELECT s.user_id,u.status FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires>?',(hashlib.sha256(token.encode()).hexdigest(),time.time()))
+        self.require(r,'请先登录',401)
+        self.require(r['status']=='active','账号已注销或已被封禁',403)
+        return r['user_id']
 
     def logout(self,token):
         with self.tx() as c:c.execute('DELETE FROM sessions WHERE token=?',(hashlib.sha256(token.encode()).hexdigest(),))
 
+    def deactivate(self,u):
+        """用户主动注销账号。保留订单、工单、信誉等记录（数据可追溯），
+        但账号立即下线、在售商品全部下架、之后不可再登录。
+        有未完结订单或未结案工单时禁止注销，堵住「货不对版就注销跑路」这条路。"""
+        with self.tx() as c:
+            open_order=c.execute("SELECT 1 FROM orders WHERE (buyer_id=? OR seller_id=?) AND status NOT IN ('completed','cancelled','refunded') LIMIT 1",(u,u)).fetchone()
+            self.require(not open_order,'还有未完成的订单，请先处理或申请售后后再注销')
+            open_ticket=c.execute("""SELECT 1 FROM tickets t LEFT JOIN orders o ON o.id=t.order_id
+                WHERE t.status NOT IN ('resolved','rejected')
+                  AND (t.user_id=? OR o.buyer_id=? OR o.seller_id=?) LIMIT 1""",(u,u,u)).fetchone()
+            self.require(not open_ticket,'还有未结案的工单，请等待处理完成后再注销')
+            c.execute("UPDATE users SET status='deactivated' WHERE id=?",(u,))
+            c.execute('DELETE FROM sessions WHERE user_id=?',(u,))
+            c.execute("UPDATE products SET status='removed' WHERE seller_id=? AND status='available'",(u,))
+        return {'ok':True}
+
     def profile(self,u):
-        r=self.row('SELECT id,nickname,college,major,education,bio,role,score FROM users WHERE id=?',(u,))
+        r=self.row('SELECT id,nickname,college,major,education,bio,role,score,status FROM users WHERE id=?',(u,))
         self.require(r,'用户不存在',404);return r
 
     def update_profile(self,u,d):

@@ -32,6 +32,15 @@ export const clicks = {
     go('home');
   },
 
+  deactivate: async () => {
+    if (!confirm('注销后账号立即下线、在售商品全部下架、无法再登录；订单、工单与信誉记录会保留以便追溯。有未完成订单或未结案工单时无法注销。确认注销账号？')) return;
+    await api('/auth/deactivate', {});
+    state.token = ''; state.me = null; state.cart = [];
+    sessionStorage.removeItem('hc-token');
+    toast('账号已注销');
+    go('home');
+  },
+
   'copy-recovery': async () => {
     await navigator.clipboard.writeText($('#recovery-code').textContent);
     toast('已复制，请私下保存');

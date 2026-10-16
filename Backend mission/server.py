@@ -87,6 +87,7 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/auth/password' and method=='POST':return self.respond(m.change_password(u,data.get('old_password'),data.get('new_password')))
             if p=='/api/me':return self.respond(m.update_profile(u,data) if method=='POST' else m.profile(u))
             if p=='/api/auth/logout':m.logout(self.token());return self.respond({'ok':True})
+            if p=='/api/auth/deactivate' and method=='POST':return self.respond(m.deactivate(u))
             if p=='/api/publish' and method=='POST':return self.respond(m.publish(u,data))
             if p=='/api/my-products':return self.respond(m.my_products(u,query.get('status')))
             if p=='/api/product/status' and method=='POST':return self.respond(m.set_product_status(u,int(data['id']),data['action']))
@@ -121,7 +122,7 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/moderate' and method=='POST':return self.respond(m.moderate(u,data))
             if p=='/api/nominate' and method=='POST':return self.respond(m.nominate(u,data))
             if p=='/api/admin':
-                m.staff(u);return self.respond({'users':m.rows('SELECT id,nickname,college,score,role FROM users'),'audit':m.rows('SELECT * FROM audit ORDER BY id DESC LIMIT 100'),'nominations':m.rows('SELECT n.*,u.nickname,r.name FROM nominations n JOIN users u ON u.id=n.user_id JOIN rooms r ON r.id=n.room_id')})
+                m.staff(u);return self.respond({'users':m.rows('SELECT id,nickname,college,score,role,status FROM users'),'audit':m.rows('SELECT * FROM audit ORDER BY id DESC LIMIT 100'),'nominations':m.rows('SELECT n.*,u.nickname,r.name FROM nominations n JOIN users u ON u.id=n.user_id JOIN rooms r ON r.id=n.room_id')})
             if p=='/api/admin/nominate' and method=='POST':
                 m.require(m.profile(u)['role']=='admin','仅平台管理员可任命',403)
                 with m.tx() as c:
@@ -129,6 +130,7 @@ class Handler(BaseHTTPRequestHandler):
                     c.execute("UPDATE nominations SET status='approved' WHERE id=?",(n['id'],));c.execute("UPDATE members SET role='moderator' WHERE room_id=? AND user_id=?",(n['room_id'],n['user_id']))
                     c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',(u,n['user_id'],'appointment','群管理员申请审核通过',time.time()))
                 return self.respond({'ok':True})
+            if p=='/api/admin/ban' and method=='POST':return self.respond(m.ban_user(u,int(data['target']),bool(data.get('banned',True)),data.get('reason','')))
             if p=='/api/reconcile':return self.respond(m.reconcile(u))
             if p=='/api/backup' and method=='POST':return self.respond({'ok':True,'file':Path(m.backup(u)).name})
             raise DomainError('接口不存在',404)

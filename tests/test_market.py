@@ -210,5 +210,28 @@ class MarketTests(unittest.TestCase):
         room2=self.m.join_room(self.a,'college')
         self.assertEqual(room2['id'],room['id'])
         self.assertEqual(self.m.row('SELECT role FROM members WHERE room_id=? AND user_id=?',(room['id'],self.a))['role'],'member')
+    def test_deactivate_blocks_when_open_order(self):
+        p=self.listing();self.checkout([p])  # 买家 b 下单未付款，双方都有未完成订单
+        with self.assertRaises(DomainError):self.m.deactivate(self.b)
+        with self.assertRaises(DomainError):self.m.deactivate(self.a)
+    def test_deactivate_removes_listings_and_blocks_login(self):
+        cid=self.login('13800000021');p=self.listing(cid)
+        self.m.deactivate(cid)
+        self.assertEqual(self.m.product(p)['status'],'removed')
+        self.assertEqual(self.m.profile(cid)['status'],'deactivated')
+        with self.assertRaises(DomainError):self.login('13800000021')
+    def test_ban_blocks_login_and_removes_listings(self):
+        cid=self.login('13800000022');p=self.listing(cid)
+        self.m.ban_user(self.staff,cid,True,'货不对版且失联')
+        self.assertEqual(self.m.profile(cid)['status'],'banned')
+        self.assertEqual(self.m.product(p)['status'],'removed')
+        with self.assertRaises(DomainError):self.login('13800000022')
+        self.m.ban_user(self.staff,cid,False,'核实后解封')
+        self.assertEqual(self.m.profile(cid)['status'],'active')
+        self.login('13800000022')
+    def test_ban_requires_admin_and_cannot_ban_self(self):
+        with self.assertRaises(DomainError):self.m.ban_user(self.staff,self.staff,True,'不能封自己')
+        cid=self.login('13800000023')
+        with self.assertRaises(DomainError):self.m.ban_user(cid,self.a,True,'非管理员不能封')
 
 if __name__=='__main__':unittest.main()

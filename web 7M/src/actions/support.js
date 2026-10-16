@@ -32,6 +32,22 @@ export const clicks = {
   // 信誉分只能由平台管理员、且必须挂在一张已核实的工单上调整。
   credit(b, id){
     modal(`<h2>信誉审核调整</h2><p class="muted">必须关联已核实工单，填写理由。举报不自动扣分，用户可申诉。</p><form id="credit-form" data-target="${id}">${field('关联工单编号','ticket_id','number','','required min="1"')}${field('调整分值（如 -10 或 +10）','delta','number','','required min="-100" max="100"')}<label class="field"><span>审核理由</span><textarea name="reason" required></textarea></label><button class="btn primary">确认调整并记录</button></form>`);
+  },
+
+  // 封禁 / 解封：比扣信誉分更硬的约束，仅管理员对非管理员账号操作。
+  ban: async (b, id) => {
+    const banning = b.dataset.value === 'true';
+    if (!confirm(banning ? `确认封禁用户 #${id}？封禁后立即下线、在售商品下架、无法登录。` : `确认解封用户 #${id}？`)) return;
+    let reason = '';
+    if (banning){
+      reason = (prompt('封禁理由（会写入审计记录）：') || '').trim();
+      if (!reason){ toast('需要填写封禁理由'); return; }
+    }else{
+      reason = '解封';
+    }
+    await api('/admin/ban', {target:id, banned:banning, reason});
+    toast(banning ? '已封禁' : '已解封');
+    await render();
   }
 };
 
