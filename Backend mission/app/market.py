@@ -41,7 +41,7 @@ class Market(Store, AccountService, CatalogService, TradeService,
             for upload in c.execute('SELECT id,path FROM uploads').fetchall():
                 local=self.root/'uploads'/Path(upload['path']).name
                 if local.exists():c.execute('UPDATE uploads SET path=? WHERE id=?',(str(local),upload['id']))
-            for phone,nick,role in ([] if trial else [('13800000001','林同学','user'),('13800000002','小陈同学','user'),('13800000003','转角客服','admin')]):
+            for phone,nick,role in ([] if trial else [('13800000001','林同学','user'),('13800000002','小陈同学','user'),('19065322759','转角客服','admin')]):
                 c.execute('INSERT OR IGNORE INTO users(phone,nickname,role,major) VALUES(?,?,?,?)',(phone,nick,role,'计算机科学与技术'))
 
 

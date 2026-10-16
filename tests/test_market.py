@@ -8,7 +8,7 @@ class MarketTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
         self.m=Market(self.tmp.name)
-        self.a=self.login('13800000011'); self.b=self.login('13800000012'); self.staff=self.login('13800000003')
+        self.a=self.login('13800000011'); self.b=self.login('13800000012'); self.staff=self.login('19065322759')
     def tearDown(self): self.tmp.cleanup()
     def login(self,phone):
         code=self.m.request_code(phone)['demo_code']

@@ -188,13 +188,13 @@ def main():
     except (DomainError,ValueError) as error:ap.error(str(error))
     if args.trial and not phone:
         # 学院试用版默认不 seed 任何账号，客服/群管理/信誉调整会无人可用。
-        # 这里自动补一个管理员：环境变量优先，没配就用固定手机号 + 随机密码，
-        # 密码只在首次创建时打印一次，重启不会覆盖已有账号的密码。
-        auto_phone='13900000000';auto_password=secrets.token_urlsafe(9)
+        # 这里自动补一个管理员：号码固定，密码用默认值，方便登录界面「管理员登录」一键进入。
+        # 登录后可在「我的」里修改密码；改密码后「一键登录」按钮就不再适用，需手动输入。
+        auto_phone='19065322759';auto_password='HualiCorner@2026'
         created=not server.market.row('SELECT 1 FROM users WHERE phone=?',(auto_phone,))
         server.market.bootstrap_admin(auto_phone,auto_password)
-        if created:print(f'已创建客服管理员：手机号 {auto_phone}，初始密码 {auto_password}（仅本次显示，请妥善保存）',flush=True)
-        else:print(f'客服管理员 {auto_phone} 已存在，未重复创建',flush=True)
+        if created:print(f'已创建管理员：手机号 {auto_phone}，默认密码 {auto_password}（仅本地试用，可登录后修改）',flush=True)
+        else:print(f'管理员 {auto_phone} 已存在，未重复创建',flush=True)
     def timer():
         while True:
             try:

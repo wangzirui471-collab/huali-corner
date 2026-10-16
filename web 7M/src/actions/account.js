@@ -25,6 +25,12 @@ export const clicks = {
     await setLogin(await api('/auth/login', {phone, code:c.demo_code}));
   },
 
+  // 试用版「管理员登录」：固定管理员号码 + 默认密码一键进入后台。
+  // 管理员改过密码后此按钮就不再适用，需手动输入新密码登录。
+  'admin-login': async () => {
+    await setLogin(await api('/auth/login', {phone:'19065322759', password:'HualiCorner@2026'}));
+  },
+
   logout: async () => {
     await api('/auth/logout', {});
     state.token = ''; state.me = null; state.cart = [];
