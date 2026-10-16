@@ -34,7 +34,7 @@ def build(output):
     # 前端已拆成 ES 模块，整棵 src/ 目录都要跟着导出。
     shutil.copytree(WEB/'src',output/'src')
     assets=output/'assets';assets.mkdir(exist_ok=True)
-    for name in (['market-demo-photos.png','logo-mark.svg','logo-mark-192.png']
+    for name in (['market-demo-photos.png','logo-mark.png','logo-mark-192.png']
                  +['book%d.svg'%n for n in range(6)]
                  +['item%d.svg'%n for n in range(3)]
                  +['electronics%d.jpg'%n for n in range(4)]):

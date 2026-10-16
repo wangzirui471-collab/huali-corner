@@ -192,9 +192,15 @@ def main():
         # 登录后可在「我的」里修改密码；改密码后「一键登录」按钮就不再适用，需手动输入。
         auto_phone='19065322759';auto_password='HualiCorner@2026'
         created=not server.market.row('SELECT 1 FROM users WHERE phone=?',(auto_phone,))
-        server.market.bootstrap_admin(auto_phone,auto_password)
-        if created:print(f'已创建管理员：手机号 {auto_phone}，默认密码 {auto_password}（仅本地试用，可登录后修改）',flush=True)
-        else:print(f'管理员 {auto_phone} 已存在，未重复创建',flush=True)
+        try:
+            server.market.bootstrap_admin(auto_phone,auto_password)
+            if created:print(f'已创建管理员：手机号 {auto_phone}，默认密码 {auto_password}（仅本地试用，可登录后修改）',flush=True)
+            else:print(f'管理员 {auto_phone} 已存在，未重复创建',flush=True)
+        except DomainError as error:
+            # 号码已被注册成普通账号时不能自动提权（防越权校验拦截）。
+            # 不能因此让整个服务起不来——提示运营者手动处理即可。
+            print(f'自动创建管理员跳过：{error}',flush=True)
+            print('如需把该号码升级为管理员，请直接在数据库中将其 users.role 改为 admin。',flush=True)
     def timer():
         while True:
             try:
