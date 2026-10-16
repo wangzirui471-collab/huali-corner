@@ -233,5 +233,14 @@ class MarketTests(unittest.TestCase):
         with self.assertRaises(DomainError):self.m.ban_user(self.staff,self.staff,True,'不能封自己')
         cid=self.login('13800000023')
         with self.assertRaises(DomainError):self.m.ban_user(cid,self.a,True,'非管理员不能封')
+    def test_reserved_and_sold_products_hidden_from_feed(self):
+        p=self.listing();self.assertEqual(len(self.m.products()),1)
+        self.checkout([p])  # 下单后商品进入 reserved
+        self.assertEqual(len(self.m.products()),0)
+        o=self.m.orders(self.b)[0]
+        self.m.order_action(self.b,o['id'],'pay',{});self.m.order_action(self.a,o['id'],'deliver',{})
+        self.m.order_action(self.b,o['id'],'handover',{});self.m.order_action(self.b,o['id'],'receive',{})
+        self.assertEqual(self.m.product(p)['status'],'sold')
+        self.assertEqual(len(self.m.products()),0)
 
 if __name__=='__main__':unittest.main()

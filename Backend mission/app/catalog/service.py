@@ -56,7 +56,8 @@ class CatalogService(ValidationMixin):
         f=filters or {};ids=self.rows('SELECT id FROM products ORDER BY id DESC');result=[]
         for row in ids:
             p=self.product(row['id'],u)
-            if p['status']=='removed':continue
+            # 主页商品流只展示「在售」：已售出、已预订、已下架的一律不出现。
+            if p['status']!='available':continue
             if f.get('seller') and p['seller_id']!=int(f['seller']):continue
             if f.get('category') and p['category']!=f['category']:continue
             if f.get('favorite') and not p['favorited']:continue
@@ -64,7 +65,6 @@ class CatalogService(ValidationMixin):
             if q:
                 hay=' '.join(str(p.get(k,'')) for k in ['title','description','isbn','publisher','major','edition']).lower()
                 if not all(word in hay for word in q):continue
-            if f.get('available') and p['status']!='available':continue
             result.append(p)
         if f.get('sort')=='price':result.sort(key=lambda p:p['price']+(p['delivery_fee'] if p['delivery']=='delivery' else 0))
         return result[:100]
