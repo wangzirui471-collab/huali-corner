@@ -1,4 +1,4 @@
-import argparse,base64,ipaddress,json,mimetypes,os,time,threading,traceback
+import argparse,base64,ipaddress,json,mimetypes,os,secrets,time,threading,traceback
 from pathlib import Path
 from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
 from urllib.parse import urlsplit,parse_qs,unquote
@@ -180,6 +180,15 @@ def main():
     if phone and not args.trial:ap.error('管理员初始化仅供--trial模式使用')
     try:server=make_server(root,args.port,not args.trial and not args.no_seed,trial=args.trial,host=args.host,public_origin=args.public_origin,trust_proxy=args.trust_proxy,admin=(phone,password) if phone else None,web=args.web)
     except (DomainError,ValueError) as error:ap.error(str(error))
+    if args.trial and not phone:
+        # 学院试用版默认不 seed 任何账号，客服/群管理/信誉调整会无人可用。
+        # 这里自动补一个管理员：环境变量优先，没配就用固定手机号 + 随机密码，
+        # 密码只在首次创建时打印一次，重启不会覆盖已有账号的密码。
+        auto_phone='13900000000';auto_password=secrets.token_urlsafe(9)
+        created=not server.market.row('SELECT 1 FROM users WHERE phone=?',(auto_phone,))
+        server.market.bootstrap_admin(auto_phone,auto_password)
+        if created:print(f'已创建客服管理员：手机号 {auto_phone}，初始密码 {auto_password}（仅本次显示，请妥善保存）',flush=True)
+        else:print(f'客服管理员 {auto_phone} 已存在，未重复创建',flush=True)
     def timer():
         while True:
             try:

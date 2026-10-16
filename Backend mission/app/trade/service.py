@@ -74,7 +74,7 @@ class TradeService(ValidationMixin):
                 self.require(buyer and status=='awaiting_handover','请在实际交接后确认')
                 c.execute("UPDATE orders SET status='awaiting_receipt',handover_at=? WHERE id=?",(now,oid))
             elif action=='receive':
-                self.require(buyer and status in ['awaiting_handover','awaiting_receipt','completed'],'当前不能确认收货')
+                self.require(buyer and status in ['awaiting_receipt','completed'],'请先核对交接再确认收货')
                 if status!='completed':self.complete(c,r,now)
             elif action=='confirm_schedule':
                 self.require(not buyer and status=='paid','仅卖家可在付款后确认时间')
@@ -159,4 +159,6 @@ class TradeService(ValidationMixin):
             for r in c.execute("SELECT * FROM orders WHERE status='paid' AND schedule_confirmed=0 AND created<?",(now-86400,)).fetchall():
                 self.journal(c,r['id'],'refund',r['total']);c.execute("UPDATE orders SET status='cancelled' WHERE id=?",(r['id'],));self.release(c,r)
             for r in c.execute("SELECT * FROM orders WHERE status='awaiting_receipt' AND handover_at<?",(now-86400,)).fetchall():
-                if not c.execute("SELECT 1 FROM tickets WHERE order_id=? AND type='refund' AND status NOT IN ('resolved','rejected')",(r['id'],)).fetchone():self.complete(c,r,now)
+                if not c.execute("SELECT 1 FROM tickets WHERE order_id=? AND type='refund' AND status NOT IN ('resolved','rejected')",(r['id'],)).fetchone():
+                    self.complete(c,r,now)
+                    c.execute('INSERT INTO order_notes(order_id,user_id,body,created) VALUES(?,?,?,?)',(r['id'],0,'超过24小时未确认收货，系统已自动完成收货并结算',now))

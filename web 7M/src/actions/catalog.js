@@ -53,7 +53,7 @@ export const clicks = {
 
   offer(b, id){
     if (!needLogin()) return;
-    modal(`<h2>给商品出个价</h2><p class="muted">卖家接受后，订单将采用该价格。送货费另算，不支持订单外补款。</p><form id="offer-form" data-id="${id}">${field('商品出价（元）','amount','number','','required min="0" max="10000" step="0.01"')}<button class="btn primary">提交出价</button></form>`);
+    modal(`<h2>给商品出个价</h2><p class="muted">出价需低于商品价、至少 1 元。卖家接受后，订单将采用该价格，送货费另算，不支持订单外补款。</p><form id="offer-form" data-id="${id}">${field('商品出价（元）','amount','number','','required min="1" max="10000" step="0.01"')}<button class="btn primary">提交出价</button></form>`);
   },
   'accept-offer': async (b, id) => {
     await api('/offer/accept', {id, accept:b.dataset.value === 'true'});

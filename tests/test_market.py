@@ -151,7 +151,7 @@ class MarketTests(unittest.TestCase):
         self.assertEqual(self.m.profile(self.a)['score'],90)
     def test_refund_after_settlement_reconciles_and_media_in_backup(self):
         o=self.checkout();oid=o['id']
-        self.m.order_action(self.b,oid,'pay',{});self.m.order_action(self.a,oid,'deliver',{});self.m.order_action(self.b,oid,'receive',{})
+        self.m.order_action(self.b,oid,'pay',{});self.m.order_action(self.a,oid,'deliver',{});self.m.order_action(self.b,oid,'handover',{});self.m.order_action(self.b,oid,'receive',{})
         t=self.m.create_ticket(self.b,dict(type='refund',order_id=oid,subject='退款',body='双方同意退货'))
         self.m.resolve_ticket(self.staff,t['id'],dict(outcome='refund',reason='核实退款',amount=o['total']))
         row=self.m.reconcile(self.staff)[0]
@@ -186,5 +186,29 @@ class MarketTests(unittest.TestCase):
         p=self.listing();path=self.m.backup(self.staff)
         self.assertTrue(Path(path).exists())
         self.assertEqual(Market(self.tmp.name).product(p)['title'],'高等数学 第七版')
+    def test_offer_cannot_be_zero_or_at_or_above_price(self):
+        p=self.listing()  # price=1500 分
+        with self.assertRaises(DomainError):self.m.offer(self.b,p,0)
+        with self.assertRaises(DomainError):self.m.offer(self.b,p,1500)
+        with self.assertRaises(DomainError):self.m.offer(self.b,p,1600)
+        self.m.offer(self.b,p,1000)
+    def test_accept_offer_rejects_when_product_unavailable(self):
+        p=self.listing();oid=self.m.offer(self.b,p,1000)['id']
+        self.m.set_product_status(self.a,p,'delist')
+        with self.assertRaises(DomainError):self.m.accept_offer(self.a,oid,True)
+        self.m.accept_offer(self.a,oid,False)
+        self.assertEqual(self.m.offers(self.a)[0]['status'],'rejected')
+    def test_receive_requires_handover_first(self):
+        o=self.checkout();oid=o['id']
+        self.m.order_action(self.b,oid,'pay',{});self.m.order_action(self.a,oid,'deliver',{})
+        with self.assertRaises(DomainError):self.m.order_action(self.b,oid,'receive',{})
+        self.m.order_action(self.b,oid,'handover',{});self.m.order_action(self.b,oid,'receive',{})
+        self.assertEqual(self.m.order(self.b,oid)['status'],'completed')
+    def test_first_joiner_becomes_college_group_owner(self):
+        room=self.m.join_room(self.b,'college')
+        self.assertEqual(self.m.row('SELECT role FROM members WHERE room_id=? AND user_id=?',(room['id'],self.b))['role'],'owner')
+        room2=self.m.join_room(self.a,'college')
+        self.assertEqual(room2['id'],room['id'])
+        self.assertEqual(self.m.row('SELECT role FROM members WHERE room_id=? AND user_id=?',(room['id'],self.a))['role'],'member')
 
 if __name__=='__main__':unittest.main()

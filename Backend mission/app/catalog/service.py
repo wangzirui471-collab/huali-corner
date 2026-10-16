@@ -60,7 +60,10 @@ class CatalogService(ValidationMixin):
             if f.get('seller') and p['seller_id']!=int(f['seller']):continue
             if f.get('category') and p['category']!=f['category']:continue
             if f.get('favorite') and not p['favorited']:continue
-            if f.get('q') and str(f['q']).lower() not in (' '.join(str(p.get(k,'')) for k in ['title','description','isbn','publisher','major','edition'])).lower():continue
+            q=str(f.get('q') or '').lower().split()
+            if q:
+                hay=' '.join(str(p.get(k,'')) for k in ['title','description','isbn','publisher','major','edition']).lower()
+                if not all(word in hay for word in q):continue
             if f.get('available') and p['status']!='available':continue
             result.append(p)
         if f.get('sort')=='price':result.sort(key=lambda p:p['price']+(p['delivery_fee'] if p['delivery']=='delivery' else 0))
@@ -94,15 +97,17 @@ class CatalogService(ValidationMixin):
         return self.product(pid,u)
 
     def react(self,u,p,kind,on):
-        self.product(p);self.require(kind in ['like','favorite'],'无效操作')
+        item=self.product(p);self.require(kind in ['like','favorite'],'无效操作')
+        self.require(item['status']!='removed','商品已下架，无法收藏或点赞')
         with self.tx() as c:
             if on:c.execute('INSERT OR IGNORE INTO reactions VALUES(?,?,?)',(u,p,kind))
             else:c.execute('DELETE FROM reactions WHERE user_id=? AND product_id=? AND kind=?',(u,p,kind))
         return self.product(p,u)
 
     def offer(self,u,p,amount):
-        item=self.product(p);self.cents(amount)
+        item=self.product(p);amount=self.cents(amount,'出价')
         self.require(item['seller_id']!=u and item['status']=='available','当前商品不能出价')
+        self.require(0<amount<item['price'],'出价需低于商品价且不能为0')
         with self.tx() as c:oid=c.execute('INSERT INTO offers(product_id,buyer_id,amount,created) VALUES(?,?,?,?)',(p,u,amount,time.time())).lastrowid
         return {'id':oid}
 
@@ -111,7 +116,9 @@ class CatalogService(ValidationMixin):
 
     def accept_offer(self,u,oid,accept):
         with self.tx() as c:
-            r=c.execute('SELECT o.*,p.seller_id FROM offers o JOIN products p ON p.id=o.product_id WHERE o.id=?',(oid,)).fetchone()
+            r=c.execute('SELECT o.*,p.seller_id,p.status product_status FROM offers o JOIN products p ON p.id=o.product_id WHERE o.id=?',(oid,)).fetchone()
             self.require(r and r['seller_id']==u,'不能处理他人报价',403)
+            self.require(r['status']=='pending','该报价已处理')
+            if accept:self.require(r['product_status']=='available','商品已下架或售出，不能接受报价')
             c.execute('UPDATE offers SET status=? WHERE id=?',('accepted' if accept else 'rejected',oid))
         return {'ok':True}

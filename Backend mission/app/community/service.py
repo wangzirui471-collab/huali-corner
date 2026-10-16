@@ -11,6 +11,7 @@ class CommunityService(ValidationMixin):
     def join_room(self,u,kind):
         self.require(kind in ['general','college'],'群类型不正确')
         college=self.profile(u)['college'] or '计算机工程学院'
+        created=False
         with self.tx() as c:
             if kind=='general': rid=1
             else:
@@ -21,7 +22,10 @@ class CommunityService(ValidationMixin):
                 else:
                     n=c.execute("SELECT COALESCE(MAX(sequence),0)+1 FROM rooms WHERE kind='college' AND college=?",(college,)).fetchone()[0]
                     rid=c.execute("INSERT INTO rooms(kind,name,college,sequence) VALUES('college',?,?,?)",(f'{college}交流{n}群',college,n)).lastrowid
-            c.execute('INSERT OR IGNORE INTO members(room_id,user_id) VALUES(?,?)',(rid,u))
+                    created=True
+            # 新建群的创建者自动成为群主，这样学院群里有人能禁言、删消息；
+            # 加入已有群或总聊则保持普通成员。
+            c.execute('INSERT OR IGNORE INTO members(room_id,user_id,role) VALUES(?,?,?)',(rid,u,'owner' if created else 'member'))
             return dict(c.execute('SELECT * FROM rooms WHERE id=?',(rid,)).fetchone())
     def private_room(self,u,peer):
         peer=int(peer);self.profile(peer);self.require(peer!=u,'不能给自己发私信')
