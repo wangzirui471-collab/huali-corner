@@ -3,6 +3,7 @@ import json
 import time
 import uuid
 from decimal import Decimal
+from .access import case_access
 
 
 class TicketEvidence:
@@ -30,14 +31,11 @@ class TicketEvidence:
         role = self.profile(user_id)['role']
         for row in self.rows('SELECT * FROM ticket_evidence WHERE upload_id=?', (upload_id,)):
             ticket = self.row('SELECT * FROM tickets WHERE id=?', (row['ticket_id'],))
-            participants = {ticket['user_id']}
-            if ticket['order_id']:
-                order = self.row('SELECT buyer_id,seller_id FROM orders WHERE id=?', (ticket['order_id'],))
-                participants.update([order['buyer_id'], order['seller_id']])
-            if user_id in participants:
+            participant, worker, _ = case_access(self, user_id, ticket)
+            if participant:
                 if not row['internal']:
                     return True
-            elif role == 'admin' or (role == 'support' and ticket['assignee'] == user_id):
+            elif worker:
                 return True
         return False
 

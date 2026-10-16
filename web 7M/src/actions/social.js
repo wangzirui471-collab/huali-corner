@@ -7,7 +7,7 @@ import { api } from '../core/http.js';
 import { go, render } from '../core/nav.js';
 import { modal, closeModal } from '../core/shell.js';
 import { needLogin } from '../auth/login.js';
-import { messageBubble } from '../pages/messages.js';
+import { appendMessages } from '../pages/messages.js';
 
 export const clicks = {
   chat: async (b, id) => {
@@ -66,11 +66,9 @@ export const submits = {
     form.reset();
     const messages = await api('/messages?room_id='+form.dataset.room+'&after='+state.messageCursor);
     const stream = $('#chat-stream');
-    for (const m of messages){
-      stream.insertAdjacentHTML('beforeend', messageBubble(m));
-      state.messageCursor = m.id;
-    }
-    stream.scrollTop = stream.scrollHeight;
+    if(!stream)return;
+    appendMessages(messages);
+    if(document.visibilityState!=='hidden'&&state.messageCursor)await api('/messages/read',{room_id:Number(form.dataset.room),through_id:state.messageCursor});
   },
 
   'comment-form': async ({ form, d }) => {

@@ -17,7 +17,7 @@ export function badges(count) {
         badge.dataset.notificationCount = '';
         badge.className = 'notification-badge';
         badge.textContent = count > 99 ? '99+' : String(count);
-        badge.setAttribute('aria-label', `订单售后未读${count}条`);
+        badge.setAttribute('aria-label', `订单、售后与私信通知未读${count}条`);
         button.append(badge);
       }
     });
@@ -48,7 +48,7 @@ export async function refresh() {
         const fresh = result.items.filter(item => !item.read_at && item.id > state.latest);
         if (fresh.length) {
           try {
-            const notice = new Notification('转角有新的订单／售后通知', {
+            const notice = new Notification('转角有新的订单／售后／私信通知', {
               body: '请进入消息中心查看处理。交易资金为模拟记录。', tag: 'zj-inbox-' + state.context.user.id,
             });
             state.windows.add(notice);
@@ -80,11 +80,11 @@ export function attach(context) {
   }
 
 export function rows(items, context) {
-    return items.map(item => `<button class="notification-row ${item.read_at ? '' : 'unread'}" data-inbox-action="open" data-notification-id="${item.id}" data-kind="${escape(item.entity_type)}" data-entity="${item.entity_id}"><span class="notification-symbol">${item.entity_type === 'order' ? '单' : '助'}</span><span><b>${escape(item.title)}</b><small>${item.entity_type === 'order' ? '订单' : '工单'} #${item.entity_id} · ${escape(context.date(item.created_at))}${item.read_at ? ' · 已读' : ' · 未读'}</small></span><span aria-hidden="true">›</span></button>`).join('');
+    return items.map(item => `<button class="notification-row ${item.read_at ? '' : 'unread'}" data-inbox-action="open" data-notification-id="${item.id}" data-kind="${escape(item.entity_type)}" data-entity="${item.entity_id}"><span class="notification-symbol">${item.entity_type === 'order' ? '单' : item.entity_type === 'chat' ? '聊' : '助'}</span><span><b>${escape(item.title)}</b><small>${item.entity_type === 'order' ? '订单' : item.entity_type === 'chat' ? '私信' : '工单'} #${item.entity_id} · ${escape(context.date(item.created_at))}${item.read_at ? ' · 已读' : ' · 未读'}</small></span><span aria-hidden="true">›</span></button>`).join('');
   }
 
 export async function panel(context) {
     const result = await context.request('/notifications');
-    return `<section class="panel inbox-panel" data-notification-center><div class="section-heading"><h2>订单与售后通知</h2><button class="text-button" data-inbox-action="refresh" data-latest="${result.latest_id}">刷新通知</button></div><p class="muted">仅显示你的订单和有权限处理的工单。未读 ${result.unread_count} 条。</p><div class="stack"><button class="btn secondary" data-inbox-action="read-all" data-through="${result.latest_id}" ${!result.unread_count ? 'disabled' : ''}>全部标为已读</button><button class="btn secondary" data-inbox-action="permission">开启浏览器提醒</button><button class="text-button" data-inbox-action="disable">关闭本机浏览器提醒</button></div><p class="muted" data-inbox-connection>${escape(permissionText())}</p><div class="notification-list">${rows(result.items,context) || '<p class="muted">暂无订单或售后通知。</p>'}</div>${result.has_more ? `<button class="btn secondary" data-inbox-action="more" data-before="${result.items.at(-1).id}">加载更早通知</button>` : ''}</section>`;
+    return `<section class="panel inbox-panel" data-notification-center><div class="section-heading"><h2>订单、售后与私信通知</h2><button class="text-button" data-inbox-action="refresh" data-latest="${result.latest_id}">刷新通知</button></div><p class="muted">仅显示你的订单、私信提醒和有权限处理的工单。未读 ${result.unread_count} 条。</p><div class="stack"><button class="btn secondary" data-inbox-action="read-all" data-through="${result.latest_id}" ${!result.unread_count ? 'disabled' : ''}>全部标为已读</button><button class="btn secondary" data-inbox-action="permission">开启浏览器提醒</button><button class="text-button" data-inbox-action="disable">关闭本机浏览器提醒</button></div><p class="muted" data-inbox-connection>${escape(permissionText())}</p><div class="notification-list">${rows(result.items,context) || '<p class="muted">暂无订单或售后通知。</p>'}</div>${result.has_more ? `<button class="btn secondary" data-inbox-action="more" data-before="${result.items.at(-1).id}">加载更早通知</button>` : ''}</section>`;
   }
 export const redraw=()=>badges(appState.inbox?.context.isCurrent()?appState.inbox.count:0);

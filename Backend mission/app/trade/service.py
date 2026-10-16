@@ -1,6 +1,7 @@
 """交易模块：合并下单、订单状态流转、付款前修改订单、模拟账务、超时任务。"""
 import json, time
 from .inventory import release_product
+from ..support.access import can_read_order
 from ..core.errors import ValidationMixin, DomainError
 
 
@@ -38,7 +39,7 @@ class TradeService(ValidationMixin):
 
     def order(self,u,oid):
         r=self.row('SELECT * FROM orders WHERE id=?',(oid,));self.require(r,'订单不存在',404)
-        self.require(u in [r['buyer_id'],r['seller_id']] or self.profile(u)['role'] in ['support','admin'],'不能查看他人订单',403)
+        self.require(can_read_order(self,u,r),'请先认领关联工单，或检查订单访问权限',403)
         r['items']=json.loads(r['items']);r['ledger']=self.rows('SELECT kind,amount,created FROM ledger WHERE order_id=? ORDER BY id',(oid,))
         r['changes']=self.rows('SELECT * FROM order_changes WHERE order_id=? ORDER BY id DESC',(oid,))
         r['notes']=self.rows('SELECT * FROM order_notes WHERE order_id=? ORDER BY id DESC',(oid,))
@@ -75,7 +76,7 @@ class TradeService(ValidationMixin):
                 if status!='cancelled':
                     if status=='paid':self.journal(c,oid,'refund',r['total'])
                     c.execute("UPDATE orders SET status='cancelled' WHERE id=?",(oid,));self.release(c,r)
-                    self.notify(c,[r['seller_id']],f'order:{oid}:cancelled','买家已取消订单','order',oid)
+                    self.notify(c,[r['seller_id'] if buyer else r['buyer_id']],f'order:{oid}:cancelled',('买家' if buyer else '卖家')+'已取消订单','order',oid)
             elif action=='deliver':
                 self.require(not buyer and status=='paid','仅卖家可在付款后标记交付')
                 c.execute("UPDATE orders SET status='awaiting_handover',schedule_confirmed=1,delivered_at=? WHERE id=?",(now,oid))

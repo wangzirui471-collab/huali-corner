@@ -7,6 +7,8 @@ class CommunityService(ValidationMixin):
 
     def rooms(self,u):
         joined=self.rows('SELECT r.*,m.role,m.muted,(SELECT COUNT(*) FROM members z WHERE z.room_id=r.id) count FROM rooms r JOIN members m ON m.room_id=r.id WHERE m.user_id=?',(u,))
+        joined=[self.room_view(u,room) for room in joined]
+        joined.sort(key=lambda room:(room['last_message'] or {}).get('id',0),reverse=True)
         return {'joined':joined,'general':self.row('SELECT *, (SELECT COUNT(*) FROM members WHERE room_id=1) count FROM rooms WHERE id=1'),'college':self.profile(u)['college']}
     def join_room(self,u,kind):
         self.require(kind in ['general','college'],'群类型不正确')
@@ -31,7 +33,7 @@ class CommunityService(ValidationMixin):
             c.execute("INSERT OR IGNORE INTO rooms(kind,name,pair) VALUES('private',?,?)",(self.profile(peer)['nickname'],pair))
             rid=c.execute('SELECT id FROM rooms WHERE pair=?',(pair,)).fetchone()[0]
             for uid in [u,peer]:c.execute('INSERT OR IGNORE INTO members(room_id,user_id) VALUES(?,?)',(rid,uid))
-        return self.row('SELECT * FROM rooms WHERE id=?',(rid,))
+        return self.room_view(u,self.row('SELECT * FROM rooms WHERE id=?',(rid,)))
     def member(self,u,r):
         m=self.row('SELECT * FROM members WHERE room_id=? AND user_id=?',(r,u))
         self.require(m is not None,'请先加入该群或会话',403);return m
@@ -46,7 +48,9 @@ class CommunityService(ValidationMixin):
             peer=self.row('SELECT user_id FROM members WHERE room_id=? AND user_id<>?',(r,u))['user_id']
             self.require(not self.row('SELECT 1 FROM blocks WHERE (user_id=? AND target=?) OR (user_id=? AND target=?)',(u,peer,peer,u)),'该会话已被屏蔽',403)
         with self.tx() as c:
-            c.execute('INSERT OR IGNORE INTO messages(room_id,user_id,body,created,request_key) VALUES(?,?,?,?,?)',(r,u,body,time.time(),key))
+            inserted=c.execute('INSERT OR IGNORE INTO messages(room_id,user_id,body,created,request_key) VALUES(?,?,?,?,?)',(r,u,body,time.time(),key))
+            if inserted.rowcount and room['kind']=='private':
+                self.notify(c,[peer],f'chat:{r}:message:{inserted.lastrowid}','你有新的私聊消息','chat',r)
         return {'ok':True}
     def block(self,u,target,enabled):
         self.require(u!=int(target),'不能屏蔽自己')

@@ -137,6 +137,7 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/rooms':return self.respond(m.rooms(u))
             if p=='/api/rooms/join' and method=='POST':return self.respond(m.join_room(u,data['kind']))
             if p=='/api/rooms/private' and method=='POST':return self.respond(m.private_room(u,int(data['peer'])))
+            if p=='/api/messages/read' and method=='POST':return self.respond(m.read_messages(u,int(data['room_id']),data['through_id']))
             if p=='/api/messages':return self.respond(m.send_message(u,int(data['room_id']),data['body'],data['key']) if method=='POST' else m.messages(u,int(query['room_id']),int(query.get('after',0))))
             if p=='/api/block' and method=='POST':return self.respond(m.block(u,int(data['target']),bool(data.get('enabled',True))))
             if p=='/api/posts' and method=='POST':return self.respond(m.add_post(u,data))

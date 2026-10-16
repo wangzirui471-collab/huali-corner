@@ -42,7 +42,8 @@ export const submits = {
       evidence:await uploadEvidenceFiles(form,context()),
       type:form.dataset.type,
       order_id:Number(form.dataset.order) || null,
-      product_id:Number(form.dataset.product) || null
+      product_id:Number(form.dataset.product) || null,
+      related_ticket_id:Number(form.dataset.related) || null
     });
     closeModal();
     go('ticket/'+r.id);

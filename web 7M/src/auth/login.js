@@ -8,6 +8,7 @@ import { render } from '../core/nav.js';
 import { modal, closeModal } from '../core/shell.js';
 import { stop } from '../core/inbox.js';
 import { field } from '../components/forms.js';
+import { clearAccountCaches } from '../core/account-cache.js';
 
 export function publicDemoNotice(){
   modal(`<span class="eyebrow">HUALI CORNER PREVIEW</span><h2>先逛逛，看看转角</h2><p>这是公开演示版，不收集手机号、收货地址、照片或聊天内容，也不进行真实交易。</p><p class="muted">可以体验搜索、分类、商品详情、卖家主页和社区样例。其余功能可在本地模拟版体验。</p><button class="btn primary full" data-action="close">继续逛逛</button>`);
@@ -20,9 +21,11 @@ export function needLogin(){
 }
 
 export function clearAccount(){
+  clearAccountCaches(state.me?.id);
   stop();
   if(state.draftEditor)clearTimeout(state.draftEditor.timer);
   state.draftEditor=null;
+  state.draftGeneration++;
   state.token = ''; state.me = null; state.cart = [];
   clearPoll();
   sessionStorage.removeItem('hc-token');

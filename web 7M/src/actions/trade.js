@@ -47,6 +47,10 @@ export const clicks = {
 
 export const submits = {
   'order-edit-form': async ({ form, d, fd }) => {
+    if (form.dataset.role === 'seller') {
+      await api('/order/update', {id:Number(form.dataset.id), appointment:new Date(d.appointment).getTime()/1000});
+      closeModal(); toast('交付时间已修改'); await render(); return;
+    }
     const keep = fd.getAll('keep').map(Number);
     if (!keep.length) throw new Error('订单至少要保留一件商品');
     await api('/order/update', {

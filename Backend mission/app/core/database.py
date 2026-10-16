@@ -9,6 +9,7 @@ import sqlite3, json, time, threading
 from contextlib import contextmanager
 from pathlib import Path
 from ..catalog.migrations import migrate_catalog
+from ..community.migrations import migrate_community
 
 # 写事务串行锁：让并发写入在 Python 层排队，而不是各自去撞 SQLite 的写锁。
 #
@@ -84,7 +85,7 @@ class Store:
             additions = {
                 'users': [('is_active', 'INTEGER NOT NULL DEFAULT 1'), ('trading_blocked', 'INTEGER NOT NULL DEFAULT 0')],
                 'tickets': [('refund_mode', "TEXT NOT NULL DEFAULT 'refund_only'"), ('return_sent_at', 'REAL'),
-                            ('return_received_at', 'REAL'), ('requested_amount', 'INTEGER')],
+                            ('return_received_at', 'REAL'), ('requested_amount', 'INTEGER'), ('related_ticket_id', 'INTEGER')],
                 'audit': [('rule_key', "TEXT NOT NULL DEFAULT ''"), ('reversal_of', 'INTEGER'),
                           ('score_before', 'INTEGER'), ('score_after', 'INTEGER')],
             }
@@ -95,6 +96,7 @@ class Store:
                         c.execute('ALTER TABLE '+table+' ADD COLUMN '+name+' '+definition)
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS audit_reversal_once ON audit(reversal_of) WHERE reversal_of IS NOT NULL')
             migrate_catalog(c)
+            migrate_community(c)
             c.execute("INSERT OR IGNORE INTO rooms(id,kind,name) VALUES(1,'general','广州校区总聊')")
     def connect(self):
         c=sqlite3.connect(self.path,timeout=20)

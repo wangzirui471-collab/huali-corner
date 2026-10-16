@@ -6,6 +6,7 @@ import { state } from '../core/state.js';
 import { api } from '../core/http.js';
 import { go, render } from '../core/nav.js';
 import { loginModal, trialLoginModal, changePasswordModal, recoveryNotice, setLogin, clearAccount } from '../auth/login.js';
+import { suspend } from '../core/drafts.js';
 
 export const clicks = {
   login: () => loginModal(),
@@ -26,10 +27,8 @@ export const clicks = {
   },
 
   logout: async () => {
-    await api('/auth/logout', {});
-    state.token = ''; state.me = null; state.cart = [];
-    sessionStorage.removeItem('hc-token');
-    go('home');
+    try{await suspend();await api('/auth/logout', {});}
+    finally{clearAccount();go('home');}
   },
 
   'copy-recovery': async () => {

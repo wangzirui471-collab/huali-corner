@@ -1,6 +1,7 @@
 """客服模块：工单受理与处理、信誉调整、订单评价。"""
 import json, time
 from ..core.errors import ValidationMixin, DomainError
+from .access import case_access, case_participants
 
 
 class SupportService(ValidationMixin):
@@ -11,28 +12,37 @@ class SupportService(ValidationMixin):
         self.require(refund_mode in ['refund_only','return_refund'],'退款方式无效')
         evidence=self.validate_evidence(u,d.get('evidence',[]))
         with self.tx() as c:
+            related=d.get('related_ticket_id') or None
+            if related:
+                self.require(typ=='appeal','只有申诉可以关联原工单')
+                original=c.execute('SELECT * FROM tickets WHERE id=?',(int(related),)).fetchone()
+                self.require(original and u in case_participants(self,original),'不能关联他人工单',403)
+                self.require(original['status']=='resolved','请先在原工单补充材料，结案后可申请复核',409)
+                oid=original['order_id'];pid=original['product_id']
             if oid:
                 r=c.execute('SELECT * FROM orders WHERE id=?',(int(oid),)).fetchone()
                 self.require(r and u in [r['buyer_id'],r['seller_id']],'不能关联他人订单',403)
                 if typ=='refund':
                     self.require(u==r['buyer_id'] and r['status'] in ['paid','awaiting_handover','awaiting_receipt','completed','disputed'],'订单当前不能申请退款')
                     self.require(not c.execute("SELECT 1 FROM tickets WHERE order_id=? AND type='refund' AND status NOT IN ('resolved','rejected')",(oid,)).fetchone(),'已有待处理退款')
+                    if not r['delivered_at']:refund_mode='refund_only'
                     c.execute("UPDATE orders SET status='disputed' WHERE id=?",(oid,))
             else:self.require(typ!='refund','退款必须关联订单')
             if pid:self.product(int(pid))
             tid=c.execute('INSERT INTO tickets(user_id,order_id,product_id,type,subject,body,created) VALUES(?,?,?,?,?,?,?)',(u,oid,pid,typ,subject,body,time.time())).lastrowid
-            c.execute('UPDATE tickets SET refund_mode=? WHERE id=?',(refund_mode,tid))
+            c.execute('UPDATE tickets SET refund_mode=?,related_ticket_id=? WHERE id=?',(refund_mode,related,tid))
             self.save_evidence(c,tid,u,evidence,False)
             self.notify_ticket(c,tid,f'ticket:{tid}:created','有新的售后／反馈工单',actor=u,queue=True)
         return self.ticket(u,tid)
 
     def ticket(self,u,tid):
         r=self.row('SELECT t.*,u.nickname FROM tickets t JOIN users u ON u.id=t.user_id WHERE t.id=?',(tid,));self.require(r,'工单不存在',404)
-        staff=self.profile(u)['role'] in ['support','admin'];allowed=r['user_id']==u
-        if r['order_id']:
-            o=self.row('SELECT buyer_id,seller_id FROM orders WHERE id=?',(r['order_id'],));allowed=allowed or u in [o['buyer_id'],o['seller_id']]
-        self.require(allowed or staff,'不能查看他人工单',403)
-        staff=staff and not allowed
+        allowed,staff,worker=case_access(self,u,r)
+        self.require(allowed or worker,'不能查看他人工单',403)
+        r['restricted']=not (allowed or staff)
+        if r['restricted']:
+            safe={k:r.get(k) for k in ['id','user_id','order_id','product_id','type','subject','status','assignee','created','nickname']}
+            return {**safe,'restricted':True,'body':'','reason':'','messages':[],'evidence':[]}
         r['messages']=self.rows('SELECT m.*,u.nickname FROM ticket_messages m JOIN users u ON u.id=m.user_id WHERE ticket_id=? AND (?=1 OR internal=0) ORDER BY m.id',(tid,int(staff)))
         r['evidence']=[{'id':x['upload_id'],'url':'/media/'+x['upload_id'],'internal':bool(x['internal'])} for x in self.rows('SELECT upload_id,internal FROM ticket_evidence WHERE ticket_id=? AND (?=1 OR internal=0) ORDER BY created_at',(tid,int(staff)))]
         return r
@@ -43,11 +53,17 @@ class SupportService(ValidationMixin):
         return [self.ticket(u,r['id']) for r in ids]
 
     def reply_ticket(self,u,tid,d):
-        self.ticket(u,tid);internal=d.get('internal',False)
+        internal=d.get('internal',False)
         self.require(type(internal) is bool,'内部备注状态必须为布尔值')
         if internal:self.staff(u)
         evidence=self.validate_evidence(u,d.get('evidence',[]))
         with self.tx() as c:
+            ticket=c.execute('SELECT * FROM tickets WHERE id=?',(tid,)).fetchone()
+            self.require(ticket,'工单不存在',404)
+            participant,worker,_=case_access(self,u,ticket)
+            self.require(participant or worker,'请先认领工单后回复',403)
+            self.require(not internal or worker,'当事人不能使用内部备注',403)
+            self.require(ticket['status']!='resolved','工单已结案，请通过关联申诉申请复核',409)
             message_id=c.execute('INSERT INTO ticket_messages(ticket_id,user_id,body,internal,created) VALUES(?,?,?,?,?)',(tid,u,self.text(d.get('body') or ('补充图片证据' if evidence else ''),2000,'回复'),int(internal),time.time())).lastrowid
             self.save_evidence(c,tid,u,evidence,internal)
             self.notify_ticket(c,tid,f'ticket:{tid}:reply:{message_id}','工单有新的回复或材料',actor=u,internal=internal)
@@ -68,7 +84,9 @@ class SupportService(ValidationMixin):
         self.check_conflict(u,t)
         with self.tx() as c:
             t=c.execute('SELECT * FROM tickets WHERE id=?',(tid,)).fetchone()
-            if t['status']=='resolved':return {'ok':True}
+            if t['status']=='resolved':
+                self.require(d.get('outcome','resolved')==t['outcome'],'工单已结案，请通过关联申诉申请复核',409)
+                return {'ok':True}
             outcome=d.get('outcome','resolved');self.require(outcome in ['refund','reject','resolved','review','claim','request_refund'],'处理方式无效')
             if t['type']=='refund' and outcome in ['refund','reject','resolved']:
                 self.require(self.profile(u)['role']=='admin','退款审批仅限平台管理员；客服请提交处理建议',403)
@@ -88,7 +106,9 @@ class SupportService(ValidationMixin):
                     self.require(u not in [r['buyer_id'],r['seller_id']],'不能审核自己的交易',403)
                     if outcome=='refund':
                         self.require(t['type']=='refund' and r['status']=='disputed','只有争议退款工单可以退款')
-                        self.require(t['refund_mode']!='return_refund' or t['return_received_at'],'请先由卖家确认收到退回实物，再批准退款')
+                        if not r['delivered_at']:
+                            c.execute("UPDATE tickets SET refund_mode='refund_only' WHERE id=?",(tid,))
+                        else:self.require(t['refund_mode']!='return_refund' or t['return_received_at'],'请先由卖家确认收到退回实物，再批准退款')
                         amount=self.cents(d.get('amount',r['total']));self.require(0<amount<=r['total'],'退款不能超过订单金额')
                         self.journal(c,r['id'],'refund',amount)
                         settled=c.execute("SELECT amount FROM ledger WHERE order_id=? AND kind='settlement'",(r['id'],)).fetchone()

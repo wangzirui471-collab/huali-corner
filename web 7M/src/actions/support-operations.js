@@ -1,6 +1,6 @@
 import { context as getContext } from '../core/context.js';
 import { e, field, evidenceInput, names, types, amountText } from '../components/support-fields.js';
-import { support } from '../pages/support.js';
+import { support, ticketModal } from '../pages/support.js';
 export async function uploadEvidenceFiles(form, context = getContext()) {
     const input = form.querySelector('input[name=evidence]');
     const files = [...(input?.files || [])];
@@ -38,6 +38,7 @@ export async function operationClick(button){
     try {
       if (button.hasAttribute('data-credit-user')) { await creditDialog(context, Number(button.dataset.creditUser)); return; }
       const action = button.dataset.operation;
+      if(action==='appeal-case'){await ticketModal('appeal',null,null,Number(button.dataset.id));return;}
       const id = button.dataset.id;
       if (action === 'refresh-cases') await support(context, button.dataset.staff === 'true');
       else if (action === 'credit-rules') {
