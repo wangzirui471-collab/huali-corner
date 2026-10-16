@@ -36,6 +36,11 @@ class CatalogEditing:
             self._editable_listing(p)
             self.require(p['version']==version,'商品已被修改，请读取新版后再保存',409)
             data=self._validated_listing(c,user_id,self._listing_from_draft(fields))
+            # Proof is server-owned private metadata, absent from the public edit DTO.
+            prior=json.loads(p['data'])
+            if prior.get('proof'):
+                clean=json.loads(data['data']);clean['proof']=prior['proof']
+                data['data']=json.dumps(clean,ensure_ascii=False)
             changed=any(p[k]!=v for k,v in data.items())
             c.execute('UPDATE products SET title=?,category=?,price=?,delivery_fee=?,delivery=?,region=?,data=?,version=version+1 WHERE id=? AND version=?',
                 (*data.values(),product_id,version))

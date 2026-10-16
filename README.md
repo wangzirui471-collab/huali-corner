@@ -4,9 +4,9 @@
 
 **本轮分层升级**：商品编辑、下架恢复、组合筛选与分页已接入；保留私密草稿、独立客服、退货重售、信誉和通知。详见 [本轮交付与升级说明](docs/LAYERED_COMPLETION.md)。源码包可用 `python scripts/build_trial_package.py --output /tmp/zhuanjiao-trial.zip` 生成，包含完整后端包、ES模块树及小程序，不带运行数据。
 
-**计算机工程学院可登录试用版**：下载 `artifacts/huali-corner-trial.zip`，解压后双击 `start-trial.bat`，或运行 `python "Backend mission/server.py" --trial`。同学使用手机号＋密码独立注册，不发送短信、号码未验证；支持发布、收藏、聊天与模拟交易。独立的 `var-trial/` 保留账号和图片，关闭共享测试验证码与客服快捷登录。管理员由运营者单独创建。见[试用与后端部署说明](docs/TRIAL.md)；仍需真实部署后才有同学可访问的公网网址。
+**计算机工程学院可登录试用版**：在当前功能分支选择 **Code → Download ZIP** 下载全部源码，或使用本轮交付的分层试用ZIP；解压后双击 `start-trial.bat`，或运行 `python "Backend mission/server.py" --trial`。同学使用手机号＋密码独立注册，不发送短信、号码未验证；支持发布、收藏、聊天与模拟交易。独立的 `var-trial/` 保留账号和图片，关闭共享测试验证码与客服快捷登录。管理员由运营者单独创建。见[试用与后端部署说明](docs/TRIAL.md)；仍需真实部署后才有同学可访问的公网网址。
 
-要发链接给同学看效果，可使用独立的[公开演示版部署说明](docs/PUBLIC_DEMO.md)。仓库 `artifacts/huali-corner-public-demo.zip` 可直接解压后上传静态托管平台，不需要让自己的电脑持续运行。该包只展示虚构数据，未提供真实注册、地址填写、交易或后台入口。公网网址需要在托管平台实际部署后生成。
+要发链接给同学看效果，可使用独立的[公开演示版部署说明](docs/PUBLIC_DEMO.md)。先运行 `python scripts/build_public_demo.py --output dist/public-demo` 导出，再把该目录上传静态托管平台；静态演示不需要让自己的电脑持续运行。该包只展示虚构数据，未提供真实注册、地址填写、交易或后台入口。公网网址需要在托管平台实际部署后生成。
 
 ## 目录结构
 

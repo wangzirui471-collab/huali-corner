@@ -19,3 +19,9 @@ Task 4 complete: 组合筛选5个用例RED→GREEN；500件数据匹配、游标
 - 构建测试先因缺少打包器失败，增加白名单源码ZIP后通过；启动脚本取消按端口强杀进程，保留手动选择8081和错误信息。
 
 Task 5 pre-review: Python105/105、ES49、native8、frontend_session通过；layered_browser8组、public_demo_smoke、ui_redesign_smoke、browser_smoke和源码包解压启动验证全部通过。源码包不带运行数据，Windows/微信原机未执行。
+
+Final review: fresh independent reviewer completed; 3 Important/P2, no Critical or confirmed Minor. Initial requested model was unavailable due usage quota; next available independent model completed the read-only review.
+Final: fixed buyer restriction/checkout race — test_fraud_restriction_committed_before_checkout_write_is_respected RED→GREEN.
+Final: fixed private proof loss on price-only edit — test_price_edit_preserves_server_owned_private_purchase_proof RED→GREEN; public DTO still hides proof.
+Final: fixed old upload overwriting newer suspended draft recovery — frontend_cache.test.mjs actual delayed upload RED→GREEN; durable editor generation remains after suspension.
+Final verification: Python107/107; ES49 with graph; frontend_session + frontend_cache; native8; layered_browser8 journeys + legacy browser + static subpath + redesign4 widths; clean source ZIP startup all pass. No deferred minors or declined finding rulings; Windows/WeChat/public/real payment remain unverified scope.

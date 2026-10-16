@@ -70,3 +70,46 @@ class CatalogEditingTests(unittest.TestCase):
         self.market.order_action(self.buyer,order['id'],'cancel',{})
         self.assertEqual(self.market.product(pid)['status'],'removed')
         self.assertEqual(self.market.product(pid)['removal_reason'],'credit_block')
+
+    def test_price_edit_preserves_server_owned_private_purchase_proof(self):
+        draft=self.draft();data=self.market._listing_from_draft(draft['fields'])
+        import io
+        from PIL import Image
+        image=io.BytesIO();Image.new('RGB',(80,80),'yellow').save(image,'PNG')
+        proof=self.market.add_upload(self.seller,image.getvalue(),'proof',private=True)['id']
+        pid=self.market.publish(self.seller,{**data,'proof':proof})['id']
+        dto=self.market.product_edit(self.seller,pid)
+        self.assertNotIn('proof',dto['fields'])
+        self.market.edit_product(self.seller,pid,dto['version'],{**dto['fields'],'price':'18.25'})
+        stored=json.loads(self.market.row('SELECT data FROM products WHERE id=?',(pid,))['data'])
+        self.assertEqual(stored.get('proof'),proof)
+        self.assertNotIn('proof',self.market.product(pid,self.buyer))
+
+    def test_fraud_restriction_committed_before_checkout_write_is_respected(self):
+        import threading
+        from contextlib import contextmanager
+        initial=self.listing()
+        first=self.market.checkout(self.buyer,dict(product_ids=[initial],delivery='pickup',appointment=time.time()+3600,key='previous-deal'))
+        report=self.market.create_ticket(self.seller,dict(type='report',order_id=first['id'],subject='买家违规',body='已核实欺诈证据'))
+        self.market.resolve_ticket(self.admin,report['id'],dict(outcome='resolved',reason='核实买家独立违规事件'))
+        target=self.listing();original_tx=self.market.tx;entered=threading.Event();resume=threading.Event();results=[]
+        @contextmanager
+        def delayed_tx():
+            if threading.current_thread().name=='racing-checkout':
+                entered.set()
+                if not resume.wait(5):raise RuntimeError('race test did not release checkout')
+            with original_tx() as connection:yield connection
+        self.market.tx=delayed_tx
+        def checkout():
+            try:results.append(self.market.checkout(self.buyer,dict(product_ids=[target],delivery='pickup',appointment=time.time()+3600,key='new-deal')))
+            except Exception as error:results.append(error)
+        worker=threading.Thread(target=checkout,name='racing-checkout');worker.start()
+        try:
+            self.assertTrue(entered.wait(5))
+            self.market.apply_penalty(self.admin,self.buyer,report['id'],'fraud','核实后限制新交易')
+        finally:resume.set();worker.join(5);self.market.tx=original_tx
+        self.assertFalse(worker.is_alive())
+        self.assertIsInstance(results[0],DomainError)
+        self.assertEqual(results[0].status,403)
+        self.assertEqual(len(self.market.rows('SELECT id FROM orders')),1)
+        self.assertEqual(self.market.product(target)['status'],'available')

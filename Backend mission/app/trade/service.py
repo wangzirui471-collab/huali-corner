@@ -6,7 +6,6 @@ from ..core.errors import ValidationMixin, DomainError
 
 class TradeService(ValidationMixin):
     def checkout(self,u,d):
-        self.require(not self.row('SELECT trading_blocked FROM users WHERE id=?',(u,))['trading_blocked'],'当前账号已限制新交易，可申请申诉',403)
         ids=d.get('product_ids');self.require(isinstance(ids,list) and 1<=len(ids)<=20 and len(set(ids))==len(ids),'请选择1至20件不同商品')
         key=self.text(d.get('key'),100,'请求标识');delivery=d.get('delivery');self.require(delivery in ['pickup','delivery'],'交付方式错误')
         try:appointment=float(d.get('appointment',0))
@@ -14,6 +13,8 @@ class TradeService(ValidationMixin):
         self.require(time.time()+60<appointment<time.time()+86400*30,'请选择未来30天内的交付时间')
         address=self.text(d.get('address'),150,'收货公共地点') if delivery=='delivery' else ''
         with self.tx() as c:
+            buyer=c.execute('SELECT is_active,trading_blocked FROM users WHERE id=?',(u,)).fetchone()
+            self.require(buyer and buyer['is_active'] and not buyer['trading_blocked'],'当前账号已限制新交易或已停用，可申请申诉',403)
             old=c.execute('SELECT id FROM orders WHERE buyer_id=? AND request_key=?',(u,key)).fetchone()
             if old:return self.order(u,old['id'])
             products=[c.execute('SELECT * FROM products WHERE id=?',(i,)).fetchone() for i in ids]

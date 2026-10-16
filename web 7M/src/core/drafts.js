@@ -19,7 +19,7 @@ export function status(state, message, conflict = false) {
   }
 
 export function cache(state) {
-    if (!state.touched || !state.deps.isCurrent() || (appState.draftEditor && appState.draftEditor !== state)) return;
+    if (state.generation !== appState.draftGeneration || !state.touched || !state.deps.isCurrent() || (appState.draftEditor && appState.draftEditor !== state)) return;
     try {
       localStorage.setItem(cacheKey(state.deps.user.id,state.productId), JSON.stringify({
         id: state.id, version: state.version, fields: fields(state),

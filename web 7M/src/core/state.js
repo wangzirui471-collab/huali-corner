@@ -7,6 +7,7 @@ export const state = {
   token: window.HUALI_STATIC_DEMO ? '' : sessionStorage.getItem('hc-token') || '',
   me: null,
   draftEditor: null,
+  draftGeneration:0,
   inbox: null,
   feed: null,
   mediaURLs:new Set(),

@@ -16,6 +16,7 @@ export async function editProduct(id){
     queue:Promise.resolve(),uploads:new Set(),urls:new Set(),failed:new Set(cached?.failed_angles||[]),
     generations:{},localOK:true,conflict:!!cached && cached.version!==dto.version,touched:!!cached,timer:null,
     lastSaved:cached?'':JSON.stringify(dto.fields)};
+  editor.generation=++appState.draftGeneration;
   appState.draftEditor=editor;
   deps.shell(publishForm(editor,deps));
   mountPublisher(editor);

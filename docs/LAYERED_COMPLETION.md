@@ -45,6 +45,7 @@
 python3 -m unittest discover -s tests -v
 node tests/frontend_modules.test.mjs
 node tests/frontend_session.test.mjs
+node tests/frontend_cache.test.mjs
 # 逐个运行 tests/native_*.test.js
 python3 tests/layered_browser_smoke.py
 python3 tests/public_demo_smoke.py
@@ -61,8 +62,10 @@ python3 scripts/build_trial_package.py --output /tmp/zhuanjiao-trial.zip
 
 ## 本轮已执行记录
 
-- Python：105项通过，包括两种旧版数据迁移、并发与库存、草稿/客服/信誉/通知、HTTP和打包检查。
-- 网页：49个模块真实加载、显式静态依赖图无环；发布晚返回/切换页面保护脚本通过。
+- Python：107项通过，包括两种旧版数据迁移、并发与库存、草稿/客服/信誉/通知、HTTP和打包检查。
+- 网页：49个模块真实加载、显式静态依赖图无环；发布晚返回/切换页面保护和挂起草稿的晚上传保护脚本通过。
 - 原生客户端：8个Node脚本通过，含编辑版本、金额/查询合同和会话切换；这不是微信工具编译或真机验收。
 - Linux Chromium：分层试用8组完整流程、旧完整交易/售后/群聊流程、公开静态子路径/只读检查、原视觉首屏与375/390/768/1440布局检查通过。
 - 干净源码ZIP：校验文件哈希、解压、空库试用启动与health/config/search/模块入口请求通过。
+
+独立审查确认的3项P2均已用先失败、后通过的回归修复，见 [独立审查记录](reviews/2026-10-16-layered-review.md)。未确认的Windows/微信真机等范围仍单列。

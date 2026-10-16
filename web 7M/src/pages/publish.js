@@ -41,6 +41,7 @@ export async function publish(draftId) {
       state.photos = draft.fields.photos.map(id => state.photos.find(item => item.id === id)).filter(Boolean);
     }
     if(!deps.isVisible())return;
+    state.generation=++appState.draftGeneration;
     appState.draftEditor = state;
     const value = state.fields;
     if(!value.college)value.college=deps.user.college||'';
