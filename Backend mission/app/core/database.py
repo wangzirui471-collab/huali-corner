@@ -1,13 +1,27 @@
+"""SQLite 连接、事务与表结构。
+
+注意两处不能动的设计（详见文件内注释）：
+  1. 不使用 WAL，用默认的删除日志模式
+  2. 写事务必须串行化（_WRITE 锁）
+改动前请先读下方注释，那里记录了不这么做会出什么故障。
+"""
 import sqlite3, json, time, threading
 from contextlib import contextmanager
 from pathlib import Path
 
-# 写事务串行锁。
-# SQLite 在 Windows 上让多个线程各自开写事务时，会随机抛
-# sqlite3.OperationalError: attempt to write a readonly database —— 即使数据库
-# 已经处于 WAL 模式也一样（实测 30 并发写约 7% 失败）。加锁后为 0 失败。
-# 本站写入量很小（校园场景，主要是发布、下单、聊天），串行化的代价可以忽略；
-# 读操作不经过这把锁，WAL 模式下读仍然并发。
+# 写事务串行锁：让并发写入在 Python 层排队，而不是各自去撞 SQLite 的写锁。
+#
+# 关于它【不】负责什么，写清楚以免后人误会：
+#   · 它不负责防止超卖 —— 那是 tx() 里 BEGIN IMMEDIATE 的职责：事务一开始就申请
+#     SQLite 的写锁，后到的事务必须等待，读到的是已提交的新状态。实测用不同请求键
+#     三线程抢购，有锁无锁都是 0 次超卖。
+#   · 它也不是「attempt to write a readonly database」的修复 —— 那个问题的根因是
+#     WAL 模式下最后一个连接关闭时 checkpoint 并删除 -wal/-shm，已由改用删除日志模式解决。
+#     关掉 WAL 之后实测 30 并发写 × 5 轮，有锁无锁都是 0 失败。
+#
+# 留着它的理由只有一个：写入在 Python 层确定性排队，不必依赖 SQLite busy_timeout
+# 的重试行为，也不会有 database is locked 在极端争用时冒出来。本站写入量很小。
+# 读操作不经过这把锁，不受影响。
 _WRITE = threading.RLock()
 
 SCHEMA='''

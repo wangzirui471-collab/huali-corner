@@ -1,7 +1,7 @@
 import unittest, tempfile, sys, io, time, concurrent.futures
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'Backend mission'))
-from market import Market, DomainError
+from app.market import Market, DomainError
 from PIL import Image
 
 class MarketTests(unittest.TestCase):
@@ -89,12 +89,37 @@ class MarketTests(unittest.TestCase):
         p=self.listing();o=self.checkout([p]);self.m.order_action(self.b,o['id'],'cancel',{})
         self.assertEqual(self.m.product(p)['status'],'available')
     def test_concurrent_checkout_one_winner(self):
+        """三个线程抢同一件商品，最终只能存在一张订单。
+
+        断言的是「数据库里的订单数」和「不同订单 id 的个数」，而不是
+        「返回非空结果的个数」。原因是：checkout 对相同 request_key 是幂等的
+        （会返回已存在的那张订单），而本 helper 用 time.time_ns() 生成键，
+        并发时可能撞到同一个值 —— 于是多个线程都拿到同一个订单 id。
+        那是正确行为，不是超卖。早先按「非空个数」断言，会把这个正常情况
+        误报成失败，也会掩盖真正需要检查的不变量。
+        """
         p=self.listing()
         def attempt(_):
             try:return self.checkout([p])['id']
             except DomainError:return None
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:results=list(ex.map(attempt,range(3)))
-        self.assertEqual(sum(x is not None for x in results),1)
+        self.assertEqual(self.m.row('SELECT COUNT(*) n FROM orders')['n'],1,'同一件商品不应生成多张订单')
+        self.assertEqual(len({x for x in results if x is not None}),1,'成功的线程必须指向同一张订单')
+
+    def test_concurrent_checkout_distinct_keys_no_oversell(self):
+        """用互不相同的请求键并发抢购，确认不会卖出两次。
+
+        与上一个测试的区别：这里每个线程用独立 key，排除幂等返回的干扰，
+        直接检验「一件实物只能产生一张订单」这个核心不变量。
+        """
+        p=self.listing()
+        def attempt(i):
+            try:return self.m.checkout(self.b,dict(product_ids=[p],delivery='delivery',address='A2楼下',appointment=time.time()+7200,key='distinct-%d'%i))['id']
+            except DomainError:return None
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:results=list(ex.map(attempt,range(3)))
+        self.assertEqual(self.m.row('SELECT COUNT(*) n FROM orders')['n'],1)
+        self.assertEqual(len([x for x in results if x is not None]),1)
+        self.assertEqual(self.m.product(p)['status'],'reserved')
     def test_favorite_like_idempotent_and_completed_only_review(self):
         p=self.listing();self.m.react(self.b,p,'favorite',True);self.m.react(self.b,p,'favorite',True)
         self.assertEqual(len(self.m.products(self.b,{'favorite':'1'})),1)

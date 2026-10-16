@@ -23,7 +23,9 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(h['Cache-Control'],'no-store')
     def test_core_asset_types_ignore_incorrect_windows_registry_mappings(self):
         with patch('server.mimetypes.guess_type',return_value=('text/plain',None)):
-            for path,expected in [('/','text/html'),('/app.js','text/javascript'),('/market.css','text/css')]:
+            # 前端入口已拆成 ES 模块，这里改查 src/main.js；
+            # .js 必须有 text/javascript 之外的正确类型，否则浏览器会拒绝执行模块。
+            for path,expected in [('/','text/html'),('/src/main.js','text/javascript'),('/market.css','text/css')]:
                 with self.subTest(path=path):
                     status,body,headers=self.req(path)
                     self.assertEqual(status,200)

@@ -1,6 +1,6 @@
 import json,time,html
 from pathlib import Path
-from paths import ASSETS
+from .core.config import ASSETS
 
 def seed_electronics(m):
     """电子产品演示商品。可增量补齐：已存在的同标题商品会跳过，

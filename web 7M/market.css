@@ -1342,7 +1342,9 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 
 @media (max-width: 580px) {
-  .feed-tabs-bar { margin-inline: -14px; padding-inline: 14px; }
+  /* 负边距要和 .market-main 此刻的左右内边距（12px）对齐：
+     写成 -14px 会让整条频道栏比视口宽 2px，页面就能左右晃动。 */
+  .feed-tabs-bar { margin-inline: -12px; padding-inline: 12px; }
   .feed-tab { padding: 7px 13px; font-size: 13px; }
   .mine-stats { grid-template-columns: repeat(4, 1fr); gap: 7px; }
   .stat-cell { padding: 12px 4px; }

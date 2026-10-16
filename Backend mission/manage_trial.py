@@ -4,8 +4,8 @@ import getpass
 import os
 import time
 from pathlib import Path
-from market import Market,DomainError
-from paths import data_dir
+from app.market import Market,DomainError
+from app.core.config import data_dir
 
 
 def main():

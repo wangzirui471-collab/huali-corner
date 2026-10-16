@@ -4,9 +4,12 @@ import unittest
 import zipfile
 from contextlib import contextmanager
 from pathlib import Path
+import sys
 from unittest.mock import patch
 
-from market import Market
+# 后端入口在 "Backend mission" 下（目录名带空格），测试要自己把它加进搜索路径。
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'Backend mission'))
+from app.market import Market
 
 
 class BackupResourceTests(unittest.TestCase):
@@ -42,7 +45,9 @@ class BackupResourceTests(unittest.TestCase):
                     for connection in unclosed:connection.close()
                     self.assertEqual(len(unclosed),0,'SQLite handles must close before temporary database cleanup on Windows')
 
-        with patch('market.sqlite3.connect',connect),patch('market.tempfile.TemporaryDirectory',temporary_directory):
+        # 备份链路现在横跨两个模块：SQLite 连接来自 core/database.py，
+        # 临时目录来自 ops/service.py。patch 的是它们各自 import 进来的模块对象。
+        with patch('app.core.database.sqlite3.connect',connect),patch('app.ops.service.tempfile.TemporaryDirectory',temporary_directory):
             yield
         self.assertEqual(len(connections),3)
 

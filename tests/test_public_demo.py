@@ -21,8 +21,9 @@ class PublicDemoTests(unittest.TestCase):
             output=Path(tmp)/'site'
             result=self.build(output)
             self.assertEqual(result.returncode,0,result.stderr)
+            # 用 as_posix：Windows 下 relative_to 会给出 src\main.js，跟断言里的斜杠对不上。
             files=[p.relative_to(output) for p in output.rglob('*') if p.is_file()]
-            self.assertTrue({'index.html','app.js','public-demo.js','demo-data.json','_headers'}.issubset({str(p) for p in files}))
+            self.assertTrue({'index.html','src/main.js','public-demo.js','demo-data.json','_headers'}.issubset({p.as_posix() for p in files}))
             self.assertFalse(any(p.suffix in {'.py','.sqlite3','.xlsx','.zip'} or 'var' in p.parts for p in files))
             data=json.loads((output/'demo-data.json').read_text(encoding='utf-8'))
             self.assertTrue(data['config']['public_demo'])
@@ -33,7 +34,8 @@ class PublicDemoTests(unittest.TestCase):
                 self.assertNotIn(forbidden,raw)
             self.assertNotIn('role',raw)
             html=(output/'index.html').read_text(encoding='utf-8')
-            self.assertLess(html.index('public-demo.js'),html.index('app.js'))
+            # 演示快照必须先于主模块执行，否则 api() 拿不到 window.hualiDemoApi。
+            self.assertLess(html.index('public-demo.js'),html.index('src/main.js'))
 
     def test_export_does_not_overwrite_existing_directory(self):
         with tempfile.TemporaryDirectory() as tmp:

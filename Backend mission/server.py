@@ -2,9 +2,9 @@ import argparse,base64,ipaddress,json,mimetypes,os,time,threading,traceback
 from pathlib import Path
 from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
 from urllib.parse import urlsplit,parse_qs,unquote
-from market import Market,DomainError
-from seed import seed as seed_data
-from paths import WEB,COLLEGES_JSON,data_dir
+from app.market import Market,DomainError
+from app.seed import seed as seed_data
+from app.core.config import WEB,COLLEGES_JSON,data_dir
 # Windows registry associations can label .js as text/plain. Core web types
 # must be deterministic because browsers enforce nosniff for scripts/styles.
 ASSET_TYPES={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml; charset=utf-8','.png':'image/png','.webp':'image/webp','.ico':'image/x-icon'}

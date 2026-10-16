@@ -1,13 +1,19 @@
-"""Password accounts for the trial; no SMS or claim of phone ownership."""
+"""账号模块：注册、登录、改密、恢复码、个人资料与角色权限。
+
+密码认证来自原 auth.py 的 PasswordAuth，账号接口来自原 market.py。
+"""
 import hashlib
 import re
 import secrets
 import time
 
 ROUNDS=600000
+import hashlib, re, secrets, time
+from ..core.errors import ValidationMixin, DomainError
 
 
-class PasswordAuth:
+class AccountService(ValidationMixin):
+
     def _trial_only(self):self.require(self.trial,'此接口仅供学院试用版使用',403)
     def _phone(self,phone):
         self.require(isinstance(phone,str) and re.fullmatch(r'1[3-9][0-9]{9}',phone),'请输入11位手机号')
@@ -101,3 +107,44 @@ class PasswordAuth:
             uid=c.execute("INSERT INTO users(phone,nickname,role,college) VALUES(?,'转角客服','admin','计算机工程学院')",(phone,)).lastrowid
             c.execute('INSERT INTO password_credentials VALUES(?,?,?,?,?)',(uid,salt,digest,rounds,recovery_digest))
         return self.profile(uid)
+
+    def request_code(self,phone):
+        self.require(not self.trial,'学院试用采用密码登录，测试验证码已关闭',403)
+        self.require(isinstance(phone,str) and re.fullmatch(r'1[3-9]\d{9}',phone),'请输入11位手机号')
+        code=str(secrets.randbelow(900000)+100000)
+        with self.tx() as c:c.execute('INSERT OR REPLACE INTO otp VALUES(?,?,?,0)',(phone,hashlib.sha256(code.encode()).hexdigest(),time.time()+300))
+        return {'demo_code':code,'simulation':True,'message':'本地测试验证码，不会发送短信'}
+
+    def login(self,phone,code):
+        self.require(not self.trial,'学院试用采用密码登录，测试验证码已关闭',403)
+        with self.tx() as c:
+            r=c.execute('SELECT * FROM otp WHERE phone=?',(phone,)).fetchone()
+            valid=r and r['expires']>time.time() and r['attempts']<5 and secrets.compare_digest(r['digest'],hashlib.sha256(str(code).encode()).hexdigest())
+            if not valid:
+                if r:c.execute('UPDATE otp SET attempts=attempts+1 WHERE phone=?',(phone,))
+                c.commit();raise DomainError('验证码错误、过期或已使用',401)
+            c.execute('DELETE FROM otp WHERE phone=?',(phone,))
+            c.execute('INSERT OR IGNORE INTO users(phone,nickname) VALUES(?,?)',(phone,'同学'+phone[-4:]))
+            uid=c.execute('SELECT id FROM users WHERE phone=?',(phone,)).fetchone()[0]
+            token=secrets.token_urlsafe(32)
+            c.execute('INSERT INTO sessions VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),uid,time.time()+86400*7))
+        return {'token':token,'user':self.profile(uid),'simulation':True}
+
+    def user(self,token):
+        r=self.row('SELECT user_id FROM sessions WHERE token=? AND expires>?',(hashlib.sha256(token.encode()).hexdigest(),time.time()))
+        self.require(r,'请先登录',401);return r['user_id']
+
+    def logout(self,token):
+        with self.tx() as c:c.execute('DELETE FROM sessions WHERE token=?',(hashlib.sha256(token.encode()).hexdigest(),))
+
+    def profile(self,u):
+        r=self.row('SELECT id,nickname,college,major,education,bio,role,score FROM users WHERE id=?',(u,))
+        self.require(r,'用户不存在',404);return r
+
+    def update_profile(self,u,d):
+        nickname=self.text(d.get('nickname'),24,'昵称');college='计算机工程学院' if self.trial else str(d.get('college',''))[:80];major=str(d.get('major',''))[:80]
+        education=d.get('education','本科');self.require(education in ['本科','专科','已毕业','其他'],'暂不开放该层次')
+        with self.tx() as c:c.execute('UPDATE users SET nickname=?,college=?,major=?,education=?,bio=? WHERE id=?',(nickname,college,major,education,str(d.get('bio',''))[:300],u))
+        return self.profile(u)
+
+    def staff(self,u):self.require(self.profile(u)['role'] in ['admin','support'],'仅客服或管理员可操作',403)

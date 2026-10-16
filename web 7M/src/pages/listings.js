@@ -1,0 +1,11 @@
+'use strict';
+// 页面层 · 我发布的（下架 / 重新上架）
+import { e, icon } from '../core/dom.js';
+import { money } from '../core/format.js';
+import { state, statusNames } from '../core/state.js';
+import { api } from '../core/http.js';
+import { shell, heading, empty } from '../core/shell.js';
+import { productPicture, shipLabel } from '../components/product-card.js';
+import { needLogin } from '../auth/login.js';
+
+export async function myProducts(){if(!needLogin())return;const ps=await api('/my-products');const groups=[['available','在售'],['removed','已下架'],['reserved','已预留'],['sold','已售出']];const st=Object.fromEntries(groups.map(x=>[x[0],ps.filter(p=>p.status===x[0]).length]));shell(`${heading('MY LISTINGS','我发布的','下架不会删除商品，随时可以重新上架。')}<div class="mine-stats">${groups.map(([k,t])=>`<div class="stat-cell"><b>${st[k]}</b><span>${t}</span></div>`).join('')}</div>${ps.length?groups.map(([k,t])=>{const list=ps.filter(p=>p.status===k);if(!list.length)return '';return `<section class="panel listing-group"><div class="section-heading"><h2>${t} <small>${list.length} 件</small></h2></div><div class="listing-list">${list.map(p=>`<div class="listing-row"><button class="listing-photo" data-go="product/${p.id}" aria-label="查看${e(p.title)}">${productPicture(p)}</button><div class="listing-info"><button class="listing-title" data-go="product/${p.id}">${e(p.title)}</button><div class="price-line"><i class="cur">¥</i><b>${money(p.price)}</b></div><small>${e(p.region)} · ${shipLabel(p)}</small></div><div class="listing-actions">${k==='available'?`<button class="btn secondary sm" data-action="delist" data-id="${p.id}">${icon('down')}下架</button>`:''}${k==='removed'?`<button class="btn primary sm" data-action="relist" data-id="${p.id}">${icon('refresh')}重新上架</button>`:''}${['reserved','sold'].includes(k)?`<span class="tag">${e(statusNames[k])}</span>`:''}</div></div>`).join('')}</div></section>`;}).join(''):empty('还没有发布过商品','给闲置找一个新主人，从发布第一件开始。')}<div class="submit-row"><button class="btn primary" data-go="publish">${icon('plus')}发布新商品</button><button class="btn secondary" data-go="orders">${icon('bag')}我卖出的订单</button></div>`,'me');}

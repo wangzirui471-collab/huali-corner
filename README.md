@@ -14,12 +14,22 @@
 huali-corner-trial/
 ├── Backend mission/     后端：入口 + 业务模块 + 部署配置
 │   ├── server.py      HTTP 服务与路由
-│   ├── market.py      核心业务：商品、订单、工单、信誉、审核
-│   ├── paths.py       路径统一出口（根目录在这里算一次）
-│   └── seed.py db.py auth.py community.py manage_trial.py
-│            render.yaml requirements.txt
+│   ├── app/           业务模块（分层，见下）
+│   │   ├── market.py  Market 组合类：把下面各模块拼成一个对象
+│   │   ├── core/      config(路径) database(Store) errors(异常与校验)
+│   │   └── account/ catalog/ trade/ community/ support/ ops/
+│   ├── seed.py        演示数据播种
+│   └── manage_trial.py render.yaml requirements.txt
 ├── web 7M/              前端：网页静态文件 + 小程序
-│   ├── index.html app.js market.css styles.css public-demo.js
+│   ├── index.html market.css styles.css public-demo.js
+│   ├── src/           ES 模块（入口 main.js，分层，见下）
+│   │   ├── core/      dom format state http nav shell asset
+│   │   ├── components/ forms category-art product-card
+│   │   ├── pages/     home product publish cart orders listings
+│   │   │              me community messages support
+│   │   ├── auth/      login
+│   │   ├── actions/   index(分发) ui catalog trade social support account change
+│   │   └── router.js  路由表与 render
 │   ├── assets/        图片、Logo、演示素材
 │   └── miniprogram/   微信小程序
 ├── docs/                TRIAL.md、ASSET-CREDITS.md、research/
@@ -28,9 +38,10 @@ huali-corner-trial/
 └── start-trial.bat / start-trial-8081.bat   启动脚本
 ```
 
-路径全部由 `Backend mission/paths.py` 推导：它先看上一级有没有 `web 7M`，
+路径全部由 `Backend mission/app/core/config.py` 推导：它先看上一级有没有 `web 7M`，
 有就把根目录定为上一级（正常项目结构）；没有就退回自身目录
 （后端被单独拷出去部署时走这个分支）。
+
 ## 启动网站
 
 Python 3.12+。当前云环境已安装 Pillow；新机器需先安装依赖：
@@ -103,7 +114,7 @@ python server.py
 python3 -m unittest discover -s tests -v
 node tests/native_client.test.js
 node tests/native_order.test.js
-node --check "web 7M/app.js"
+node tests/frontend_modules.test.mjs   # 前端 ES 模块：可加载性 + 依赖无环
 python3 tests/browser_smoke.py
 python3 tests/ui_redesign_smoke.py
 ```

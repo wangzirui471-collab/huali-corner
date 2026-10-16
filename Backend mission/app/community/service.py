@@ -1,6 +1,10 @@
-import time, sqlite3
+"""社区模块：帖子、评论、总聊与学院群、私聊、举报与屏蔽。"""
+import time
+from ..core.errors import ValidationMixin, DomainError
 
-class Community:
+
+class CommunityService(ValidationMixin):
+
     def rooms(self,u):
         joined=self.rows('SELECT r.*,m.role,m.muted,(SELECT COUNT(*) FROM members z WHERE z.room_id=r.id) count FROM rooms r JOIN members m ON m.room_id=r.id WHERE m.user_id=?',(u,))
         return {'joined':joined,'general':self.row('SELECT *, (SELECT COUNT(*) FROM members WHERE room_id=1) count FROM rooms WHERE id=1'),'college':self.profile(u)['college']}

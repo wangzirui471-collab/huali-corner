@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from market import Market, DomainError
+from app.market import Market, DomainError
 
 
 class TrialAuthTests(unittest.TestCase):
@@ -66,7 +66,8 @@ class TrialAuthTests(unittest.TestCase):
         restarted=Market(self.tmp.name,trial=True)
         with self.assertRaises(DomainError) as context:restarted.login_password('13900000011',self.password)
         self.assertEqual(context.exception.status,429)
-        with patch('auth.time.time',return_value=time.time()+901):
+        # 密码认证已随 auth.py 迁到 app/account/service.py，打补丁的目标要跟着改。
+        with patch('app.account.service.time.time',return_value=time.time()+901):
             self.assertEqual(restarted.login_password('13900000011',self.password)['user']['role'],'user')
 
     def test_password_change_requires_old_password_and_revokes_all_sessions(self):
