@@ -25,16 +25,16 @@ def build(output):
         for uid in sorted({p['seller_id'] for p in products}):
             user=market.profile(uid)
             profiles[str(uid)]={k:user[k] for k in ['id','nickname','college','major','education','bio','score']}
-        data={'config':{'name':'华立转角','simulation':True,'public_demo':True,'campus':'广州校区','pilot':'计算机工程学院','support_hours':'08:00–20:00','colleges':[]},
+        data={'config':{'name':'转角','simulation':True,'public_demo':True,'campus':'广州校区','pilot':'计算机工程学院','support_hours':'08:00–20:00','colleges':[]},
               'products':products,'profiles':profiles,'posts':market.posts(),'comments':{}}
     output.mkdir(parents=True,exist_ok=True)
-    for name in ['app.js','public-demo.js','styles.css','market.css']:
+    for name in ['app.js','public-demo.js','publishing.js','operations.js','styles.css','market.css','publishing.css']:
         shutil.copy2(ROOT/'web'/name,output/name)
     assets=output/'assets';assets.mkdir(exist_ok=True)
     for name in ['market-demo-photos.png']+['book%d.svg'%n for n in range(6)]+['item%d.svg'%n for n in range(3)]:
         shutil.copy2(ROOT/'web/assets'/name,assets/name)
     html=(ROOT/'web/index.html').read_text(encoding='utf-8')
-    html=html.replace('href="/','href="./').replace('src="/app.js"','src="./app.js"')
+    html=html.replace('href="/','href="./').replace('src="/','src="./')
     html=html.replace('<script src="./app.js"','<script src="./public-demo.js" defer></script><script src="./app.js"')
     html=html.replace('</head>','<meta name="robots" content="noindex,nofollow"></head>')
     (output/'index.html').write_text(html,encoding='utf-8')

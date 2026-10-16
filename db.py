@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS comments(id INTEGER PRIMARY KEY,post_id INTEGER,user_
 CREATE TABLE IF NOT EXISTS offers(id INTEGER PRIMARY KEY,product_id INTEGER,buyer_id INTEGER,amount INTEGER,status TEXT DEFAULT 'pending',created REAL);
 CREATE TABLE IF NOT EXISTS nominations(id INTEGER PRIMARY KEY,user_id INTEGER,room_id INTEGER,reason TEXT,status TEXT DEFAULT 'pending',created REAL);
 CREATE TABLE IF NOT EXISTS drafts(id TEXT PRIMARY KEY,user_id INTEGER NOT NULL,fields TEXT NOT NULL,version INTEGER NOT NULL DEFAULT 1,status TEXT NOT NULL DEFAULT 'active',updated_at REAL NOT NULL,published_product_id INTEGER,source_product_id INTEGER);
+CREATE TABLE IF NOT EXISTS ticket_evidence(ticket_id INTEGER NOT NULL,upload_id TEXT NOT NULL,user_id INTEGER NOT NULL,internal INTEGER NOT NULL DEFAULT 0,created_at REAL NOT NULL,PRIMARY KEY(ticket_id,upload_id));
 '''
 
 class Store:

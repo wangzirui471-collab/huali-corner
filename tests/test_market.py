@@ -44,7 +44,7 @@ class MarketTests(unittest.TestCase):
         self.assertEqual(self.m.profile(self.a)['score'],100)
         with self.assertRaises(DomainError):self.m.credit_action(self.b,self.a,-50,'违规属实',t['id'])
         self.m.resolve_ticket(self.staff,t['id'],dict(outcome='resolved',reason='举报证据核实，卖家发布内容违规'))
-        self.m.credit_action(self.staff,self.a,-50,'审核证据认定恶意发布',t['id'])
+        self.m.apply_penalty(self.staff,self.a,t['id'],'fraud','审核证据认定欺诈')
         with self.assertRaises(DomainError): self.listing()
         self.assertEqual(self.m.profile(self.a)['score'],50)
         appeal=self.m.create_ticket(self.a,dict(type='appeal',subject='信誉申诉',body='请求复核'))
@@ -120,9 +120,9 @@ class MarketTests(unittest.TestCase):
     def test_credit_cannot_punish_unrelated_user_or_duplicate_event(self):
         p=self.listing();t=self.m.create_ticket(self.b,dict(type='report',product_id=p,subject='发布问题',body='证据说明'))
         self.m.resolve_ticket(self.staff,t['id'],dict(outcome='resolved',reason='核实卖家发布违规'))
-        with self.assertRaises(DomainError):self.m.credit_action(self.staff,self.b,-10,'不能处罚无关举报者',t['id'])
-        self.m.credit_action(self.staff,self.a,-10,'已核实证据',t['id'])
-        with self.assertRaises(DomainError):self.m.credit_action(self.staff,self.a,-10,'重复扣分',t['id'])
+        with self.assertRaises(DomainError):self.m.apply_penalty(self.staff,self.b,t['id'],'outside_surcharge','不能处罚无关举报者')
+        self.m.apply_penalty(self.staff,self.a,t['id'],'outside_surcharge','已核实证据')
+        with self.assertRaises(DomainError):self.m.apply_penalty(self.staff,self.a,t['id'],'outside_surcharge','重复扣分')
         self.assertEqual(self.m.profile(self.a)['score'],90)
     def test_refund_after_settlement_reconciles_and_media_in_backup(self):
         o=self.checkout();oid=o['id']

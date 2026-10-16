@@ -68,10 +68,14 @@ class Publishing:
                                    (json.dumps(fields, ensure_ascii=False), now, draft_id))
             else:
                 self.require(version == 0, '草稿不存在或版本不正确', 409)
+                source_product_id = None
+                if payload.get('copy_from_id'):
+                    original = self._draft_row(connection, user_id, payload['copy_from_id'])
+                    source_product_id = original['source_product_id']
                 count = connection.execute("SELECT COUNT(*) FROM drafts WHERE user_id=? AND status='active'", (user_id,)).fetchone()[0]
                 self.require(count < 100, '草稿箱已满，请先删除不需要的草稿')
-                connection.execute('INSERT INTO drafts(id,user_id,fields,updated_at) VALUES(?,?,?,?)',
-                                   (draft_id, user_id, json.dumps(fields, ensure_ascii=False), now))
+                connection.execute('INSERT INTO drafts(id,user_id,fields,updated_at,source_product_id) VALUES(?,?,?,?,?)',
+                                   (draft_id, user_id, json.dumps(fields, ensure_ascii=False), now, source_product_id))
         return self.get_draft(user_id, draft_id)
 
     def get_draft(self, user_id, draft_id):

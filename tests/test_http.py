@@ -18,7 +18,7 @@ class HttpTests(unittest.TestCase):
             with urllib.request.urlopen(urllib.request.Request(self.base+path,data=json.dumps(data).encode() if data is not None else None,headers=h)) as r:return r.status,r.read(),r.headers
         except urllib.error.HTTPError as e:return e.code,e.read(),e.headers
     def test_public_home_api_and_no_cache(self):
-        status,body,h=self.req('/');self.assertEqual(status,200);self.assertIn('华立转角',body.decode())
+        status,body,h=self.req('/');self.assertEqual(status,200);self.assertIn('<title>转角 ·',body.decode())
         status,body,h=self.req('/api/products');self.assertEqual(status,200);self.assertIsInstance(json.loads(body),list)
         self.assertEqual(h['Cache-Control'],'no-store')
     def test_core_asset_types_ignore_incorrect_windows_registry_mappings(self):

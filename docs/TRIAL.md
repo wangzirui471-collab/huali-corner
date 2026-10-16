@@ -92,3 +92,9 @@ python3 tests/ui_redesign_smoke.py
 ```
 
 小程序源码已按后端配置切换手机号密码注册/登录，显示一次恢复码；密码修改和找回暂使用网页。尚未经过微信开发者工具编译、真机或平台审核，不表示小程序已上线。
+
+## 本轮发布与客服升级（2026-10-16）
+
+参阅[发布与售后试用指南](PUBLISHING-SUPPORT.md)：简化发布、账号草稿与图片恢复、独立客服账号、证据工单、退货后重售、信誉规则及申诉。完整包更新，保留原数据，勿仅替换server.py。订单推送、手机权限与新增地址按用户要求推迟；客服队列目前手动刷新。
+
+新增验证：`node tests/native_publishing.test.js`、`node tests/native_support.test.js`、`python3 tests/publishing_browser_smoke.py`、`python3 tests/support_browser_smoke.py`。

@@ -22,6 +22,7 @@ def run():
     page.get_by_role('button',name='卖家体验').click()
     page.get_by_role('button',name='发布闲置',exact=True).first.click()
     page.locator('[name=title]').fill('浏览器测试教材')
+    page.locator('.publish-extra summary').click()
     page.locator('[name=description]').fill('测试发布：有少量笔记，无缺页，附练习册')
     page.locator('[name=price]').fill('12')
     page.locator('[name=publisher]').fill('测试出版社')

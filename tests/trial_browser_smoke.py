@@ -42,6 +42,7 @@ with tempfile.TemporaryDirectory() as root:
                 expect(page.locator('.account-button')).to_contain_text(nickname)
             seller.get_by_role('button',name='发布闲置',exact=True).first.click()
             seller.locator('[name=title]').fill('学院试用二手教材')
+            seller.locator('.publish-extra summary').click()
             seller.locator('[name=description]').fill('试用测试书籍，有少量笔记，无缺页。')
             seller.locator('[name=publisher]').fill('测试出版社')
             seller.locator('[name=price]').fill('12')
