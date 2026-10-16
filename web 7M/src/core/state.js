@@ -14,7 +14,9 @@ export const state = {
   // 逛逛页的「免费送」货架开关与频道筛选并列存在。
   freeShelf: false,
   // 消息页的增量拉取游标，提交消息后需要接着它继续追加。
-  messageCursor: 0
+  messageCursor: 0,
+  // 求购撮合：买家点「我要这个」后暂存求购编号，结算时带上以记撮合服务费。
+  pendingWant: null
 };
 
 export const statusNames = {

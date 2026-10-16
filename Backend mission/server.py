@@ -66,6 +66,8 @@ class Handler(BaseHTTPRequestHandler):
                 u=int(query['id']);return self.respond({'user':m.profile(u),'products':m.products(self.optional_user(),{'seller':str(u)})})
             if p=='/api/posts' and method=='GET':return self.respond(m.posts(query.get('topic','')))
             if p=='/api/comments' and method=='GET':return self.respond(m.comments(int(query['id'])))
+            if p=='/api/wants' and method=='GET':return self.respond(m.wants(self.optional_user()))
+            if p=='/api/want' and method=='GET':return self.respond(m.want(self.optional_user(),int(query['id'])))
             if p.startswith('/media/'):
                 fid=p.split('/')[-1];upload=m.row('SELECT * FROM uploads WHERE id=?',(fid,));m.require(upload,'图片不存在',404)
                 if upload['private']:
@@ -88,6 +90,7 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/me':return self.respond(m.update_profile(u,data) if method=='POST' else m.profile(u))
             if p=='/api/auth/logout':m.logout(self.token());return self.respond({'ok':True})
             if p=='/api/auth/deactivate' and method=='POST':return self.respond(m.deactivate(u))
+            if p=='/api/wants' and method=='POST':return self.respond(m.create_want(u,data))
             if p=='/api/publish' and method=='POST':return self.respond(m.publish(u,data))
             if p=='/api/my-products':return self.respond(m.my_products(u,query.get('status')))
             if p=='/api/product/status' and method=='POST':return self.respond(m.set_product_status(u,int(data['id']),data['action']))

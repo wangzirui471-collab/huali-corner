@@ -2,10 +2,12 @@
 // 事件层 · 社区、私聊、群聊、群管理员
 
 import { $, e, toast } from '../core/dom.js';
-import { state } from '../core/state.js';
+import { money } from '../core/format.js';
+import { state, saveCart } from '../core/state.js';
 import { api } from '../core/http.js';
 import { go, render } from '../core/nav.js';
 import { modal, closeModal } from '../core/shell.js';
+import { field } from '../components/forms.js';
 import { needLogin } from '../auth/login.js';
 import { messageBubble } from '../pages/messages.js';
 
@@ -43,6 +45,28 @@ export const clicks = {
     const peer = room.pair.split(':').map(Number).find(x => x !== state.me.id);
     await api('/block', {target:peer, enabled:true});
     toast('已屏蔽，对方不能继续发消息');
+  },
+
+  'open-want': () => {
+    if (!needLogin()) return;
+    modal(`<h2>发布求购</h2><p class="muted">说明想买什么和预算，平台帮你匹配在售卖家；成交收 5% 撮合服务费（模拟）。</p><form id="want-form">${field('求购物品','keyword','text','','required maxlength="40" placeholder="如：笔记本电脑、羽毛球拍、高等数学上册"')}${field('预算上限（元）','budget','number','','required min="1" max="10000" step="0.01"')}<label class="field"><span>补充说明</span><textarea name="description" maxlength="1000" placeholder="想要的成色、版次、配置等"></textarea></label><button class="btn primary full">发布求购</button></form>`);
+  },
+
+  'want-matches': async (b, id) => {
+    const w = await api('/want?id='+id);
+    modal(`<h2>求购「${e(w.keyword)}」的匹配</h2><p class="muted">预算 ¥${money(w.budget)} · ${w.matches.length} 件匹配</p>${w.matches.length?`<div class="want-matches">${w.matches.map(p=>`<div class="match-row"><img src="${e(p.photos?.[0]?.url)}" alt=""><div class="match-info"><b>${e(p.title)}</b><small>${e(p.nickname)} · ${e(p.region)}</small><span class="price">¥${money(p.price)}</span></div>${p.seller_id!==state.me?.id?`<button class="btn primary sm" data-action="want-buy" data-id="${p.id}" data-want="${w.id}">我要这个</button>`:''}</div>`).join('')}</div>`:'<p class="muted">暂时没有匹配的在售商品，稍后再来看看。</p>'}`);
+  },
+
+  'want-buy': async (b, id) => {
+    if (!needLogin()) return;
+    const p = await api('/product?id='+id);
+    if (p.seller_id === state.me.id) throw new Error('不能购买自己的商品');
+    if (!state.cart.includes(id)) state.cart.push(id);
+    saveCart();
+    state.pendingWant = Number(b.dataset.want);
+    closeModal();
+    go('cart');
+    toast('已加入取货清单，结算时记入 5% 撮合服务费');
   }
 };
 
@@ -85,5 +109,13 @@ export const submits = {
     await api('/nominate', {room_id:Number(form.dataset.id), reason:d.reason});
     closeModal();
     toast('申请已提交，等待平台审核');
+  },
+
+  'want-form': async ({ d }) => {
+    if (!needLogin()) return;
+    const r = await api('/wants', {keyword:d.keyword, budget:Math.round(Number(d.budget)*100), description:d.description||''});
+    closeModal();
+    toast(r.matches.length ? `求购已发布，已匹配 ${r.matches.length} 件在售商品` : '求购已发布，暂时没有匹配商品');
+    await render();
   }
 };

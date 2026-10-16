@@ -84,3 +84,31 @@ class CommunityService(ValidationMixin):
         self.member(u,int(d['room_id']))
         with self.tx() as c:c.execute('INSERT INTO nominations(user_id,room_id,reason,created) VALUES(?,?,?,?)',(u,int(d['room_id']),self.text(d.get('reason'),500,'申请理由'),time.time()))
         return {'ok':True}
+
+    # --- 校园求购撮合 ---------------------------------------------------
+    def create_want(self,u,d):
+        keyword=self.text(d.get('keyword'),40,'求购物品')
+        budget=self.cents(d.get('budget'),'预算');self.require(budget>0,'预算需大于0')
+        desc=str(d.get('description') or '').strip()[:1000]
+        with self.tx() as c:
+            wid=c.execute('INSERT INTO wants(user_id,keyword,budget,description,status,created) VALUES(?,?,?,?,?,?)',(u,keyword,budget,desc,'open',time.time())).lastrowid
+        return self.want(u,wid)
+
+    def wants(self,u=None):
+        return [self.want(u,r['id']) for r in self.rows('SELECT id FROM wants ORDER BY id DESC LIMIT 50')]
+
+    def want(self,u,wid):
+        w=self.row('SELECT w.*,u.nickname FROM wants w JOIN users u ON u.id=w.user_id WHERE w.id=?',(wid,))
+        self.require(w,'求购不存在',404)
+        w['matches']=self.match_wants(w['keyword'],w['budget'],u)
+        return w
+
+    def match_wants(self,keyword,budget,u=None):
+        """按关键词匹配在售商品：标题/描述/分类包含关键词即命中，预算内优先、价低优先。"""
+        kw=str(keyword).lower()
+        result=[]
+        for p in self.products(u):
+            hay=' '.join(str(p.get(k,'')) for k in ['title','description','category']).lower()
+            if kw in hay:result.append(p)
+        result.sort(key=lambda p:(p['price']>budget,p['price']))
+        return result[:20]

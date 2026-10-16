@@ -11,6 +11,7 @@ class TradeService(ValidationMixin):
         except (ValueError,TypeError):raise DomainError('交付时间无效')
         self.require(time.time()+60<appointment<time.time()+86400*30,'请选择未来30天内的交付时间')
         address=self.text(d.get('address'),150,'收货公共地点') if delivery=='delivery' else ''
+        want_id=d.get('want_id')
         with self.tx() as c:
             old=c.execute('SELECT id FROM orders WHERE buyer_id=? AND request_key=?',(u,key)).fetchone()
             if old:return self.order(u,old['id'])
@@ -20,6 +21,11 @@ class TradeService(ValidationMixin):
             seller=products[0]['seller_id'];self.require(seller!=u,'不能购买自己的商品')
             self.require(all(p['status']=='available' for p in products),'部分商品已被预留或售出',409)
             self.require(all(p['delivery'] in [delivery,'both'] for p in products),'商品不支持所选交付方式')
+            want=None
+            if want_id is not None:
+                self.require(isinstance(want_id,int) or str(want_id).isdigit(),'求购编号无效')
+                want=c.execute("SELECT * FROM wants WHERE id=?",(int(want_id),)).fetchone()
+                self.require(want and want['status']=='open','该求购已成交或不存在')
             items=[]
             for p in products:
                 price=p['price'];offer=c.execute("SELECT amount FROM offers WHERE product_id=? AND buyer_id=? AND status='accepted' ORDER BY id DESC LIMIT 1",(p['id'],u)).fetchone()
@@ -28,6 +34,10 @@ class TradeService(ValidationMixin):
             subtotal=sum(p['price'] for p in items);fee=max(p['delivery_fee'] for p in products) if delivery=='delivery' else 0
             oid=c.execute('INSERT INTO orders(buyer_id,seller_id,items,subtotal,delivery_fee,total,delivery,address,appointment,status,created,request_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(u,seller,json.dumps(items,ensure_ascii=False),subtotal,fee,subtotal+fee,delivery,address,appointment,'awaiting_payment',time.time(),key)).lastrowid
             for p in products:c.execute("UPDATE products SET status='reserved' WHERE id=?",(p['id'],))
+            if want is not None:
+                # 求购撮合成交：标记该求购已完成，并记 5% 撮合服务费（向下取整到分）。
+                c.execute("UPDATE wants SET status='matched' WHERE id=?",(want['id'],))
+                self.journal(c,oid,'service_fee',subtotal*5//100)
         return self.order(u,oid)
 
     def order(self,u,oid):

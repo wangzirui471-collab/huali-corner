@@ -545,6 +545,19 @@ button { -webkit-tap-highlight-color: transparent; }
 .tier-option b { display: block; font-size: 14px; }
 .tier-option small { color: var(--muted); }
 
+.want-board .section-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.want-list { display: grid; gap: 10px; margin-top: 12px; }
+.want-row { padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md); }
+.want-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.want-row small { display: block; color: var(--muted); margin: 6px 0; }
+.want-matches { display: grid; gap: 10px; max-height: 60vh; overflow-y: auto; }
+.match-row { display: flex; align-items: center; gap: 12px; padding: 10px; border: 1px solid var(--line); border-radius: var(--r-md); }
+.match-row img { width: 52px; height: 52px; border-radius: var(--r-sm); object-fit: cover; flex: 0 0 auto; }
+.match-info { flex: 1; min-width: 0; }
+.match-info b { display: block; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.match-info small { display: block; color: var(--muted); }
+.match-info .price { color: var(--price); font-weight: 700; }
+
 .card-content { padding: 13px 14px 13px; }
 .card-title {
   font-size: 14.5px;

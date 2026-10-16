@@ -62,15 +62,19 @@ export const submits = {
   },
 
   'checkout-form': async ({ d }) => {
-    await api('/checkout', {
+    const payload = {
       product_ids:state.cart,
       delivery:d.delivery,
       address:d.address,
       appointment:new Date(d.appointment).getTime()/1000,
       // 同一笔订单重复提交时用它做幂等，避免生成两张单。
       key:crypto.randomUUID()
-    });
+    };
+    // 从「求购撮合」进来的订单带上求购编号，后端据此记 5% 撮合服务费。
+    if (state.pendingWant) payload.want_id = state.pendingWant;
+    await api('/checkout', payload);
     state.cart = [];
+    state.pendingWant = null;
     saveCart();
     go('orders');
     toast('订单已生成，当前仅模拟付款');

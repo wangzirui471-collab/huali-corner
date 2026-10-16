@@ -255,5 +255,19 @@ class MarketTests(unittest.TestCase):
         self.assertEqual(self.m.products()[0]['id'],p1)
         with self.m.tx() as c:c.execute('UPDATE products SET promoted_until=0 WHERE id=?',(p1,))  # 到期
         self.assertEqual(self.m.products()[0]['id'],p2)
+    def test_want_matches_and_service_fee(self):
+        p=self.listing(self.a,title='笔记本电脑 · 轻薄便携')
+        w=self.m.create_want(self.b,dict(keyword='电脑',budget=200000,description='想要一台轻薄本'))
+        self.assertIn(p,[x['id'] for x in w['matches']])  # 关键词命中
+        o=self.m.checkout(self.b,dict(product_ids=[p],delivery='pickup',appointment=time.time()+7200,key='want-check',want_id=w['id']))
+        fee=[x for x in o['ledger'] if x['kind']=='service_fee']
+        self.assertEqual(fee[0]['amount'],75)  # 1500 分 × 5% = 75 分
+        self.assertEqual(self.m.row('SELECT status FROM wants WHERE id=?',(w['id'],))['status'],'matched')
+    def test_want_checkout_requires_open(self):
+        p=self.listing(self.a,title='笔记本电脑');p2=self.listing(self.a,title='电脑包')
+        w=self.m.create_want(self.b,dict(keyword='电脑',budget=200000,description=''))
+        self.m.checkout(self.b,dict(product_ids=[p],delivery='pickup',appointment=time.time()+7200,key='w1',want_id=w['id']))
+        with self.assertRaises(DomainError):
+            self.m.checkout(self.b,dict(product_ids=[p2],delivery='pickup',appointment=time.time()+7200,key='w2',want_id=w['id']))
 
 if __name__=='__main__':unittest.main()
