@@ -59,7 +59,7 @@ class CreditService:
             connection.execute('UPDATE users SET score=? WHERE id=?', (after, target_user_id))
             if rule_key == 'fraud':
                 connection.execute('UPDATE users SET trading_blocked=1 WHERE id=?', (target_user_id,))
-                connection.execute("UPDATE products SET status='removed' WHERE seller_id=? AND status='available'", (target_user_id,))
+                connection.execute("UPDATE products SET status='removed',removal_reason='credit_block',version=version+1 WHERE seller_id=? AND status='available'", (target_user_id,))
             audit_id = connection.execute(
                 'INSERT INTO audit(actor,target,type,delta,reason,ticket_id,created,rule_key,score_before,score_after) VALUES(?,?,?,?,?,?,?,?,?,?)',
                 (administrator_id, target_user_id, 'credit' if delta else 'credit_warning', after - before,

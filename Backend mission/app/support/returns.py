@@ -85,10 +85,19 @@ class PhysicalReturns:
         for row in self.rows('SELECT id FROM products WHERE seller_id=? ORDER BY id DESC', (user_id,)):
             product = self.product(row['id'], user_id)
             product['can_relist'] = False
+            product['can_restore'] = False
+            product['can_edit'] = product['status']=='available' or (product['status']=='removed' and product['removal_reason']=='seller_delist')
             if product['status'] == 'removed':
                 with self.tx() as connection:
                     try:
+                        self._can_restore(connection,user_id,product)
+                        product['can_restore']=True
+                    except Exception as error:
+                        if not hasattr(error,'status'):raise
+                        product['relist_reason']=str(error)
+                    try:
                         self._relist_source(connection, user_id, product['id'])
+                        self._listing_account(connection,user_id)
                         product['can_relist'] = True
                     except Exception as error:
                         if not hasattr(error, 'status'):

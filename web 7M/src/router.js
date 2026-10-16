@@ -10,18 +10,24 @@ import { needLogin, loginModal } from './auth/login.js';
 import { home } from './pages/home.js';
 import { product } from './pages/product.js';
 import { publish } from './pages/publish.js';
+import { editProduct } from './pages/edit.js';
+import { drafts } from './pages/drafts.js';
+import { suspend } from './core/drafts.js';
+import { attach } from './core/inbox.js';
+import { releaseMedia } from './core/media.js';
+import { context } from './core/context.js';
 import { cartPage } from './pages/cart.js';
 import { orders } from './pages/orders.js';
 import { myProducts } from './pages/listings.js';
 import { community } from './pages/community.js';
 import { chats } from './pages/messages.js';
 import { profile, mine } from './pages/me.js';
-import { support, ticketPage } from './pages/support.js';
+import { supportPage as support, ticketPage } from './pages/support.js';
 
 // 公开演示版只开放这四条只读路由。
 const DEMO_ROUTES = ['home', 'product', 'profile', 'community'];
 // 其余路由必须登录，未登录时先给一页说明再弹登录框。
-const AUTH_ROUTES = ['favorites', 'publish', 'cart', 'orders', 'listings', 'messages', 'me', 'support', 'staff', 'ticket'];
+const AUTH_ROUTES = ['favorites', 'publish', 'cart', 'orders', 'listings', 'selling', 'drafts', 'edit', 'messages', 'me', 'support', 'staff', 'ticket'];
 
 function publicDemoFeature(route){
   const [title, description] = demoFeatures[route] || ['功能预览', '该操作只在本地模拟版中提供。'];
@@ -29,10 +35,15 @@ function publicDemoFeature(route){
 }
 
 export async function render(){
+  await suspend();
+  releaseMedia();
   const rid = bumpRenderId();
+  attach(state.me && !window.HUALI_STATIC_DEMO ? context() : null);
   clearPoll();
   window.scrollTo(0, 0);
-  const [route, id] = (location.hash.slice(1) || 'home').split('/');
+  const [path,query] = (location.hash.slice(1) || 'home').split('?');
+  const [route,id]=path.split('/');
+  if(route==='home' && query){const f=Object.fromEntries(new URLSearchParams(query));state.freeShelf=f.free==='1';delete f.free;state.filter={category:'',q:'',sort:'',...f};}
   try{
     if (window.HUALI_STATIC_DEMO && !DEMO_ROUTES.includes(route)){ publicDemoFeature(route); return; }
     if (!state.me && AUTH_ROUTES.includes(route)){
@@ -44,7 +55,10 @@ export async function render(){
       home: () => home(),
       favorites: () => needLogin() && home(true),
       product: () => product(id),
-      publish,
+      publish:()=>publish(id),
+      drafts,
+      edit:()=>editProduct(id),
+      selling:myProducts,
       cart: cartPage,
       orders,
       listings: myProducts,

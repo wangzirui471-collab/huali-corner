@@ -8,6 +8,8 @@ import { go, render } from '../core/nav.js';
 import { modal, closeModal } from '../core/shell.js';
 import { field } from '../components/forms.js';
 import { ticketModal } from '../pages/support.js';
+import { uploadEvidenceFiles, creditDialog } from './support-operations.js';
+import { context } from '../core/context.js';
 
 export const clicks = {
   'new-ticket': () => ticketModal('other'),
@@ -30,15 +32,14 @@ export const clicks = {
   },
 
   // 信誉分只能由平台管理员、且必须挂在一张已核实的工单上调整。
-  credit(b, id){
-    modal(`<h2>信誉审核调整</h2><p class="muted">必须关联已核实工单，填写理由。举报不自动扣分，用户可申诉。</p><form id="credit-form" data-target="${id}">${field('关联工单编号','ticket_id','number','','required min="1"')}${field('调整分值（如 -10 或 +10）','delta','number','','required min="-100" max="100"')}<label class="field"><span>审核理由</span><textarea name="reason" required></textarea></label><button class="btn primary">确认调整并记录</button></form>`);
-  }
+  credit:(b,id)=>creditDialog(context(),id)
 };
 
 export const submits = {
   'ticket-form': async ({ form, d }) => {
     const r = await api('/tickets', {
       ...d,
+      evidence:await uploadEvidenceFiles(form,context()),
       type:form.dataset.type,
       order_id:Number(form.dataset.order) || null,
       product_id:Number(form.dataset.product) || null

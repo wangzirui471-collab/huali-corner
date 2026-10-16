@@ -6,6 +6,10 @@ export const state = {
   // 公开演示版没有登录态，token 恒为空。
   token: window.HUALI_STATIC_DEMO ? '' : sessionStorage.getItem('hc-token') || '',
   me: null,
+  draftEditor: null,
+  inbox: null,
+  feed: null,
+  mediaURLs:new Set(),
   config: {},
   filter: {category:'', q:'', sort:''},
   poll: null,

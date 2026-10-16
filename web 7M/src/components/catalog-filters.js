@@ -1,0 +1,13 @@
+import { state } from '../core/state.js';
+import { e } from '../core/dom.js';
+const input=(label,name,value='')=>`<label class="field"><span>${label}</span><input name="${name}" value="${e(value)}" maxlength="100"></label>`;
+const select=(label,name,options,value)=>`<label class="field"><span>${label}</span><select name="${name}">${options.map(([k,t])=>`<option value="${k}" ${k===value?'selected':''}>${t}</option>`).join('')}</select></label>`;
+export function filterForm(){
+ const f=state.filter,book=!f.category||f.category==='books';
+ return `<h2>组合筛选</h2><form id="catalog-filter-form"><div class="form-grid">${select('分类','category',[['','全部'],['books','二手书'],['electronics','电子产品'],['living','宿舍生活'],['sports','运动好物']],f.category)}${select('价格排序','sort',[['','最新发布'],['price','从低到高'],['price_desc','从高到低']],f.sort)}${select('交付方式','delivery',[['','不限'],['pickup','自提'],['delivery','送货（按含送货费总价筛选）']],f.delivery||'')}${input('最低总价（元）','min_price',f.min_price==null?'':Number(f.min_price)/100)}${input('最高总价（元）','max_price',f.max_price==null?'':Number(f.max_price)/100)}${input('学院（完整名称，可不填）','college',f.college||'')}${select('成色','condition',[['','不限'],['unknown','未知／待核对'],['近乎全新','近乎全新'],['正常使用痕迹','正常使用痕迹'],['明显磨损，已说明','明显磨损，已说明']],f.condition||'')}</div><fieldset class="form-grid" data-book-filter ${book?'':'hidden'}><legend>教材条件</legend>${input('专业（完整名称）','major',f.major||'')}${input('课程（完整名称）','course',f.course||'')}${select('版次','edition',[['','不限'],['unknown','未知／待确认'],...Array.from({length:9},(_,i)=>['第'+['一','二','三','四','五','六','七','八','九'][i]+'版','第'+['一','二','三','四','五','六','七','八','九'][i]+'版'])],f.edition||'')}</fieldset><p class="muted">选择送货时按商品价＋送货费筛选；订单合并费以结算页为准。信息不全可选择“未知”。</p><button class="btn primary full">应用筛选</button><button type="button" class="text-button" data-action="share-filters">分享当前筛选</button><button type="button" class="text-button" data-action="clear-filters">清空全部筛选</button></form>`;
+}
+export function filterSummary(){
+ if(!state.freeShelf && !Object.values(state.filter).some(v=>v!=='' && v!=null))return '';
+ const f=state.filter,labels={delivery:'交付',min_price:'最低价',max_price:'最高价',college:'学院',major:'专业',course:'课程',edition:'版次',condition:'成色'};
+ return `<div class="filter-summary">${Object.entries(labels).filter(([k])=>f[k]!==undefined&&f[k]!=='').map(([k,t])=>`<span class="tag">${t}：${e(k.endsWith('price')?'¥'+Number(f[k])/100:f[k]==='unknown'?'未知':f[k]==='pickup'?'自提':f[k]==='delivery'?'送货':f[k])}</span>`).join('')}<button class="text-button" data-action="share-filters">分享筛选</button><button class="text-button" data-action="clear-filters">清空筛选</button></div>`;
+}

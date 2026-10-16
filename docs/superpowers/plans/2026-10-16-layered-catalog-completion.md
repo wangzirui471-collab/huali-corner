@@ -1,6 +1,6 @@
 # 转角分层整合与商品管理第一批 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 以用户ad39da0分层结构为基础保留两条分支能力，交付商品编辑、可靠下架/恢复和组合筛选，不恢复旧平铺架构。
 
@@ -35,7 +35,7 @@
 - [x] main基线：`python3 -m unittest discover -s tests -v`，55项通过。
 - [x] `node tests/frontend_modules.test.mjs`：31模块加载/依赖无环通过。
 - [x] 原生客户端隐私、订单展示、密码登录3个Node脚本通过。
-- [ ] 本机Windows浏览器冒烟结果不冒充本轮验证；整合后仍需执行当前环境可运行的真实浏览器场景。
+- [x] 本机Windows浏览器冒烟结果不冒充本轮验证；整合后仍需执行当前环境可运行的真实浏览器场景。
 
 ## 1. 文件职责与迁移映射
 
@@ -65,11 +65,11 @@
 
 **Interfaces:** 保留Market.save_draft(user_id,payload)、publish_draft(user_id,id,version)、relist_draft(user_id,product_id)、create_support(admin_id,payload)、apply_penalty(...)、reverse_penalty(...)、notifications(user_id,before=0)等现有合同；保留main的my_products、set_product_status、update_order和订单留言。publish继续接受电子产品，并支持草稿发布所需的同事务内部调用。
 
-- [ ] 写迁移回归：电子产品发布、付款前改单/留言与草稿重售能在同一Market实例中共存；新旧数据目录升级保留账号、图片、order_notes和原账务；错误地用演示库开启trial仍拒绝。
-- [ ] 先运行相应测试，记录缺少的服务/字段/API造成的失败；不删除main已有测试来换旧测试。
-- [ ] 将6286861服务按映射迁入，统一异常与校验来自app/core/errors.py，路径仅导入config；合并表迁移，不把WAL设置带回。
-- [ ] 在事务内区分seller_delist、refund_removed、credit_block和legacy_unknown等移除原因；无法判断的历史记录进入核对，不能无条件恢复库存。
-- [ ] 运行Python完整套件，逐项核对main和旧功能分支场景的并集；通过后提交后端整合。
+- [x] 写迁移回归：电子产品发布、付款前改单/留言与草稿重售能在同一Market实例中共存；新旧数据目录升级保留账号、图片、order_notes和原账务；错误地用演示库开启trial仍拒绝。
+- [x] 先运行相应测试，记录缺少的服务/字段/API造成的失败；不删除main已有测试来换旧测试。
+- [x] 将6286861服务按映射迁入，统一异常与校验来自app/core/errors.py，路径仅导入config；合并表迁移，不把WAL设置带回。
+- [x] 在事务内区分seller_delist、refund_removed、credit_block和legacy_unknown等移除原因；无法判断的历史记录进入核对，不能无条件恢复库存。
+- [x] 运行Python完整套件，逐项核对main和旧功能分支场景的并集；通过后提交后端整合。
 
 ### Task 2: 前端ES模块与原生功能整合
 
@@ -77,11 +77,11 @@
 
 **Interfaces:** core/http.api(path,data,options={background:false})保留默认代次检查，允许同账号草稿/通知后台同步；state持有token、me、cart、draftEditor和inbox状态。nav继续注册render回调，不由页面import router。
 
-- [ ] 写真实浏览器失败场景：用户的新商品频道仍可用；旧账号草稿恢复三图；独立客服处理退货并重售；消息红点和公共地点仍可用；换账号旧操作不得提交。
-- [ ] 将旧HTML与动作按职责迁移，沿用户现有样式/插画/Logo，不整体替换pages或恢复全局脚本；新动作在actions/index.js中注册，页面不偷偷重复安装全站监听。
-- [ ] 保留listings路由，并兼容旧selling链接；加入drafts、publish/id等必要路由及静态只读守卫；启动顺序不改坏public-demo注入。
-- [ ] 更新原生文件与测试引用到web 7M/miniprogram，保留可运行入口；真机/工具未执行结果明确记录。
-- [ ] 运行模块自检、全部相关Node脚本、真实浏览器及静态子路径演示；通过后提交前端整合。
+- [x] 写真实浏览器失败场景：用户的新商品频道仍可用；旧账号草稿恢复三图；独立客服处理退货并重售；消息红点和公共地点仍可用；换账号旧操作不得提交。
+- [x] 将旧HTML与动作按职责迁移，沿用户现有样式/插画/Logo，不整体替换pages或恢复全局脚本；新动作在actions/index.js中注册，页面不偷偷重复安装全站监听。
+- [x] 保留listings路由，并兼容旧selling链接；加入drafts、publish/id等必要路由及静态只读守卫；启动顺序不改坏public-demo注入。
+- [x] 更新原生文件与测试引用到web 7M/miniprogram，保留可运行入口；真机/工具未执行结果明确记录。
+- [x] 运行模块自检、全部相关Node脚本、真实浏览器及静态子路径演示；通过后提交前端整合。
 
 ### Task 3: 原地编辑与可靠下架/恢复
 
@@ -89,11 +89,11 @@
 
 **Interfaces:** edit_product(user_id,product_id,version,fields)；GET /api/product/edit?id返回本人可编辑DTO与version；POST /api/product/edit接收{id,version,fields}。fields沿用草稿表单的元字符串和图片ID，服务端严格转换为分并复用发布校验。原/api/product/status保持兼容，状态检查进入同一事务。
 
-- [ ] 写失败测试：别人的商品不能改；两个版本冲突返回409；reserved/sold不可直接编辑；三图、金额、低分限制不被绕过；不同请求键的下单与编辑/下架竞争只产生有效状态。
-- [ ] 给商品增加version，编辑时CAS校验最新状态，保留stock_key；报价记录绑定商品版本，价格/关键描述/图片变更时使未锁定报价失效。
-- [ ] 为已生成订单保留完整快照；不能让普通恢复按钮绕过退货、欺诈或较新实物出售记录。
-- [ ] 网页管理页按原分组增加编辑入口与明确不可编辑原因；原生按相同合同适配，不复制一套判断规则。
-- [ ] 运行Python与真实双账号编辑—下单—下架/恢复流程，核对原订单、报价和账务；通过后提交。
+- [x] 写失败测试：别人的商品不能改；两个版本冲突返回409；reserved/sold不可直接编辑；三图、金额、低分限制不被绕过；不同请求键的下单与编辑/下架竞争只产生有效状态。
+- [x] 给商品增加version，编辑时CAS校验最新状态，保留stock_key；报价记录绑定商品版本，价格/关键描述/图片变更时使未锁定报价失效。
+- [x] 为已生成订单保留完整快照；不能让普通恢复按钮绕过退货、欺诈或较新实物出售记录。
+- [x] 网页管理页按原分组增加编辑入口与明确不可编辑原因；原生按相同合同适配，不复制一套判断规则。
+- [x] 运行Python与真实双账号编辑—下单—下架/恢复流程，核对原订单、报价和账务；通过后提交。
 
 ### Task 4: 多条件筛选与稳定翻页
 
@@ -101,19 +101,19 @@
 
 **Interfaces:** 保留旧/api/products的数组合同；新GET /api/products/search使用q/category/college/major/course/edition/condition/delivery/min_price/max_price/sort/cursor/page_size，金额为整数分，返回{items,next_cursor,has_more}。page_size默认20、最大50；未知字段提供明确unknown选项。
 
-- [ ] 写失败测试：组合条件、未知版次、免费书、electronics不显示教材专属项；500件数据中匹配项不因旧100件截断丢失；同价按id稳定排序，游标绑定条件，不能跨查询复用。
-- [ ] 把筛选放在分页之前，以参数化查询及必要索引执行；按所选自提/送货总价排序；游标带排序键和初始最大id，新增商品留到刷新显示。
-- [ ] 页面共享筛选只在state，更新筛选重置游标；已显示ID去重。商品价格被卖家修改时刷新结果，下单仍以确认的商品/订单快照为准，不承诺跨编辑的永久搜索快照。
-- [ ] 按category显示筛选抽屉；数据不全可选未知，不逼卖家填写全部课程信息；用户可清空/分享当前筛选。
-- [ ] 验证移动端筛选、排序与标价口径、翻页新增数据、清空筛选；通过后提交。
+- [x] 写失败测试：组合条件、未知版次、免费书、electronics不显示教材专属项；500件数据中匹配项不因旧100件截断丢失；同价按id稳定排序，游标绑定条件，不能跨查询复用。
+- [x] 把筛选放在分页之前，以参数化查询及必要索引执行；按所选自提/送货总价排序；游标带排序键和初始最大id，新增商品留到刷新显示。
+- [x] 页面共享筛选只在state，更新筛选重置游标；已显示ID去重。商品价格被卖家修改时刷新结果，下单仍以确认的商品/订单快照为准，不承诺跨编辑的永久搜索快照。
+- [x] 按category显示筛选抽屉；数据不全可选未知，不逼卖家填写全部课程信息；用户可清空/分享当前筛选。
+- [x] 验证移动端筛选、排序与标价口径、翻页新增数据、清空筛选；通过后提交。
 
 ### Task 5: 并集回归、独立审查与分层交付包
 
 **Files:** scripts/build_public_demo.py、scripts/build_trial_package.py、README、docs操作/升级记录、启动脚本和回归测试。
 
-- [ ] 从新分层目录构建完整源码ZIP，解压后启动；不能缺app子包、ES模块树、Logo或electronics资产，不能带数据库/上传/备份/原始学生表。
-- [ ] 在旧main格式及6286861格式的临时数据副本分别做升级验证，账号、订单、账务、照片、草稿/通知和order_notes保持可读；失败时不操作原数据。
-- [ ] 执行Python全套、动态模块加载/无环、Node客户端、两账号浏览器、375/390/768/1440布局、静态子路径无写入检查；按真实执行记录结果，不承诺固定测试数量。
+- [x] 从新分层目录构建完整源码ZIP，解压后启动；不能缺app子包、ES模块树、Logo或electronics资产，不能带数据库/上传/备份/原始学生表。
+- [x] 在旧main格式及6286861格式的临时数据副本分别做升级验证，账号、订单、账务、照片、草稿/通知和order_notes保持可读；失败时不操作原数据。
+- [x] 执行Python全套、动态模块加载/无环、Node客户端、两账号浏览器、375/390/768/1440布局、静态子路径无写入检查；按真实执行记录结果，不承诺固定测试数量。
 - [ ] 完成本分支整体独立审查，修复重要问题并验证。未运行的Windows/微信原机、公网/支付验收单列。
 - [ ] 提交并推送分层集成功能分支，保留main和旧功能分支；交付可运行ZIP、更新说明和第一批实际完成清单，不把后续阶段宣称完成。
 

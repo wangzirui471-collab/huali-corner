@@ -1,6 +1,8 @@
-# 华立转角 · 计算机工程学院试点
+# 转角 · 计算机工程学院试点
 
 一个已经连接真实 SQLite 数据库的本地模拟交易原型，包含手机/电脑网站、原生微信小程序源码、社区聊天及客服后台。不是公开运营版本；未接真实短信、身份核验、微信收款或学校系统。
+
+**本轮分层升级**：商品编辑、下架恢复、组合筛选与分页已接入；保留私密草稿、独立客服、退货重售、信誉和通知。详见 [本轮交付与升级说明](docs/LAYERED_COMPLETION.md)。源码包可用 `python scripts/build_trial_package.py --output /tmp/zhuanjiao-trial.zip` 生成，包含完整后端包、ES模块树及小程序，不带运行数据。
 
 **计算机工程学院可登录试用版**：下载 `artifacts/huali-corner-trial.zip`，解压后双击 `start-trial.bat`，或运行 `python "Backend mission/server.py" --trial`。同学使用手机号＋密码独立注册，不发送短信、号码未验证；支持发布、收藏、聊天与模拟交易。独立的 `var-trial/` 保留账号和图片，关闭共享测试验证码与客服快捷登录。管理员由运营者单独创建。见[试用与后端部署说明](docs/TRIAL.md)；仍需真实部署后才有同学可访问的公网网址。
 
@@ -17,8 +19,8 @@ huali-corner-trial/
 │   ├── app/           业务模块（分层，见下）
 │   │   ├── market.py  Market 组合类：把下面各模块拼成一个对象
 │   │   ├── core/      config(路径) database(Store) errors(异常与校验)
-│   │   └── account/ catalog/ trade/ community/ support/ ops/
-│   ├── seed.py        演示数据播种
+│   │   └── account/ catalog/ trade/ community/ support/ notifications/ ops/
+│   │   └── seed.py    演示数据播种（在app包内）
 │   └── manage_trial.py render.yaml requirements.txt
 ├── web 7M/              前端：网页静态文件 + 小程序
 │   ├── index.html market.css styles.css public-demo.js
@@ -52,7 +54,7 @@ python3 -m pip install -r requirements.txt
 python3 server.py --port 8080
 ```
 
-本地浏览器访问 `http://127.0.0.1:8080`。仅绑定回环地址；不要把此演示服务直接暴露公网。页面是可运行软件，并非静态效果图。默认生成9件明确标为演示的商品和2条演示帖子；`--no-seed` 可禁用示例商品。
+本地浏览器访问 `http://127.0.0.1:8080`。仅绑定回环地址；不要把此演示服务直接暴露公网。页面是可运行软件，并非静态效果图。默认生成13件明确标为演示的商品和2条演示帖子；`--no-seed` 可禁用示例商品。
 
 数据默认在 `var/`，可指定 `--data /path/to/private-data`。重新启动会保留数据，不会覆盖已发布商品。不需要修改原来的点云网站仓库 `/workspace/-`。
 
@@ -68,7 +70,7 @@ python server.py
 
 保持终端开启，在本机浏览器访问 `http://127.0.0.1:8080`。命令是 `python`，前面没有点号。PowerShell 的个人配置脚本被执行策略阻止，与 Python 网站启动是不同问题，不需要为此放宽执行策略。
 
-若旧下载包打开首页时报 `WindowsPath ... no attribute 'is_relative_to'`，是旧代码调用了 Python 3.9 才提供的方法。本次修复同时移除了登录使用的 `str.removeprefix`，并明确用 UTF-8 读取学院目录。先按 Ctrl+C 停止网站，用 GitHub 最新版 `server.py` 替换 `Backend mission/` 内的同名文件，再运行 `python server.py`；保留原有 `var/` 数据目录，无需为此重装依赖。推荐新环境使用 Python 3.12+；兼容回归在 Python 3.12 下模拟缺少新方法进行验证，未在旧版 Windows Python 上实机测试。
+更新分层版本时，不要只替换 `server.py`。先停止服务并备份原数据，再在新目录完整解压全部源码，用 `--data` 指向原试用数据目录。升级只增量迁移数据库；网页 `src/` 和后端 `app/` 必须成套更新。原 `var-trial/`、照片和备份不能删除或用演示数据覆盖。先在副本中核对订单和账务，再用于原数据。推荐Python 3.12；本轮没有Windows实机验证。
 
 若 pip 报 `Cannot connect to proxy`，应先检查本机代理及 pip 代理配置；连接失败后的 `No matching distribution` 不能单独证明依赖版本不存在。不要通过禁用 TLS 校验来解决代理问题。
 
@@ -84,9 +86,11 @@ python server.py
 
 ## 已实现流程
 
-- 二手书、宿舍与运动闲置；逐本发布，版次、ISBN、出版社、笔记/缺页/附件选项。
+- 二手书、宿舍、运动与电子产品闲置；逐本发布，版次、ISBN、出版社、笔记/缺页/附件选项。
 - 正面、侧面、顶部三张不同实拍图校验，可补充版权页和内页；不保证自动识别网图或盗版。
-- 商品详情、公开卖家主页、搜索分类、收藏、点赞、链接分享和规则参考估价。
+- 商品详情、公开卖家主页、组合筛选、稳定翻页、收藏、点赞、链接分享和规则参考估价。支持学院、专业、课程、版次、成色、交付方式和价格；按所选交付总价筛选。
+- 三步发布、私密草稿自动保存、冲突提示与恢复；在售/主动下架商品可编辑，旧报价随关键修改失效，已生成订单保留原快照。
+- 主动下架可恢复；售后移除须确认实物和退款后从重售草稿发布，违规和不明确的历史移除不能绕过。
 - 同卖家多件加入取货清单，合并下单。送货费按所选商品的最高送货费收取一次，商品总价与送货费分别显示。
 - 自提/卖家送货、地点与时间快照、卖家确认时段、结构化改约（另一方接受才生效）。付款前30分钟超时关闭；已付款但下单24小时后卖家仍未确认时段则自动模拟退款取消。
 - 模拟付款、交接、确认收货；买家核对交接后24小时自动收货，售后处理中暂停。卖家单方面点已交付不会开始自动结算。
@@ -113,9 +117,11 @@ python server.py
 ```bash
 python3 -m unittest discover -s tests -v
 node tests/native_client.test.js
+node tests/native_catalog.test.js
 node tests/native_order.test.js
 node tests/frontend_modules.test.mjs   # 前端 ES 模块：可加载性 + 依赖无环
-python3 tests/browser_smoke.py
+python3 tests/layered_browser_smoke.py
+python3 tests/public_demo_smoke.py
 python3 tests/ui_redesign_smoke.py
 ```
 

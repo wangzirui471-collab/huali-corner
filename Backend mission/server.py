@@ -62,6 +62,7 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/auth/login' and method=='POST':return self.respond(m.login_password(data.get('phone'),data.get('password')) if m.trial else m.login(data.get('phone'),data.get('code')))
             if p=='/api/auth/register' and method=='POST':return self.respond(m.register_password(data.get('phone'),data.get('password'),data.get('nickname')))
             if p=='/api/auth/recover' and method=='POST':return self.respond(m.recover_password(data.get('phone'),data.get('recovery_code'),data.get('new_password')))
+            if p=='/api/products/search' and method=='GET':return self.respond(m.search_products(self.optional_user(),query))
             if p=='/api/products' and method=='GET':return self.respond(m.products(self.optional_user(),query))
             if p=='/api/product' and method=='GET':return self.respond(m.product(int(query['id']),self.optional_user()))
             if p=='/api/profile' and method=='GET':
@@ -105,6 +106,8 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/auth/password' and method=='POST':return self.respond(m.change_password(u,data.get('old_password'),data.get('new_password')))
             if p=='/api/me':return self.respond(m.update_profile(u,data) if method=='POST' else m.profile(u))
             if p=='/api/auth/logout':m.logout(self.token());return self.respond({'ok':True})
+            if p=='/api/product/edit':
+                return self.respond(m.edit_product(u,int(data['id']),data['version'],data['fields']) if method=='POST' else m.product_edit(u,int(query['id'])))
             if p=='/api/publish' and method=='POST':return self.respond(m.publish(u,data))
             if p=='/api/my-products':return self.respond(m.my_products(u,query.get('status')))
             if p=='/api/product/status' and method=='POST':return self.respond(m.set_product_status(u,int(data['id']),data['action']))

@@ -8,6 +8,7 @@
 import sqlite3, json, time, threading
 from contextlib import contextmanager
 from pathlib import Path
+from ..catalog.migrations import migrate_catalog
 
 # 写事务串行锁：让并发写入在 Python 层排队，而不是各自去撞 SQLite 的写锁。
 #
@@ -93,6 +94,7 @@ class Store:
                     if name not in existing:
                         c.execute('ALTER TABLE '+table+' ADD COLUMN '+name+' '+definition)
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS audit_reversal_once ON audit(reversal_of) WHERE reversal_of IS NOT NULL')
+            migrate_catalog(c)
             c.execute("INSERT OR IGNORE INTO rooms(id,kind,name) VALUES(1,'general','广州校区总聊')")
     def connect(self):
         c=sqlite3.connect(self.path,timeout=20)

@@ -96,7 +96,7 @@ class SupportService(ValidationMixin):
                         elif amount<r['total']:self.journal(c,r['id'],'settlement',r['total']-amount)
                         c.execute("UPDATE orders SET status='refunded' WHERE id=?",(r['id'],))
                         # Refunded physical items are NOT automatically offered again.
-                        for p in json.loads(r['items']):c.execute("UPDATE products SET status='removed' WHERE id=?",(p['id'],))
+                        for p in json.loads(r['items']):c.execute("UPDATE products SET status='removed',removal_reason='refund_removed',version=version+1 WHERE id=?",(p['id'],))
                     elif r['status']=='disputed' and t['type']=='refund':
                         prior='completed' if r['completed_at'] else 'awaiting_receipt' if r['handover_at'] else 'awaiting_handover' if r['delivered_at'] else 'paid'
                         c.execute('UPDATE orders SET status=? WHERE id=?',(prior,r['id']))

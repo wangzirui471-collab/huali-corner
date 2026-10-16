@@ -4,7 +4,7 @@
 
 import { state } from './state.js';
 
-export async function api(path, data){
+export async function api(path, data, options={}){
   if (window.HUALI_STATIC_DEMO) return window.hualiDemoApi(path, data);
   // 记下发起时的账号与渲染代次；如果请求返回前已经切换，就丢弃这次结果，
   // 免得旧请求把上一个账号的内容盖到新页面上。
@@ -15,7 +15,7 @@ export async function api(path, data){
     body: data === undefined ? undefined : JSON.stringify(data)
   });
   const body = await res.json();
-  if (session !== state.token || epoch !== state.renderId) throw new Error('页面或账号已切换，请重试');
+  if (session !== state.token || (!options.background && epoch !== state.renderId)) throw new Error('页面或账号已切换，请重试');
   if (!res.ok) throw new Error(body.error || '请求失败');
   return body;
 }

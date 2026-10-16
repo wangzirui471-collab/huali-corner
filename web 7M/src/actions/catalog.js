@@ -76,38 +76,6 @@ export const clicks = {
 };
 
 export const submits = {
-  // 三视图先逐张上传，拿到上传 id 后再随表单一起提交商品。
-  'publish-form': async ({ d, fd }) => {
-    const uploads = [];
-    for (const angle of ['front','side','top','extra']){
-      const files = angle === 'extra' ? fd.getAll('extra').filter(f => f.size) : [fd.get(angle)];
-      for (const file of files){
-        if (!file?.size) continue;
-        if (file.size > 5*1024*1024) throw new Error('单张图片不能超过5MB');
-        const content = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result.split(',')[1]);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        const r = await api('/upload', {content, angle});
-        uploads.push(r.id);
-      }
-    }
-    const payload = {
-      ...d,
-      photos:uploads,
-      price:Math.round(Number(d.price)*100),
-      delivery_fee:Math.round(Number(d.delivery_fee)*100),
-      original_price:Math.round(Number(d.original_price || 0)*100),
-      region:d.building+' · '+d.point,
-      college:state.me.college
-    };
-    const r = await api('/publish', payload);
-    toast('发布成功');
-    go('product/'+r.id);
-  },
-
   'search-form': ({ d }) => { state.filter.q = d.q; state.freeShelf = false; go('home'); },
   'filter-form': ({ d }) => {
     state.filter.category = d.category;

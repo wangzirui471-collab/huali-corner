@@ -32,7 +32,7 @@ with tempfile.TemporaryDirectory() as root:
    page.get_by_role('searchbox',name='搜索商品').fill('')
    page.locator('#search-form').get_by_role('button',name='搜索',exact=True).click()
    page.get_by_role('button',name='推荐',exact=True).click()
-   expect(page.locator('.product-card')).to_have_count(9)
+   expect(page.locator('.product-card')).to_have_count(13)
    artifacts=Path('/workspace/campus-market/artifacts');artifacts.mkdir(exist_ok=True)
    for width,height,label in [(375,812,'small-mobile'),(390,844,'mobile'),(768,1024,'tablet'),(1440,1000,'desktop')]:
     page.set_viewport_size({'width':width,'height':height})

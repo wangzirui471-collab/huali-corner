@@ -26,10 +26,10 @@ def build(output):
         for uid in sorted({p['seller_id'] for p in products}):
             user=market.profile(uid)
             profiles[str(uid)]={k:user[k] for k in ['id','nickname','college','major','education','bio','score']}
-        data={'config':{'name':'华立转角','simulation':True,'public_demo':True,'campus':'广州校区','pilot':'计算机工程学院','support_hours':'08:00–20:00','colleges':[]},
+        data={'config':{'name':'转角','simulation':True,'public_demo':True,'campus':'广州校区','pilot':'计算机工程学院','support_hours':'08:00–20:00','colleges':[]},
               'products':products,'profiles':profiles,'posts':market.posts(),'comments':{}}
     output.mkdir(parents=True,exist_ok=True)
-    for name in ['public-demo.js','styles.css','market.css']:
+    for name in ['public-demo.js','styles.css','market.css','publishing.css','inbox.css']:
         shutil.copy2(WEB/name,output/name)
     # 前端已拆成 ES 模块，整棵 src/ 目录都要跟着导出。
     shutil.copytree(WEB/'src',output/'src')

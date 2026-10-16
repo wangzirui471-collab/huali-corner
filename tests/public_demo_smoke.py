@@ -27,7 +27,7 @@ with tempfile.TemporaryDirectory() as tmp:
             page.on('request',lambda request:requests.append((request.method,request.url)))
             base='http://127.0.0.1:'+str(server.server_port)+'/preview/'
             page.goto(base,wait_until='networkidle')
-            expect(page.locator('.product-card')).to_have_count(9)
+            expect(page.locator('.product-card')).to_have_count(13)
             expect(page.locator('.simulation-bar')).to_contain_text('公开演示')
             page.get_by_role('button',name='二手书',exact=True).first.click()
             expect(page.locator('.product-card')).to_have_count(6)

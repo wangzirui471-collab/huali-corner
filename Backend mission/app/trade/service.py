@@ -1,5 +1,6 @@
 """交易模块：合并下单、订单状态流转、付款前修改订单、模拟账务、超时任务。"""
 import json, time
+from .inventory import release_product
 from ..core.errors import ValidationMixin, DomainError
 
 
@@ -19,13 +20,15 @@ class TradeService(ValidationMixin):
             self.require(all(products),'商品不存在')
             self.require(len({p['seller_id'] for p in products})==1,'只能合并同一卖家的商品')
             seller=products[0]['seller_id'];self.require(seller!=u,'不能购买自己的商品')
+            owner=c.execute('SELECT is_active,trading_blocked FROM users WHERE id=?',(seller,)).fetchone()
+            self.require(owner and owner['is_active'] and not owner['trading_blocked'],'卖家当前不能进行新交易',403)
             self.require(all(p['status']=='available' for p in products),'部分商品已被预留或售出',409)
             self.require(all(p['delivery'] in [delivery,'both'] for p in products),'商品不支持所选交付方式')
             items=[]
             for p in products:
-                price=p['price'];offer=c.execute("SELECT amount FROM offers WHERE product_id=? AND buyer_id=? AND status='accepted' ORDER BY id DESC LIMIT 1",(p['id'],u)).fetchone()
+                price=p['price'];offer=c.execute("SELECT amount FROM offers WHERE product_id=? AND buyer_id=? AND status='accepted' AND product_version=? ORDER BY id DESC LIMIT 1",(p['id'],u,p['version'])).fetchone()
                 if offer:price=offer['amount']
-                data=json.loads(p['data']);items.append({'id':p['id'],'title':p['title'],'price':price,'region':p['region'],'edition':data.get('edition',''),'notes':data.get('notes',''),'missing':data.get('missing',''),'accessories':data.get('accessories',''),'photo':data['photos'][0]['url']})
+                data=json.loads(p['data']);items.append({'id':p['id'],'title':p['title'],'price':price,'region':p['region'],'edition':data.get('edition',''),'notes':data.get('notes',''),'missing':data.get('missing',''),'accessories':data.get('accessories',''),'photo':data['photos'][0]['url'],'category':p['category'],'description':data.get('description',''),'condition':data.get('condition',''),'photos':data.get('photos',[]),'delivery_fee':p['delivery_fee'],'product_version':p['version']})
             subtotal=sum(p['price'] for p in items);fee=max(p['delivery_fee'] for p in products) if delivery=='delivery' else 0
             oid=c.execute('INSERT INTO orders(buyer_id,seller_id,items,subtotal,delivery_fee,total,delivery,address,appointment,status,created,request_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(u,seller,json.dumps(items,ensure_ascii=False),subtotal,fee,subtotal+fee,delivery,address,appointment,'awaiting_payment',time.time(),key)).lastrowid
             for p in products:c.execute("UPDATE products SET status='reserved' WHERE id=?",(p['id'],))
@@ -45,7 +48,7 @@ class TradeService(ValidationMixin):
     def journal(self,c,oid,kind,amount):c.execute('INSERT OR IGNORE INTO ledger(order_id,kind,amount,created) VALUES(?,?,?,?)',(oid,kind,amount,time.time()))
 
     def release(self,c,r):
-        for p in json.loads(r['items']):c.execute("UPDATE products SET status='available' WHERE id=?",(p['id'],))
+        for p in json.loads(r['items']):release_product(c,p['id'])
 
     def complete(self,c,r,now):
         c.execute("UPDATE orders SET status='completed',completed_at=? WHERE id=?",(now,r['id']))
@@ -117,7 +120,7 @@ class TradeService(ValidationMixin):
                 self.require(set(keep).issubset({i['id'] for i in items}),'包含不属于本订单的商品')
                 for i in items:
                     if i['id'] not in keep:
-                        c.execute("UPDATE products SET status='available' WHERE id=? AND status='reserved'",(i['id'],))
+                        release_product(c,i['id'])
                         removed.append(i['title'])
                 items=[i for i in items if i['id'] in keep]
             if 'delivery' in d:
@@ -141,7 +144,7 @@ class TradeService(ValidationMixin):
             self.require(now+60<appointment<now+86400*30,'请选择未来30天内的交付时间')
             subtotal=sum(i['price'] for i in items);fee=0
             if delivery=='delivery':
-                fees=[c.execute('SELECT delivery_fee FROM products WHERE id=?',(i['id'],)).fetchone()['delivery_fee'] for i in items]
+                fees=[i.get('delivery_fee',c.execute('SELECT delivery_fee FROM products WHERE id=?',(i['id'],)).fetchone()['delivery_fee']) for i in items]
                 fee=max(fees) if fees else 0
             c.execute('UPDATE orders SET items=?,subtotal=?,delivery_fee=?,total=?,delivery=?,address=?,appointment=? WHERE id=?',
                       (json.dumps(items,ensure_ascii=False),subtotal,fee,subtotal+fee,delivery,address,appointment,oid))

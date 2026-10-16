@@ -5,11 +5,13 @@
 import { $ } from './core/dom.js';
 import { state, loadCart } from './core/state.js';
 import { api } from './core/http.js';
+import { cache } from './core/drafts.js';
 import { render } from './router.js';
 import { closeModal } from './core/shell.js';
 import { registerActions } from './actions/index.js';
 import { registerChangeHandlers } from './actions/change.js';
 
+window.addEventListener('pagehide',()=>{if(state.draftEditor)cache(state.draftEditor);});
 registerActions();
 registerChangeHandlers();
 

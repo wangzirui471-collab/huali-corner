@@ -1,28 +1,19 @@
 @echo off
 chcp 65001 >nul
-title 华立转角 · 试用版 8081
-cd /d "%~dp0Backend mission"
-
+title 转角 · 模拟试用版 8081
+cd /d "%~dp0"
 echo.
-echo   华立转角 · 学院试用版
-echo   ----------------------------------------
-echo   检查 8081 端口占用...
-set FOUND=0
-for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":8081" ^| findstr "LISTENING"') do (
-    echo   发现已在运行的实例 PID %%p，先关闭它
-    taskkill /PID %%p /F >nul 2>&1
-    set FOUND=1
+echo 转角 · 手机号密码登录 · 全部交易为模拟
+python -c "import PIL" >nul 2>&1
+if errorlevel 1 (
+    echo 请先安装 Python 3.12，再运行下面的依赖安装命令：
+    echo python -m pip install -r "Backend mission/requirements.txt"
+    pause
+    exit /b 1
 )
-if "%FOUND%"=="1" timeout /t 2 /nobreak >nul
-
-echo   启动中，请稍候...
-echo   浏览器打开： http://127.0.0.1:8081
-echo   停止服务：在此窗口按 Ctrl+C
-echo   ----------------------------------------
-echo.
-
-python server.py --trial --port 8081
-
-echo.
-echo   服务已停止。
+echo 启动后在浏览器打开 http://127.0.0.1:8081
+echo 请保持此窗口运行。停止时按 Ctrl+C。
+echo 端口被占用时请使用另一个启动脚本，或自行结束旧实例。
+python "Backend mission/server.py" --trial --port 8081
+echo 服务已停止；如有报错，请保留上面的完整信息。
 pause

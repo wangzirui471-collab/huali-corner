@@ -1,0 +1,32 @@
+.publish-heading { display:flex; justify-content:space-between; align-items:center; gap:16px; margin:8px 0 24px; }
+.publish-heading h1 { font-size:28px; margin:6px 0 12px; }
+.simple-publish { max-width:900px; margin:auto; }
+.draft-toolbar { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:12px 16px; background:#eaf5ee; color:#235a3c; border-radius:12px; margin-bottom:18px; font-size:13px; }
+.draft-conflict { margin-bottom:16px; padding:14px; background:#fff3df; color:#795119; }
+.draft-conflict button { margin:8px; padding:7px; border:1px solid currentColor; border-radius:6px; }
+.simple-publish .upload-slot { cursor:pointer; display:flex; flex-direction:column; gap:10px; }
+.simple-publish .upload-preview img { width:100%; height:125px; object-fit:cover; border-radius:8px; }
+.simple-publish .upload-preview:empty { min-height:60px; background:#f0f3ed; border-radius:8px; }
+.simple-publish input[type=file] { max-width:100%; font-size:12px; }
+.simple-publish .photo-count { margin-bottom:14px; }
+.publish-extra summary { cursor:pointer; font-weight:700; padding:4px 0; }
+.publish-extra[open] summary { margin-bottom:18px; }
+.publish-submit { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:18px 0; }
+.draft-list .panel { max-width:900px; }
+[hidden] { display:none !important; }
+@media(max-width:580px) {
+  .publish-heading { align-items:flex-start; flex-direction:column; }
+  .publish-heading h1 { font-size:25px; }
+  .simple-publish .form-grid { grid-template-columns:1fr; }
+  .simple-publish .photo-inputs { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .simple-publish .upload-slot { min-height:150px; }
+  .simple-publish .upload-preview img { height:85px; }
+  .simple-publish input[type=file] { font-size:9px; }
+  .draft-toolbar { align-items:flex-start; font-size:11px; }
+  .publish-submit { align-items:flex-start; flex-direction:column; }
+  .publish-submit .btn { width:100%; }
+}
+.simple-publish .upload-slot>.upload-preview { position:static; inset:auto; width:100%; }
+.simple-publish .upload-preview img { opacity:1; }
+
+.filter-summary{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:12px}#catalog-filter-form fieldset{border:0;padding:0;min-inline-size:0}

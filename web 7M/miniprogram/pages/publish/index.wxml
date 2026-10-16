@@ -1,1 +1,43 @@
-<view class="page"><view class="section-title">给闲置一个新去处</view><view class="notice">模拟试用 · 发布需要三张不同角度实拍图</view><form bindsubmit="submit"><view class="panel"><view class="field"><text>标题</text><input name="title" maxlength="80" placeholder="如：数据结构 第二版"/></view><view class="field"><text>分类</text><picker range="{{['二手书','宿舍生活','运动闲置','电子产品']}}" bindchange="category">{{category==='books'?'二手书':category==='living'?'宿舍生活':category==='sports'?'运动闲置':'电子产品'}}</picker></view><view class="field"><text>商品介绍与缺陷</text><textarea name="description" maxlength="3000"/></view><view class="field"><text>售价（元，建议4元起，允许免费送）</text><input name="price" type="digit"/></view><view class="field"><text>原购买价（元，可不填）</text><input name="original_price" type="digit" placeholder="填了会显示折扣"/></view><view class="field"><text>成色</text><picker range="{{conditionOptions}}" data-list="conditionOptions" data-field="condition" bindchange="choose">{{condition}}</picker></view><view class="photos"><view class="photo" data-angle="front" bindtap="pick"><image wx:if="{{photos.front}}" src="{{photos.front}}"/><text>正面 ＋</text></view><view class="photo" data-angle="side" bindtap="pick"><image wx:if="{{photos.side}}" src="{{photos.side}}"/><text>侧面 ＋</text></view><view class="photo" data-angle="top" bindtap="pick"><image wx:if="{{photos.top}}" src="{{photos.top}}"/><text>顶部 ＋</text></view></view></view><view class="panel" wx:if="{{category==='books'}}"><view class="field"><text>版次</text><picker range="{{editions}}" data-list="editions" data-field="edition" bindchange="choose">{{edition}}</picker></view><view class="field"><text>出版社（不确定填待确认）</text><input name="publisher"/></view><view class="field"><text>作者</text><input name="author"/></view><view class="field"><text>ISBN（可选）</text><input name="isbn"/></view><view class="field"><text>笔记情况</text><picker range="{{notesOptions}}" data-list="notesOptions" data-field="notes" bindchange="choose">{{notes}}</picker></view><view class="field"><text>缺页情况</text><picker range="{{missingOptions}}" data-list="missingOptions" data-field="missing" bindchange="choose">{{missing}}</picker></view><view class="field"><text>附件情况</text><picker range="{{accessoryOptions}}" data-list="accessoryOptions" data-field="accessories" bindchange="choose">{{accessories}}</picker></view></view><view class="panel"><view class="field"><text>交付方式</text><picker range="{{['自提或送货','仅自提','仅送货']}}" bindchange="delivery">{{delivery==='both'?'自提或送货':delivery==='pickup'?'仅自提':'仅送货'}}</picker></view><view class="field"><text>公共交付区域</text><input name="region" placeholder="如 A1楼下入口"/></view><view class="field"><text>送货费（元，自提不收）</text><input name="delivery_fee" type="digit" value="2"/></view><view class="field"><text>购买时间（可填未知）</text><input name="bought" placeholder="2024-09 或未知"/></view></view><button class="primary" form-type="submit" loading="{{busy}}" disabled="{{busy}}">确认发布</button></form></view>
+<view class="page">
+  <view class="section-title">{{editingId?'编辑商品':'简单选一选，就能发布'}}</view>
+  <view class="notice">模拟交易 · 未核对可以直说 · 照片不代表平台鉴真</view>
+  <view class="row"><button bindtap="listDrafts">我的草稿</button><button bindtap="newDraft">新建一条</button></view>
+  <view class="notice">{{saveStatus}}<button size="mini" bindtap="saveDraft">立即保存</button></view>
+  <view class="panel" wx:if="{{conflict}}"><view>版本冲突，未覆盖另一窗口的新内容</view><button bindtap="reloadDraft">读取新版</button><button wx:if="{{!editingId}}" bindtap="copyDraft">另存一份</button></view>
+  <view class="notice" wx:if="{{sourceProductId}}">退货重售草稿：请核对退回后的笔记、缺页、附件和照片，再发布。</view>
+  <view class="panel" wx:if="{{showDrafts}}"><view class="title">草稿箱（仅自己可见）</view><view wx:for="{{drafts}}" wx:key="id"><view>{{item.fields.title||'未命名草稿'}}</view><button data-id="{{item.id}}" bindtap="openDraft">继续编辑</button></view></view>
+  <form bindsubmit="submit">
+    <view class="panel"><view class="title">1 · 卖什么，选一下</view>
+      <view class="field"><text>类别</text><picker range="{{categories}}" data-field="category" bindchange="choose">{{fields.category==='books'?'二手书':fields.category==='living'?'宿舍生活':fields.category==='electronics'?'电子产品':'运动闲置'}}</picker></view>
+      <view class="field"><text>物品／书名 *</text><input value="{{fields.title}}" data-field="title" bindinput="input" maxlength="80" placeholder="例如：数据结构 第二版"/></view>
+      <view class="field"><text>成色</text><picker range="{{conditions}}" data-list="conditions" data-field="condition" bindchange="choose">{{fields.condition}}</picker></view>
+      <block wx:if="{{fields.category==='books'}}">
+        <view class="field"><text>版次</text><picker range="{{editions}}" data-list="editions" data-field="edition" bindchange="choose">{{fields.edition}}</picker></view>
+        <view class="field"><text>笔记</text><picker range="{{noteOptions}}" data-list="noteOptions" data-field="notes" bindchange="choose">{{fields.notes}}</picker></view>
+        <view class="field"><text>缺页</text><picker range="{{missingOptions}}" data-list="missingOptions" data-field="missing" bindchange="choose">{{fields.missing}}</picker></view>
+        <view class="field"><text>附件</text><picker range="{{accessoryOptions}}" data-list="accessoryOptions" data-field="accessories" bindchange="choose">{{fields.accessories}}</picker></view>
+      </block>
+    </view>
+    <view class="panel"><view class="title">2 · 实拍三张，自动上传</view><view class="photos">
+      <view class="photo" data-angle="front" bindtap="pick"><image wx:if="{{photos.front}}" src="{{photos.front}}"/><text>正面／封面 ＋</text></view>
+      <view class="photo" data-angle="side" bindtap="pick"><image wx:if="{{photos.side}}" src="{{photos.side}}"/><text>侧面／书脊 ＋</text></view>
+      <view class="photo" data-angle="top" bindtap="pick"><image wx:if="{{photos.top}}" src="{{photos.top}}"/><text>顶部／书页 ＋</text></view>
+    </view><view class="muted">上传完成后可关窗继续编辑；正在上传的照片可能需要重选。</view></view>
+    <view class="panel"><view class="title">3 · 定价格，选交付</view>
+      <view class="field"><text>售价（元，可免费送）*</text><input type="digit" value="{{fields.price}}" data-field="price" bindinput="input"/></view>
+      <view class="field"><text>交付方式</text><picker range="{{deliveries}}" data-field="delivery" bindchange="choose">{{fields.delivery==='pickup'?'自提':fields.delivery==='delivery'?'校内送货':'自提或送货'}}</picker></view>
+      <view class="field" wx:if="{{fields.delivery!=='pickup'}}"><text>送货费（元）</text><input type="digit" value="{{fields.delivery_fee}}" data-field="delivery_fee" bindinput="input"/></view>
+      <view class="field"><text>公共交付区域 *</text><picker range="{{buildingChoices}}" bindchange="locationBuilding">选择楼栋／自由填写</picker><input value="{{fields.region}}" data-field="region" bindinput="input" maxlength="80" placeholder="也可自由填写，如图书馆南门"/></view>
+    </view>
+    <view class="panel"><view class="row"><text>补充信息与缺陷说明（选填）</text><switch checked="{{showExtra}}" bindchange="toggleExtra"/></view>
+      <block wx:if="{{showExtra}}">
+        <view class="field"><text>说明／已知缺陷</text><textarea value="{{fields.description}}" data-field="description" bindinput="input" maxlength="3000" placeholder="有缺页、缺附件时请说明"/></view>
+        <view class="field"><text>出版社</text><input value="{{fields.publisher}}" data-field="publisher" bindinput="input"/></view>
+        <view class="field"><text>作者</text><input value="{{fields.author}}" data-field="author" bindinput="input"/></view>
+        <view class="field"><text>适用专业（可选）</text><input value="{{fields.major}}" data-field="major" bindinput="input"/></view><view class="field"><text>课程（可选）</text><input value="{{fields.course}}" data-field="course" bindinput="input"/></view><view class="field"><text>ISBN</text><input value="{{fields.isbn}}" data-field="isbn" bindinput="input"/></view>
+        <view class="field"><text>购买月份（不记得可不填）</text><input value="{{fields.bought}}" data-field="bought" bindinput="input"/></view>
+      </block>
+    </view>
+    <button class="primary" form-type="submit" loading="{{busy}}" disabled="{{busy}}">{{editingId?'保存商品修改':'确认发布'}}</button>
+  </form>
+</view>

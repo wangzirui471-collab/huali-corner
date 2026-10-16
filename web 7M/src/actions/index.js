@@ -12,17 +12,24 @@ import * as trade from './trade.js';
 import * as social from './social.js';
 import * as support from './support.js';
 import * as account from './account.js';
+import * as publishing from './publishing.js';
+import * as catalogFilters from './catalog-filters.js';
+import { operationClick, operationSubmit, filterCases } from './support-operations.js';
+import { inboxClick } from './inbox.js';
 
 // 公开演示版只放行这些只读交互，其余一律弹说明、不渲染任何表单。
-const DEMO_CLICK_ALLOWED = ['market-channel','market-shortcut','free-shelf','feed-sort','category','login','close','photo','share'];
+const DEMO_CLICK_ALLOWED = ['market-channel','market-shortcut','free-shelf','feed-sort','category','login','close','photo','share','open-filter','clear-filters','share-filters','feed-tab','more-products'];
 
-const clicks = {...ui.clicks, ...catalog.clicks, ...trade.clicks, ...social.clicks, ...support.clicks, ...account.clicks};
-const submits = {...catalog.submits, ...trade.submits, ...social.submits, ...support.submits, ...account.submits};
+const clicks = {...ui.clicks, ...catalog.clicks, ...trade.clicks, ...social.clicks, ...support.clicks, ...account.clicks, ...publishing.clicks,...catalogFilters.clicks};
+const submits = {...catalog.submits, ...trade.submits, ...social.submits, ...support.submits, ...account.submits, ...publishing.submits,...catalogFilters.submits};
 
 export function registerActions(){
+  document.addEventListener('input',ev=>{if(['queue_query','queue_type','queue_status'].includes(ev.target.name))filterCases();});
   document.addEventListener('click', async ev => {
     const goBtn = ev.target.closest('[data-go]');
     if (goBtn){ go(goBtn.dataset.go); return; }
+    const extra=ev.target.closest('[data-operation],[data-credit-user],[data-inbox-action]');
+    if(extra){if(window.HUALI_STATIC_DEMO){publicDemoNotice();return;}try{await (extra.hasAttribute('data-inbox-action')?inboxClick(extra):operationClick(extra));}catch(err){toast(err.message);}return;}
     const b = ev.target.closest('[data-action]');
     if (!b) return;
     const a = b.dataset.action, id = Number(b.dataset.id);
@@ -41,10 +48,11 @@ export function registerActions(){
     const form = ev.target;
     if (!form.id) return;
     ev.preventDefault();
-    if (window.HUALI_STATIC_DEMO && form.id !== 'search-form'){ publicDemoNotice(); return; }
+    if (window.HUALI_STATIC_DEMO && !['search-form','catalog-filter-form'].includes(form.id)){ publicDemoNotice(); return; }
     const fd = new FormData(form), d = Object.fromEntries(fd), button = ev.submitter;
     if (button) button.disabled = true;
     try{
+      if(form.hasAttribute('data-operation-form')){await operationSubmit({form,button});return;}
       const handler = submits[form.id];
       if (handler) await handler({form, d, fd, button});
     }catch(err){ toast(err.message); }

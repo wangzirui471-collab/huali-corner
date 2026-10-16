@@ -26,6 +26,9 @@ from .support.service import SupportService
 from .ops.service import OpsService
 from pathlib import Path
 from .catalog.drafts import DraftService
+from .catalog.validation import ListingValidation
+from .catalog.editing import CatalogEditing
+from .catalog.search import CatalogSearch
 from .support.accounts import SupportAccounts
 from .support.evidence import TicketEvidence
 from .support.returns import PhysicalReturns
@@ -35,7 +38,8 @@ from .notifications.service import NotificationService
 
 class Market(Store, AccountService, CatalogService, TradeService,
              CommunityService, SupportService, OpsService, DraftService,
-             SupportAccounts, TicketEvidence, PhysicalReturns, CreditService, NotificationService):
+             SupportAccounts, TicketEvidence, PhysicalReturns, CreditService, NotificationService,
+             ListingValidation, CatalogEditing, CatalogSearch):
     """试用版应用的组合根。"""
 
     def __init__(self,root,trial=False):

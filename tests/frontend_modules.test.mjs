@@ -44,6 +44,20 @@ for (const file of files){
   }
 }
 
+// Check the static dependency graph too: successful ES imports alone allow cycles.
+const visiting=new Set(),visited=new Set();
+function checkCycle(file,chain=[]){
+ if(visiting.has(file))throw new Error('循环依赖: '+[...chain,file].map(p=>path.relative(SRC,p)).join(' -> '));
+ if(visited.has(file))return;
+ visiting.add(file);
+ const source=fs.readFileSync(file,'utf8');
+ for(const match of source.matchAll(/(?:import|export)\s+[^;]*?\sfrom\s+['"]([^'"]+)['"]/g)){
+  if(match[1].startsWith('.'))checkCycle(path.resolve(path.dirname(file),match[1]),[...chain,file]);
+ }
+ visiting.delete(file);visited.add(file);
+}
+try{for(const file of files)checkCycle(file);}catch(error){failed++;console.error(error.message);}
+
 // 入口必须存在，否则 index.html 会 404
 const entry = path.join(SRC, 'main.js');
 if (!fs.existsSync(entry)){

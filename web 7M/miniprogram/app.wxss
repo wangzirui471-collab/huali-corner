@@ -355,3 +355,5 @@ textarea { height: 190rpx; line-height: 1.7; }
   font-size: 20rpx;
 }
 .stat .num { font-size: 38rpx; font-weight: 800; color: #1c1d21; line-height: 1.1; }
+
+.native-notice-count{display:inline-block;background:#e94343;color:#fff;padding:1px 5px;border-radius:10px;font-size:11px;margin-left:3px}.notification-item{padding:15px 10px;border-bottom:1px solid #eee}.notification-item.unread{background:#fffae8}.order-highlight{outline:2px solid #ffcc38}

@@ -22,7 +22,8 @@ def run():
     page.get_by_role('button',name='卖家体验').click()
     page.get_by_role('button',name='发布闲置',exact=True).first.click()
     page.locator('[name=title]').fill('浏览器测试教材')
-    page.locator('[name=description]').fill('测试发布：有少量笔记，无缺页，附练习册')
+    page.locator('.publish-extra summary').click()
+    page.locator('#publish-form [name=description]').fill('测试发布：有少量笔记，无缺页，附练习册')
     page.locator('[name=price]').fill('12')
     page.locator('[name=publisher]').fill('测试出版社')
     for angle,color in [('front','red'),('side','green'),('top','blue')]:
@@ -46,7 +47,7 @@ def run():
     page.get_by_role('button',name='申请售后',exact=True).first.click()
     page.locator('[name=subject]').fill('测试售后')
     page.locator('[name=body]').fill('约定交付问题，申请退货反馈')
-    page.get_by_role('button',name='提交工单',exact=True).click()
+    page.get_by_role('button',name='提交反馈',exact=True).click()
     
     try: page.get_by_text('测试售后',exact=True).wait_for(timeout=5000)
     except Exception:
