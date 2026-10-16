@@ -23,25 +23,25 @@
 ## Task 1: 权限、卖家订单和售后闭环
 **Files:** app/support/access.py、support/service.py、support/evidence.py、trade/service.py、core/database.py；网页pages/orders.js、pages/support.js、actions/trade.js、actions/support.js。
 **Interfaces:** 工单DTO增加restricted与related_ticket_id；未分配客服只取摘要；关联申诉保留原工单。卖家待付款只提交appointment；取消通知发另一方。未交付误选退货时归一化为无需退回，历史错选也能合法退款但不生成虚假退货链。
-- [ ] 写tests/test_functional_fixes.py及tests/frontend_functional.test.mjs对应失败用例并运行。
-- [ ] 实现权限收口、角色表单、取消通知、退款纠错、结案只读及关联申诉。
-- [ ] 定向测试通过，提交。
+- [x] 写tests/test_functional_fixes.py及tests/frontend_functional.test.mjs对应失败用例并运行。
+- [x] 实现权限收口、角色表单、取消通知、退款纠错、结案只读及关联申诉。
+- [x] 定向测试通过，提交。
 
 ## Task 2: 私聊未读、对方名称与退出清理
 **Files:** app/community/migrations.py、community/service.py；src/core/inbox.js、core/account-cache.js、auth/login.js、actions/account.js、pages/messages.js、actions/inbox.js；server.py。
 **Interfaces:** members增加last_read_message_id；POST /api/messages/read带room_id和through_id；rooms返回peer_id/name/unread_count/last_message；私聊通知entity_type=chat，通知已读与会话已读各有明确起点。
-- [ ] 写消息重试、双向名称、游标范围、转号缓存失败用例并运行。
-- [ ] 实现双向视图、持久游标/私聊通知、网页读标记与路由、当前账号退出清理。
-- [ ] 定向测试通过，提交。
+- [x] 写消息重试、双向名称、游标范围、转号缓存失败用例并运行。
+- [x] 实现双向视图、持久游标/私聊通知、网页读标记与路由、当前账号退出清理。
+- [x] 定向测试通过，提交。
 
 ## Task 3: 社区校园互助首版
 **Files:** app/community/help.py、community/migrations.py、app/market.py、server.py；src/components/help.js、pages/help.js、actions/help.js、pages/community.js、router.js、actions/index.js；小程序既有hub入口。
 **Interfaces:** GET/POST /api/help/posts，POST /api/help/status；表service_posts关联posts；金额reward整数分，输入reward_yuan严格解析；举报/反馈使用post_id关联工单。无真实服务订单/支付。
-- [ ] 写tests/test_community_help.py与浏览器互助发布/联系/关闭/反馈流程，确认新能力缺失时失败。
-- [ ] 实现点选发布、筛选、联系作者、关闭/重新开放及关联工单；静态演示只读守卫。
-- [ ] 回归并提交。
+- [x] 写tests/test_community_help.py与浏览器互助发布/联系/关闭/反馈流程，确认新能力缺失时失败。
+- [x] 实现点选发布、筛选、联系作者、关闭/重新开放及关联工单；静态演示只读守卫。
+- [x] 回归并提交。
 
 ## Task 4: 完整验证和交付
-- [ ] 跑全部Python/Node及代表性Chromium流程，检查旧数据迁移、静态演示与干净源码包。
-- [ ] 独立审查本轮差异，重要问题补先失败回归后修复。
+- [x] 跑全部Python/Node及代表性Chromium流程，检查旧数据迁移、静态演示与干净源码包。
+- [x] 独立审查本轮差异，重要问题补先失败回归后修复。
 - [ ] 更新需求状态/说明，打包，推送功能分支，报告未测设备和剩余后续功能。
