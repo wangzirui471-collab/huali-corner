@@ -56,7 +56,7 @@ export const submits = {
     const r = await api('/tickets', {
       ...d,
       type:form.dataset.type,
-      order_id:Number(form.dataset.order) || null,
+      order_id:Number(form.dataset.order) || (d.order_id?Number(d.order_id):null),
       product_id:Number(form.dataset.product) || null
     });
     closeModal();
