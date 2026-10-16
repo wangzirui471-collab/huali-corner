@@ -91,6 +91,7 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/publish' and method=='POST':return self.respond(m.publish(u,data))
             if p=='/api/my-products':return self.respond(m.my_products(u,query.get('status')))
             if p=='/api/product/status' and method=='POST':return self.respond(m.set_product_status(u,int(data['id']),data['action']))
+            if p=='/api/product/promote' and method=='POST':return self.respond(m.promote(u,int(data['id']),data.get('tier')))
             if p=='/api/upload' and method=='POST':
                 try:content=base64.b64decode(data.get('content',''),validate=True)
                 except ValueError:raise DomainError('无效图片编码')

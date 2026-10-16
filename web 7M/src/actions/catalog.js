@@ -72,6 +72,10 @@ export const clicks = {
     await api('/product/status', {id, action:'relist'});
     toast('已重新上架');
     await render();
+  },
+
+  promote(b, id){
+    modal(`<h2>置顶推广</h2><p class="muted">付费置顶让你的商品排在「猜你喜欢」和分类顶部。模拟支付，不扣真实款项，到期自动下沉。</p><form id="promote-form" data-id="${id}"><div class="promote-tiers">${[['1d','单日置顶','¥1'],['3d','3天置顶','¥3'],['7d','7天置顶','¥5']].map(([v,l,pr])=>`<label class="tier-option"><input type="radio" name="tier" value="${v}" ${v==='1d'?'checked':''}><span><b>${l}</b><small>${pr} / 次</small></span></label>`).join('')}</div><button class="btn primary full">模拟支付并置顶</button></form>`);
   }
 };
 
@@ -120,5 +124,11 @@ export const submits = {
     await api('/offer', {product_id:Number(form.dataset.id), amount:Math.round(Number(d.amount)*100)});
     closeModal();
     toast('出价已提交，可在订单页查看');
+  },
+  'promote-form': async ({ form, d }) => {
+    const r = await api('/product/promote', {id:Number(form.dataset.id), tier:d.tier});
+    closeModal();
+    toast(`已置顶 ${r.days} 天（模拟支付 ¥${(r.price/100).toFixed(2)}）`);
+    await render();
   }
 };

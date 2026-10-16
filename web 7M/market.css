@@ -518,6 +518,33 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .sold-tag { border-radius: var(--r-pill); }
 
+.promote-tag {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  z-index: 3;
+  background: var(--brand);
+  color: var(--brand-ink);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: var(--r-pill);
+}
+
+.promote-tiers { display: grid; gap: 10px; }
+.tier-option {
+  display: flex; gap: 12px; align-items: center;
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: border-color .2s var(--ease);
+}
+.tier-option:has(input:checked) { border-color: var(--brand-lo); background: var(--brand-soft); }
+.tier-option input { accent-color: var(--brand); width: 16px; height: 16px; }
+.tier-option b { display: block; font-size: 14px; }
+.tier-option small { color: var(--muted); }
+
 .card-content { padding: 13px 14px 13px; }
 .card-title {
   font-size: 14.5px;

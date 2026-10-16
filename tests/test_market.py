@@ -242,5 +242,18 @@ class MarketTests(unittest.TestCase):
         self.m.order_action(self.b,o['id'],'handover',{});self.m.order_action(self.b,o['id'],'receive',{})
         self.assertEqual(self.m.product(p)['status'],'sold')
         self.assertEqual(len(self.m.products()),0)
+    def test_promote_pins_own_available_product(self):
+        p1=self.listing(self.a);p2=self.listing(self.a)
+        self.assertEqual(self.m.products()[0]['id'],p2)  # 默认最新在前
+        self.m.promote(self.a,p1,'7d')
+        self.assertEqual(self.m.products()[0]['id'],p1)  # 置顶后 p1 排最前
+        with self.assertRaises(DomainError):self.m.promote(self.b,p1,'1d')  # 不能置顶别人的
+        with self.assertRaises(DomainError):self.m.promote(self.a,p1,'30d')  # 档位非法
+    def test_promote_expires_and_sinks(self):
+        p1=self.listing(self.a);p2=self.listing(self.a)
+        self.m.promote(self.a,p1,'1d')
+        self.assertEqual(self.m.products()[0]['id'],p1)
+        with self.m.tx() as c:c.execute('UPDATE products SET promoted_until=0 WHERE id=?',(p1,))  # 到期
+        self.assertEqual(self.m.products()[0]['id'],p2)
 
 if __name__=='__main__':unittest.main()

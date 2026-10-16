@@ -3,6 +3,9 @@ import hashlib, io, json, secrets, time
 from PIL import Image, ImageOps, UnidentifiedImageError
 from ..core.errors import ValidationMixin, DomainError
 
+# 付费置顶档位：档位 -> (天数, 模拟价格·分)。低价非强制，免费商品自然下沉。
+PROMOTE_TIERS={'1d':(1,100),'3d':(3,300),'7d':(7,500)}
+
 
 class CatalogService(ValidationMixin):
     def add_upload(self,u,content,angle,private=False):
@@ -67,6 +70,8 @@ class CatalogService(ValidationMixin):
                 if not all(word in hay for word in q):continue
             result.append(p)
         if f.get('sort')=='price':result.sort(key=lambda p:p['price']+(p['delivery_fee'] if p['delivery']=='delivery' else 0))
+        # 置顶商品提到最前（稳定排序：置顶的组内仍保持上面的价格/最新顺序）。
+        now=time.time();result.sort(key=lambda p:0 if (p.get('promoted_until') or 0)>now else 1)
         return result[:100]
 
     def my_products(self,u,status=None):
@@ -95,6 +100,22 @@ class CatalogService(ValidationMixin):
         else:raise DomainError('不支持的商品操作')
         with self.tx() as c:c.execute('UPDATE products SET status=? WHERE id=?',(target,pid))
         return self.product(pid,u)
+
+    def promote(self,u,pid,tier):
+        """付费置顶：把自己的在售商品顶到首页/分类顶部，低价非强制。
+        模拟支付（不扣真实款项）。未到期续期从当前到期时间累加，不吞剩余时长。"""
+        self.require(tier in PROMOTE_TIERS,'置顶档位无效')
+        days,price=PROMOTE_TIERS[tier]
+        p=self.row('SELECT * FROM products WHERE id=?',(pid,))
+        self.require(p,'商品不存在',404)
+        self.require(p['seller_id']==u,'只能置顶自己发布的商品',403)
+        self.require(p['status']=='available','只有「在售」的商品可以置顶')
+        base=max(p['promoted_until'] or 0,time.time())
+        until=base+days*86400
+        with self.tx() as c:
+            c.execute('UPDATE products SET promoted_until=? WHERE id=?',(until,pid))
+            c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',(u,u,'promote',f'商品 #{pid} 置顶 {days} 天（模拟支付 ¥{price/100:.2f}）',time.time()))
+        return {'id':pid,'tier':tier,'days':days,'price':price,'promoted_until':until,'simulation':True}
 
     def react(self,u,p,kind,on):
         item=self.product(p);self.require(kind in ['like','favorite'],'无效操作')
