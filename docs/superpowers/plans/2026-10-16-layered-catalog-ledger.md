@@ -25,3 +25,5 @@ Final: fixed buyer restriction/checkout race — test_fraud_restriction_committe
 Final: fixed private proof loss on price-only edit — test_price_edit_preserves_server_owned_private_purchase_proof RED→GREEN; public DTO still hides proof.
 Final: fixed old upload overwriting newer suspended draft recovery — frontend_cache.test.mjs actual delayed upload RED→GREEN; durable editor generation remains after suspension.
 Final verification: Python107/107; ES49 with graph; frontend_session + frontend_cache; native8; layered_browser8 journeys + legacy browser + static subpath + redesign4 widths; clean source ZIP startup all pass. No deferred minors or declined finding rulings; Windows/WeChat/public/real payment remain unverified scope.
+
+Task 5 complete: 已推送feat/layered-completion到原私有仓库，未改main；源码包构建/解压/启动检查通过，最终交付文件位于/workspace/转角-分层试用版-2026-10-16.zip。开发环境start_skill草稿已保存，须在环境设置保存并发布后才启用，未发布网站。
