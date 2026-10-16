@@ -849,3 +849,523 @@ button { -webkit-tap-highlight-color: transparent; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
+
+/* ==========================================================================
+   23. 二级频道条（吸顶）
+   参考二手平台的频道切换：吸顶、横向滚动、选中为深色胶囊。
+   ========================================================================== */
+
+.feed-tabs-bar {
+  position: sticky;
+  top: var(--header-h, 0px);
+  z-index: 24;
+  display: flex;
+  gap: 6px;
+  padding: 10px 0;
+  margin: 0 0 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: linear-gradient(var(--canvas) 72%, rgba(244, 245, 247, 0));
+  -ms-overflow-style: none;
+}
+.feed-tabs-bar::-webkit-scrollbar { display: none; }
+
+.feed-tab {
+  flex: 0 0 auto;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: var(--sh-1);
+  transition: background .18s var(--ease), color .18s var(--ease), transform .18s var(--ease);
+}
+.feed-tab:hover { transform: translateY(-1px); color: var(--ink); }
+.feed-tab.active {
+  background: var(--ink);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(22, 26, 35, .18);
+}
+
+/* ==========================================================================
+   24. 商品卡升级
+   成色徽章 + 大号价格 + 原价删除线 + 折扣 + 交付标签
+   ========================================================================== */
+
+.product-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  transition: transform .2s var(--ease), box-shadow .2s var(--ease), border-color .2s var(--ease);
+}
+.product-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--line-2);
+  box-shadow: var(--sh-3);
+}
+
+.cond-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 3;
+  max-width: 62%;
+  padding: 4px 9px;
+  border-radius: var(--r-xs);
+  background: rgba(20, 22, 26, .78);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: .2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  backdrop-filter: blur(4px);
+}
+
+.price-line {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.price-line .cur {
+  font-size: 13px;
+  font-weight: 800;
+  font-style: normal;
+  color: var(--price);
+}
+.price-line b {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -.5px;
+  color: var(--price);
+  line-height: 1;
+}
+.price-line s {
+  margin-left: 5px;
+  font-size: 12px;
+  color: var(--faint);
+  text-decoration-thickness: 1px;
+}
+.price-line em {
+  margin-left: 5px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--price-soft);
+  color: var(--price);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+.mini-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.mini-tag.ghost {
+  background: var(--surface-2);
+  color: var(--ink-3);
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mini-tag svg { width: 11px; height: 11px; flex: 0 0 auto; }
+
+/* 详情页价格仍用大号 */
+.detail-price .cur { font-size: 16px; font-style: normal; color: var(--price); font-weight: 800; }
+
+/* ==========================================================================
+   25. 商品流工具条
+   ========================================================================== */
+
+.feed-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: border-color .18s var(--ease), color .18s var(--ease);
+}
+.feed-filter:hover { border-color: var(--line-3); color: var(--ink); }
+.feed-filter svg { width: 15px; height: 15px; }
+
+/* ==========================================================================
+   26. 我的 · 数据统计与购买/出售宫格
+   ========================================================================== */
+
+.mine-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.stat-cell {
+  padding: 16px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  text-align: center;
+  box-shadow: var(--sh-1);
+}
+.stat-cell b {
+  display: block;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -.5px;
+  color: var(--ink);
+  line-height: 1.1;
+}
+.stat-cell span {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.mine-actions {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.mine-actions button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 20px 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  text-align: center;
+  cursor: pointer;
+  box-shadow: var(--sh-1);
+  transition: transform .2s var(--ease), border-color .2s var(--ease), box-shadow .2s var(--ease);
+}
+.mine-actions button:hover {
+  transform: translateY(-2px);
+  border-color: var(--brand);
+  box-shadow: var(--sh-2);
+}
+.mine-actions svg {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--brand-lo);
+  stroke-width: 1.9;
+}
+.mine-actions b { font-size: 14px; font-weight: 700; color: var(--ink); }
+.mine-actions small { font-size: 11px; color: var(--muted); }
+
+/* ==========================================================================
+   27. 我发布的 · 列表
+   ========================================================================== */
+
+.listing-group .section-heading h2 small {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.listing-list { display: flex; flex-direction: column; gap: 2px; }
+
+.listing-row {
+  display: grid;
+  grid-template-columns: 76px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.listing-row:first-child { border-top: 0; padding-top: 4px; }
+
+.listing-photo {
+  width: 76px;
+  height: 76px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.listing-photo img,
+.listing-photo .photo-sprite {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background-size: 400% 400%;
+  display: block;
+}
+
+.listing-info { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.listing-title {
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--ink);
+  line-height: 1.35;
+  cursor: pointer;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.listing-title:hover { color: var(--brand-ink); }
+.listing-info .price-line { margin-top: 2px; }
+.listing-info .price-line b { font-size: 18px; }
+.listing-info small { font-size: 12px; color: var(--muted); }
+
+.listing-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+
+/* ==========================================================================
+   28. 按钮尺寸补充
+   ========================================================================== */
+
+.btn.sm { padding: 7px 13px; font-size: 13px; border-radius: var(--r-sm); }
+.btn.sm svg { width: 15px; height: 15px; }
+.btn.lg { padding: 15px 30px; font-size: 16px; border-radius: var(--r-md); }
+
+/* ==========================================================================
+   29. 发布页
+   分区步骤 + 分类卡片 + 带单位输入 + 吸底提交 + 实时预览
+   ========================================================================== */
+
+.publish-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px;
+  align-items: start;
+}
+.publish-form { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+.publish-step { display: flex; flex-direction: column; gap: 14px; }
+
+.step-head { display: flex; align-items: flex-start; gap: 12px; }
+.step-head h2 { margin: 0; font-size: 17px; font-weight: 750; letter-spacing: -.2px; }
+.step-head p { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); }
+.publish-step > .step-head + * { margin-top: 2px; }
+.step-head + .form-grid,
+.step-head + .cat-picker,
+.step-head + .photo-inputs { margin-top: 4px; }
+
+.cat-picker {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.cat-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 16px 8px 13px;
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .18s var(--ease), background .18s var(--ease), transform .18s var(--ease);
+}
+.cat-option:hover { transform: translateY(-2px); border-color: var(--line-3); }
+.cat-option input { position: absolute; opacity: 0; pointer-events: none; }
+.cat-ico {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink-3);
+  box-shadow: var(--sh-1);
+}
+.cat-ico svg { width: 22px; height: 22px; stroke-width: 1.8; }
+.cat-option b { font-size: 14px; font-weight: 700; color: var(--ink); }
+.cat-option small { font-size: 11px; color: var(--muted); line-height: 1.3; }
+.cat-option:has(input:checked) {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+.cat-option:has(input:checked) .cat-ico { background: var(--brand); color: #40300a; }
+.cat-option:has(input:focus-visible) { outline: 2px solid var(--brand-lo); outline-offset: 2px; }
+
+.input-affix {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 13px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  transition: border-color .18s var(--ease), box-shadow .18s var(--ease);
+}
+.input-affix:focus-within { border-color: var(--brand-lo); box-shadow: 0 0 0 3px var(--brand-soft); }
+.input-affix i {
+  font-style: normal;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--price);
+}
+.input-affix input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 0;
+  border: 0;
+  background: none;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  outline: none;
+}
+
+.sticky-submit {
+  position: sticky;
+  bottom: 12px;
+  z-index: 20;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, .93);
+  backdrop-filter: saturate(180%) blur(12px);
+  box-shadow: var(--sh-3);
+}
+
+.publish-preview { min-width: 0; }
+.preview-inner {
+  position: sticky;
+  top: calc(var(--header-h, 0px) + 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--sh-1);
+}
+.preview-inner h3 { margin: 0; font-size: 15px; font-weight: 750; }
+.preview-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.preview-tips li {
+  display: flex;
+  gap: 7px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+.preview-tips svg {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+  color: var(--ok);
+}
+
+/* ==========================================================================
+   30. 修改订单
+   ========================================================================== */
+
+.edit-items { display: flex; flex-direction: column; gap: 8px; }
+.edit-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 13px;
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: border-color .18s var(--ease), background .18s var(--ease), opacity .18s var(--ease);
+}
+.edit-item:has(input:checked) { border-color: var(--brand); background: var(--brand-soft); }
+.edit-item:has(input:not(:checked)) { opacity: .5; }
+.edit-item input { width: 18px; height: 18px; accent-color: var(--brand-lo); flex: 0 0 auto; }
+.edit-item img { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; flex: 0 0 auto; }
+.edit-item span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.edit-item b { font-size: 14px; font-weight: 650; color: var(--ink); line-height: 1.35; }
+.edit-item small { font-size: 12px; color: var(--price); font-weight: 700; }
+
+/* ==========================================================================
+   31. 新组件的响应式
+   ========================================================================== */
+
+@media (max-width: 1100px) {
+  .publish-layout { grid-template-columns: minmax(0, 1fr); }
+  .preview-inner { position: static; }
+  .publish-preview { display: none; }
+}
+
+@media (max-width: 850px) {
+  .cat-picker { grid-template-columns: repeat(2, 1fr); }
+  .mine-actions { grid-template-columns: repeat(4, 1fr); }
+}
+
+@media (max-width: 580px) {
+  .feed-tabs-bar { margin-inline: -14px; padding-inline: 14px; }
+  .feed-tab { padding: 7px 13px; font-size: 13px; }
+  .mine-stats { grid-template-columns: repeat(4, 1fr); gap: 7px; }
+  .stat-cell { padding: 12px 4px; }
+  .stat-cell b { font-size: 19px; }
+  .stat-cell span { font-size: 11px; }
+  .mine-actions { grid-template-columns: repeat(4, 1fr); gap: 7px; }
+  .mine-actions button { padding: 14px 4px 12px; gap: 4px; }
+  .mine-actions b { font-size: 12px; }
+  .mine-actions small { display: none; }
+  .mine-actions svg { width: 22px; height: 22px; }
+  .listing-row { grid-template-columns: 64px 1fr; gap: 11px; }
+  .listing-photo { width: 64px; height: 64px; }
+  .listing-actions { grid-column: 2; flex-direction: row; align-items: center; margin-top: 2px; }
+  .listing-actions .btn.sm { padding: 6px 11px; font-size: 12px; }
+  .price-line b { font-size: 20px; }
+  .sticky-submit { bottom: 74px; flex-direction: column; align-items: stretch; gap: 9px; }
+  .sticky-submit > span { text-align: center; }
+  .sticky-submit .btn { width: 100%; }
+  .cat-picker { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .cat-option { padding: 13px 6px 11px; }
+  .cat-ico { width: 36px; height: 36px; }
+  .cat-ico svg { width: 19px; height: 19px; }
+  .cat-option small { display: none; }
+  .feed-filter { padding: 7px 11px; font-size: 12px; }
+}
+

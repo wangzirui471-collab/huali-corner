@@ -88,6 +88,8 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/me':return self.respond(m.update_profile(u,data) if method=='POST' else m.profile(u))
             if p=='/api/auth/logout':m.logout(self.token());return self.respond({'ok':True})
             if p=='/api/publish' and method=='POST':return self.respond(m.publish(u,data))
+            if p=='/api/my-products':return self.respond(m.my_products(u,query.get('status')))
+            if p=='/api/product/status' and method=='POST':return self.respond(m.set_product_status(u,int(data['id']),data['action']))
             if p=='/api/upload' and method=='POST':
                 try:content=base64.b64decode(data.get('content',''),validate=True)
                 except ValueError:raise DomainError('无效图片编码')
@@ -97,6 +99,7 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/orders':return self.respond(m.orders(u))
             if p=='/api/order':return self.respond(m.order(u,int(query['id'])))
             if p=='/api/order/action' and method=='POST':return self.respond(m.order_action(u,int(data['id']),data['action'],data))
+            if p=='/api/order/update' and method=='POST':return self.respond(m.update_order(u,int(data['id']),data))
             if p=='/api/order/change' and method=='POST':return self.respond(m.respond_change(u,int(data['id']),bool(data['accept'])))
             if p=='/api/offers':return self.respond(m.offers(u))
             if p=='/api/offer' and method=='POST':return self.respond(m.offer(u,int(data['product_id']),data['amount']))

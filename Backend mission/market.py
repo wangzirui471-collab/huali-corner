@@ -123,6 +123,31 @@ class Market(Store,Community,PasswordAuth):
             result.append(p)
         if f.get('sort')=='price':result.sort(key=lambda p:p['price']+(p['delivery_fee'] if p['delivery']=='delivery' else 0))
         return result[:100]
+    def my_products(self,u,status=None):
+        """卖家自己的商品列表，含已下架。products() 会把 removed 过滤掉，
+        而卖家需要在「我发布的」里看到自己下架掉的东西，所以单独走这里。"""
+        result=[]
+        for row in self.rows('SELECT id FROM products WHERE seller_id=? ORDER BY id DESC',(u,)):
+            p=self.product(row['id'],u)
+            if status and p['status']!=status:continue
+            result.append(p)
+        return result
+    def set_product_status(self,u,pid,action):
+        """下架 / 重新上架。只允许在 available 与 removed 之间切换。
+        已被预订(reserved)或已售出(sold)的商品不能下架 —— 它们已经挂在别人的订单上，
+        下架会让那张订单指向一个消失的商品。"""
+        p=self.row('SELECT * FROM products WHERE id=?',(pid,))
+        self.require(p,'商品不存在',404)
+        self.require(p['seller_id']==u,'只能管理自己发布的商品',403)
+        if action=='delist':
+            self.require(p['status']=='available','只有「在售」的商品可以下架；已预订或已售出的不能下架')
+            target='removed'
+        elif action=='relist':
+            self.require(p['status']=='removed','只有「已下架」的商品可以重新上架')
+            target='available'
+        else:raise DomainError('不支持的商品操作')
+        with self.tx() as c:c.execute('UPDATE products SET status=? WHERE id=?',(target,pid))
+        return self.product(pid,u)
     def react(self,u,p,kind,on):
         self.product(p);self.require(kind in ['like','favorite'],'无效操作')
         with self.tx() as c:
@@ -172,6 +197,7 @@ class Market(Store,Community,PasswordAuth):
         self.require(u in [r['buyer_id'],r['seller_id']] or self.profile(u)['role'] in ['support','admin'],'不能查看他人订单',403)
         r['items']=json.loads(r['items']);r['ledger']=self.rows('SELECT kind,amount,created FROM ledger WHERE order_id=? ORDER BY id',(oid,))
         r['changes']=self.rows('SELECT * FROM order_changes WHERE order_id=? ORDER BY id DESC',(oid,))
+        r['notes']=self.rows('SELECT * FROM order_notes WHERE order_id=? ORDER BY id DESC',(oid,))
         r['buyer']=self.profile(r['buyer_id'])['nickname'];r['seller']=self.profile(r['seller_id'])['nickname'];return r
     def orders(self,u):return [self.order(u,r['id']) for r in self.rows('SELECT id FROM orders WHERE buyer_id=? OR seller_id=? ORDER BY id DESC',(u,u))]
     def journal(self,c,oid,kind,amount):c.execute('INSERT OR IGNORE INTO ledger(order_id,kind,amount,created) VALUES(?,?,?,?)',(oid,kind,amount,time.time()))
@@ -193,7 +219,7 @@ class Market(Store,Community,PasswordAuth):
                     c.execute("UPDATE orders SET status='paid',paid_at=? WHERE id=?",(now,oid));self.journal(c,oid,'payment',r['total'])
                 else:self.require(status in ['paid','awaiting_handover','awaiting_receipt','completed'],'当前不可支付')
             elif action=='cancel':
-                self.require(buyer,'仅买家可取消',403)
+                self.require(buyer or status=='awaiting_payment','卖家只能在买家付款前取消订单；已付款的请走客服流程退款',403)
                 self.require(status in ['awaiting_payment','paid','cancelled'],'已交付或存在争议，请申请售后')
                 if status!='cancelled':
                     if status=='paid':self.journal(c,oid,'refund',r['total'])
@@ -217,6 +243,57 @@ class Market(Store,Community,PasswordAuth):
                 self.require(not c.execute("SELECT 1 FROM order_changes WHERE order_id=? AND status='pending'",(oid,)).fetchone(),'已有待对方确认的改约')
                 c.execute('INSERT INTO order_changes(order_id,proposer,appointment,address,created) VALUES(?,?,?,?,?)',(oid,u,appointment,address,now))
             else:raise DomainError('不支持此订单操作')
+        return self.order(u,oid)
+    def update_order(self,u,oid,d):
+        """付款前修改订单。付款之后改时间要走 order_action 的 reschedule（需对方确认），
+        这里只负责「还没付钱」的那段时间 —— 这时候双方都还没投入成本，改起来没有风险。
+        买家可改交付方式、收货地点、交付时间，并可从订单里移除商品；
+        卖家只能改交付时间，其余由买家决定。
+        移除商品会把该商品释放回「在售」，并重算小计、运费与总额。"""
+        with self.tx() as c:
+            r=c.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
+            self.require(r,'订单不存在',404)
+            self.require(u in [r['buyer_id'],r['seller_id']],'不能处理他人订单',403)
+            buyer=u==r['buyer_id']
+            self.require(r['status']=='awaiting_payment','订单已付款，如需改时间请用「申请改约」')
+            items=json.loads(r['items']);removed=[]
+            if 'product_ids' in d:
+                self.require(buyer,'仅买家可调整订单中的商品')
+                keep=[int(x) for x in d['product_ids']]
+                self.require(keep,'订单至少要保留一件商品')
+                self.require(set(keep).issubset({i['id'] for i in items}),'包含不属于本订单的商品')
+                for i in items:
+                    if i['id'] not in keep:
+                        c.execute("UPDATE products SET status='available' WHERE id=? AND status='reserved'",(i['id'],))
+                        removed.append(i['title'])
+                items=[i for i in items if i['id'] in keep]
+            if 'delivery' in d:
+                self.require(buyer,'仅买家可更改交付方式')
+            delivery=str(d.get('delivery') or r['delivery'])
+            self.require(delivery in ['pickup','delivery'],'交付方式需要是自提或送货')
+            if delivery!=r['delivery']:
+                for i in items:
+                    p=c.execute('SELECT delivery FROM products WHERE id=?',(i['id'],)).fetchone()
+                    self.require(p and p['delivery'] in [delivery,'both'],f'「{i["title"]}」不支持所选交付方式')
+            raw=d.get('address')
+            if raw is not None and raw!=(r['address'] or ''):
+                self.require(buyer,'仅买家可更改收货地点')
+            if delivery=='delivery':
+                address=self.text(raw if raw is not None else (r['address'] or ''),150,'收货公共地点')
+            else:
+                address=''
+            try:appointment=float(d.get('appointment') if d.get('appointment') is not None else r['appointment'])
+            except (ValueError,TypeError):raise DomainError('交付时间无效')
+            now=time.time()
+            self.require(now+60<appointment<now+86400*30,'请选择未来30天内的交付时间')
+            subtotal=sum(i['price'] for i in items);fee=0
+            if delivery=='delivery':
+                fees=[c.execute('SELECT delivery_fee FROM products WHERE id=?',(i['id'],)).fetchone()['delivery_fee'] for i in items]
+                fee=max(fees) if fees else 0
+            c.execute('UPDATE orders SET items=?,subtotal=?,delivery_fee=?,total=?,delivery=?,address=?,appointment=? WHERE id=?',
+                      (json.dumps(items,ensure_ascii=False),subtotal,fee,subtotal+fee,delivery,address,appointment,oid))
+            for title in removed:
+                c.execute('INSERT INTO order_notes(order_id,user_id,body,created) VALUES(?,?,?,?)',(oid,u,f'买家移除商品：{title}',now))
         return self.order(u,oid)
     def respond_change(self,u,change_id,accept):
         with self.tx() as c:

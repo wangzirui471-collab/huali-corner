@@ -314,3 +314,44 @@ textarea { height: 190rpx; line-height: 1.7; }
 .hero-title { font-size: 52rpx; font-weight: 750; line-height: 1.4; }
 .hero-title text { color: #f0b413; }
 .market-page { padding-top: 20rpx; }
+
+/* --- 15. 商品卡成色徽章 ------------------------------------------------- */
+.card { position: relative; }
+.cond-badge {
+  position: absolute;
+  left: 12rpx;
+  top: 12rpx;
+  z-index: 2;
+  max-width: 60%;
+  background: rgba(20, 22, 26, .78);
+  color: #ffffff;
+  font-size: 18rpx;
+  font-weight: 700;
+  border-radius: 10rpx;
+  padding: 6rpx 14rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cond-badge.photo { left: auto; right: 12rpx; background: rgba(255,255,255,.84); color: #8a8880; }
+
+/* --- 16. 我发布的：统计行 ---------------------------------------------- */
+.stats-row {
+  display: flex;
+  margin-bottom: 24rpx;
+  background: #ffffff;
+  border: 2rpx solid #edeef2;
+  border-radius: 26rpx;
+  overflow: hidden;
+}
+.stat {
+  flex: 1;
+  text-align: center;
+  padding: 24rpx 8rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  color: #8b8f98;
+  font-size: 20rpx;
+}
+.stat .num { font-size: 38rpx; font-weight: 800; color: #1c1d21; line-height: 1.1; }
