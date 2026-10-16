@@ -5,6 +5,7 @@
 export const state = {
   // 公开演示版没有登录态，token 恒为空。
   token: window.HUALI_STATIC_DEMO ? '' : sessionStorage.getItem('hc-token') || '',
+  logoutSession:null,
   me: null,
   draftEditor: null,
   draftGeneration:0,
@@ -33,6 +34,7 @@ export const statusNames = {
 
 // 公开演示版：这些路由不开放，点进去只给说明，不给表单。
 export const demoFeatures = {
+  help:['校园互助','可登录试用版支持发布需求与私聊协商；公开演示不接收发布、取件码或服务报酬。'],
   publish:['发布闲置','本地模拟版支持正面、侧面、顶部三张实拍，以及书籍版次、笔记、缺页和附件说明。'],
   orders:['订单与售后','本地模拟版可体验合并同卖家取货、模拟付款、交接确认与售后处理。'],
   messages:['校园聊天','本地模拟版包含私聊、学院群和总聊；公开演示不接收或发送消息。'],

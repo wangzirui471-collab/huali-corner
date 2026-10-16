@@ -68,6 +68,7 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/profile' and method=='GET':
                 u=int(query['id']);return self.respond({'user':m.profile(u),'products':m.products(self.optional_user(),{'seller':str(u)})})
             if p=='/api/posts' and method=='GET':return self.respond(m.posts(query.get('topic','')))
+            if p=='/api/help/posts' and method=='GET':return self.respond(m.help_posts(self.optional_user(),query))
             if p=='/api/comments' and method=='GET':return self.respond(m.comments(int(query['id'])))
             if p.startswith('/media/'):
                 fid=p.split('/')[-1];upload=m.row('SELECT * FROM uploads WHERE id=?',(fid,));m.require(upload,'图片不存在',404)
@@ -87,6 +88,8 @@ class Handler(BaseHTTPRequestHandler):
                 m.require(file.is_file(),'页面不存在',404)
                 return self.respond(file.read_bytes(),kind=ASSET_TYPES.get(file.suffix.lower()) or mimetypes.guess_type(str(file))[0] or 'application/octet-stream')
             u=self.uid()
+            if p=='/api/help/posts' and method=='POST':return self.respond(m.publish_help(u,data))
+            if p=='/api/help/status' and method=='POST':return self.respond(m.set_help_status(u,int(data['post_id']),data['status']))
             if p=='/api/notifications' and method=='GET':return self.respond(m.notifications(u,int(query.get('before',0))))
             if p=='/api/notifications/read' and method=='POST':return self.respond(m.read_notifications(u,data))
             if p=='/api/drafts' and method=='GET':return self.respond(m.list_drafts(u))
@@ -145,7 +148,7 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/moderate' and method=='POST':return self.respond(m.moderate(u,data))
             if p=='/api/nominate' and method=='POST':return self.respond(m.nominate(u,data))
             if p=='/api/admin':
-                m.staff(u);return self.respond({'users':m.rows('SELECT id,nickname,college,score,role FROM users'),'audit':m.rows('SELECT * FROM audit ORDER BY id DESC LIMIT 100'),'nominations':m.rows('SELECT n.*,u.nickname,r.name FROM nominations n JOIN users u ON u.id=n.user_id JOIN rooms r ON r.id=n.room_id')})
+                m._administrator(u);return self.respond({'users':m.rows('SELECT id,nickname,college,score,role FROM users'),'audit':m.rows('SELECT * FROM audit ORDER BY id DESC LIMIT 100'),'nominations':m.rows('SELECT n.*,u.nickname,r.name FROM nominations n JOIN users u ON u.id=n.user_id JOIN rooms r ON r.id=n.room_id')})
             if p=='/api/admin/nominate' and method=='POST':
                 m.require(m.profile(u)['role']=='admin','仅平台管理员可任命',403)
                 with m.tx() as c:

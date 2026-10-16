@@ -20,6 +20,7 @@ import { cartPage } from './pages/cart.js';
 import { orders } from './pages/orders.js';
 import { myProducts } from './pages/listings.js';
 import { community } from './pages/community.js';
+import { helpPage } from './pages/help.js';
 import { chats } from './pages/messages.js';
 import { profile, mine } from './pages/me.js';
 import { supportPage as support, ticketPage } from './pages/support.js';
@@ -63,6 +64,7 @@ export async function render(){
       orders,
       listings: myProducts,
       community,
+      help:()=>helpPage(id,query),
       messages: () => chats(id),
       profile: () => profile(id),
       me: mine,

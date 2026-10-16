@@ -1,7 +1,13 @@
 const assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
 const app={globalData:{user:{id:3,role:'admin'},sessionVersion:0},request:async()=>[]};let def;
 const wx={removeStorageSync(){},getStorageSync(){return null},showToast(){}};
-vm.runInNewContext(fs.readFileSync('web 7M/miniprogram/pages/hub/index.js','utf8'),{getApp:()=>app,Page:d=>def=d,require:()=>require('../web 7M/miniprogram/utils'),wx,console,setInterval,clearInterval,Date,Math,Number});
+function nativeRequire(name){
+ if(name==='../../utils')return require('../web 7M/miniprogram/utils');
+ const module={exports:{}};
+ vm.runInNewContext(fs.readFileSync('web 7M/miniprogram/'+name.replace('../../','')+'.js','utf8'),{module,getApp:()=>app,wx,Set,Math,Number,Date,Error});
+ return module.exports;
+}
+vm.runInNewContext(fs.readFileSync('web 7M/miniprogram/pages/hub/index.js','utf8'),{getApp:()=>app,Page:d=>def=d,require:nativeRequire,wx,console,setInterval,clearInterval,Date,Math,Number});
 const page={...def,data:{...def.data,user:app.globalData.user,orders:[{id:123}],tickets:[{id:4}],activeTicket:{body:'STAFF ONLY',messages:[{internal:1,body:'secret'}]},rooms:[{id:7}],messages:[{body:'private'}],cart:[{id:1}],products:[]},setData(d){Object.assign(this.data,d);}};
 page.logout();
 for(const key of ['orders','tickets','rooms','messages','cart'])assert.equal(page.data[key].length,0,'Logout must clear '+key);
@@ -9,7 +15,12 @@ assert.equal(page.data.activeTicket,null,'Logout must clear staff ticket evidenc
 assert.equal(page.data.currentRoom,0,'Logout must clear private room');
 console.log('Native client privacy checks passed');
 
-(async()=>{page.data.currentRoom=7;page.data.messages=[];let seen=[];app.request=async p=>{seen.push(p);return p.includes('after=100')?[{id:101,body:'new'}]:Array.from({length:100},(_,i)=>({id:i+1,body:'old'}));};await page.loadMessages();await page.loadMessages();assert.equal(page.data.messages.length,101);assert.ok(seen[1].includes('after=100'));console.log('Native chat cursor checks passed');})().catch(e=>{console.error(e);process.exitCode=1;});
+(async()=>{app.globalData.user={id:3};page.data.tab='messages';page.data.currentRoom=7;page.data.messages=[];let seen=[];app.request=async p=>{seen.push(p);if(p==='/rooms')return {joined:[]};if(p==='/messages/read')return {};return p.includes('after=100')?[{id:101,body:'new'}]:Array.from({length:100},(_,i)=>({id:i+1,body:'old'}));};await page.loadMessages();await page.loadMessages();assert.equal(page.data.messages.length,101);assert.ok(seen.filter(p=>p.startsWith('/messages?'))[1].includes('after=100'));console.log('Native chat cursor checks passed');
+app.request=async()=>({id:8});page.data.user=app.globalData.user;page.load=async()=>{};
+await page.join({currentTarget:{dataset:{kind:'general'}}});
+assert.equal(page.cursor,0,'Joining another room must reset cursor');assert.equal(page.data.messages.length,0,'Joining must clear old conversation');
+page.cursor=12;page.data.messages=[{id:12}];page.nav({currentTarget:{dataset:{tab:'community'}}});
+assert.equal(page.cursor,0);assert.equal(page.data.messages.length,0);})().catch(e=>{console.error(e);process.exitCode=1;});
 let appDefinition,pending;
 vm.runInNewContext(fs.readFileSync('web 7M/miniprogram/app.js','utf8'),{App:d=>appDefinition=d,wx:{getStorageSync:()=>'',request:o=>{pending=o;}},Promise,Error});
 appDefinition.globalData.sessionVersion=0;

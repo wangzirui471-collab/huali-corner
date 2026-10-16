@@ -22,6 +22,8 @@ class CreditService:
         self.check_conflict(administrator_id, ticket)
         self.require(ticket['status'] == 'resolved' and ticket['outcome'] in ['resolved', 'refund'], '请先核实工单并完成处理')
         related = set()
+        if ticket.get('post_id'):
+            related.add(self.row('SELECT user_id FROM posts WHERE id=?',(ticket['post_id'],))['user_id'])
         if ticket['product_id']:
             related.add(self.product(ticket['product_id'])['seller_id'])
         if ticket['order_id']:

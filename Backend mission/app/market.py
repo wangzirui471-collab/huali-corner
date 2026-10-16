@@ -35,12 +35,13 @@ from .support.returns import PhysicalReturns
 from .support.credit import CreditService
 from .notifications.service import NotificationService
 from .community.inbox import ChatInbox
+from .community.help import CommunityHelp
 
 
 class Market(Store, AccountService, CatalogService, TradeService,
              CommunityService, SupportService, OpsService, DraftService,
              SupportAccounts, TicketEvidence, PhysicalReturns, CreditService, NotificationService,
-             ListingValidation, CatalogEditing, CatalogSearch, ChatInbox):
+             ListingValidation, CatalogEditing, CatalogSearch, ChatInbox, CommunityHelp):
     """试用版应用的组合根。"""
 
     def __init__(self,root,trial=False):

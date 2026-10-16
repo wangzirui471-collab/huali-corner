@@ -27,8 +27,14 @@ export const clicks = {
   },
 
   logout: async () => {
-    try{await suspend();await api('/auth/logout', {});}
-    finally{clearAccount();go('home');}
+    const session=state.token;
+    const owner=state.me?.id;
+    const current=()=>state.token===session&&state.me?.id===owner;
+    if(state.logoutSession===session)return;
+    state.logoutSession=session;
+    try{await suspend();if(current())await api('/auth/logout', {});}
+    catch(error){if(current())throw error;}
+    finally{if(current()){clearAccount();go('home');}if(state.logoutSession===session)state.logoutSession=null;}
   },
 
   'copy-recovery': async () => {

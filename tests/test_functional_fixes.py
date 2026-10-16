@@ -53,6 +53,11 @@ class FunctionalFixTests(unittest.TestCase):
         self.assertIn('卖家', notices['items'][0]['title'])
         self.assertEqual(self.market.notifications(self.seller)['unread_count'], seller_count)
 
+    def test_support_cannot_bypass_scope_using_global_finance_or_backup(self):
+        worker=self.worker('64')
+        with self.assertRaises(DomainError):self.market.reconcile(worker)
+        with self.assertRaises(DomainError):self.market.backup(worker)
+
     def test_undelivered_return_request_is_normalized_and_can_refund(self):
         order = self.order()
         self.market.order_action(self.buyer, order['id'], 'pay', {})

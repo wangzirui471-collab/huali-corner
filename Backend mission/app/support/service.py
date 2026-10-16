@@ -12,13 +12,15 @@ class SupportService(ValidationMixin):
         self.require(refund_mode in ['refund_only','return_refund'],'退款方式无效')
         evidence=self.validate_evidence(u,d.get('evidence',[]))
         with self.tx() as c:
+            post_id=d.get('post_id') or None
+            if post_id:self.require(c.execute('SELECT id FROM posts WHERE id=?',(int(post_id),)).fetchone(),'社区内容不存在',404)
             related=d.get('related_ticket_id') or None
             if related:
                 self.require(typ=='appeal','只有申诉可以关联原工单')
                 original=c.execute('SELECT * FROM tickets WHERE id=?',(int(related),)).fetchone()
                 self.require(original and u in case_participants(self,original),'不能关联他人工单',403)
                 self.require(original['status']=='resolved','请先在原工单补充材料，结案后可申请复核',409)
-                oid=original['order_id'];pid=original['product_id']
+                oid=original['order_id'];pid=original['product_id'];post_id=original['post_id']
             if oid:
                 r=c.execute('SELECT * FROM orders WHERE id=?',(int(oid),)).fetchone()
                 self.require(r and u in [r['buyer_id'],r['seller_id']],'不能关联他人订单',403)
@@ -30,7 +32,7 @@ class SupportService(ValidationMixin):
             else:self.require(typ!='refund','退款必须关联订单')
             if pid:self.product(int(pid))
             tid=c.execute('INSERT INTO tickets(user_id,order_id,product_id,type,subject,body,created) VALUES(?,?,?,?,?,?,?)',(u,oid,pid,typ,subject,body,time.time())).lastrowid
-            c.execute('UPDATE tickets SET refund_mode=?,related_ticket_id=? WHERE id=?',(refund_mode,related,tid))
+            c.execute('UPDATE tickets SET refund_mode=?,related_ticket_id=?,post_id=? WHERE id=?',(refund_mode,related,post_id,tid))
             self.save_evidence(c,tid,u,evidence,False)
             self.notify_ticket(c,tid,f'ticket:{tid}:created','有新的售后／反馈工单',actor=u,queue=True)
         return self.ticket(u,tid)
@@ -41,7 +43,7 @@ class SupportService(ValidationMixin):
         self.require(allowed or worker,'不能查看他人工单',403)
         r['restricted']=not (allowed or staff)
         if r['restricted']:
-            safe={k:r.get(k) for k in ['id','user_id','order_id','product_id','type','subject','status','assignee','created','nickname']}
+            safe={k:r.get(k) for k in ['id','user_id','order_id','product_id','post_id','type','subject','status','assignee','created','nickname']}
             return {**safe,'restricted':True,'body':'','reason':'','messages':[],'evidence':[]}
         r['messages']=self.rows('SELECT m.*,u.nickname FROM ticket_messages m JOIN users u ON u.id=m.user_id WHERE ticket_id=? AND (?=1 OR internal=0) ORDER BY m.id',(tid,int(staff)))
         r['evidence']=[{'id':x['upload_id'],'url':'/media/'+x['upload_id'],'internal':bool(x['internal'])} for x in self.rows('SELECT upload_id,internal FROM ticket_evidence WHERE ticket_id=? AND (?=1 OR internal=0) ORDER BY created_at',(tid,int(staff)))]
@@ -70,6 +72,9 @@ class SupportService(ValidationMixin):
         return self.ticket(u,tid)
 
     def check_conflict(self,u,t):
+        if t.get('post_id'):
+            post=self.row('SELECT user_id FROM posts WHERE id=?',(t['post_id'],))
+            self.require(post and post['user_id']!=u,'不能审核自己发布的互助或社区内容',403)
         if t.get('product_id'):
             pid=t['product_id'];self.require(self.product(pid)['seller_id']!=u,'不能审核自己发布商品的投诉',403)
             for order in self.rows('SELECT items FROM orders WHERE buyer_id=? OR seller_id=?',(u,u)):

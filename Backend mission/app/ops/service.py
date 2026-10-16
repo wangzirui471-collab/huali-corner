@@ -7,7 +7,7 @@ from pathlib import Path
 
 class OpsService(ValidationMixin):
     def reconcile(self,u):
-        self.staff(u);result=[]
+        self._administrator(u);result=[]
         for o in self.rows('SELECT id,total,status FROM orders ORDER BY id DESC'):
             amounts={r['kind']:r['amount'] for r in self.rows('SELECT kind,amount FROM ledger WHERE order_id=?',(o['id'],))}
             net=amounts.get('settlement',0)-amounts.get('settlement_reversal',0)
@@ -16,7 +16,7 @@ class OpsService(ValidationMixin):
         return result
 
     def backup(self,u):
-        self.staff(u);return self._backup()
+        self._administrator(u);return self._backup()
 
     def _backup(self):
         directory=self.root/'backups';directory.mkdir(exist_ok=True);path=directory/f'market-{time.time_ns()}.zip'

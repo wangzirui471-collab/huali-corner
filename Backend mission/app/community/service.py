@@ -59,7 +59,7 @@ class CommunityService(ValidationMixin):
             else:c.execute('DELETE FROM blocks WHERE user_id=? AND target=?',(u,int(target)))
         return {'ok':True}
     def posts(self,topic=''):
-        return self.rows('SELECT p.*,u.nickname,u.college,(SELECT COUNT(*) FROM comments c WHERE c.post_id=p.id) replies FROM posts p JOIN users u ON u.id=p.user_id WHERE (?=\'\' OR topic=?) ORDER BY p.id DESC LIMIT 100',(topic,topic))
+        return self.rows('SELECT p.*,u.nickname,u.college,(SELECT COUNT(*) FROM comments c WHERE c.post_id=p.id) replies FROM posts p JOIN users u ON u.id=p.user_id WHERE (?=\'\' OR topic=?) AND NOT EXISTS (SELECT 1 FROM service_posts h WHERE h.post_id=p.id) ORDER BY p.id DESC LIMIT 100',(topic,topic))
     def add_post(self,u,d):
         body=self.text(d.get('body'),2000,'帖子内容');topic=d.get('topic','交流')
         self.require(topic in ['交流','求购','毕业季','互助'],'分区不正确')

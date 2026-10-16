@@ -85,7 +85,7 @@ class Store:
             additions = {
                 'users': [('is_active', 'INTEGER NOT NULL DEFAULT 1'), ('trading_blocked', 'INTEGER NOT NULL DEFAULT 0')],
                 'tickets': [('refund_mode', "TEXT NOT NULL DEFAULT 'refund_only'"), ('return_sent_at', 'REAL'),
-                            ('return_received_at', 'REAL'), ('requested_amount', 'INTEGER'), ('related_ticket_id', 'INTEGER')],
+                            ('return_received_at', 'REAL'), ('requested_amount', 'INTEGER'), ('related_ticket_id', 'INTEGER'), ('post_id', 'INTEGER')],
                 'audit': [('rule_key', "TEXT NOT NULL DEFAULT ''"), ('reversal_of', 'INTEGER'),
                           ('score_before', 'INTEGER'), ('score_after', 'INTEGER')],
             }

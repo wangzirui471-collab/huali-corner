@@ -43,7 +43,8 @@ export const submits = {
       type:form.dataset.type,
       order_id:Number(form.dataset.order) || null,
       product_id:Number(form.dataset.product) || null,
-      related_ticket_id:Number(form.dataset.related) || null
+      related_ticket_id:Number(form.dataset.related) || null,
+      post_id:Number(form.dataset.post)||null
     });
     closeModal();
     go('ticket/'+r.id);
