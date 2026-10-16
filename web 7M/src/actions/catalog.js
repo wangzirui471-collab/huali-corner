@@ -108,7 +108,7 @@ export const submits = {
       college:state.me.college
     };
     const r = await api('/publish', payload);
-    toast('发布成功');
+    toast(r.moderation ? r.moderation.message : '发布成功');
     go('product/'+r.id);
   },
 

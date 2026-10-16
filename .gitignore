@@ -9,3 +9,7 @@ __pycache__/
 dist/
 _backup-*/
 artifacts/
+
+# 开源敏感词库不随仓库提交：体积大、许可各异、上游会持续更新。
+# 用 scripts/fetch_wordlists.py 按需拉取。自建词表在 app/moderation/data/*.txt，那个要提交。
+Backend mission/app/moderation/data/thirdparty/

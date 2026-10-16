@@ -2,6 +2,7 @@
 import hashlib, io, json, secrets, time
 from PIL import Image, ImageOps, UnidentifiedImageError
 from ..core.errors import ValidationMixin, DomainError
+from ..moderation import scan_product, message_for, report_of
 
 # 付费置顶档位：档位 -> (天数, 模拟价格·分)。低价非强制，免费商品自然下沉。
 PROMOTE_TIERS={'1d':(1,100),'3d':(3,300),'7d':(7,500)}
@@ -42,14 +43,30 @@ class CatalogService(ValidationMixin):
         if proof:
             pr=self.row('SELECT * FROM uploads WHERE id=?',(proof,));self.require(pr and pr['user_id']==u and pr['private'],'凭证无效');clean['proof']=proof
         clean['original_price']=self.cents(d.get('original_price',0),'原价');clean['simulation']=False
+        # 违禁品与交易外流的自动审核（app/moderation）。
+        # 高危（法定禁止 / 加微信这类明确外流指令）直接拦死；
+        # 中危（平台限制类目 / 疑似联系方式）放行但打标，进工作台的人工待审队列。
+        # 放在所有字段校验之后：先让用户看到「标题没填」这种具体问题，
+        # 而不是一上来就被审核拦掉、搞不清到底是哪儿不对。
+        report=scan_product(d)
+        self.require(not report['blocked'],'不能发布：'+message_for(report),422)
+        marked=report_of(report)
+        if marked:clean['moderation']=marked
         with self.tx() as c:
             pid=c.execute('INSERT INTO products(seller_id,title,category,price,delivery_fee,delivery,region,data,created) VALUES(?,?,?,?,?,?,?,?,?)',(u,title,d['category'],price,fee,delivery,region,json.dumps(clean,ensure_ascii=False),time.time())).lastrowid
-        return {'id':pid}
+        return {'id':pid,'moderation':{'action':report['action'],'message':message_for(report)} if marked else None}
 
     def product(self,p,u=None):
         r=self.row('SELECT p.*,u.nickname,u.college seller_college,u.score FROM products p JOIN users u ON u.id=p.seller_id WHERE p.id=?',(p,))
         self.require(r,'商品不存在',404)
-        data=json.loads(r.pop('data'));data.pop('proof',None);r.update(data)
+        data=json.loads(r.pop('data'));data.pop('proof',None)
+        moderation=data.pop('moderation',None);r.update(data)
+        # 审核标记对外只暴露「是否在审」这一个布尔值，**不公开命中词**——
+        # 公开了就等于把词表变成「哪个词会触发审核」的查询接口，等于教人绕过。
+        # 卖家本人和工作台能看到具体命中了什么，便于申诉与处置。
+        r['under_review']=bool(moderation and not moderation.get('reviewed'))
+        if moderation and (u==r['seller_id'] or (u and self.profile(u)['role'] in ['support','admin'])):
+            r['moderation']=moderation
         r['likes']=self.row("SELECT COUNT(*) n FROM reactions WHERE product_id=? AND kind='like'",(p,))['n']
         r['liked']=bool(u and self.row("SELECT 1 FROM reactions WHERE product_id=? AND user_id=? AND kind='like'",(p,u)))
         r['favorited']=bool(u and self.row("SELECT 1 FROM reactions WHERE product_id=? AND user_id=? AND kind='favorite'",(p,u)))
