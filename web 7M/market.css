@@ -719,6 +719,46 @@ button { -webkit-tap-highlight-color: transparent; }
 .chat-stream { background: var(--surface-2); border-radius: var(--r-md); }
 .post-card .post-body { color: var(--ink-2); line-height: 1.85; }
 
+/* --- 29. 社区帖子卡片（2026-10-17 重排）----------------------------------
+   旧卡片：作者、分区、时间挤一行，正文下面飘着两个下划线链接，
+   看起来像没写完的网页。新卡片按社交卡片的重心排：
+   头部（谁 + 什么时候 + 什么分区）→ 正文 → 分隔的操作条。 */
+.post-card { padding: 20px 22px 0; }
+.post-head { display: flex; align-items: center; gap: 12px; }
+.post-author { display: flex; align-items: center; gap: 11px; flex: 1; min-width: 0; padding: 0; text-align: left; }
+.post-avatar { flex: none; width: 38px; height: 38px; border-radius: 12px; font-size: 15px; font-weight: 700; }
+.post-who { min-width: 0; }
+.post-who b { display: block; font-size: 13.5px; font-weight: 700; color: var(--ink); }
+.post-who small { display: block; margin-top: 2px; font-size: 11px; color: var(--faint); }
+.post-head .type-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; font-size: 11.5px; }
+.post-head .type-chip .icon { width: 13px; height: 13px; }
+.post-body { margin: 13px 0 0; font-size: 14.5px; line-height: 1.9; color: var(--ink); }
+.post-actions {
+  display: flex; align-items: center; gap: 4px;
+  margin: 14px -22px 0; padding: 8px 14px 10px;
+  border-top: 1px solid var(--line);
+}
+.post-action {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border-radius: var(--r-pill);
+  font-size: 12px; font-weight: 550; color: var(--ink-3);
+  transition: background .15s, color .15s;
+}
+.post-action .icon { width: 15px; height: 15px; }
+.post-action:hover { background: var(--surface-2); color: var(--ink); }
+.post-action.quiet { margin-left: auto; color: var(--faint); }
+.post-action.quiet:hover { color: var(--tone-danger); background: var(--tone-danger-bg, #fdf1ee); }
+.reply-count {
+  min-width: 18px; padding: 0 6px; border-radius: var(--r-pill);
+  background: var(--surface-2); font-size: 10.5px; font-weight: 650;
+  text-align: center; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+@media (max-width: 580px) {
+  .post-card { padding: 16px 16px 0; }
+  .post-actions { margin: 12px -16px 0; padding: 6px 8px 8px; }
+  .post-body { font-size: 13.5px; }
+}
+
 /* --- 19. 弹窗 / 轻提示 -------------------------------------------------- */
 .modal-backdrop { backdrop-filter: blur(3px); background: rgba(20, 22, 28, .42); }
 .modal { border-radius: var(--r-xl); box-shadow: var(--sh-3); border: 1px solid var(--line); }
