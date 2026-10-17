@@ -1474,7 +1474,7 @@ button { -webkit-tap-highlight-color: transparent; }
 /* 消息页 · 订单与售后通知（站内通知，区别于聊天消息） */
 .notice-list { display: flex; flex-direction: column; gap: 10px; max-height: 62vh; overflow: auto; }
 .notice-item { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); padding: 12px 14px; }
-.notice-item.unread { border-color: var(--brand); background: var(--brand-soft); }
+.notice-item.unread { border-color: var(--brand); background: var(--brand-soft); cursor: pointer; }
 .notice-item p { margin: 0 0 6px; line-height: 1.6; color: var(--ink-2); }
 .notice-item small { color: var(--muted); }
 
@@ -2024,7 +2024,7 @@ button.me-notice { width: 100%; text-align: left; cursor: pointer; border: 0; fo
 /* --- 通知中心（套聊天窗的壳）--------------------------------------------- */
 .notice-stream { display: flex; flex-direction: column; gap: 10px; }
 .notice-item { border: 1px solid var(--line); border-radius: var(--r-sm); background: #fff; padding: 12px 14px; }
-.notice-item.unread { border-color: var(--brand-lo); background: var(--brand-soft); }
+.notice-item.unread { border-color: var(--brand-lo); background: var(--brand-soft); cursor: pointer; }
 .notice-item p { margin: 0 0 6px; line-height: 1.6; color: var(--ink-2); }
 .notice-item small { color: var(--muted); }
 

@@ -194,7 +194,10 @@ const NOTE_META = {
     <div class="wx-stream notice-stream">${notices.items.map(n => {
       const [ic, tone] = NOTE_META[n.kind] || ['bell', 'mute'];
       const link = n.order_id ? `订单 #${n.order_id}` : n.ticket_id ? `工单 #${n.ticket_id}` : n.post_id ? `帖子 #${n.post_id}` : '';
-      return `<div class="notice-item ${n.read_at?'':'unread'}"><span class="notice-ic" data-tone="${tone}">${icon(ic)}</span><div><p>${e(n.body)}</p><small>${date(n.created)}${link?' · '+e(link):''}</small></div></div>`;
+      // 未读的通知整条可点：点了标记已读（actions/social.js 的 read-notice）。
+      // 已读的不再挂 data-action——重复点击不该发重复请求。
+      const attrs = n.read_at ? '' : ` data-action="read-notice" data-id="${n.id}"`;
+      return `<div class="notice-item ${n.read_at?'':'unread'}"${attrs}><span class="notice-ic" data-tone="${tone}">${icon(ic)}</span><div><p>${e(n.body)}</p><small>${date(n.created)}${link?' · '+e(link):''}</small></div></div>`;
     }).join('')
       || '<div class="wx-sys">暂无通知</div>'}</div>` : '';
 
