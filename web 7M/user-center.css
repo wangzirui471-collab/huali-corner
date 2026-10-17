@@ -1,0 +1,57 @@
+/* User-domain scope only; A imports this after the existing site styles. */
+.user-center { min-width: 0; max-width: 100%; color: var(--ink, #1c1d21); overflow-wrap: anywhere; }
+.user-center .panel { min-width: 0; }
+.user-center .tag { white-space: normal; max-width: 100%; line-height: 1.6; }
+.user-center .user-profile-heading { display: flex; align-items: flex-start; gap: 20px; }
+.user-center .user-profile-identity { flex: 1; min-width: 0; }
+.user-center .user-profile-identity h2 { margin: 0 0 10px; }
+.user-center .user-profile-identity p { line-height: 1.65; margin: 6px 0; }
+.user-center .user-profile-bio { white-space: pre-wrap; overflow-wrap: anywhere; }
+.user-center .user-profile-options { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 14px; }
+.user-center .user-profile-options span { color: var(--ink-2, #44474e); }
+.user-center .user-avatar { display: inline-flex; flex: 0 0 auto; width: 88px; height: 88px; border-radius: 50%; overflow: hidden; position: relative; background: var(--brand-soft, #fff6d8); color: var(--brand-ink, #7d5c07); vertical-align: middle; }
+.user-center .user-avatar-small { width: 40px; height: 40px; }
+.user-center .user-avatar-fallback { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 700; }
+.user-center .user-avatar-small .user-avatar-fallback { font-size: 18px; }
+.user-center .user-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.user-center .user-avatar img[hidden] { display: none; }
+.user-center .user-center-editor { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: start; gap: 20px; margin-top: 24px; }
+.user-center .user-profile-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 16px; }
+.user-center .user-profile-wide { grid-column: 1 / -1; }
+.user-center .field { min-width: 0; }
+.user-center .field input, .user-center .field select, .user-center .field textarea { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.user-center .field textarea { resize: vertical; min-height: 110px; }
+.user-center .field input[readonly] { background: var(--surface-2, #fafbfc); color: var(--ink-3, #6b6f77); }
+.user-center .field small { font-size: 12px; line-height: 1.65; color: var(--muted, #8b8f98); margin-top: 6px; }
+.user-center .user-avatar-preview { margin: 20px 0; text-align: center; }
+.user-center .user-profile-buttons, .user-center .user-account-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.user-center .user-account-buttons { margin: 12px 0 20px; }
+.user-center .user-profile-buttons .btn, .user-center .user-account-buttons .btn, .user-center .user-profile-buttons .text-button { min-height: 44px; white-space: normal; }
+.user-center button[hidden] { display: none; }
+.user-center button:disabled { cursor: wait; opacity: .6; }
+.user-center .user-feedback { margin-top: 14px; min-height: 24px; font-size: 14px; line-height: 1.7; }
+.user-center .user-feedback:empty { min-height: 0; }
+.user-center .user-feedback:focus { outline: 2px solid var(--brand, #ffcc38); outline-offset: 5px; }
+.user-center .user-comparison { margin-top: 20px; padding: 18px; border: 1px solid var(--line, #edeef2); border-radius: 12px; background: var(--surface-2, #fafbfc); }
+.user-center .user-comparison[hidden] { display: none; }
+.user-center .user-comparison .user-avatar { width: 56px; height: 56px; }
+.user-center .user-comparison .user-profile-heading { gap: 12px; margin-bottom: 14px; }
+.user-center .user-credit { margin-top: 22px; }
+.user-center .user-public-products { margin-top: 26px; }
+.user-center .mine-actions { margin-top: 16px; }
+.user-center .staff-entry { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.user-center .staff-entry h2 { margin: 0 0 5px; }
+.user-center :is(input, select, textarea, button):focus-visible { outline: 2px solid var(--brand-ink, #7d5c07); outline-offset: 3px; }
+@media (max-width: 900px) { .user-center .user-center-editor { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) {
+  .user-center .user-profile-heading { gap: 14px; }
+  .user-center .user-avatar { width: 64px; height: 64px; }
+  .user-center .user-profile-heading h2 { font-size: 21px; }
+  .user-center .user-profile-fields { grid-template-columns: minmax(0, 1fr); }
+  .user-center .field input, .user-center .field select, .user-center .field textarea { font-size: 16px; }
+  .user-center .user-profile-buttons { align-items: stretch; }
+  .user-center .user-profile-buttons > button { flex: 1 1 140px; }
+  .user-center .user-avatar-preview .user-avatar { width: 88px; height: 88px; }
+  .user-center .user-comparison { padding: 14px; }
+  .user-center .mine-stats, .user-center .mine-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
