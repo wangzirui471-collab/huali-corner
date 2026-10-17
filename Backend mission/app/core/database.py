@@ -1,30 +1,49 @@
-"""SQLite 连接、事务与表结构。
+"""数据库层：同时支持 SQLite（默认）与 MySQL（设置 HC_DB 后启用）。
 
-注意两处不能动的设计（详见文件内注释）：
-  1. 不使用 WAL，用默认的删除日志模式
-  2. 写事务必须串行化（_WRITE 锁）
-改动前请先读下方注释，那里记录了不这么做会出什么故障。
+双引擎策略
+----------
+  - 默认使用 SQLite 文件（market.sqlite3），保证现有测试与演示/试用实例零改动、可随时回退。
+  - 设置环境变量 HC_DB=mysql://user:pass@host:port/dbname 后，Store 自动切换到 MySQL。
+  - 两条硬约束与 SQLite 时代一致：
+      1. 不使用 WAL，写事务串行化（_WRITE 锁）。
+      2. 所有对外查询仍通过 tx()/rows()/row()，service 层不感知后端差异。
+
+dialect 适配
+------------
+  sqlite3 的 connection.execute() 返回 cursor，且可链式 .fetchone()/.fetchall()/.lastrowid；
+  pymysql 的 connection 没有 .execute()，且 .execute() 返回的是受影响的行数而非 cursor。
+  为了不改变 10 个 service 文件里成千上万处 `c.execute(...).fetchone()` 的写法，这里用
+  _Conn 包装器抹平差异：两种后端下 self.connect() 都返回一个 _Conn，它的 .execute()
+  始终返回 cursor（MySQL 模式下还会做 SQL 方言改写）。
+
+  方言改写只发生在 MySQL 模式，覆盖本项目用到的全部 SQLite 专有写法：
+      ?                        -> %s            （占位符）
+      INSERT OR IGNORE         -> INSERT IGNORE
+      INSERT OR REPLACE        -> REPLACE INTO
+      BEGIN IMMEDIATE          -> BEGIN
+      ON CONFLICT(...) DO UPDATE SET a=excluded.x
+                               -> ON DUPLICATE KEY UPDATE a=VALUES(x)
+  其余 SQL（JOIN / COALESCE / LIMIT / 子查询等）两种库通用，无需改写。
 """
-import sqlite3, json, time, threading
+import os, re, sqlite3, json, time, threading, queue
 from contextlib import contextmanager
 from pathlib import Path
+from urllib.parse import urlparse
 
-# 写事务串行锁：让并发写入在 Python 层排队，而不是各自去撞 SQLite 的写锁。
-#
+# 写事务串行锁：让并发写入在 Python 层排队，而不是各自去撞底层写锁。
 # 关于它【不】负责什么，写清楚以免后人误会：
 #   · 它不负责防止超卖 —— 那是 tx() 里 BEGIN IMMEDIATE 的职责：事务一开始就申请
-#     SQLite 的写锁，后到的事务必须等待，读到的是已提交的新状态。实测用不同请求键
+#     底层写锁，后到的事务必须等待，读到的是已提交的新状态。实测用不同请求键
 #     三线程抢购，有锁无锁都是 0 次超卖。
 #   · 它也不是「attempt to write a readonly database」的修复 —— 那个问题的根因是
 #     WAL 模式下最后一个连接关闭时 checkpoint 并删除 -wal/-shm，已由改用删除日志模式解决。
 #     关掉 WAL 之后实测 30 并发写 × 5 轮，有锁无锁都是 0 失败。
-#
-# 留着它的理由只有一个：写入在 Python 层确定性排队，不必依赖 SQLite busy_timeout
+# 留着它的理由只有一个：写入在 Python 层确定性排队，不必依赖 busy_timeout
 # 的重试行为，也不会有 database is locked 在极端争用时冒出来。本站写入量很小。
 # 读操作不经过这把锁，不受影响。
 _WRITE = threading.RLock()
 
-SCHEMA='''
+SQLITE_SCHEMA = '''
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,phone TEXT UNIQUE,nickname TEXT NOT NULL,college TEXT DEFAULT '计算机工程学院',major TEXT DEFAULT '',education TEXT DEFAULT '本科',bio TEXT DEFAULT '',role TEXT DEFAULT 'user',score INTEGER DEFAULT 100 CHECK(score BETWEEN 0 AND 100),status TEXT DEFAULT 'active');
 CREATE TABLE IF NOT EXISTS otp(phone TEXT PRIMARY KEY,digest TEXT,expires REAL,attempts INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INTEGER,expires REAL);
@@ -55,79 +74,319 @@ CREATE TABLE IF NOT EXISTS wants(id INTEGER PRIMARY KEY,user_id INTEGER,keyword 
 CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY,user_id INTEGER,kind TEXT,order_id INTEGER,ticket_id INTEGER,body TEXT,read_at REAL,created REAL,post_id INTEGER);
 '''
 
+# MySQL 等价表结构。与 SQLITE_SCHEMA 字段一一对应，差异点：
+#   · id INTEGER PRIMARY KEY  ->  id INT PRIMARY KEY AUTO_INCREMENT
+#   · REAL                    ->  DOUBLE
+#   · 保留字 key / type 用反引号引用
+#   · 带 UNIQUE/PRIMARY KEY 的文本列用 VARCHAR（MySQL 对 TEXT 建唯一索引在严格模式下受限）
+MYSQL_SCHEMA = '''
+CREATE TABLE IF NOT EXISTS users(id INT PRIMARY KEY AUTO_INCREMENT,phone VARCHAR(32) NOT NULL UNIQUE,nickname VARCHAR(64) NOT NULL,college VARCHAR(64) DEFAULT '计算机工程学院',major VARCHAR(64) DEFAULT '',education VARCHAR(32) DEFAULT '本科',bio TEXT,role VARCHAR(32) DEFAULT 'user',score INT DEFAULT 100 CHECK (score BETWEEN 0 AND 100),status VARCHAR(32) DEFAULT 'active',last_login DOUBLE DEFAULT 0);
+CREATE TABLE IF NOT EXISTS otp(phone VARCHAR(32) NOT NULL PRIMARY KEY,digest TEXT,expires DOUBLE,attempts INT DEFAULT 0);
+CREATE TABLE IF NOT EXISTS sessions(token VARCHAR(128) NOT NULL PRIMARY KEY,user_id INT,expires DOUBLE);
+CREATE TABLE IF NOT EXISTS settings(`key` VARCHAR(64) NOT NULL PRIMARY KEY,value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS password_credentials(user_id INT NOT NULL PRIMARY KEY,salt TEXT NOT NULL,digest TEXT NOT NULL,rounds INT NOT NULL,recovery_digest TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS auth_attempts(phone VARCHAR(32) NOT NULL PRIMARY KEY,attempts INT NOT NULL,reset_at DOUBLE NOT NULL);
+CREATE TABLE IF NOT EXISTS uploads(id VARCHAR(64) NOT NULL PRIMARY KEY,user_id INT,path TEXT,digest TEXT,angle VARCHAR(16),private INT DEFAULT 0);
+CREATE TABLE IF NOT EXISTS products(id INT PRIMARY KEY AUTO_INCREMENT,seller_id INT,title VARCHAR(255),category VARCHAR(32),price INT,delivery_fee INT,delivery VARCHAR(32),region VARCHAR(32),status VARCHAR(32) DEFAULT 'available',data TEXT,created DOUBLE,promoted_until DOUBLE DEFAULT 0,delisted_by INT DEFAULT 0);
+CREATE TABLE IF NOT EXISTS reactions(user_id INT,product_id INT,kind VARCHAR(16),PRIMARY KEY(user_id,product_id,kind));
+CREATE TABLE IF NOT EXISTS orders(id INT PRIMARY KEY AUTO_INCREMENT,buyer_id INT,seller_id INT,items TEXT,subtotal INT,delivery_fee INT,total INT,delivery VARCHAR(32),address TEXT,appointment DOUBLE,status VARCHAR(48),created DOUBLE,paid_at DOUBLE,delivered_at DOUBLE,handover_at DOUBLE,completed_at DOUBLE,request_key VARCHAR(64),schedule_confirmed INT DEFAULT 0,want_id INT,UNIQUE(buyer_id,request_key));
+CREATE TABLE IF NOT EXISTS order_changes(id INT PRIMARY KEY AUTO_INCREMENT,order_id INT,proposer INT,appointment DOUBLE,address TEXT,status VARCHAR(32) DEFAULT 'pending',created DOUBLE);
+CREATE TABLE IF NOT EXISTS order_notes(id INT PRIMARY KEY AUTO_INCREMENT,order_id INT,user_id INT,body TEXT,created DOUBLE);
+CREATE TABLE IF NOT EXISTS ledger(id INT PRIMARY KEY AUTO_INCREMENT,order_id INT,kind VARCHAR(48),amount INT,created DOUBLE,UNIQUE(order_id,kind));
+CREATE TABLE IF NOT EXISTS tickets(id INT PRIMARY KEY AUTO_INCREMENT,user_id INT,order_id INT,product_id INT,`type` VARCHAR(48),subject VARCHAR(255),body TEXT,status VARCHAR(32) DEFAULT 'open',assignee INT,outcome VARCHAR(48),reason TEXT,created DOUBLE);
+CREATE TABLE IF NOT EXISTS ticket_messages(id INT PRIMARY KEY AUTO_INCREMENT,ticket_id INT,user_id INT,body TEXT,internal INT DEFAULT 0,created DOUBLE);
+CREATE TABLE IF NOT EXISTS audit(id INT PRIMARY KEY AUTO_INCREMENT,actor INT,target INT,`type` VARCHAR(48),delta INT,reason TEXT,ticket_id INT,created DOUBLE);
+CREATE TABLE IF NOT EXISTS reviews(id INT PRIMARY KEY AUTO_INCREMENT,order_id INT,user_id INT,rating INT,body TEXT,created DOUBLE,UNIQUE(order_id,user_id));
+CREATE TABLE IF NOT EXISTS rooms(id INT PRIMARY KEY AUTO_INCREMENT,kind VARCHAR(32),name VARCHAR(128),college VARCHAR(64) DEFAULT '',sequence INT DEFAULT 1,pair VARCHAR(128) UNIQUE);
+CREATE TABLE IF NOT EXISTS members(room_id INT,user_id INT,muted INT DEFAULT 0,role VARCHAR(32) DEFAULT 'member',last_read_id INT DEFAULT 0,PRIMARY KEY(room_id,user_id));
+CREATE TABLE IF NOT EXISTS messages(id INT PRIMARY KEY AUTO_INCREMENT,room_id INT,user_id INT,body TEXT,created DOUBLE,request_key VARCHAR(64),removed INT DEFAULT 0,moderation TEXT,UNIQUE(user_id,room_id,request_key));
+CREATE TABLE IF NOT EXISTS message_hides(user_id INT,message_id INT,created DOUBLE,PRIMARY KEY(user_id,message_id));
+CREATE TABLE IF NOT EXISTS blocks(user_id INT,target INT,PRIMARY KEY(user_id,target));
+CREATE TABLE IF NOT EXISTS posts(id INT PRIMARY KEY AUTO_INCREMENT,user_id INT,topic VARCHAR(128),body TEXT,created DOUBLE,moderation TEXT,removed INT DEFAULT 0);
+CREATE TABLE IF NOT EXISTS comments(id INT PRIMARY KEY AUTO_INCREMENT,post_id INT,user_id INT,body TEXT,created DOUBLE,parent_id INT DEFAULT 0);
+CREATE TABLE IF NOT EXISTS offers(id INT PRIMARY KEY AUTO_INCREMENT,product_id INT,buyer_id INT,amount INT,status VARCHAR(48) DEFAULT 'pending',created DOUBLE,accepted_at DOUBLE);
+CREATE TABLE IF NOT EXISTS nominations(id INT PRIMARY KEY AUTO_INCREMENT,user_id INT,room_id INT,reason TEXT,status VARCHAR(32) DEFAULT 'pending',created DOUBLE);
+CREATE TABLE IF NOT EXISTS wants(id INT PRIMARY KEY AUTO_INCREMENT,user_id INT,keyword VARCHAR(128),budget INT,description TEXT,status VARCHAR(32) DEFAULT 'open',created DOUBLE);
+CREATE TABLE IF NOT EXISTS notifications(id INT PRIMARY KEY AUTO_INCREMENT,user_id INT,kind VARCHAR(48),order_id INT,ticket_id INT,body TEXT,read_at DOUBLE,created DOUBLE,post_id INT);
+'''
+
+# MySQL 模式下的 SQL 方言改写（仅作用于进来的 SQL 文本）。
+_RE_IGNORE = re.compile(r'\bINSERT\s+OR\s+IGNORE\b', re.I)
+_RE_REPLACE = re.compile(r'\bINSERT\s+OR\s+REPLACE\b', re.I)  # 替换为 REPLACE（原句自带 INTO，不要写成 REPLACE INTO）
+_RE_BEGIN = re.compile(r'\bBEGIN\s+IMMEDIATE\b', re.I)
+_RE_CONFLICT = re.compile(r'ON\s+CONFLICT\s*\([^)]*\)\s*DO\s+UPDATE\s+SET', re.I)
+_RE_EXCLUDED = re.compile(r'excluded\.(\w+)', re.I)
+# key / type 是 MySQL 保留字，但本项目只把它们当列名用（从不在字符串字面量里出现），
+# 因此用「前后必须是标识符边界、且不在引号内」的限定把它们反引号化。
+# 前瞻只接受空白/逗号/等号/行尾，避免命中 'auth_mode' 这类字符串里恰好含该单词的情况。
+_RE_KEY = re.compile(r"(?<![\w'\"`])key\b(?=[\s,)=]|$)", re.I)
+_RE_TYPE = re.compile(r"(?<![\w'\"`])type\b(?=[\s,)=]|$)", re.I)
+
+
+def _rewrite_mysql(sql):
+    # 注意顺序：先处理列名保留字 key/type，再改写 ON CONFLICT -> ON DUPLICATE KEY，
+    # 否则后一步引入的 "DUPLICATE KEY" 里的 KEY 会被误加反引号。
+    s = _RE_IGNORE.sub('INSERT IGNORE', sql)
+    s = _RE_REPLACE.sub('REPLACE', s)
+    s = _RE_BEGIN.sub('BEGIN', s)
+    s = _RE_KEY.sub('`key`', s)
+    s = _RE_TYPE.sub('`type`', s)
+    s = _RE_CONFLICT.sub('ON DUPLICATE KEY UPDATE', s)
+    s = _RE_EXCLUDED.sub(r'VALUES(\1)', s)
+    s = s.replace('?', '%s')
+    return s
+
+
+def _split_statements(sql):
+    out = []
+    buf = ''
+    for ch in sql:
+        buf += ch
+        if ch == ';':
+            out.append(buf.strip())
+            buf = ''
+    if buf.strip():
+        out.append(buf.strip())
+    return out
+
+
+class _Conn:
+    """统一 sqlite3 / pymysql 的游标语义。
+
+    sqlite3：connection.execute() 返回 cursor，可链式 .fetchone()/.lastrowid。
+    pymysql：connection 没有 .execute()；必须 cursor.execute()，且返回的是 rowcount。
+    这里两种后端都返回 _Conn，其 .execute() 始终返回 cursor，并代理 commit/rollback/close。
+    MySQL 模式下 .execute() 会先过方言改写器。
+    """
+
+    def __init__(self, raw, dialect, rewriter=None, pool=None):
+        self._raw = raw
+        self._dialect = dialect
+        self._rew = rewriter
+        self._pool = pool
+
+    def _sql(self, sql):
+        if self._dialect == 'mysql' and self._rew:
+            return self._rew(sql)
+        return sql
+
+    def execute(self, sql, args=()):
+        sql2 = self._sql(sql)
+        cur = self._raw.cursor()
+        cur.execute(sql2, args)
+        return cur
+
+    def executemany(self, sql, args):
+        sql2 = self._sql(sql)
+        cur = self._raw.cursor()
+        cur.executemany(sql2, args)
+        return cur
+
+    def executescript(self, sql):
+        if self._dialect == 'sqlite':
+            self._raw.executescript(sql)
+            return
+        # MySQL 没有 executescript：拆成单条依次执行。
+        for stmt in _split_statements(sql):
+            if stmt:
+                self._raw.cursor().execute(stmt)
+
+    def commit(self):
+        try:
+            self._raw.commit()
+        except Exception:
+            pass
+
+    def rollback(self):
+        try:
+            self._raw.rollback()
+        except Exception:
+            pass
+
+    def close(self):
+        if self._pool is not None:
+            try:
+                self._pool.put(self._raw)
+            except Exception:
+                try:
+                    self._raw.close()
+                except Exception:
+                    pass
+        else:
+            try:
+                self._raw.close()
+            except Exception:
+                pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
+
+
+# MySQL 连接池：避免每次查询都做 TCP 握手。按 DSN 维度隔离。
+_MYSQL_POOLS = {}
+_MYSQL_POOLS_LOCK = threading.Lock()
+
+
+def _pool_for(dsn_key, factory):
+    with _MYSQL_POOLS_LOCK:
+        if dsn_key not in _MYSQL_POOLS:
+            _MYSQL_POOLS[dsn_key] = queue.Queue()
+        q = _MYSQL_POOLS[dsn_key]
+    return q, factory
+
+
 class Store:
-    def __init__(self,root):
-        self.root=Path(root);self.root.mkdir(parents=True,exist_ok=True)
-        (self.root/'uploads').mkdir(exist_ok=True)
-        self.path=self.root/'market.sqlite3'
-        with self.connect() as c:
-            # 这里刻意使用默认的删除日志模式，而不是 WAL。
-            # 原因：本项目的写法是「每次事务新开连接、用完即关」，而 WAL 模式下
-            # 最后一个连接关闭时会自动 checkpoint 并删除 -wal / -shm 文件。
-            # 如果此刻另一个线程刚开好连接准备写入，它找不到 wal 文件，就会抛
-            # sqlite3.OperationalError: attempt to write a readonly database。
-            # 实测并发写约 7% 失败。改用删除日志模式后为 0 失败（并发读的损失可以忽略，
-            # 校园场景读多写少且写入已由 _WRITE 串行化）。
-            # 这一句同时把已经处于 WAL 的旧数据库迁移回删除日志模式。
-            c.execute('PRAGMA journal_mode=DELETE')
-            c.executescript(SCHEMA)
-            if 'schedule_confirmed' not in [x[1] for x in c.execute('PRAGMA table_info(orders)')]:c.execute('ALTER TABLE orders ADD COLUMN schedule_confirmed INTEGER DEFAULT 0')
-            # 账号状态：active / banned(封禁) / deactivated(注销)。老库自动补列。
-            if 'status' not in [x[1] for x in c.execute('PRAGMA table_info(users)')]:c.execute("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'")
-            # 付费置顶到期时间戳（0=未置顶）。老库自动补列。
-            if 'promoted_until' not in [x[1] for x in c.execute('PRAGMA table_info(products)')]:c.execute('ALTER TABLE products ADD COLUMN promoted_until REAL DEFAULT 0')
-            # 订单关联的求购编号（NULL=普通下单）。没有它就无法在取消/退款时回滚求购状态，
-            # 求购会永久停在 matched。老库自动补列。
-            if 'want_id' not in [x[1] for x in c.execute('PRAGMA table_info(orders)')]:c.execute('ALTER TABLE orders ADD COLUMN want_id INTEGER')
-            # 平台处置标记：0=卖家自助下架（可自行重新上架），>0=平台处置人的 id（卖家不能自行恢复，
-            # 必须走客服申诉）。没有这一列，「平台下架」和「自己下架」在库里长得一模一样，
-            # 管理员下架后卖家点一下「重新上架」就绕过去了。老库自动补列。
-            if 'delisted_by' not in [x[1] for x in c.execute('PRAGMA table_info(products)')]:c.execute('ALTER TABLE products ADD COLUMN delisted_by INTEGER DEFAULT 0')
-            # 最后登录时间：人员管理要能回答「这个客服上次登录是什么时候」。
-            # 没有这一列时只能拿 sessions.expires 反推（会话固定 7 天），
-            # 而会话被强制下线删掉之后就彻底查不到了。
-            if 'last_login' not in [x[1] for x in c.execute('PRAGMA table_info(users)')]:c.execute('ALTER TABLE users ADD COLUMN last_login REAL DEFAULT 0')
-            # 聊天与帖子的审核标记。与商品一样只存命中摘要，不存原始长文本。
-            if 'moderation' not in [x[1] for x in c.execute('PRAGMA table_info(messages)')]:c.execute('ALTER TABLE messages ADD COLUMN moderation TEXT')
-            if 'moderation' not in [x[1] for x in c.execute('PRAGMA table_info(posts)')]:c.execute('ALTER TABLE posts ADD COLUMN moderation TEXT')
-            if 'removed' not in [x[1] for x in c.execute('PRAGMA table_info(posts)')]:c.execute('ALTER TABLE posts ADD COLUMN removed INTEGER DEFAULT 0')
-            # 评论的回复关系：parent_id=0 表示直接评论帖子，>0 表示回复某条评论。
-            # 没有它，评论区只能平铺，无法呈现「谁回复谁」的嵌套结构。老库自动补列。
-            if 'parent_id' not in [x[1] for x in c.execute('PRAGMA table_info(comments)')]:c.execute('ALTER TABLE comments ADD COLUMN parent_id INTEGER DEFAULT 0')
-            # 聊天已读位点：记到「读过的最大消息 id」。没有它就无法算未读角标，
-            # 「我的」页顶栏的小红数字只能靠 notifications 单一来源。
-            # 老库自动补列，0 = 从未读过（整个历史都算未读太多，下面查询里对
-            # last_read_id=0 的会话按最近 50 条封顶计数）。
-            if 'last_read_id' not in [x[1] for x in c.execute('PRAGMA table_info(members)')]:c.execute('ALTER TABLE members ADD COLUMN last_read_id INTEGER DEFAULT 0')
-            # 通知关联的帖子（帖子回复 / @提及）。订单与工单已有各自的列，
-            # 社区通知复用它们会让前端跳转逻辑变糊，单独补一列。
-            if 'post_id' not in [x[1] for x in c.execute('PRAGMA table_info(notifications)')]:c.execute('ALTER TABLE notifications ADD COLUMN post_id INTEGER')
-            # 报价接受时间：接受后 24 小时内该买家未结算，报价自动作废、商品重新可报价。
-            # 没有它就无法给「被接受的报价」定一个独占的失效点。
-            if 'accepted_at' not in [x[1] for x in c.execute('PRAGMA table_info(offers)')]:c.execute('ALTER TABLE offers ADD COLUMN accepted_at REAL')
-            # 在线客服会话：support=1 标记「这是用户与平台客服的会话」而非普通私聊；
-            # assignee=认领该会话的客服 id（0=待接入）。没有它俩，客服列表里分不清
-            # 哪些是客服会话、这单归谁，多客服值守就会撞车。老库自动补列。
-            if 'support' not in [x[1] for x in c.execute('PRAGMA table_info(rooms)')]:c.execute('ALTER TABLE rooms ADD COLUMN support INTEGER DEFAULT 0')
-            if 'assignee' not in [x[1] for x in c.execute('PRAGMA table_info(rooms)')]:c.execute('ALTER TABLE rooms ADD COLUMN assignee INTEGER DEFAULT 0')
-            # 客服会话关联的工单：在线客服不是「谁点谁进」，要先有工单。
-            # 记下最近一次进入时对应的工单，客服打开会话就知道在聊哪件事。
-            if 'ticket_id' not in [x[1] for x in c.execute('PRAGMA table_info(rooms)')]:c.execute('ALTER TABLE rooms ADD COLUMN ticket_id INTEGER DEFAULT 0')
-            c.execute("INSERT OR IGNORE INTO rooms(id,kind,name) VALUES(1,'general','广州校区总聊')")
+    def __init__(self, root):
+        self.root = Path(root)
+        dsn = (os.environ.get('HC_DB') or '').strip()
+        if dsn.startswith('mysql://'):
+            self.dialect = 'mysql'
+            self.mysql = self._parse_mysql_dsn(dsn)
+            self._init_mysql_db()
+        else:
+            self.dialect = 'sqlite'
+            self.root.mkdir(parents=True, exist_ok=True)
+            (self.root / 'uploads').mkdir(exist_ok=True)
+            self.path = self.root / 'market.sqlite3'
+        self._init_schema()
+
+    # ---- MySQL 相关 ----
+    @staticmethod
+    def _parse_mysql_dsn(dsn):
+        p = urlparse(dsn)
+        return {
+            'host': p.hostname or '127.0.0.1',
+            'port': p.port or 3306,
+            'user': p.username or 'root',
+            'password': p.password or '',
+            'db': (p.path or '').lstrip('/') or 'huali_corner',
+        }
+
+    def _mysql_connect(self, db=None, pool=None):
+        import pymysql
+        cfg = dict(self.mysql)
+        if db is not None:
+            cfg['db'] = db
+        raw = pymysql.connect(
+            host=cfg['host'], port=cfg['port'], user=cfg['user'],
+            password=cfg['password'], database=cfg.get('db'),
+            charset='utf8mb4', autocommit=True,
+            cursorclass=pymysql.cursors.DictCursor,
+            connect_timeout=10,
+        )
+        return _Conn(raw, 'mysql', _rewrite_mysql, pool=pool)
+
+    def _init_mysql_db(self):
+        """确保目标库存在（不存在则建库），并预建连接池。"""
+        import pymysql
+        cfg = self.mysql
+        # 先连到服务端（不带库名）建库。
+        raw = pymysql.connect(
+            host=cfg['host'], port=cfg['port'], user=cfg['user'],
+            password=cfg['password'], charset='utf8mb4', autocommit=True,
+            cursorclass=pymysql.cursors.DictCursor, connect_timeout=10,
+        )
+        try:
+            with raw.cursor() as cur:
+                cur.execute('CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET utf8mb4' % cfg['db'])
+        finally:
+            raw.close()
+        # 建连接池（懒填充，connect() 时按需补到合适数量）。
+        self._pool, self._pool_factory = _pool_for(
+            (cfg['host'], cfg['port'], cfg['user'], cfg['db']),
+            lambda: self._mysql_connect(pool=None),
+        )
+
+    def _mysql_get_conn(self):
+        try:
+            raw = self._pool.get_nowait()
+            if raw.open:  # 连接还活着
+                return _Conn(raw, 'mysql', _rewrite_mysql, pool=self._pool)
+        except queue.Empty:
+            pass
+        # 新连接（带 pool 引用，close 时归还）。
+        return self._mysql_connect(pool=self._pool)
+
+    # ---- 统一接口 ----
     def connect(self):
-        c=sqlite3.connect(self.path,timeout=20)
-        c.row_factory=sqlite3.Row
-        c.execute('PRAGMA foreign_keys=ON')
-        return c
+        if self.dialect == 'sqlite':
+            c = sqlite3.connect(self.path, timeout=20)
+            c.row_factory = sqlite3.Row
+            c.execute('PRAGMA foreign_keys=ON')
+            return _Conn(c, 'sqlite', None)
+        return self._mysql_get_conn()
+
+    def _init_schema(self):
+        if self.dialect == 'sqlite':
+            with self.connect() as c:
+                # 这里刻意使用默认的删除日志模式，而不是 WAL。
+                # 原因：本项目的写法是「每次事务新开连接、用完即关」，而 WAL 模式下
+                # 最后一个连接关闭时会自动 checkpoint 并删除 -wal / -shm 文件。
+                # 如果此刻另一个线程刚开好连接准备写入，它找不到 wal 文件，就会抛
+                # sqlite3.OperationalError: attempt to write a readonly database。
+                # 实测并发写约 7% 失败。改用删除日志模式后为 0 失败。
+                # 这一句同时把已经处于 WAL 的旧数据库迁移回删除日志模式。
+                c.execute('PRAGMA journal_mode=DELETE')
+                c.executescript(SQLITE_SCHEMA)
+                if 'schedule_confirmed' not in [x[1] for x in c.execute('PRAGMA table_info(orders)')]:
+                    c.execute('ALTER TABLE orders ADD COLUMN schedule_confirmed INTEGER DEFAULT 0')
+                if 'status' not in [x[1] for x in c.execute('PRAGMA table_info(users)')]:
+                    c.execute("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'")
+                if 'promoted_until' not in [x[1] for x in c.execute('PRAGMA table_info(products)')]:
+                    c.execute('ALTER TABLE products ADD COLUMN promoted_until REAL DEFAULT 0')
+                if 'want_id' not in [x[1] for x in c.execute('PRAGMA table_info(orders)')]:
+                    c.execute('ALTER TABLE orders ADD COLUMN want_id INTEGER')
+                if 'delisted_by' not in [x[1] for x in c.execute('PRAGMA table_info(products)')]:
+                    c.execute('ALTER TABLE products ADD COLUMN delisted_by INTEGER DEFAULT 0')
+                if 'last_login' not in [x[1] for x in c.execute('PRAGMA table_info(users)')]:
+                    c.execute('ALTER TABLE users ADD COLUMN last_login REAL DEFAULT 0')
+                if 'moderation' not in [x[1] for x in c.execute('PRAGMA table_info(messages)')]:
+                    c.execute('ALTER TABLE messages ADD COLUMN moderation TEXT')
+                if 'moderation' not in [x[1] for x in c.execute('PRAGMA table_info(posts)')]:
+                    c.execute('ALTER TABLE posts ADD COLUMN moderation TEXT')
+                if 'removed' not in [x[1] for x in c.execute('PRAGMA table_info(posts)')]:
+                    c.execute('ALTER TABLE posts ADD COLUMN removed INTEGER DEFAULT 0')
+                if 'parent_id' not in [x[1] for x in c.execute('PRAGMA table_info(comments)')]:
+                    c.execute('ALTER TABLE comments ADD COLUMN parent_id INTEGER DEFAULT 0')
+                if 'last_read_id' not in [x[1] for x in c.execute('PRAGMA table_info(members)')]:
+                    c.execute('ALTER TABLE members ADD COLUMN last_read_id INTEGER DEFAULT 0')
+                if 'post_id' not in [x[1] for x in c.execute('PRAGMA table_info(notifications)')]:
+                    c.execute('ALTER TABLE notifications ADD COLUMN post_id INTEGER')
+                if 'accepted_at' not in [x[1] for x in c.execute('PRAGMA table_info(offers)')]:
+                    c.execute('ALTER TABLE offers ADD COLUMN accepted_at REAL')
+                if 'support' not in [x[1] for x in c.execute('PRAGMA table_info(rooms)')]:
+                    c.execute('ALTER TABLE rooms ADD COLUMN support INTEGER DEFAULT 0')
+                if 'assignee' not in [x[1] for x in c.execute('PRAGMA table_info(rooms)')]:
+                    c.execute('ALTER TABLE rooms ADD COLUMN assignee INTEGER DEFAULT 0')
+                if 'ticket_id' not in [x[1] for x in c.execute('PRAGMA table_info(rooms)')]:
+                    c.execute('ALTER TABLE rooms ADD COLUMN ticket_id INTEGER DEFAULT 0')
+                c.execute("INSERT OR IGNORE INTO rooms(id,kind,name) VALUES(1,'general','广州校区总聊')")
+        else:
+            with self.connect() as c:
+                c.executescript(MYSQL_SCHEMA)
+                c.execute("INSERT IGNORE INTO rooms(id,kind,name) VALUES(1,'general','广州校区总聊')")
+
     @contextmanager
     def tx(self):
         with _WRITE:
-            c=self.connect()
+            c = self.connect()
             try:
-                c.execute('BEGIN IMMEDIATE');yield c;c.commit()
-            except Exception:c.rollback();raise
-            finally:c.close()
-    def rows(self,q,args=()):
-        with self.connect() as c:return [dict(x) for x in c.execute(q,args).fetchall()]
-    def row(self,q,args=()):
-        r=self.rows(q,args);return r[0] if r else None
+                c.execute('BEGIN IMMEDIATE')
+                yield c
+                c.commit()
+            except Exception:
+                c.rollback()
+                raise
+            finally:
+                c.close()
+
+    def rows(self, q, args=()):
+        with self.connect() as c:
+            return [dict(x) for x in c.execute(q, args).fetchall()]
+
+    def row(self, q, args=()):
+        r = self.rows(q, args)
+        return r[0] if r else None
