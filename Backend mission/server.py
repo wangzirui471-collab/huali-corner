@@ -33,14 +33,20 @@ class Handler(BaseHTTPRequestHandler):
         try:
             origin=self.headers.get('Origin')
             if origin:
-                if self.server.public_origin:
-                    expected=self.server.public_origin
-                else:
-                    # 未显式配置时按请求自身推导。Cloudflare Tunnel / Nginx 这类反代会带
-                    # X-Forwarded-Proto: https；直连则按 http。这样公网穿透不必手填每次都会变的域名。
-                    proto=(self.headers.get('X-Forwarded-Proto') or 'http').split(',')[0].strip().lower()
-                    expected=f'{proto}://'+self.headers.get('Host','')
-                m.require(origin==expected,'不允许跨站请求',403)
+                # 允许的 Origin 有两个来源，缺一不可：
+                #   1. 显式配置的 public_origin（反代/公网域名）；
+                #   2. 请求自身的 Host（X-Forwarded-Proto 推导，直连则 http）。
+                # 只留 (1) 会在 --lan 时把本机访问憋死：--lan 把 public_origin 固定成
+                # http://<局域网IP>:8081，而浏览器打开 http://127.0.0.1:8081 时，Chrome 对
+                # ES 模块请求一定带 Origin，于是 /src/main.js 被 403、页面永远停在加载文案。
+                # 本机名、localhost、局域网 IP 指向的是同一个实例，都该放行；
+                # 而跨站页面（evil.example）的 Origin 既不是 public_origin 也不是本站 Host，
+                # 仍然被拦住，CSRF 防护不受影响。
+                proto=(self.headers.get('X-Forwarded-Proto') or 'http').split(',')[0].strip().lower()
+                host=self.headers.get('Host','')
+                allowed={f'{proto}://'+host,'http://'+host,'https://'+host}
+                if self.server.public_origin:allowed.add(self.server.public_origin)
+                m.require(origin in allowed,'不允许跨站请求',403)
             data={}
             if method=='POST':
                 length=int(self.headers.get('Content-Length','0'));m.require(0<length<=8*1024*1024,'请求过大或为空',413)

@@ -36,6 +36,17 @@ class TrialHttpTests(unittest.TestCase):
         self.assertEqual(self.req('/api/auth/code',{'phone':'13800000003'})[0],403)
         self.assertEqual(self.req('/api/auth/login',{'phone':'13800000003','code':'123456'})[0],401)
 
+    def test_local_host_origin_allowed_while_public_origin_is_configured(self):
+        # 回归：--lan 会把 public_origin 固定成局域网地址（如 http://192.168.0.19:8081），
+        # 但用户常从 http://127.0.0.1:8081 打开。浏览器对 ES 模块请求一定带 Origin，
+        # 若只认 public_origin，/src/main.js 会 403，页面永远停在加载文案。
+        # 本机名/localhost/局域网 IP 指向同一实例，都应放行。
+        status,config=self.req('/api/config',origin=self.base)
+        self.assertEqual(status,200,config)
+        self.assertTrue(config['trial'])
+        # 真正的跨站 Origin 仍必须拒绝（CSRF 防护不受影响）。
+        self.assertEqual(self.req('/api/auth/register',{'phone':'13900000022','password':'TrialPassword2026!','nickname':'跨站'},origin='https://evil.example')[0],403)
+
     def test_https_proxy_origin_registration_and_role_boundary(self):
         result=self.register()
         token=result['token']
