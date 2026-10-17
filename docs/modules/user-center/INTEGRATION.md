@@ -1,12 +1,13 @@
-# 用户中心 U01 接入合同
+# 用户中心 U01 U02 U03 接入合同
 
-日期：2026-10-17（Asia/Shanghai）。B 侧第一阶段交付，目标分支 `feat/layered-completion`。
+日期：2026-10-17（Asia/Shanghai）。B 侧源码交付，目标分支 `feat/layered-completion`。
 
 起始提交：`b59096c471acf162c0072f6ec324a7675c1415a2`。
 
 ## 交付状态和边界
 
-U01 提供资料领域方法、增量迁移及测试源码，供 A 接线；后续 U02 的专用媒体合同见 AVATAR_INTEGRATION.md。
+U01/U02/U03 的 B 侧代码已编写，公共接线与运行验收仍由 A 负责。
+本文件详述U01；头像接线见 AVATAR_INTEGRATION.md，网页接线见 WEB_INTEGRATION.md，验收对应见 ACCEPTANCE.md。
 未编辑公共入口，尚未注册新的 HTTP 路由，也未替换旧 AccountService 方法。
 本文件中的接线片段是给 A 的修改建议，不是本分支已经执行的改动。
 
@@ -37,7 +38,9 @@ migrate_account(c)
 | degree_level | TEXT 非空，bachelor/junior_college/other/unspecified，默认 unspecified |
 | study_status | TEXT 非空，studying/graduated/other/unspecified，默认 unspecified |
 | profile_version | INTEGER 非空、非负整数，默认 0 |
-| avatar_upload_id | 可空 TEXT，U02 保留位 |
+| avatar_upload_id | 可空 TEXT，仅选中有效专用头像时投影公开地址 |
+
+迁移还创建独立 user_avatar_uploads 表及所有者索引，不更改旧 uploads 六列结构；见头像合同。
 
 历史“本科/专科”仅映射学历；“已毕业”仅映射毕业状态；其他、空值与未知值映射 unspecified。
 新增账号默认两项未知，不能把注册时旧 education 默认“本科”视为本人已选学历。
@@ -156,12 +159,13 @@ HTTP 自查入口仍必须 `self.uid()`，不能把 URL/body 中的用户 ID 传
 
 新方法返回数据，不返回 HTML；页面展示 nickname/major/bio 时仍必须转义。
 
-## 6 U02 U03 的保留合同和接线需求
+## 6 U02 U03 的接线需求
 
 - U02 已编写专用头像领域，资料 DTO 返回当前有效的公开头像路径；无效或无头像时为 null。
 - U02 的 `user_upload_avatar`、`user_set_avatar`、`user_is_public_avatar`、`user_avatar_bytes` 接入见 AVATAR_INTEGRATION.md，尚未由 A 接线验证。
-- U03 继续交付独立 `actions/user-profile.js` 的 clicks/submits、`user-` 动作及表单 ID。
-- 此阶段没有前端动作/表单/样式需要 A 注册；不要提前引用不存在的文件。
+- U03 已编写 `actions/user-profile.js` 的 clicks/submits、`user-` 动作及表单 ID；具体导出、文件change和img错误捕获事件见 WEB_INTEGRATION.md。
+- A 需注册 user-center.css 并把它加入静态演示导出复制列表；B未编辑公共入口或导出脚本。
+- A 需把头像文件清单纳入同一个SQLite备份快照；新记录使用相对路径，见 AVATAR_INTEGRATION.md。
 - 现有 core/http.js 抛出的 Error 未携带 HTTP status。U03 需要明确区分409；建议 A 后续在原错误上增加只读的 status 属性，保留 error/message 与既有调用方式。B 不另建请求/共享状态实现。
 - 两阶段接线后分别合入 A 的提交，才能验证真实 HTTP、旧小程序兼容和页面保存。
 
@@ -193,4 +197,5 @@ node tests/frontend_modules.test.mjs
 | /api/user/profile GET/POST | 待 A 填写 | 未接入 |
 | 公开 DTO 与旧客户端兼容 | 待 A 验证 | 未联调 |
 | U02 媒体钩子 | 见 AVATAR_INTEGRATION.md | 已写领域代码，待 A 接入 |
-| U03 动作和样式 | 后续阶段 | 未实现 |
+| U03 动作/事件/样式/导出复制 | 见 WEB_INTEGRATION.md | 已写本领域代码，待 A 接入 |
+| 头像备份清单 | 见 AVATAR_INTEGRATION.md | 已提供领域方法，待 A 接入 ops |
