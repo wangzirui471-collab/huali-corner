@@ -80,6 +80,11 @@ export async function mine(){
       </div>
     </section>
 
+    <section class="me-card me-quick">
+      <button data-go="orders">${icon('bag')}<b>我的订单</b></button>
+      <button data-go="favorites">${icon('heart')}<b>我的收藏</b></button>
+    </section>
+
     ${notices.unread
       ? `<button class="me-notice alert" data-go="messages/notice">${icon('bell')}你有 <b>${notices.unread}</b> 条未读订单通知，点击查看</button>`
       : `<div class="me-notice">${icon('shield')}模拟交易试用 · 不扣真实款项 · 平台依据规则保障双方权益</div>`}
@@ -105,8 +110,6 @@ export async function mine(){
     </section>
 
     <section class="me-card me-tools">
-      ${tile('orders','list','我的订单',0)}
-      ${tile('favorites','heart','我的收藏',0)}
       ${tile('profile/'+state.me.id,'user','公开主页',0)}
       ${state.config.trial?tile('','shield','账号与安全',0,'data-action="change-password"'):''}
       ${tile('support','message','帮助与客服',0)}

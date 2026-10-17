@@ -1861,6 +1861,15 @@ button.me-notice { width: 100%; text-align: left; cursor: pointer; border: 0; fo
 
 .me-tools { display: grid; grid-template-columns: repeat(4, 1fr); padding: 8px 4px 10px; }
 
+/* 快捷条：我的订单 / 我的收藏。放在头像卡正下方，
+   这两个是全站最高频的两个入口，不值得让用户去宫格第二排找。 */
+.me-quick { display: flex; padding: 6px; }
+.me-quick > button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 0; background: none; border: 0; font: inherit; font-size: 14px; color: var(--ink); cursor: pointer; border-radius: var(--r-xs); }
+.me-quick > button:hover { background: var(--surface-2); }
+.me-quick > button + button { position: relative; }
+.me-quick > button + button::before { content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 1px; background: var(--line); }
+.me-quick .icon { width: 18px; height: 18px; color: var(--ink-2); }
+
 @media (max-width: 560px) {
   .me-hero { padding: 16px 14px; }
   .me-badge { right: 12%; }
