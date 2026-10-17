@@ -10,8 +10,8 @@
 // 本轮由平台端侧代为重构，协作者后续在此文件内继续迭代即可。
 
 import { $, e, icon } from '../core/dom.js';
-import { date } from '../core/format.js';
-import { state } from '../core/state.js';
+import { date, money } from '../core/format.js';
+import { state, statusNames } from '../core/state.js';
 import { api } from '../core/http.js';
 import { shell, heading } from '../core/shell.js';
 import { field, selectField } from '../components/forms.js';
@@ -31,6 +31,29 @@ function tile(go, ic, label, count, extra = '', tone = '') {
   return `<button class="me-tile ${tone}" ${attrs}>
     <span class="me-tile-icon">${icon(ic)}</span><small>${e(label)}</small>${badge}</button>`;
 }
+
+// 内容分区标题：左侧标题、右侧「查看全部」。空数据时不出「查看全部」——
+// 指向一个空列表的链接是负体验。
+const secHead = (title, go, label = '查看全部') =>
+  `<header class="me-sec-head"><h3>${e(title)}</h3>${go ? `<button class="text-button" data-go="${go}">${e(label)}${icon('arrow')}</button>` : ''}</header>`;
+
+const meEmpty = text => `<p class="me-empty">${e(text)}</p>`;
+
+// 最近订单预览行。整行可点进订单页；缩略图取第一件商品，多件时标「等 N 件」。
+function orderRow(o) {
+  const first = o.items && o.items[0] ? o.items[0] : {};
+  const more = o.items && o.items.length > 1 ? ` 等${o.items.length}件` : '';
+  const role = o.buyer_id === state.me.id ? '我买到的' : '我卖出的';
+  return `<div class="me-order-row" data-go="orders">
+    <img src="${e(first.photo || '')}" alt="" loading="lazy">
+    <div class="me-order-main"><b>${e(first.title || '订单 #'+o.id)}${more}</b>
+      <small>${e(statusNames[o.status] || o.status)} · ${role} · ${date(o.created)}</small></div>
+    <b class="me-order-amount">¥${money(o.total)}</b></div>`;
+}
+
+// 通知预览行。与 messages/notice 的列表同一份数据，这里只显示最近三条。
+const noteRow = n => `<div class="me-note-row" data-go="messages/notice">
+  <p>${e(n.body)}</p><small>${date(n.created)}</small></div>`;
 
 export async function mine(){
   if(!needLogin())return;
@@ -107,6 +130,32 @@ export async function mine(){
       <span class="me-banner-icon">${icon('plus')}</span>
       <div><b>有闲置要出？</b><small>拍三张照片，一分钟挂上转角</small></div>
       <button class="btn primary" data-go="publish">去发布</button>
+    </section>
+
+    <section class="me-card me-sec">
+      ${secHead('最近订单', myOrders.length ? 'orders' : '')}
+      ${myOrders.length ? myOrders.slice(0,3).map(orderRow).join('') : meEmpty('还没有订单。逛逛首页，看中的直接下单一分钟搞定。')}
+    </section>
+
+    <section class="me-card me-sec">
+      ${secHead('我的收藏', favoriteCount ? 'favorites' : '')}
+      ${favoriteCount
+        ? `<div class="me-goods">${favList.slice(0,4).map(card).join('')}</div>`
+        : meEmpty('还没收藏过商品。看到想要的先收着，降价了也好对比。')}
+    </section>
+
+    <section class="me-card me-sec">
+      ${secHead('在售商品', listingCount ? 'listings' : '')}
+      ${listingCount
+        ? `<div class="me-goods">${myList.filter(p=>p.status==='available').slice(0,4).map(card).join('')}</div>`
+        : meEmpty('还没有在售的商品。上面那条黄色横幅就是入口。')}
+    </section>
+
+    <section class="me-card me-sec">
+      ${secHead('消息通知', notices.items.length ? 'messages/notice' : '')}
+      ${notices.items.length
+        ? notices.items.slice(0,3).map(noteRow).join('')
+        : meEmpty('暂无通知。下单、付款、交付、售后等节点会在这里提醒你。')}
     </section>
 
     <section class="me-card me-tools">

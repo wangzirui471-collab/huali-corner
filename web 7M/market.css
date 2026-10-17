@@ -1812,7 +1812,7 @@ button.kpi:hover .kpi-arrow { opacity: 1; transform: none; color: var(--t, var(-
    头像卡 → 通知条 → 五格数据 → 购买/出售宫格 → 发布横幅 → 服务宫格。
    只用 :root 令牌不写死色值；窄屏优先，桌面限宽居中。
    没有的功能（钱包/红包/足迹）不放占位格。 */
-.me-page { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.me-page { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
 .me-card { background: var(--surface); border-radius: var(--r-md); box-shadow: var(--sh-1); }
 
 .me-hero { display: flex; align-items: center; gap: 14px; padding: 18px 16px; }
@@ -1860,6 +1860,33 @@ button.me-notice { width: 100%; text-align: left; cursor: pointer; border: 0; fo
 .me-banner .btn { flex: none; }
 
 .me-tools { display: grid; grid-template-columns: repeat(4, 1fr); padding: 8px 4px 10px; }
+
+/* 内容预览区：最近订单 / 收藏 / 在售 / 通知。
+   「我的」页不能只是入口集合——每个入口下面要直接看得到对应的东西。 */
+.me-sec { padding: 2px 14px 10px; }
+.me-sec-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 0 8px; }
+.me-sec-head h3 { margin: 0; font-size: 15px; }
+.me-sec-head .text-button .icon { width: 13px; height: 13px; }
+.me-empty { margin: 0; padding: 18px 0 14px; text-align: center; color: var(--muted); font-size: 12.5px; }
+
+.me-order-row { display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--line); cursor: pointer; border-radius: var(--r-xs); }
+.me-order-row:last-child { border-bottom: 0; }
+.me-order-row:hover { background: var(--surface-2); }
+.me-order-row img { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; flex: none; background: var(--surface-2); }
+.me-order-main { flex: 1; min-width: 0; }
+.me-order-main b { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.me-order-main small { color: var(--ink-3); font-size: 11px; }
+.me-order-amount { flex: none; font-size: 13px; color: var(--ink); }
+
+.me-goods { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding-bottom: 4px; }
+.me-goods .product-card { margin: 0; }
+@media (max-width: 560px) { .me-goods { grid-template-columns: repeat(2, 1fr); } }
+
+.me-note-row { padding: 9px 4px; border-bottom: 1px solid var(--line); font-size: 12px; cursor: pointer; border-radius: var(--r-xs); }
+.me-note-row:last-child { border-bottom: 0; }
+.me-note-row:hover { background: var(--surface-2); }
+.me-note-row p { margin: 0 0 3px; line-height: 1.6; }
+.me-note-row small { color: var(--faint); font-size: 11px; }
 
 /* 快捷条：我的订单 / 我的收藏。放在头像卡正下方，
    这两个是全站最高频的两个入口，不值得让用户去宫格第二排找。 */
