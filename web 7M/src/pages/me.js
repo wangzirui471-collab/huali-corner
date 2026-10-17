@@ -174,7 +174,7 @@ export async function mine(){
       ${tile('profile/'+state.me.id,'user','公开主页',0)}
       ${state.config.trial?tile('','shield','账号与安全',0,'data-action="change-password"'):''}
       ${tile('support','message','帮助与客服',0)}
-      ${tile('','chart','信誉与申诉',0,'data-action="appeal"')}
+      ${tile('credit','chart','信誉与申诉',0)}
       ${tile('','close','退出登录',0,'data-action="logout"','danger')}
       ${tile('','trash','注销账号',0,'data-action="deactivate"','danger')}
     </section>

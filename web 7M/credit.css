@@ -1,0 +1,23 @@
+/* 信誉与申诉页专用样式（独立文件，避免与 market.css 的并行改动混在一起） */
+
+.credit-hero { text-align: center; }
+.credit-stars { font-size: 34px; letter-spacing: 4px; line-height: 1.2; color: var(--brand-lo); }
+.credit-stars-empty { color: var(--line-3); }
+.credit-progress { height: 8px; max-width: 320px; margin: 14px auto; border-radius: 999px; background: var(--line); overflow: hidden; }
+.credit-progress i { display: block; height: 100%; border-radius: 999px; background: var(--brand); transition: width .4s var(--ease); }
+
+.credit-tiers { display: grid; gap: 10px; margin: 12px 0; }
+.credit-tier { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md); }
+.credit-tier span { color: var(--brand-lo); letter-spacing: 1px; white-space: nowrap; }
+.credit-tier b { white-space: nowrap; }
+.credit-tier small { margin-left: auto; color: var(--muted); }
+.credit-tier.current { border-color: var(--brand-lo); background: var(--brand-soft); }
+
+.credit-rules { display: grid; gap: 10px; margin: 12px 0; padding: 0; list-style: none; }
+.credit-rules li { display: flex; justify-content: space-between; gap: 16px; padding-bottom: 9px; border-bottom: 1px dashed var(--line); }
+.credit-rules span { color: var(--muted); text-align: right; }
+
+@media (max-width: 640px) {
+  .credit-stars { font-size: 28px; letter-spacing: 2px; }
+  .credit-tier small { margin-left: 0; width: 100%; }
+}

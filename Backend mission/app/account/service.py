@@ -10,7 +10,7 @@ import time
 ROUNDS=600000
 import hashlib, re, secrets, time
 from ..core.errors import ValidationMixin, DomainError
-from .credit import is_trusted
+from .credit import is_trusted, star_badge
 
 
 class AccountService(ValidationMixin):
@@ -218,7 +218,15 @@ class AccountService(ValidationMixin):
 
     def profile(self,u):
         r=self.row('SELECT id,nickname,college,major,education,bio,role,score,status FROM users WHERE id=?',(u,))
-        self.require(r,'用户不存在',404);return r
+        self.require(r,'用户不存在',404);r.update(self.credit_badge(u,r['score']));return r
+
+    def credit_badge(self,u,score=None):
+        """信誉星级（不落库）：有效好评 = 买家给卖家的 4-5 星；严重违规 = 单次扣分 ≥15。"""
+        if score is None:
+            row=self.row('SELECT score FROM users WHERE id=?',(u,));score=row['score'] if row else 100
+        good=self.row("SELECT COUNT(*) n FROM reviews r JOIN orders o ON o.id=r.order_id WHERE o.seller_id=? AND r.user_id=o.buyer_id AND r.rating>=4",(u,))['n']
+        severe=self.row("SELECT COUNT(*) n FROM audit WHERE target=? AND type='credit' AND delta<=?",(u,-15))['n']
+        return star_badge(good,severe,score)
 
     def update_profile(self,u,d):
         nickname=self.text(d.get('nickname'),24,'昵称');college='计算机工程学院' if self.trial else str(d.get('college',''))[:80];major=str(d.get('major',''))[:80]
@@ -238,7 +246,10 @@ class AccountService(ValidationMixin):
     # 客服日常值守；用户无后台权限。层级判断统一走这里，别在业务里手写比较。
     ROLE_RANK = {'user':0,'support':1,'admin':2,'developer':3}
 
-    def role_of(self,u):return self.profile(u)['role']
+    def role_of(self,u):
+        # 直接查 role：profile 现在会附带信誉星级（两次统计查询），
+        # 鉴权路径没必要为拿一个角色承担这份开销。
+        r=self.row('SELECT role FROM users WHERE id=?',(u,));return r['role'] if r else ''
     def is_staff(self,u):return self.role_of(u) in ('support','admin','developer')
     def is_admin(self,u):return self.role_of(u) in ('admin','developer')
 

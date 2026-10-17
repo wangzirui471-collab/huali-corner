@@ -89,3 +89,48 @@ def is_trusted(listings=0, delivered=0, late=0, refunded=0):
             and delivered >= TRUSTED_MIN_DELIVERED
             and late == 0
             and refunded == 0)
+
+
+# --- 信誉星级 -------------------------------------------------------------
+#
+# 分数（0-100）是即时健康度：违规扣、好评成交加，低于 60 暂停发布。
+# 星级（1-7）是长期口碑：4 星起步，靠持续好评升级，6 星「诚信卖家」、7 星「优品卖家」。
+#
+# 星级不落库，由「有效好评数 + 严重违规次数 + 分数红线」实时派生：
+#   · 不新增字段 → 老库无需迁移，也不会出现「字段与规则不同步」的数据漂移；
+#   · 有效好评 = 买家给卖家打的 4-5 星（reviews 里去重到订单）；
+#   · 阈值 3 / 8 / 20 递增，前期快、后期慢，防止刷单速升；
+#   · 严重违规（单次扣 ≥15 分）每次掉 1 星、最多扣 2 星；
+#   · 分数跌破 60/40/20 时星级依次封顶 3/2/1，和「暂停发布」的红线对齐。
+STAR_TITLES = {1: '风险账号', 2: '受限卖家', 3: '待改进', 4: '新手卖家',
+               5: '靠谱卖家', 6: '诚信卖家', 7: '优品卖家'}
+STAR_REVIEW_NEED = {5: 3, 6: 8, 7: 20}
+STAR_SCORE_CAPS = ((20, 1), (40, 2), (60, 3))
+STAR_BASE = 4
+STAR_MAX = 7
+SEVERE_DELTA = -15
+
+
+def star_badge(good_reviews=0, severe_violations=0, score=100):
+    """把「有效好评 / 严重违规次数 / 信誉分」换算成星级、称号与升星进度。"""
+    stars = STAR_BASE
+    for star in sorted(STAR_REVIEW_NEED):
+        if good_reviews >= STAR_REVIEW_NEED[star]:
+            stars = star
+    stars -= min(max(0, severe_violations), 2)
+    for floor, cap in STAR_SCORE_CAPS:
+        if score < floor:
+            stars = min(stars, cap)
+    stars = max(1, min(STAR_MAX, stars))
+    nxt = stars + 1 if stars < STAR_MAX else None
+    need = STAR_REVIEW_NEED.get(nxt, 0) if nxt else 0
+    return {
+        'stars': stars,
+        'star_title': STAR_TITLES[stars],
+        'good_reviews': good_reviews,
+        'severe_violations': severe_violations,
+        'next_star': nxt,
+        'next_star_need': max(0, need - good_reviews) if nxt else 0,
+        'star_tiers': [{'star': s, 'title': STAR_TITLES[s], 'need': STAR_REVIEW_NEED[s]} for s in (5, 6, 7)],
+        'star_pause_score': 60
+    }
