@@ -301,6 +301,7 @@ class MarketTests(unittest.TestCase):
 
     def test_support_room_connects_user_to_desk(self):
         """在线客服：普通用户直达「转角客服」私聊，双方可互发、重复进入同会话。"""
+        self.m.create_ticket(self.a,dict(type='other',subject='咨询运费',body='想咨询'))  # 新规则：先提交问题才能进客服会话
         r=self.m.support_room(self.a)
         self.assertEqual(r['kind'],'private'); self.assertEqual(r['name'],'转角客服')
         self.m.send_message(self.a,r['id'],'在吗，想咨询运费','k1')
@@ -312,6 +313,7 @@ class MarketTests(unittest.TestCase):
 
     def test_support_room_claim_prevents_double_pickup(self):
         """客服会话认领：先认领者持有，后来者不抢单；释放后可接手。"""
+        self.m.create_ticket(self.a,dict(type='other',subject='咨询',body='想咨询'))
         r=self.m.support_room(self.a)
         with self.m.tx() as c:c.execute("INSERT INTO users(phone,nickname,role,college) VALUES('13800000999','客服B','support','计算机工程学院')")
         s2=self.m.row("SELECT id FROM users WHERE nickname='客服B'")['id']
@@ -330,6 +332,7 @@ class MarketTests(unittest.TestCase):
 
     def test_support_room_visible_in_staff_pool(self):
         """客服池：未加入的客服也能在 rooms() 里看到待接入的客服会话。"""
+        self.m.create_ticket(self.a,dict(type='other',subject='咨询',body='想咨询'))
         r=self.m.support_room(self.a)
         with self.m.tx() as c:c.execute("INSERT INTO users(phone,nickname,role,college) VALUES('13800000998','客服C','support','计算机工程学院')")
         s2=self.m.row("SELECT id FROM users WHERE nickname='客服C'")['id']

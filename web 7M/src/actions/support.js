@@ -100,6 +100,20 @@ export const clicks = {
   },
 
   // 封禁 / 解封：比扣信誉分更硬的约束，仅管理员对非管理员账号操作。
+  // 星级调整：管理员对非管理员账号 ±1/±2 星，写审计并在用户信誉页可见。
+  stars(b, id){
+    modal(`<h2>调整信誉星级</h2>
+      <p class="muted">星级 = 好评成长 + 管理员调整。每次最多 ±2 星，理由会展示在用户的「信誉与申诉」页。</p>
+      <form id="stars-form" data-target="${id}">
+        <label class="field"><span>调整幅度</span><select name="delta">
+          <option value="1">+1 星</option><option value="2">+2 星</option>
+          <option value="-1">−1 星</option><option value="-2">−2 星</option>
+        </select></label>
+        <label class="field"><span>调整理由（用户可见）</span><textarea name="reason" required maxlength="500" placeholder="例如：误判纠正 / 严重违规降级 / 毕业季优质卖家奖励"></textarea></label>
+        <button class="btn primary full">确认调整</button>
+      </form>`);
+  },
+
   ban: async (b, id) => {
     const banning = b.dataset.value === 'true';
     if (!confirm(banning ? `确认封禁用户 #${id}？封禁后立即下线、在售商品下架、无法登录。` : `确认解封用户 #${id}？`)) return;
@@ -127,6 +141,13 @@ export const submits = {
     closeModal();
     go('ticket/'+r.id);
     toast('工单已提交');
+  },
+
+  'stars-form': async ({ form, d }) => {
+    const r = await api('/admin/stars', {target:Number(form.dataset.target), delta:Number(d.delta), reason:d.reason});
+    closeModal();
+    toast(`已调整：${r.stars} 星 · ${r.star_title}`);
+    await render();
   },
 
   'ticket-reply-form': async ({ form, d, fd }) => {

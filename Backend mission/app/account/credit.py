@@ -111,8 +111,12 @@ STAR_MAX = 7
 SEVERE_DELTA = -15
 
 
-def star_badge(good_reviews=0, severe_violations=0, score=100):
-    """把「有效好评 / 严重违规次数 / 信誉分」换算成星级、称号与升星进度。"""
+def star_badge(good_reviews=0, severe_violations=0, score=100, stars_adjust=0):
+    """把「有效好评 / 严重违规次数 / 信誉分 / 管理员调整」换算成星级、称号与升星进度。
+
+    stars_adjust 是管理员通过审计累积的调整量（每次 ±1/±2）。它最后应用、不受红线限制：
+    管理员有裁量权纠正误判或追加惩罚；而「能否发布」仍由分数红线独立决定。
+    """
     stars = STAR_BASE
     for star in sorted(STAR_REVIEW_NEED):
         if good_reviews >= STAR_REVIEW_NEED[star]:
@@ -121,7 +125,7 @@ def star_badge(good_reviews=0, severe_violations=0, score=100):
     for floor, cap in STAR_SCORE_CAPS:
         if score < floor:
             stars = min(stars, cap)
-    stars = max(1, min(STAR_MAX, stars))
+    stars = max(1, min(STAR_MAX, stars + int(stars_adjust or 0)))
     nxt = stars + 1 if stars < STAR_MAX else None
     need = STAR_REVIEW_NEED.get(nxt, 0) if nxt else 0
     return {
@@ -129,6 +133,7 @@ def star_badge(good_reviews=0, severe_violations=0, score=100):
         'star_title': STAR_TITLES[stars],
         'good_reviews': good_reviews,
         'severe_violations': severe_violations,
+        'stars_adjust': int(stars_adjust or 0),
         'next_star': nxt,
         'next_star_need': max(0, need - good_reviews) if nxt else 0,
         'star_tiers': [{'star': s, 'title': STAR_TITLES[s], 'need': STAR_REVIEW_NEED[s]} for s in (5, 6, 7)],

@@ -277,7 +277,29 @@ class SupportService(ValidationMixin):
             self.notify(c,r['seller_id'],'order_cancelled',f'订单 #{r["id"]} 因买家账号被处置已取消，商品释放回在售。',r['id'])
 
     def credit_history(self,u):
-        return self.rows("SELECT delta,reason,ticket_id,created FROM audit WHERE target=? AND type='credit' ORDER BY id DESC",(u,))
+        # kind 区分「分」与「星」：前端按单位展示，避免把 +1 星读成 +1 分。
+        return self.rows("SELECT type kind,delta,reason,ticket_id,created FROM audit WHERE target=? AND type IN ('credit','stars') ORDER BY id DESC",(u,))
+
+    def adjust_stars(self,u,target,delta,reason):
+        """管理员直接调整用户星级（±1 / ±2）。星级 = 好评成长 + 管理员调整累计，
+        每次调整写入 audit 并在用户「信誉与申诉」页可见；分数红线仍独立决定能否发布。
+
+        审计里记的是**实际生效的星级变化**：已到 7 星时 +2 只记 +1，
+        这样「+2 再 -2」能准确回到原值，不会因为封顶丢掉溢出量。"""
+        self.staff(u);self.require(self.is_admin(u),'仅平台管理员可调整星级',403)
+        self.require(u!=target,'不能调整自己的星级')
+        self.require(type(delta) is int and delta in (-2,-1,1,2),'星级调整需为 -2、-1、+1 或 +2')
+        self.text(reason,500,'调整理由')
+        cur=self.credit_badge(target)['stars']
+        applied=max(1,min(7,cur+delta))-cur
+        self.require(applied!=0,f'当前已 {cur} 星，{"不能再升" if delta>0 else "不能再降"}')
+        with self.tx() as c:
+            t=c.execute('SELECT role FROM users WHERE id=?',(target,)).fetchone()
+            self.require(t,'用户不存在',404)
+            self.require(t['role'] not in ('admin','developer'),'不能调整管理员或开发者的星级',403)
+            c.execute("INSERT INTO audit(actor,target,type,delta,reason,created) VALUES(?,?,?,?,?,?)",(u,target,'stars',applied,reason,time.time()))
+            self.notify(c,target,'credit',f'管理员将你的信誉星级调整 {applied:+d} 星：{reason}')
+        return self.credit_badge(target)
 
     def audit_log(self,u,kind='',actor=None,since=None,until=None,limit=200):
         """审计查询。

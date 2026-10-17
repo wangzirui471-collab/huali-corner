@@ -192,6 +192,7 @@ class Handler(BaseHTTPRequestHandler):
                     c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',(u,n['user_id'],'appointment','群管理员申请审核通过',time.time()))
                 return self.respond({'ok':True})
             if p=='/api/admin/ban' and method=='POST':return self.respond(m.ban_user(u,int(data['target']),bool(data.get('banned',True)),data.get('reason','')))
+            if p=='/api/admin/stars' and method=='POST':return self.respond(m.adjust_stars(u,int(data['target']),int(data['delta']),data.get('reason','')))
             if p=='/api/reconcile':return self.respond(m.reconcile(u))
             if p=='/api/backup' and method=='POST':return self.respond({'ok':True,'file':Path(m.backup(u)).name})
             raise DomainError('接口不存在',404)

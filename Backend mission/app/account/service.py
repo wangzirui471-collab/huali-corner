@@ -221,12 +221,14 @@ class AccountService(ValidationMixin):
         self.require(r,'用户不存在',404);r.update(self.credit_badge(u,r['score']));return r
 
     def credit_badge(self,u,score=None):
-        """信誉星级（不落库）：有效好评 = 买家给卖家的 4-5 星；严重违规 = 单次扣分 ≥15。"""
+        """信誉星级（不落库）：有效好评 = 买家给卖家的 4-5 星；严重违规 = 单次扣分 ≥15；
+        星级调整 = 管理员通过 audit(type='stars') 累积的人为调整。"""
         if score is None:
             row=self.row('SELECT score FROM users WHERE id=?',(u,));score=row['score'] if row else 100
         good=self.row("SELECT COUNT(*) n FROM reviews r JOIN orders o ON o.id=r.order_id WHERE o.seller_id=? AND r.user_id=o.buyer_id AND r.rating>=4",(u,))['n']
         severe=self.row("SELECT COUNT(*) n FROM audit WHERE target=? AND type='credit' AND delta<=?",(u,-15))['n']
-        return star_badge(good,severe,score)
+        adjust=self.row("SELECT COALESCE(SUM(delta),0) n FROM audit WHERE target=? AND type='stars'",(u,))['n']
+        return star_badge(good,severe,score,adjust)
 
     def update_profile(self,u,d):
         nickname=self.text(d.get('nickname'),24,'昵称');college='计算机工程学院' if self.trial else str(d.get('college',''))[:80];major=str(d.get('major',''))[:80]

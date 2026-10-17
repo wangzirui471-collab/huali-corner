@@ -294,6 +294,9 @@ function userRow(u) {
     ${isAdmin() && u.id !== state.me.id
       ? `<button class="text-button" data-action="credit" data-id="${u.id}">信誉调整</button>`
       : ''}
+    ${isAdmin() && u.id !== state.me.id && !['admin', 'developer'].includes(u.role)
+      ? `<button class="text-button" data-action="stars" data-id="${u.id}">星级调整</button>`
+      : ''}
     ${canBan
       ? `<button class="text-button ${banned ? '' : 'danger'}" data-action="ban" data-id="${u.id}" data-value="${banned ? 'false' : 'true'}">${banned ? '解封' : '封禁'}</button>`
       : ''}`;

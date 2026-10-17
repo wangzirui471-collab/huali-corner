@@ -12,6 +12,7 @@ const STAR_MAX = 7;
 // 当前状态给一句人话提示，比堆规则更让人愿意读。
 function tipFor(me){
   if (me.score < 60) return '信誉分已低于 60，发布和上架暂停中。先申诉或完成现有订单，分数会逐步恢复。';
+  if (me.stars_adjust && !me.good_reviews) return `当前星级含管理员调整 ${me.stars_adjust > 0 ? '+' : ''}${me.stars_adjust} 星。持续拿到好评，星级才会真正由口碑撑住。`;
   if (!me.good_reviews) return '还没有收到好评。完成第一单、交付时如实描述，买家打出 4–5 星就能起步冲 5 星。';
   if (me.stars >= STAR_MAX) return '已经封顶。保持真实描述和按时交付，就能稳稳守住「优品卖家」。';
   return `再攒 ${me.next_star_need} 个好评，就能升到 ${me.next_star} 星「${me.next_star_title || ''}」。`;
@@ -61,6 +62,7 @@ export async function credit(){
 <section class="panel credit-card">
   <div class="credit-head"><h2>段位成长</h2><small>好评 = 买家完成订单后打的 4–5 星</small></div>
   <ol class="credit-ladder">${tiers.map(step).join('')}</ol>
+  <p class="credit-note">4 星起步、7 星封顶。好评 = 买家完成订单后给你打的 4–5 星；差评不会直接掉星，但会进入售后核实。管理员可依据核实结果直接调整星级（每次 ±1/±2），调整记录会出现在下方的信誉时间线里。</p>
 </section>
 
 <section class="panel credit-card">
@@ -99,7 +101,7 @@ export async function credit(){
 <section class="panel credit-card">
   <div class="credit-head"><h2>我的信誉记录</h2>${history.length ? '<small>近 ' + history.length + ' 条</small>' : ''}</div>
   ${history.length
-    ? `<ul class="credit-timeline">${history.map(h => `<li class="${h.delta > 0 ? 'up' : 'down'}"><span class="credit-tl-dot"></span><div><b>${h.delta > 0 ? '+' : ''}${h.delta} 分</b><p>${e(h.reason)}</p><small>${date(h.created)}${h.ticket_id ? ' · 工单 #' + h.ticket_id : ''}</small></div></li>`).join('')}</ul>`
+    ? `<ul class="credit-timeline">${history.map(h => `<li class="${h.delta > 0 ? 'up' : 'down'}"><span class="credit-tl-dot"></span><div><b>${h.delta > 0 ? '+' : ''}${h.delta} ${h.kind === 'stars' ? '星' : '分'}</b><p>${e(h.reason)}</p><small>${date(h.created)}${h.ticket_id ? ' · 工单 #' + h.ticket_id : ''}</small></div></li>`).join('')}</ul>`
     : '<p class="credit-empty">还没有信誉变动记录。保持真实描述、按时交付，分数和星级会稳步涨。</p>'}
   <button class="btn secondary full" data-action="appeal">${icon('message')}申请信誉申诉</button>
 </section>`, 'me');
