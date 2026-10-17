@@ -1,4 +1,5 @@
 import { staffFrame } from '../components/staff-layout.js';
+import { refundExecutionPanel } from '../components/refund-execution.js';
 import { caseSources, refundContext } from '../components/case-context.js';
 import { context as getContext } from '../core/context.js';
 import { e, toast } from '../core/dom.js';
@@ -44,6 +45,7 @@ export async function ticket(context, id) {
     const returned = data.refund_mode === 'return_refund';
     const content=`${context.heading('CASE #' + data.id, data.subject, '客服08:00—20:00 · 处理进度与实际退款成功分开记录')}<div class="support-case"><section class="panel"><span class="tag">${e(names[data.status])}</span><h3>${e(data.nickname)}的反馈</h3><p class="description">${e(data.body)}</p>${data.reason ? `<div class="notice">处理依据：${e(data.reason)}</div>` : ''}
       ${data.type === 'refund' ? `<div class="notice">${returned ? '退货退款：需确认实物退回后批准退款' : '仅退款：不因此恢复卖家库存'}${data.requested_amount ? '<p>建议退款 ¥' + amountText(data.requested_amount) + '</p>' : ''}</div>` : ''}
+      ${refundExecutionPanel(data)}
       ${(data.evidence || []).length ? `<h3>私密图片证据</h3><div class="case-evidence-buttons">${data.evidence.map((photo, index) => `<button class="btn secondary" data-operation="evidence" data-id="${photo.id}">证据图片${index + 1}${photo.internal ? '（内部）' : ''}</button>`).join('')}</div>` : ''}
       <div class="case-timeline">${data.messages.map(message => `<div class="case-message ${message.internal?'internal-note':''}"><b>${e(message.nickname)} ${message.internal ? '· 内部备注' : ''}</b><p>${e(message.body)}</p><small>${context.date(message.created)}</small></div>`).join('')}</div>
       ${live ? `<form id="op-case-reply" data-operation-form="reply" data-id="${data.id}"><label class="field"><span>补充材料／回复</span><textarea name="body" maxlength="2000"></textarea></label>${evidenceInput}${staff ? '<label class="checkbox internal-note"><input name="internal" type="checkbox">仅内部备注（当事人不可见；勾选后发送按钮会提示内部备注）</label>' : ''}<button class="btn primary" data-case-reply-send>发送给当事人</button></form>` : `<div class="notice">原工单已结案，不能继续向已结案流程提交材料。${participant?`<button class="btn secondary" data-operation="appeal-case" data-id="${data.id}">提交关联申诉／新材料</button>`:'请由当事人提交关联申诉，保留原处理记录。'}</div>`}${data.related_ticket_id?`<p><button class="text-button" data-go="ticket/${data.related_ticket_id}">查看原工单 #${data.related_ticket_id}</button></p>`:''}</section>

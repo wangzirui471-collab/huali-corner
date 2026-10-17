@@ -3,6 +3,7 @@ import json, time
 from .inventory import release_product
 from ..support.access import can_read_order
 from ..core.errors import ValidationMixin, DomainError
+from .progress import order_progress
 
 
 class TradeService(ValidationMixin):
@@ -43,7 +44,10 @@ class TradeService(ValidationMixin):
         r['items']=json.loads(r['items']);r['ledger']=self.rows('SELECT kind,amount,created FROM ledger WHERE order_id=? ORDER BY id',(oid,))
         r['changes']=self.rows('SELECT * FROM order_changes WHERE order_id=? ORDER BY id DESC',(oid,))
         r['notes']=self.rows('SELECT * FROM order_notes WHERE order_id=? ORDER BY id DESC',(oid,))
-        r['buyer']=self.profile(r['buyer_id'])['nickname'];r['seller']=self.profile(r['seller_id'])['nickname'];return r
+        r['buyer']=self.profile(r['buyer_id'])['nickname'];r['seller']=self.profile(r['seller_id'])['nickname']
+        refunds=self.rows("SELECT id,status FROM tickets WHERE order_id=? AND type='refund' ORDER BY id DESC",(oid,))
+        r['progress']=order_progress(r,refunds)
+        return r
 
     def orders(self,u):return [self.order(u,r['id']) for r in self.rows('SELECT id FROM orders WHERE buyer_id=? OR seller_id=? ORDER BY id DESC',(u,u))]
 

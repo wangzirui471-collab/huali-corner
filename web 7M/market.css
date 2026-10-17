@@ -1371,3 +1371,11 @@ button { -webkit-tap-highlight-color: transparent; }
   .feed-filter { padding: 7px 11px; font-size: 12px; }
 }
 
+.card-moderation{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.card-moderation .btn{width:100%;min-height:40px;padding:9px 10px}
+.order-progress{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}
+.progress-item{min-width:0;background:#f5f7fa;border:1px solid var(--line);border-radius:10px;padding:12px}
+.progress-item h4{font-size:12px;color:var(--muted);margin:0 0 6px}
+.progress-item p{font-size:13px;margin:0 0 4px;overflow-wrap:anywhere}
+.progress-item small{color:var(--muted)}
+.refund-execution p{margin:7px 0}.refund-execution small{display:block;margin-top:8px}

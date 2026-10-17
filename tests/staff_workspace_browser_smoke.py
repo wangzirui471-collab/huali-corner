@@ -31,6 +31,7 @@ def run():
             draft=m.save_draft(seller['user']['id'],dict(version=0,fields=dict(title=title,category='books',price='12.50',delivery='pickup',region='C1楼下',photos=photos)))
             return m.publish_draft(seller['user']['id'],draft['id'],draft['version'])['id']
         p1,p2,p3=listing('待下架教材甲'),listing('待下架教材乙'),listing('核查教材')
+        home_admin,home_support=listing('首页管理下架教材'),listing('首页客服下架教材')
         case=m.create_ticket(buyer['user']['id'],dict(type='report',product_id=p3,subject='核查教材描述',body='请核对内页描述'))
         m.assign_ticket(admin['id'],case['id'],worker['id'],'排班')
         for i in range(23):
@@ -52,8 +53,45 @@ def run():
                     page.reload(wait_until='networkidle')
                     return page
                 a=page_for(operator); w=page_for(support); b=page_for(buyer)
+                b.goto(base+'/#orders',wait_until='networkidle')
+                expect(b.locator('[data-order-progress]')).to_have_count(1)
+                expect(b.locator('[data-order-progress]')).to_contain_text('售后处理中')
+                for width in [375,390,768,1440]:
+                    b.set_viewport_size({'width':width,'height':900})
+                    assert b.evaluate('document.documentElement.scrollWidth<=innerWidth')
+                b.goto(base+'/#home',wait_until='networkidle')
+                anonymous=page_for({'token':''})
+                for page in [b,anonymous]:
+                    expect(page.get_by_role('button',name='下架商品',exact=True)).to_have_count(0)
+                for page,pid,title in [(a,home_admin,'首页管理下架教材'),(w,home_support,'首页客服下架教材')]:
+                    page.goto(base+'/#home',wait_until='networkidle')
+                    card=page.locator('.product-card').filter(has=page.get_by_role('button',name=title,exact=True))
+                    button=card.get_by_role('button',name='下架商品',exact=True)
+                    expect(button).to_be_visible()
+                    assert button.evaluate('(el)=>getComputedStyle(el).color')=='rgb(185, 28, 28)'
+                    button.click()
+                    expect(page.locator('#moderate-product-form')).to_be_visible()
+                    assert page.url.endswith('#home'), '下架按钮不应触发商品跳转'
+                    page.get_by_role('button',name='取消',exact=True).click()
+                    expect(page.locator('#moderate-product-form')).to_have_count(0)
+                    assert m.product(pid)['status']=='available'
+                    button.click()
+                    page.locator('#moderate-product-form [name=reason]').fill('首页核查：描述与实拍不符')
+                    page.get_by_role('button',name='确认下架',exact=True).click()
+                    expect(card).to_have_count(0)
+                    assert m.product(pid)['removal_reason']=='staff_delist'
+                    assert m.profile(seller['user']['id'])['score']==100
+                    assert m.row('SELECT id FROM audit WHERE product_id=? AND type=?',(pid,'product_delist'))
+                a.set_viewport_size({'width':375,'height':844})
+                a.goto(base+'/#home',wait_until='networkidle')
+                expect(a.get_by_role('button',name='下架商品',exact=True).first).to_be_visible()
+                assert a.evaluate('document.documentElement.scrollWidth<=innerWidth')
+                Path('/tmp/zj-admin-review').mkdir(exist_ok=True)
+                a.screenshot(path='/tmp/zj-admin-review/home-moderation-mobile.png',full_page=True)
+                a.set_viewport_size({'width':1440,'height':1000})
                 for page,pid in [(a,p1),(w,p2)]:
                     page.goto(base+'/#product/'+str(pid),wait_until='networkidle')
+                    expect(page.locator('.detail-info h1')).to_have_text(m.product(pid)['title'])
                     button=page.get_by_role('button',name='下架商品',exact=True)
                     expect(button).to_be_visible()
                     assert button.evaluate('(el)=>getComputedStyle(el).color')=='rgb(185, 28, 28)'
@@ -81,6 +119,7 @@ def run():
                 a.set_viewport_size({'width':1440,'height':1000})
                 a.goto(base+'/#ticket/'+str(refund['id']),wait_until='networkidle')
                 expect(a.locator('h1')).to_have_text('未交付退款')
+                expect(a.locator('[data-refund-execution]')).to_contain_text('尚未执行')
                 a.locator('#resolve-form [name=reason]').fill('双方协商，未交付全额退款')
                 a.once('dialog',lambda d:d.dismiss())
                 a.get_by_role('button',name='模拟退款',exact=True).click()
@@ -89,6 +128,8 @@ def run():
                 a.get_by_role('button',name='模拟退款',exact=True).click()
                 expect(a.locator('.support-case > section > .tag')).to_contain_text('已解决')
                 assert m.order(admin['id'],order['id'])['status']=='refunded'
+                expect(a.locator('[data-refund-execution]')).to_contain_text('已模拟退款成功')
+                expect(a.locator('[data-refund-execution]')).to_contain_text('核对一致')
                 m.resolve_ticket(admin['id'],case['id'],dict(outcome='resolved',reason='核实描述问题'))
                 a.goto(base+'/#ticket/'+str(case['id']),wait_until='networkidle')
                 a.get_by_role('button',name='处理卖家信誉',exact=True).click()

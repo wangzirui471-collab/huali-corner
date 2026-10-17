@@ -2,6 +2,7 @@
 import json, time
 from ..core.errors import ValidationMixin, DomainError
 from .access import case_access, case_participants
+from .refund_execution import refund_execution, record_execution, record_failed_execution
 
 
 class SupportService(ValidationMixin):
@@ -52,6 +53,7 @@ class SupportService(ValidationMixin):
             safe={k:r.get(k) for k in ['id','user_id','order_id','product_id','post_id','type','subject','status','assignee','created','nickname']}
             return {**safe,'restricted':True,'body':'','reason':'','messages':[],'evidence':[]}
         r['sources'] = self.case_sources(r)
+        if r['type']=='refund':r['refund_execution']=refund_execution(self,r)
         r.pop('source_snapshot', None)
         r['messages']=self.rows('SELECT m.*,u.nickname FROM ticket_messages m JOIN users u ON u.id=m.user_id WHERE ticket_id=? AND (?=1 OR internal=0) ORDER BY m.id',(tid,int(staff)))
         r['evidence']=[{'id':x['upload_id'],'url':'/media/'+x['upload_id'],'internal':bool(x['internal'])} for x in self.rows('SELECT upload_id,internal FROM ticket_evidence WHERE ticket_id=? AND (?=1 OR internal=0) ORDER BY created_at',(tid,int(staff)))]
@@ -92,6 +94,16 @@ class SupportService(ValidationMixin):
             self.require(u not in [order['buyer_id'],order['seller_id']],'不能审核自己的交易',403)
 
     def resolve_ticket(self,u,tid,d):
+        attempt = {}
+        try:
+            return self._resolve_ticket_transaction(u,tid,d,attempt)
+        except DomainError:
+            raise
+        except Exception:
+            if attempt:record_failed_execution(self,attempt)
+            raise
+
+    def _resolve_ticket_transaction(self,u,tid,d,attempt):
         self.staff(u);t=self.ticket(u,tid);reason=self.text(d.get('reason'),1000,'处理依据')
         self.require(t['user_id']!=u,'不能审核自己提交的工单',403)
         self.check_conflict(u,t)
@@ -99,6 +111,10 @@ class SupportService(ValidationMixin):
             t=c.execute('SELECT * FROM tickets WHERE id=?',(tid,)).fetchone()
             if t['status']=='resolved':
                 self.require(d.get('outcome','resolved')==t['outcome'],'工单已结案，请通过关联申诉申请复核',409)
+                if t['outcome']=='refund':
+                    self._administrator(u)
+                    recorded=c.execute('SELECT amount FROM refund_executions WHERE ticket_id=?',(tid,)).fetchone()
+                    if recorded and 'amount' in d:self.require(self.cents(d['amount'])==recorded['amount'],'退款已执行，不能通过重复提交改变金额',409)
                 return {'ok':True}
             outcome=d.get('outcome','resolved');self.require(outcome in ['refund','reject','resolved','review','claim','request_refund'],'处理方式无效')
             if t['type']=='refund' and outcome in ['refund','reject','resolved']:
@@ -123,13 +139,17 @@ class SupportService(ValidationMixin):
                             c.execute("UPDATE tickets SET refund_mode='refund_only' WHERE id=?",(tid,))
                         else:self.require(t['refund_mode']!='return_refund' or t['return_received_at'],'请先由卖家确认收到退回实物，再批准退款')
                         amount=self.cents(d.get('amount',r['total']));self.require(0<amount<=r['total'],'退款不能超过订单金额')
+                        attempt.update(ticket_id=tid,order_id=r['id'],actor_id=u,amount=amount,attempted_at=time.time())
                         self.journal(c,r['id'],'refund',amount)
+                        actual=c.execute("SELECT amount FROM ledger WHERE order_id=? AND kind='refund'",(r['id'],)).fetchone()
+                        self.require(actual and actual['amount']==amount,'已有退款流水与本次金额不符，请核对',409)
                         settled=c.execute("SELECT amount FROM ledger WHERE order_id=? AND kind='settlement'",(r['id'],)).fetchone()
                         if settled:self.journal(c,r['id'],'settlement_reversal',min(amount,settled['amount']))
                         elif amount<r['total']:self.journal(c,r['id'],'settlement',r['total']-amount)
                         c.execute("UPDATE orders SET status='refunded' WHERE id=?",(r['id'],))
                         # Refunded physical items are NOT automatically offered again.
                         for p in json.loads(r['items']):c.execute("UPDATE products SET status='removed',removal_reason='refund_removed',version=version+1 WHERE id=?",(p['id'],))
+                        record_execution(c,attempt,True)
                     elif r['status']=='disputed' and t['type']=='refund':
                         prior='completed' if r['completed_at'] else 'awaiting_receipt' if r['handover_at'] else 'awaiting_handover' if r['delivered_at'] else 'paid'
                         c.execute('UPDATE orders SET status=? WHERE id=?',(prior,r['id']))
