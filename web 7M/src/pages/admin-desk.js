@@ -208,9 +208,8 @@ function peopleSection({ staff }) {
   const disabled = staff.filter(a => a.status === 'disabled').length;
   return `<section class="panel desk-panel">
     ${panelHead('运营账号', '<button class="btn primary" data-action="staff-create">新建账号</button>')}
-    <p class="desk-lead">这里管理的是<strong>平台自己人</strong>：客服与管理员。
-    停用不等于封禁——封禁会下架对方全部商品、关停在途订单，那是对违规用户的处置；
-    客服离职只该停用，账号不能再登录，但历史记录全部保留。</p>
+    <p class="desk-lead">这里管的是<strong>平台自己人</strong>：客服与管理员。停用不等于封禁——
+    客服离职只停用（账号不能登录，历史记录全保留）；封禁是针对违规用户的处置，会下架其全部商品。</p>
     <div class="desk-summary">
       <span>共 <b>${staff.length}</b> 个账号</span>
       <span><b>${staff.filter(a => a.online).length}</b> 个在线</span>
@@ -244,8 +243,8 @@ function shopsSection({ sellers }) {
   const live = sellers.filter(s => s.available > 0);
   return `<section class="panel desk-panel">
     ${panelHead('店铺处置')}
-    <p class="desk-lead">反引流实战里最常见的是「这个人整店都在导流」。批量下架会一次处理该卖家
-    全部<strong>在售</strong>商品，只写一条审计、发一条通知；已预留/已售出的商品不动，它们挂在别人的订单上。</p>
+    <p class="desk-lead">反引流实战里最常见的是「这个人整店都在导流」。批量下架一次处理该卖家全部
+    <strong>在售</strong>商品，只写一条审计、发一条通知；已预留/已售出的商品不动，它们挂在别人的订单上。</p>
     <div class="desk-summary">
       <span>共 <b>${sellers.length}</b> 个有商品的卖家</span>
       <span>其中 <b>${live.length}</b> 个还有在售</span>
@@ -351,8 +350,7 @@ function auditSection({ rows, params }) {
   const names = {};
   return `<section class="panel desk-panel">
     ${panelHead('操作审计', `<button class="btn secondary" data-action="audit-export">导出 CSV</button>`)}
-    <p class="desk-lead">客服只能看到自己经手的记录（最小必要：够他复核自己那单，看不到同事和管理员的动作）。
-    管理员可以按操作人、类型、时间筛选，用于回答「这个客服上个月做了什么」。</p>
+    <p class="desk-lead">客服只能看到自己经手的记录；管理员可按人、类型、时间筛选，用于回答「这个客服上个月做了什么」。</p>
     <form id="audit-filter-form" class="desk-form-row">
       <label class="field"><span>类型</span>
         <select name="type">
