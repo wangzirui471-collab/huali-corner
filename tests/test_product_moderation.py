@@ -9,6 +9,8 @@ import sys
 import tempfile
 import time
 import unittest
+from contextlib import contextmanager
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'Backend mission'))
@@ -116,6 +118,59 @@ class ModerationActionTests(unittest.TestCase):
         with self.assertRaises(DomainError) as ctx:
             self.m.moderate_product(self.seller, pid, 'delist', '自己的东西')
         self.assertEqual(ctx.exception.status, 403)
+
+    def test_admin_can_delist_own_listing_with_audit_and_reason(self):
+        pid = self.listing(self.staff)
+        self.m.moderate_product(self.staff, pid, 'delist', '管理员下架自己的测试商品')
+        row = self.status_of(pid)
+        self.assertEqual((row['status'], row['delisted_by']), ('removed', self.staff))
+        audit = self.m.row("SELECT actor,target,reason FROM audit WHERE type='product_moderate' ORDER BY id DESC LIMIT 1")
+        self.assertEqual((audit['actor'], audit['target']), (self.staff, self.staff))
+        self.assertIn('测试商品', audit['reason'])
+
+    def test_user_can_delist_own_but_not_others_and_admin_still_needs_reason(self):
+        own = self.listing()
+        other = self.listing(self.staff)
+        with self.assertRaises(DomainError) as caught:
+            self.m.set_product_status(self.seller, other, 'delist')
+        self.assertEqual(caught.exception.status, 403)
+        with self.assertRaises(DomainError):
+            self.m.moderate_product(self.staff, other, 'delist', ' ')
+        self.assertEqual(self.status_of(other)['status'], 'available')
+        self.m.set_product_status(self.seller, own, 'delist')
+        self.assertEqual((self.status_of(own)['status'], self.status_of(own)['delisted_by']), ('removed', 0))
+        self.m.set_product_status(self.seller, own, 'relist')
+        self.assertEqual(self.status_of(own)['status'], 'available')
+
+    def test_support_cannot_force_delist_own_but_can_voluntarily_delist(self):
+        pid = self.listing(self.support)
+        with self.assertRaises(DomainError):
+            self.m.moderate_product(self.support, pid, 'delist', '客服自己审核自己')
+        self.m.set_product_status(self.support, pid, 'delist')
+        self.assertEqual(self.status_of(pid)['delisted_by'], 0)
+
+    def test_stale_delist_read_cannot_override_a_new_checkout(self):
+        for management in [False, True]:
+            with self.subTest(management=management):
+                pid = self.listing()
+                other = Market(self.tmp.name)
+                original_tx = self.m.tx
+
+                @contextmanager
+                def checkout_before_write():
+                    other.checkout(self.buyer, dict(product_ids=[pid], delivery='pickup',
+                        appointment=time.time()+3600, key='race-'+str(pid)))
+                    with original_tx() as connection:
+                        yield connection
+
+                with patch.object(self.m, 'tx', checkout_before_write):
+                    with self.assertRaises(DomainError) as caught:
+                        if management:
+                            self.m.moderate_product(self.staff, pid, 'delist', '下架前已有订单')
+                        else:
+                            self.m.set_product_status(self.seller, pid, 'delist')
+                self.assertEqual(caught.exception.status, 409)
+                self.assertEqual(self.status_of(pid)['status'], 'reserved')
 
     def test_missing_product_is_404(self):
         with self.assertRaises(DomainError) as ctx:

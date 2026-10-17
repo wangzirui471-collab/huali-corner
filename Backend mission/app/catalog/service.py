@@ -134,6 +134,8 @@ class CatalogService(ValidationMixin):
             target='available';clear_promote=False
         else:raise DomainError('不支持的商品操作')
         with self.tx() as c:
+            current=c.execute('SELECT seller_id,status FROM products WHERE id=?',(pid,)).fetchone()
+            self.require(current and current['seller_id']==u and current['status']==p['status'],'商品状态已变化，请刷新后重试',409)
             c.execute('UPDATE products SET status=?,promoted_until=? WHERE id=?',(target,0 if clear_promote else (p['promoted_until'] or 0),pid))
         return self.product(pid,u)
 
@@ -148,12 +150,13 @@ class CatalogService(ValidationMixin):
           3. 记下 delisted_by —— 把「平台下架」和「卖家自己下架」区分开，
              被平台处置的商品卖家不能自行恢复。
 
-        仅客服与管理员可调用；操作人不能是商品卖家（避免自己审自己）。
+        管理员可下架包括本人在内的在售商品；客服管理他人商品，
+        客服本人商品走普通自主下架。恢复/复核继续保留利益冲突规则。
         """
         self.staff(u);reason=self.text(reason,500,'处置理由')
         p=self.row('SELECT * FROM products WHERE id=?',(pid,))
         self.require(p,'商品不存在',404)
-        self.require(p['seller_id']!=u,'不能处置自己发布的商品',403)
+        self.require(p['seller_id']!=u or (action=='delist' and self.profile(u)['role']=='admin'),'该操作不能用于自己发布的商品',403)
         if action=='delist':
             # 已预留/已售出的商品挂在别人的订单上，强行下架会让那张订单指向消失的商品。
             # 这类要走工单流程（退款时会置 removed）。
@@ -168,6 +171,12 @@ class CatalogService(ValidationMixin):
         else:raise DomainError('不支持的处置动作')
         now=time.time()
         with self.tx() as c:
+            actor=c.execute('SELECT role,status FROM users WHERE id=?',(u,)).fetchone()
+            self.require(actor and actor['status']=='active' and actor['role'] in ['admin','support'],'当前账号无商品管理权限',403)
+            self.require(p['seller_id']!=u or (action=='delist' and actor['role']=='admin'),'该操作不能用于自己发布的商品',403)
+            if action=='restore':self.require(actor['role']=='admin','只有平台管理员可以恢复上架',403)
+            current=c.execute('SELECT seller_id,status FROM products WHERE id=?',(pid,)).fetchone()
+            self.require(current and current['seller_id']==p['seller_id'] and current['status']==p['status'],'商品状态已变化，请刷新后重试',409)
             if action=='delist':
                 # 一并清掉未到期的置顶，否则恢复后会带着旧置顶时间直接跳到最前面。
                 c.execute("UPDATE products SET status='removed',delisted_by=?,promoted_until=0 WHERE id=?",(u,pid))

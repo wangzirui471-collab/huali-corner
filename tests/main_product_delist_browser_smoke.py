@@ -38,6 +38,10 @@ def run():
         home_ids = [listing('首页管理员核查教材'), listing('首页客服核查教材')]
         keep = listing('保留展示教材')
         own = listing('管理员自有教材', admin['id'])
+        seller_own = listing('用户自主下架教材')
+        seller_home = listing('用户首页下架教材')
+        support_own = listing('客服自主下架教材', support['user']['id'])
+        foreign_live = listing('他人的在售教材', admin['id'])
         base = 'http://127.0.0.1:' + str(server.server_port)
         errors = []
         requests = []
@@ -58,11 +62,12 @@ def run():
                 a, w, s, guest = [page_for(session) for session in [administrator, support, seller, None]]
                 expect(a.locator('.desktop-navigation')).to_contain_text('管理员工作台')
                 expect(a.locator('.brand-text')).to_contain_text('华立转角')
+                expect(guest.get_by_role('button', name='下架商品', exact=True)).to_have_count(0)
                 for page in [s, guest]:
-                    expect(page.get_by_role('button', name='下架商品', exact=True)).to_have_count(0)
                     page.goto(base + '/#product/' + str(keep), wait_until='networkidle')
                     expect(page.locator('.detail-info h1')).to_have_text('保留展示教材')
-                    expect(page.get_by_role('button', name='下架商品', exact=True)).to_have_count(0)
+                    expect(page.locator('[data-action="moderate-product"]')).to_have_count(0)
+                    expect(page.locator('[data-action="delist"]')).to_have_count(1 if page == s else 0)
                 for page, pid in zip([a, w], detail_ids):
                     page.goto(base + '/#product/' + str(pid), wait_until='networkidle')
                     expect(page.locator('.detail-info h1')).to_have_text(market.product(pid)['title'])
@@ -91,7 +96,34 @@ def run():
                     expect(card).to_have_count(0)
                 a.goto(base + '/#product/' + str(own), wait_until='networkidle')
                 expect(a.locator('.detail-info h1')).to_have_text('管理员自有教材')
-                expect(a.get_by_role('button', name='下架商品', exact=True)).to_have_count(0)
+                a.get_by_role('button', name='下架商品', exact=True).click()
+                s.goto(base + '/#product/' + str(own), wait_until='networkidle')
+                expect(s.locator('.detail-info h1')).to_have_text('管理员自有教材')
+                expect(s.get_by_role('button', name='下架商品', exact=True)).to_have_count(0)
+                a.locator('#moderate-form [name=reason]').fill('管理员下架自己的商品')
+                a.get_by_role('button', name='确认下架', exact=True).click()
+                expect(a.locator('.detail-info > .tag')).to_contain_text('已下架')
+                for page, pid in [(s,seller_own),(w,support_own)]:
+                    page.goto(base + '/#product/' + str(pid), wait_until='networkidle')
+                    expect(page.locator('.detail-info h1')).to_have_text(market.product(pid)['title'])
+                    button=page.get_by_role('button',name='下架商品',exact=True)
+                    expect(button).to_have_attribute('data-action','delist')
+                    page.once('dialog',lambda dialog:dialog.dismiss())
+                    button.click()
+                    assert market.product(pid)['status']=='available'
+                    page.once('dialog',lambda dialog:dialog.accept())
+                    button.click()
+                    expect(page.locator('.detail-info > .tag')).to_contain_text('已下架')
+                    assert market.row('SELECT delisted_by FROM products WHERE id=?',(pid,))['delisted_by']==0
+                s.goto(base+'/#home',wait_until='networkidle')
+                card=s.locator('.product-card').filter(has=s.get_by_role('button',name='用户首页下架教材',exact=True))
+                expect(card.locator('[data-action="delist"]')).to_be_visible()
+                foreign=s.locator('.product-card').filter(has=s.get_by_role('button',name='他人的在售教材',exact=True))
+                expect(foreign.get_by_role('button',name='下架商品',exact=True)).to_have_count(0)
+                expect(s.locator('[data-action="moderate-product"]')).to_have_count(0)
+                s.once('dialog',lambda dialog:dialog.accept())
+                card.locator('[data-action="delist"]').click()
+                expect(card).to_have_count(0)
                 a.goto(base + '/#product/' + str(keep), wait_until='networkidle')
                 expect(a.locator('.detail-info h1')).to_have_text('保留展示教材')
                 Path('/tmp/zj-main-delist').mkdir(exist_ok=True)
@@ -104,7 +136,7 @@ def run():
                 assert not errors, errors
                 assert market.profile(seller['user']['id'])['score'] == 100
                 browser.close()
-                print('Main UI passed: matching brand/workbenches, detail/home admin and support delist, ordinary/guest/self hidden, cancel, existing API and four viewport widths.')
+                print('Main UI passed: admin delists own/others, user delists own only in detail/home, support permissions, guest hidden, cancel, existing APIs and four viewport widths.')
         finally:
             server.shutdown()
             server.server_close()

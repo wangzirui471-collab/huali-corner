@@ -1,0 +1,17 @@
+/* Keep product controls independent of account-page and global style changes. */
+.btn.product-delist {
+  color: #b91c1c;
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+}
+.btn.product-delist:hover { background: #ffe4e6; }
+.card-moderation {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.card-moderation .product-delist {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 10px;
+}
