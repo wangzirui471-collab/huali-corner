@@ -35,12 +35,15 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":8081" ^| findstr "LISTENING
 if "%FOUND%"=="1" timeout /t 2 /nobreak >nul
 
 echo   启动中，请稍候...
-echo   浏览器打开： http://127.0.0.1:8081
+echo   本机打开： http://127.0.0.1:8081
+echo   别的电脑/手机：用下面打印的「局域网访问」地址（需同一 WiFi）
 echo   停止服务：在此窗口按 Ctrl+C
 echo   ----------------------------------------
 echo.
 
-"%PY%" server.py --trial --port 8081
+rem --lan：开放局域网访问（自动绑定 0.0.0.0 并推导 Origin）。
+rem 不加的话只监听本机，别人的电脑即使地址对也连不上。
+"%PY%" server.py --trial --port 8081 --lan
 
 echo.
 echo   服务已停止。

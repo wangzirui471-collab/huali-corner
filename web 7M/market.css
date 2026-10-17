@@ -1840,6 +1840,14 @@ button.kpi:hover .kpi-arrow { opacity: 1; transform: none; color: var(--t, var(-
 .dossier-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
 .dossier-grid > .panel { margin-bottom: 0; }
 
+/* 危险操作区：清除账号不可撤销，用暖红底和红色标题把它和普通面板分开，
+   位置也压在档案页最底部，避免顺手点到。 */
+.dossier-danger { margin-top: 18px; border-color: rgba(216, 86, 63, .28); background: #fffafa; }
+.dossier-danger h2 { color: var(--danger); font-size: 15px; margin: 0 0 8px; }
+.dossier-danger p { margin: 0 0 14px; line-height: 1.75; font-size: 12.5px; }
+.btn.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+.btn.danger:hover { background: #c24a34; border-color: #c24a34; }
+
 /* 档案头：头像按角色着色，信誉分带进度条，和用户列表的呈现保持一致 */
 .dossier-score { flex: none; width: 96px; text-align: right; }
 .dossier-score > span { display: block; font-size: 11px; color: var(--muted); }

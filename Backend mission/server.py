@@ -1,4 +1,4 @@
-import argparse,base64,ipaddress,json,mimetypes,os,secrets,time,threading,traceback
+import argparse,base64,ipaddress,json,mimetypes,os,secrets,socket,time,threading,traceback
 from pathlib import Path
 from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
 from urllib.parse import urlsplit,parse_qs,unquote
@@ -193,6 +193,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond({'ok':True})
             if p=='/api/admin/ban' and method=='POST':return self.respond(m.ban_user(u,int(data['target']),bool(data.get('banned',True)),data.get('reason','')))
             if p=='/api/admin/stars' and method=='POST':return self.respond(m.adjust_stars(u,int(data['target']),int(data['delta']),data.get('reason','')))
+            # 开发者清除账号：匿名化并释放手机号，本人可用原号重新注册。
+            if p=='/api/admin/purge' and method=='POST':return self.respond(m.purge_account(u,int(data['target']),data.get('reason','')))
             if p=='/api/reconcile':return self.respond(m.reconcile(u))
             if p=='/api/backup' and method=='POST':return self.respond({'ok':True,'file':Path(m.backup(u)).name})
             raise DomainError('接口不存在',404)
@@ -226,8 +228,10 @@ def make_server(root,port=8080,seed=False,trial=False,host='127.0.0.1',public_or
     if host not in ['127.0.0.1','localhost'] and not trial:raise ValueError('本地演示版只能绑定本机地址')
     if public_origin:
         public_origin=public_origin.rstrip('/');parsed=urlsplit(public_origin)
-        if parsed.scheme!='https' or not parsed.netloc or parsed.path or parsed.query or parsed.fragment or parsed.username or parsed.password:
-            raise ValueError('公网地址必须是完整HTTPS源地址，不含路径或账号密码')
+        # https 是正式部署的要求；--lan 局域网联调允许 http，但仅限 --trial。
+        bad_scheme = parsed.scheme!='https' and not (trial and parsed.scheme=='http')
+        if bad_scheme or not parsed.netloc or parsed.path or parsed.query or parsed.fragment or parsed.username or parsed.password:
+            raise ValueError('公网地址必须是完整HTTPS源地址，不含路径或账号密码（--trial 局域网调试可用 http）')
     if host not in ['127.0.0.1','localhost'] and not public_origin:raise ValueError('公网绑定前需配置HUALI_PUBLIC_ORIGIN并通过HTTPS代理访问')
     market=Market(root,trial=trial)
     if admin:market.bootstrap_admin(*admin)
@@ -236,8 +240,39 @@ def make_server(root,port=8080,seed=False,trial=False,host='127.0.0.1',public_or
     if seed:seed_data(server.market)
     return server
 
+def lan_ip():
+    """取本机局域网 IPv4，供 --lan 自动推导 public-origin 与打印访问地址。"""
+    try:
+        s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+        try:
+            s.connect(('8.8.8.8',80));return s.getsockname()[0]
+        finally:s.close()
+    except OSError:
+        try:return socket.gethostbyname(socket.gethostname())
+        except OSError:return '127.0.0.1'
+
+
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--port',type=int,default=int(os.environ.get('PORT','8080')));ap.add_argument('--data',default=os.environ.get('HUALI_DATA_DIR'));ap.add_argument('--no-seed',action='store_true');ap.add_argument('--trial',action='store_true');ap.add_argument('--host',default='127.0.0.1');ap.add_argument('--public-origin',default=os.environ.get('HUALI_PUBLIC_ORIGIN') or os.environ.get('RENDER_EXTERNAL_URL'));ap.add_argument('--trust-proxy',action='store_true');ap.add_argument('--web',default=os.environ.get('HUALI_WEB_DIR'));args=ap.parse_args()
+    ap=argparse.ArgumentParser()
+    ap.add_argument('--port',type=int,default=int(os.environ.get('PORT','8080')))
+    ap.add_argument('--data',default=os.environ.get('HUALI_DATA_DIR'))
+    ap.add_argument('--no-seed',action='store_true')
+    ap.add_argument('--trial',action='store_true')
+    ap.add_argument('--host',default='127.0.0.1')
+    ap.add_argument('--public-origin',default=os.environ.get('HUALI_PUBLIC_ORIGIN') or os.environ.get('RENDER_EXTERNAL_URL'))
+    ap.add_argument('--trust-proxy',action='store_true')
+    ap.add_argument('--web',default=os.environ.get('HUALI_WEB_DIR'))
+    # --lan：学院试用想让同学用自己的电脑/手机访问时用。
+    # 这行原本和上面挤在一起、超过 512 字节，Python 3.8 在 Windows 上按块
+    # 读源码时会把中文 help 文本切成半个字符，直接报 Non-UTF-8 起不来。
+    ap.add_argument('--lan',action='store_true',help='开放局域网访问（仅 --trial）：自动绑定 0.0.0.0 并推导 public-origin')
+    args=ap.parse_args()
+    # --lan：学院试用想让同学用自己的电脑/手机访问时用。
+    # 只放开监听与 Origin 校验，不改任何业务规则；演示模式仍只允许本机。
+    if args.lan:
+        if not args.trial:ap.error('--lan 只在 --trial 试用模式下可用（演示模式仅允许本机访问）')
+        args.host='0.0.0.0'
+        if not args.public_origin:args.public_origin='http://%s:%d'%(lan_ip(),args.port)
     root=args.data or data_dir(args.trial)
     phone=os.environ.get('HUALI_ADMIN_PHONE');password=os.environ.get('HUALI_ADMIN_PASSWORD')
     if bool(phone)!=bool(password):ap.error('管理员手机号与密码必须同时配置，或均不配置')
@@ -280,6 +315,9 @@ def main():
     threading.Thread(target=timer,daemon=True).start()
     mode='计算机学院试用版 · 手机号密码登录 · 模拟交易' if args.trial else '本地模拟版'
     print(f'华立转角 · {mode} · port {server.server_port} · Ctrl+C停止',flush=True)
+    if args.lan:
+        print(f'局域网访问：http://{lan_ip()}:{server.server_port}',flush=True)
+        print('同一 WiFi 的手机/其他电脑可直接打开；连不上先检查 Windows 防火墙是否放行该端口。',flush=True)
     try:server.serve_forever()
     except KeyboardInterrupt:pass
     finally:server.server_close()

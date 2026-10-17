@@ -9,7 +9,7 @@
 // 因为 actions/index.js 会把各模块的 clicks / submits 合并成一张全局表。
 // 管理员工作台的 chip 和搜索框直接复用那一套，所以这里没有重复实现。
 
-import { toast } from '../core/dom.js';
+import { toast, e } from '../core/dom.js';
 import { api } from '../core/http.js';
 import { render } from '../core/nav.js';
 import { modal, closeModal } from '../core/shell.js';
@@ -139,6 +139,19 @@ export const clicks = {
     link.remove();
     URL.revokeObjectURL(link.href);
     toast('已导出当前筛选条件下的审计记录');
+  },
+
+  // 清除账号（仅开发者）。不可逆，所以要求填理由 + 勾确认，
+  // 不用通用 confirmForm——那个只有一个按钮，写不了处置依据。
+  'purge-account': (b, id) => {
+    const nick = b.dataset.nick || ('#' + id);
+    modal(`<h2>清除账号</h2>
+      <p class="muted">将清除「${e(nick)}」的登录信息与密码，手机号释放给本人重新注册；历史订单、工单、评价与审计保留，昵称显示为「已注销用户」。<b>此操作不可撤销。</b></p>
+      <form id="purge-form" data-target="${Number(id)}">
+        <label class="field"><span>清除理由（写入审计）</span><textarea name="reason" required maxlength="500" placeholder="例如：测试账号清理 / 本人申请重置 / 严重违规"></textarea></label>
+        <label class="checkbox"><input type="checkbox" name="confirm" required>我确认清除该账号，且了解不可恢复</label>
+        <button class="btn danger full">确认清除</button>
+      </form>`);
   }
 };
 
@@ -217,5 +230,15 @@ export const submits = {
     const href = 'admin/audit' + (query.toString() ? '?' + query.toString() : '');
     // 用 hash 跳转而不是直接 render：筛选条件要能分享、能刷新后保留。
     location.hash = href;
+  },
+
+  'purge-form': async ({ form, d }) => {
+    if (!d.confirm){ toast('请先勾选确认'); return; }
+    await api('/admin/purge', { target: Number(form.dataset.target), reason: d.reason });
+    closeModal();
+    toast('账号已清除，该手机号可以重新注册了');
+    // 档案页的对象已经不存在了，回用户列表而不是重画当前页。
+    location.hash = 'staff/users';
+    await render();
   }
 };

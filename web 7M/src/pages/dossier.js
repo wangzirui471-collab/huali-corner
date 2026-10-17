@@ -15,12 +15,12 @@ import { money, date } from '../core/format.js';
 import { state, statusNames } from '../core/state.js';
 import { api } from '../core/http.js';
 import { shell, heading } from '../core/shell.js';
-import { isStaff } from '../core/roles.js';
+import { isStaff, isDeveloper } from '../core/roles.js';
 import { needLogin } from '../auth/login.js';
 
 const ROLE_NAMES = { user: '普通用户', support: '客服', admin: '平台管理员', developer: '开发者' };
 const ROLE_TONE = { user: 'mute', support: 'info', admin: 'violet', developer: 'warn' };
-const USER_STATUS = { active: '正常', banned: '已封禁', deactivated: '已注销' };
+const USER_STATUS = { active: '正常', banned: '已封禁', deactivated: '已注销', deleted: '已清除' };
 const USER_TONE = { active: 'ok', banned: 'danger', deactivated: 'mute' };
 const TICKET_TYPES = { refund: '售后', report: '举报', appeal: '申诉', reschedule: '改约', other: '咨询' };
 const TICKET_TONE = { refund: 'violet', report: 'danger', appeal: 'warn', reschedule: 'info', other: 'mute' };
@@ -112,6 +112,15 @@ export async function dossier(id) {
       </div>`).join('')}</div>`
     : '<p class="desk-empty">没有提交过工单</p>';
 
+  // 清除账号：仅开发者可见，且不能作用在管理员/开发者身上。
+  // 放在页面最底部，避免误触——它不可撤销。
+  const canPurge = isDeveloper(state.me) && user.id !== state.me.id && !['admin', 'developer'].includes(user.role);
+  const dangerZone = canPurge ? `<section class="panel dossier-danger">
+    <h2>危险操作</h2>
+    <p class="muted">清除后该账号的登录信息与密码将被移除，手机号${data.phone ? `（${e(data.phone)}）` : ''}释放给本人重新注册；历史订单、工单、评价与审计记录全部保留，昵称显示为「已注销用户」。此操作不可撤销。</p>
+    <button class="btn danger" data-action="purge-account" data-id="${user.id}" data-nick="${e(user.nickname || '')}">清除账号</button>
+  </section>` : '';
+
   shell(`${heading('DOSSIER', '用户档案 · ' + (user.nickname || ''),
     '仅客服与管理员可见；本次查阅已写入审计记录。')}
     <button class="back" data-go="staff/users">← 返回工作台</button>
@@ -121,5 +130,6 @@ export async function dossier(id) {
       <section class="panel">${sectionHead('bag', '参与订单')}${orderList}</section>
       <section class="panel">${sectionHead('tag', '商品')}${productList}</section>
       <section class="panel">${sectionHead('message', '提交的工单')}${ticketList}</section>
-    </div>`, 'staff');
+    </div>
+    ${dangerZone}`, 'staff');
 }

@@ -50,6 +50,7 @@ class AccountService(ValidationMixin):
         'banned': '该账号已被封禁，如有异议可在客服中心申诉',
         'deactivated': '该账号已注销',
         'disabled': '该账号已被平台停用，请联系管理员',
+        'deleted': '该账号已被清除，请用原手机号重新注册',
     }
 
     @classmethod
@@ -215,6 +216,46 @@ class AccountService(ValidationMixin):
             c.execute('DELETE FROM sessions WHERE user_id=?',(u,))
             c.execute("UPDATE products SET status='removed' WHERE seller_id=? AND status='available'",(u,))
         return {'ok':True}
+
+    def purge_account(self,u,target,reason):
+        """开发者清除账号：匿名化并释放手机号，让本人可以用原号重新注册。
+
+        与「注销」的区别（两个都保留，语义不同）：
+          - 注销（deactivate）：用户自助，手机号继续占用，属于「退出但留档」，
+            同一手机号不能重新注册，只能走恢复流程；
+          - 清除（purge）：开发者处置（测试账号、误注册、本人申请重置），
+            把登录标识腾出来，本人可用原号重新注册一个干净账号。
+
+        为什么不做物理删除：订单、工单、审计、消息全用 user_id 关联，
+        删行会留下一堆孤儿数据，交易对方的历史也会凭空少一半。这里只把
+        账号「匿名化」——手机号换成占位、昵称改成「已注销用户」，其余记录
+        原样保留，客服仍能按 id 追溯。
+
+        权限只给 developer：清除不可逆，admin 有封禁就够了，不需要这把刀。
+        """
+        self.require(self.role_of(u)=='developer','仅开发者可清除账号',403)
+        self.require(u!=target,'不能清除自己的账号')
+        self.text(reason,500,'清除理由')
+        with self.tx() as c:
+            user=c.execute('SELECT id,phone,nickname,role FROM users WHERE id=?',(target,)).fetchone()
+            self.require(user,'用户不存在',404)
+            self.require(user['role'] not in ('admin','developer'),'不能清除管理员或开发者账号',403)
+            now=time.time()
+            # 在途订单先按封禁口径处置：该退的退、该关的关。否则人一删，
+            # 对方那笔订单就永远卡在「待交付」，连申诉对象都没有。
+            self._settle_banned_orders(c,target,now)
+            c.execute("UPDATE products SET status='removed' WHERE seller_id=? AND status='available'",(target,))
+            c.execute('DELETE FROM sessions WHERE user_id=?',(target,))
+            # 密码凭据一并删除：手机号虽然改了，留着旧哈希没有意义，
+            # 也避免占位号被人拿去撞库。
+            c.execute('DELETE FROM password_credentials WHERE user_id=?',(target,))
+            # 占位号带 id 与时间戳，绝不会和真实手机号/邮箱冲突。
+            placeholder='deleted+%d@%d.local'%(target,int(now))
+            c.execute("UPDATE users SET phone=?,nickname=?,status='deleted',bio='' WHERE id=?",
+                      (placeholder,'已注销用户#%d'%target,target))
+            c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',
+                      (u,target,'account_purge',reason,now))
+        return {'ok':True,'freed_phone':self.mask_phone(user['phone'])}
 
     def profile(self,u):
         r=self.row('SELECT id,nickname,college,major,education,bio,role,score,status FROM users WHERE id=?',(u,))
