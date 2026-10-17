@@ -51,10 +51,12 @@ export async function profile(id){
 // --- 「我的」页 ------------------------------------------------------------
 
 // 宫格小方块。count>0 时出红点数字，0 时安静——满屏的 0 会把真正的待办淹没。
+// 红点只给「待办」：看完或处理完就该消失。收藏数、在售数这类存量不是消息，
+// 传 alert=false 只留安静的小入口，否则红点永远亮着，把真正的待办淹没。
 // go 为空时用 extra 提供行为（data-action="..."），这类方块不带跳转。
 // tone='danger' 用于注销/退出这类不可逆操作，文字转红以示区别。
-function tile(go, ic, label, count, extra = '', tone = '') {
-  const badge = count > 0 ? `<i class="me-badge">${count > 99 ? '99+' : count}</i>` : '';
+function tile(go, ic, label, count, extra = '', tone = '', alert = true) {
+  const badge = alert && count > 0 ? `<i class="me-badge">${count > 99 ? '99+' : count}</i>` : '';
   const attrs = go ? `data-go="${go}"` : extra;
   return `<button class="me-tile ${tone}" ${attrs}>
     <span class="me-tile-icon">${icon(ic)}</span><small>${e(label)}</small>${badge}</button>`;
@@ -101,17 +103,22 @@ export async function mine(){
   // 购买 / 出售宫格。每个格子通到订单页的一个**预筛视图**（orders.js 的
   // 查询参数），而不是一律甩到全部订单列表——「退款/售后 1」点进去就该
   // 只看到那一单。口径必须与 orders.js 的 ORDER_GROUPS 完全一致。
+  // 红点口径 = 「需要我动作的」：
+  //   待付款/待收货/待发货 跟订单状态走，处理完自动消失；
+  //   售后只数进行中的争议（disputed）——refunded 是已处理完的终态，
+  //   钱都退完了还亮红点，用户会以为还有事没办完。
+  //   我卖出的/我发布的 是存量不是待办，不配红点。
   const buy=[
     ['待付款',countBy('buyer',['awaiting_payment']),'wallet','orders/?role=buy&f=to_pay'],
     ['待收货',countBy('buyer',['paid','awaiting_handover','awaiting_receipt']),'truck','orders/?role=buy&f=receiving'],
-    ['退款/售后',countBy('buyer',['disputed','refunded']),'refresh','orders/?role=buy&f=aftersale']
+    ['退款/售后',countBy('buyer',['disputed']),'refresh','orders/?role=buy&f=aftersale']
   ];
   const sell=[
     ['待发货',countBy('seller',['paid','awaiting_handover']),'bag','orders/?role=sell&f=to_ship'],
-    ['我卖出的',myOrders.filter(o=>o.seller_id===me).length,'tag','orders/?role=sell'],
-    ['我发布的',myList.length,'plus','listings']
+    ['我卖出的',myOrders.filter(o=>o.seller_id===me).length,'tag','orders/?role=sell',false],
+    ['我发布的',myList.length,'plus','listings',false]
   ];
-  const tileOf=([label,n,ic,go])=>tile(go,ic,label,n);
+  const tileOf=([label,n,ic,go,alert])=>tile(go,ic,label,n,'','',alert!==false);
 
   // 刻意不放 heading：参考的二手 App「我的」页没有大标题，头像卡就是页首。
   shell(`
@@ -146,8 +153,8 @@ export async function mine(){
         <div class="me-half">${sell.map(tileOf).join('')}</div>
       </div>
       <div class="me-orders-more">
-        ${tile('favorites','heart','我的收藏',favoriteCount)}
-        ${tile('listings','tag','在售商品',listingCount)}
+        ${tile('favorites','heart','我的收藏',favoriteCount,'','',false)}
+        ${tile('listings','tag','在售商品',listingCount,'','',false)}
         ${tile('messages/notice','bell','消息通知',notices.unread)}
       </div>
     </section>

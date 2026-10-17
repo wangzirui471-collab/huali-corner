@@ -8,6 +8,7 @@ import { state, clearPoll } from '../core/state.js';
 import { api } from '../core/http.js';
 import { shell, empty } from '../core/shell.js';
 import { needLogin } from '../auth/login.js';
+import { refreshBadges } from '../core/badges.js';
 
 // 头像底色：按用户/房间 id 取模轮换 6 组配色，稳定且不刺眼。
 const AVATAR_TONES = 6;
@@ -230,6 +231,18 @@ const NOTE_META = {
   shell(`<div class="wx-app">${side}<section class="wx-chat">${chatPanel}</section></div>`, 'messages');
 
   renderRoomList(rooms, notices, activeId);
+
+  // 通知中心的未读是「浏览后消失」：点开就自动全部标记已读。
+  // 本次渲染仍按未读高亮显示（用户能看到刚才有哪些没读），后台立即清掉，
+  // 顶栏与「我的」页角标同步归零——不需要用户再找「全部标记已读」按钮。
+  if (noticeView && notices.unread > 0){
+    api('/notifications', {}).then(() => {
+      notices.unread = 0;
+      notices.items.forEach(n => { n.read_at = n.read_at || 1; });
+      renderRoomList(rooms, notices, activeId);
+      refreshBadges(true);
+    }).catch(() => {});
+  }
 
   // 搜索会话（客户端过滤，不整页重绘）。
   $('#wx-search-input')?.addEventListener('input', ev => {
