@@ -1569,6 +1569,12 @@ button { -webkit-tap-highlight-color: transparent; }
 .desk-tab:hover { background: var(--surface-2); color: var(--ink); }
 .desk-tab.active { background: var(--brand-soft); color: var(--brand-ink); font-weight: 700; }
 
+/* 人员页视图切换：运营账号 / 全部用户。和左侧分区导航的 tab 不是一套，
+   这里做成胶囊分段控件，靠视觉区分「换视图」和「换分区」。 */
+.desk-view-switch { display: inline-flex; gap: 4px; margin: 0 0 12px; padding: 3px; border-radius: var(--r-sm); background: var(--surface-2); }
+.desk-view-switch .desk-tab { padding: 6px 14px; border-radius: var(--r-xs); text-align: center; font-size: 12.5px; }
+.desk-view-switch .desk-tab.active { background: var(--surface); box-shadow: var(--sh-1); }
+
 .desk-main { min-width: 0; }
 
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 18px; }

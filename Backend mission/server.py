@@ -33,7 +33,13 @@ class Handler(BaseHTTPRequestHandler):
         try:
             origin=self.headers.get('Origin')
             if origin:
-                expected=self.server.public_origin or 'http://'+self.headers.get('Host','')
+                if self.server.public_origin:
+                    expected=self.server.public_origin
+                else:
+                    # 未显式配置时按请求自身推导。Cloudflare Tunnel / Nginx 这类反代会带
+                    # X-Forwarded-Proto: https；直连则按 http。这样公网穿透不必手填每次都会变的域名。
+                    proto=(self.headers.get('X-Forwarded-Proto') or 'http').split(',')[0].strip().lower()
+                    expected=f'{proto}://'+self.headers.get('Host','')
                 m.require(origin==expected,'不允许跨站请求',403)
             data={}
             if method=='POST':
@@ -168,6 +174,8 @@ class Handler(BaseHTTPRequestHandler):
                                  since=query.get('since'),until=query.get('until'))
                 return self.respond(body,kind='text/csv; charset=utf-8')
             if p=='/api/admin/staff' and method=='GET':return self.respond(m.staff_accounts(u))
+            # 全量注册账号（管理员/开发者）：用于把普通同学提成客服、查某人有没有注册。
+            if p=='/api/admin/accounts' and method=='GET':return self.respond(m.all_accounts(u,query.get('q','')))
             if p=='/api/admin/staff' and method=='POST':return self.respond(m.create_staff(u,data))
             if p=='/api/admin/staff/status' and method=='POST':return self.respond(m.set_staff_status(u,int(data['id']),data.get('status')))
             if p=='/api/admin/staff/password' and method=='POST':return self.respond(m.reset_staff_password(u,int(data['id'])))
@@ -241,15 +249,35 @@ def make_server(root,port=8080,seed=False,trial=False,host='127.0.0.1',public_or
     return server
 
 def lan_ip():
-    """取本机局域网 IPv4，供 --lan 自动推导 public-origin 与打印访问地址。"""
+    """取本机局域网 IPv4，供 --lan 自动推导 public-origin 与打印访问地址。
+
+    直接连 8.8.8.8 取出口 IP 在开 VPN 时会拿到 198.18.x（虚拟网卡），别人的电脑打不开。
+    这里枚举全部本机地址后按「192.168 > 10.x > 172.16-31」排序，
+    并排除回环、169.254 与 198.18/198.19 基准测试段（VPN 常用）。
+    """
+    candidates=set()
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(),None,socket.AF_INET):
+            candidates.add(info[4][0])
+    except OSError:pass
     try:
         s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
         try:
-            s.connect(('8.8.8.8',80));return s.getsockname()[0]
+            s.connect(('8.8.8.8',80));candidates.add(s.getsockname()[0])
         finally:s.close()
-    except OSError:
-        try:return socket.gethostbyname(socket.gethostname())
-        except OSError:return '127.0.0.1'
+    except OSError:pass
+    def rank(ip):
+        try:a=ipaddress.IPv4Address(ip)
+        except ValueError:return -1
+        if a.is_loopback or a.is_link_local or a.is_multicast:return -1
+        if ip.startswith(('198.18.','198.19.')):return -1
+        if not a.is_private:return -1
+        if ip.startswith('192.168.'):return 3
+        if ip.startswith('10.'):return 2
+        return 1
+    for ip in sorted(candidates,key=lambda x:(-rank(x),x)):
+        if rank(ip)>0:return ip
+    return '127.0.0.1'
 
 
 def main():

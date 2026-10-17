@@ -156,6 +156,12 @@ export const clicks = {
 };
 
 export const submits = {
+
+  // 全部用户视图的搜索：搜索词进 URL，刷新/分享都能还原。
+  'people-search-form': async ({ d }) => {
+    const q = String(d.q || '').trim();
+    location.hash = 'admin/people?scope=all' + (q ? '&q=' + encodeURIComponent(q) : '');
+  },
   'change-role-form': async ({ form, d }) => {
     await call('/admin/role', { target: Number(form.dataset.id), role: d.role }, '身份已调整，对方会话已失效');
   },

@@ -14,7 +14,7 @@ import time
 
 from ..core.errors import ValidationMixin
 
-ROLE_NAMES = {'support': '客服', 'admin': '平台管理员', 'developer': '开发者'}
+ROLE_NAMES = {'user': '普通用户', 'support': '客服', 'admin': '平台管理员', 'developer': '开发者'}
 STAFF_ROLES = ('support', 'admin', 'developer')
 
 
@@ -29,6 +29,33 @@ class StaffService(ValidationMixin):
                       (SELECT COUNT(*) FROM sessions s WHERE s.user_id=u.id AND s.expires>?) sessions
                FROM users u WHERE u.role IN ('support','admin','developer') ORDER BY u.role DESC, u.id""",
             (now,))
+        for r in rows:
+            r['role_name'] = ROLE_NAMES.get(r['role'], r['role'])
+            r['online'] = bool(r['sessions'])
+        return rows
+
+    def all_accounts(self, u, q=''):
+        """全量账号清单：所有注册用户，不只运营账号。
+
+        与 staff_accounts 的分工：
+          - staff_accounts 管「平台自己人」（客服/管理员/开发者），带停用、
+            重置密码这些运营动作；
+          - all_accounts 给的是**所有注册账号**，包括从没进过后台的普通用户，
+            用途是「把某位同学提成客服」「查这个人注册没有」。
+        默认按 id 倒序取最近 300 个；q 支持昵称/手机号模糊匹配。
+        校园场景下几百个账号，搜索比翻页快，所以不做分页。
+        """
+        self.admin(u)
+        now = time.time()
+        needle = str(q or '').strip()
+        kw = '%' + needle + '%'
+        rows = self.rows(
+            """SELECT u.id,u.phone,u.nickname,u.college,u.score,u.role,u.status,u.last_login,
+                      (SELECT COUNT(*) FROM sessions s WHERE s.user_id=u.id AND s.expires>?) sessions
+               FROM users u
+               WHERE (?='' OR u.nickname LIKE ? OR u.phone LIKE ?)
+               ORDER BY u.id DESC LIMIT 300""",
+            (now, needle, kw, kw))
         for r in rows:
             r['role_name'] = ROLE_NAMES.get(r['role'], r['role'])
             r['online'] = bool(r['sessions'])

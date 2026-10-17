@@ -186,47 +186,71 @@ function overviewSection({ content, staff, sellers, audit }) {
 
 // --- 人员与权限 -----------------------------------------------------------
 
+const OPS_ROLES = ['support', 'admin', 'developer'];
+const USER_STATUS_LABEL = { active: '正常', banned: '已封禁', disabled: '已停用', deactivated: '已注销', deleted: '已清除' };
+const USER_STATUS_TONE = { active: 'ok', banned: 'danger', disabled: 'mute', deactivated: 'mute', deleted: 'mute' };
+
 function personRow(a) {
+  const isOps = OPS_ROLES.includes(a.role);
   const disabled = a.status === 'disabled';
   const self = a.id === state.me.id;
   const tone = disabled ? 'mute' : a.online ? 'ok' : 'info';
-  // last_login 是本次迭代才加的列，老账号是 0。此时如果还有活跃会话，
-  // 显示「从未登录」会和旁边的「在线 3」自相矛盾，所以单独给一句。
-  const seen = a.last_login ? date(a.last_login) : (a.online ? '本次会话进行中' : '从未');
+  // 状态角标：在岗账号看「在线 / 停用」，普通用户看账号状态（封禁 / 注销 / 已清除）。
+  const pill = a.status !== 'active'
+    ? statePill(USER_STATUS_LABEL[a.status] || a.status, USER_STATUS_TONE[a.status] || 'mute')
+    : a.online ? statePill(`在线 ${a.sessions}`, 'ok') : statePill('离线', 'mute');
   const acts = self
     ? '<span class="tag">当前登录</span>'
-    : `<button class="btn secondary" data-action="change-role" data-id="${a.id}">改身份</button>
-       <button class="btn secondary" data-action="staff-status" data-id="${a.id}" data-value="${disabled ? 'active' : 'disabled'}">${disabled ? '启用' : '停用'}</button>
-       <button class="btn secondary" data-action="staff-reset" data-id="${a.id}">重置密码</button>
-       ${a.online ? `<button class="text-button danger" data-action="staff-revoke" data-id="${a.id}">强制下线</button>` : ''}`;
+    : `<button class="btn secondary" data-action="change-role" data-id="${a.id}">改身份</button>`+
+      // 停用 / 重置密码只对运营账号开放：普通用户的账号状态归封禁与注销管，
+      // 密码也有恢复码自助找回。两套混用会让「停用」和「封禁」分不清。
+      (isOps
+        ? `<button class="btn secondary" data-action="staff-status" data-id="${a.id}" data-value="${disabled ? 'active' : 'disabled'}">${disabled ? '启用' : '停用'}</button>`+
+          `<button class="btn secondary" data-action="staff-reset" data-id="${a.id}">重置密码</button>`
+        : '')+
+      (a.online ? `<button class="text-button danger" data-action="staff-revoke" data-id="${a.id}">强制下线</button>` : '');
   return row(
     [a.role, a.status],
     { group: 'people', text: `#${a.id} ${a.nickname} ${a.phone} ${a.role_name}` },
     `<span class="avatar role-avatar" data-tone="${ROLE_TONE[a.role] || 'mute'}">${e((a.nickname || '?')[0])}</span>
      <div class="desk-row-main">
        <b>${e(a.nickname)}</b>
-       <small><span class="mono">#${a.id}</span>${sepDot}${e(a.role_name)}${sepDot}${e(maskAccount(a.phone))}${sepDot}最近登录 ${a.last_login ? date(a.last_login) : '从未'}</small>
+       <small><span class="mono">#${a.id}</span>${sepDot}${e(a.role_name)}${sepDot}${e(maskAccount(a.phone))}${a.college ? sepDot + e(a.college) : ''}${sepDot}最近登录 ${a.last_login ? date(a.last_login) : '从未'}</small>
      </div>
-     ${disabled ? statePill('已停用', 'mute') : a.online ? statePill(`在线 ${a.sessions}`, 'ok') : statePill('离线', 'mute')}
+     ${pill}
      ${acts}`,
     { glyph: 'user', tone }
   );
 }
 
-function peopleSection({ staff }) {
+function peopleSection({ staff, scope = 'staff', q = '' }) {
+  const all = scope === 'all';
   const disabled = staff.filter(a => a.status === 'disabled').length;
+  const roleChips = all
+    ? [['user', '普通用户'], ['support', '客服'], ['admin', '管理员'], ['developer', '开发者'], ['banned', '已封禁'], ['deleted', '已清除']]
+    : [['developer', '开发者'], ['admin', '管理员'], ['support', '客服'], ['disabled', '已停用']];
   return `<section class="panel desk-panel">
-    ${panelHead('运营账号', '<button class="btn primary" data-action="staff-create">新建账号</button>')}
-    <p class="desk-lead">这里管的是<strong>平台自己人</strong>：客服、管理员、开发者。四级权限——
-    开发者任命管理员，管理员设置/废除客服并封号，客服日常值守。
-    改身份立即生效并踢掉对方全部会话，操作全程留痕。</p>
+    ${panelHead(all ? '全部注册账号' : '运营账号',
+      all
+        ? '<button class="btn secondary" data-go="admin/people">返回运营账号</button>'
+        : '<button class="btn primary" data-action="staff-create">新建账号</button>')}
+    <div class="desk-view-switch">
+      <button class="desk-tab ${all ? '' : 'active'}" data-go="admin/people">运营账号</button>
+      <button class="desk-tab ${all ? 'active' : ''}" data-go="admin/people?scope=all">全部用户</button>
+    </div>
+    <p class="desk-lead">${all
+      ? '所有在平台注册过的账号，包括从没进过后台的普通同学。点「改身份」可以把任何人提成客服、管理员或开发者——改权立即生效并踢掉对方全部会话，操作全程留痕。'
+      : '这里管的是<strong>平台自己人</strong>：客服、管理员、开发者。四级权限——开发者任命管理员，管理员设置/废除客服并封号，客服日常值守。改身份立即生效并踢掉对方全部会话，操作全程留痕。'}</p>
+    ${all ? `<form class="desk-search" id="people-search-form">${icon('search')}<input type="search" name="q" value="${e(q)}" placeholder="搜昵称或手机号" aria-label="搜索账号"><button class="btn secondary">搜索</button></form>` : ''}
     <div class="desk-summary">
       <span>共 <b>${staff.length}</b> 个账号</span>
       <span><b>${staff.filter(a => a.online).length}</b> 个在线</span>
       ${disabled ? `<span class="desk-summary-flag">已停用 <b>${disabled}</b></span>` : ''}
     </div>
-    ${chips('people', [['developer', '开发者'], ['admin', '管理员'], ['support', '客服'], ['disabled', '已停用']])}
-    ${staff.length ? `<div class="desk-list">${staff.map(personRow).join('')}</div>` : deskEmpty('还没有运营账号')}
+    ${chips('people', roleChips)}
+    ${staff.length
+      ? `<div class="desk-list">${staff.map(personRow).join('')}</div>`
+      : deskEmpty(all ? (q ? '没有匹配的账号，换个关键词试试' : '还没有注册账号') : '还没有运营账号')}
   </section>`;
 }
 
@@ -403,7 +427,13 @@ export async function adminDesk(raw = '') {
     ]);
     body = overviewSection({ content, staff, sellers, audit });
   } else if (key === 'people') {
-    body = peopleSection({ staff: await api('/admin/staff') });
+    // scope=all 是全量注册账号（含普通用户），默认仍看运营账号。
+    const scope = params.get('scope') === 'all' ? 'all' : 'staff';
+    const q = params.get('q') || '';
+    const staff = scope === 'all'
+      ? await api('/admin/accounts?q=' + encodeURIComponent(q))
+      : await api('/admin/staff');
+    body = peopleSection({ staff, scope, q });
   } else if (key === 'shops') {
     body = shopsSection({ sellers: await api('/admin/sellers') });
   } else if (key === 'words') {
