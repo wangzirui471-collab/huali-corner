@@ -9,7 +9,6 @@ import { go, render } from '../core/nav.js';
 import { modal, closeModal } from '../core/shell.js';
 import { field } from '../components/forms.js';
 import { needLogin } from '../auth/login.js';
-import { refreshBadges } from '../core/badges.js';
 import { chatClicks } from '../pages/messages.js';
 
 // 聊天室专属交互（撤回/移除/成员抽屉/表情面板）定义在 pages/messages.js，
@@ -60,31 +59,8 @@ export const clicks = {
     render();
   },
 
-  'read-notices': async () => {
-    await api('/notifications', {});
-    toast('已全部标记为已读');
-    await render();
-  },
-
-  // 单条通知：点击即已读。后端本来就支持按 id 标记（read_notifications），
-  // 缺的只是前端这一下。用 DOM 局部更新而不是 render()——通知列表可能很长，
-  // 整页重绘会把它弹回顶部，用户得重新往下翻。
-  'read-notice': async b => {
-    if (!b.classList.contains('unread')) return;
-    await api('/notifications', { id: Number(b.dataset.id) });
-    b.classList.remove('unread');
-    const left = document.querySelectorAll('.notice-item.unread').length;
-    const room = document.querySelector('[data-go="messages/notice"]');
-    if (room) {
-      const preview = room.querySelector('.wx-room-preview');
-      if (preview) preview.textContent = left ? left + ' 条未读' : '全部已读';
-      const badge = room.querySelector('.wx-badge');
-      if (badge) { if (left) badge.textContent = left > 99 ? '99+' : String(left); else badge.remove(); }
-    }
-    const markAll = document.querySelector('[data-action="read-notices"]');
-    if (markAll && !left) markAll.remove();
-    refreshBadges(true);   // 顶栏「我的」角标聚合了通知未读，同步减一
-  },
+  // 「全部标记已读」的处理器已删：打开通知页时页面会自动全部标读
+  // （messages.js 通知视图的自动标记块），这个动作再无触发点。
 
   'open-want': () => {
     if (!needLogin()) return;

@@ -190,15 +190,14 @@ const NOTE_META = {
 
 // 通知中心：沿用原来的数据，套微信聊天窗的壳。
   const noticePanel = noticeView ? `
-    <header class="wx-chat-head"><div class="wx-head-title"><h3>订单与售后通知</h3><small>下单、付款、交付、售后、社区的回复与@都会提醒你</small></div>
-    ${notices.items.some(n=>!n.read_at)?'<button class="text-button" data-action="read-notices">全部标记已读</button>':''}</header>
+    <header class="wx-chat-head"><div class="wx-head-title"><h3>订单与售后通知</h3><small>打开本页即视为已读；下单、付款、交付、售后、社区的回复与@都会提醒你</small></div></header>
     <div class="wx-stream notice-stream">${notices.items.map(n => {
       const [ic, tone] = NOTE_META[n.kind] || ['bell', 'mute'];
       const link = n.order_id ? `订单 #${n.order_id}` : n.ticket_id ? `工单 #${n.ticket_id}` : n.post_id ? `帖子 #${n.post_id}` : '';
-      // 未读的通知整条可点：点了标记已读（actions/social.js 的 read-notice）。
-      // 已读的不再挂 data-action——重复点击不该发重复请求。
-      const attrs = n.read_at ? '' : ` data-action="read-notice" data-id="${n.id}"`;
-      return `<div class="notice-item ${n.read_at?'':'unread'}"${attrs}><span class="notice-ic" data-tone="${tone}">${icon(ic)}</span><div><p>${e(n.body)}</p><small>${date(n.created)}${link?' · '+e(link):''}</small></div></div>`;
+      // 打开通知页即视为已读（下方会自动标记并清角标），所以这里一律渲染成
+      // 已读样式——不再保留黄色高亮。之前「保留高亮到下次打开」的设计
+      // 被用户反馈为困惑：点开看到了黄色，点它又没反应，像坏了。
+      return `<div class="notice-item"><span class="notice-ic" data-tone="${tone}">${icon(ic)}</span><div><p>${e(n.body)}</p><small>${date(n.created)}${link?' · '+e(link):''}</small></div></div>`;
     }).join('')
       || '<div class="wx-sys">暂无通知</div>'}</div>` : '';
 
@@ -232,9 +231,9 @@ const NOTE_META = {
 
   renderRoomList(rooms, notices, activeId);
 
-  // 通知中心的未读是「浏览后消失」：点开就自动全部标记已读。
-  // 本次渲染仍按未读高亮显示（用户能看到刚才有哪些没读），后台立即清掉，
-  // 顶栏与「我的」页角标同步归零——不需要用户再找「全部标记已读」按钮。
+  // 通知中心的未读是「打开即已读」：点开就自动全部标记已读并清掉顶栏与
+  // 「我的」页角标。列表本身直接渲染成已读样式——曾试过「保留高亮到下次
+  // 打开让用户知道刚才哪些没读」，被用户反馈为困惑：看到黄色去点又没反应。
   if (noticeView && notices.unread > 0){
     api('/notifications', {}).then(() => {
       notices.unread = 0;
