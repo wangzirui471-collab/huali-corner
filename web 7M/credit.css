@@ -1,23 +1,254 @@
-/* 信誉与申诉页专用样式（独立文件，避免与 market.css 的并行改动混在一起） */
+/* ==========================================================================
+   信誉与申诉 · 段位卡 / 成长路径 / 规则卡片
+   独立文件（不进 market.css），沿用全局设计令牌。
+   ========================================================================== */
 
-.credit-hero { text-align: center; }
-.credit-stars { font-size: 34px; letter-spacing: 4px; line-height: 1.2; color: var(--brand-lo); }
-.credit-stars-empty { color: var(--line-3); }
-.credit-progress { height: 8px; max-width: 320px; margin: 14px auto; border-radius: 999px; background: var(--line); overflow: hidden; }
-.credit-progress i { display: block; height: 100%; border-radius: 999px; background: var(--brand); transition: width .4s var(--ease); }
+/* --- 段位卡：深色强调块 ------------------------------------------------ */
+.credit-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 20px 20px 22px;
+  border-radius: var(--r-lg);
+  background: radial-gradient(120% 100% at 50% -10%, #3d3e45 0%, #2a2b31 48%, #1e1f24 100%);
+  color: #f4efe2;
+  box-shadow: 0 20px 44px -26px rgba(20, 21, 26, .75);
+}
+.credit-hero::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -120px;
+  width: 320px;
+  height: 240px;
+  transform: translateX(-50%);
+  background: radial-gradient(closest-side, rgba(255, 204, 56, .38), transparent 72%);
+  pointer-events: none;
+}
+.credit-hero.is-low::after { background: radial-gradient(closest-side, rgba(216, 86, 63, .44), transparent 72%); }
 
-.credit-tiers { display: grid; gap: 10px; margin: 12px 0; }
-.credit-tier { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md); }
-.credit-tier span { color: var(--brand-lo); letter-spacing: 1px; white-space: nowrap; }
-.credit-tier b { white-space: nowrap; }
-.credit-tier small { margin-left: auto; color: var(--muted); }
-.credit-tier.current { border-color: var(--brand-lo); background: var(--brand-soft); }
+.credit-hero-top { position: relative; display: flex; align-items: center; justify-content: space-between; }
+.credit-eyebrow { font-size: 10.5px; letter-spacing: .22em; color: #a9a69c; text-transform: uppercase; }
+.credit-score-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  padding: 5px 11px;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(255, 204, 56, .38);
+  background: rgba(255, 204, 56, .12);
+  color: var(--brand-hi);
+  font-size: 11px;
+  font-weight: 600;
+}
+.credit-score-pill b { font-size: 16px; line-height: 1; }
+.credit-score-pill i { font-style: normal; color: rgba(255, 216, 92, .6); }
 
-.credit-rules { display: grid; gap: 10px; margin: 12px 0; padding: 0; list-style: none; }
-.credit-rules li { display: flex; justify-content: space-between; gap: 16px; padding-bottom: 9px; border-bottom: 1px dashed var(--line); }
-.credit-rules span { color: var(--muted); text-align: right; }
+.credit-badge { position: relative; text-align: center; padding: 14px 0 6px; }
+.credit-badge-stars {
+  font-size: 34px;
+  letter-spacing: 6px;
+  line-height: 1.15;
+  color: var(--brand);
+  text-shadow: 0 0 22px rgba(255, 204, 56, .55);
+  animation: credit-glow 3.6s ease-in-out infinite;
+}
+.credit-badge-stars em { font-style: normal; color: rgba(255, 255, 255, .24); text-shadow: none; }
+.credit-badge-title { margin-top: 6px; font-size: 25px; font-weight: 800; letter-spacing: .06em; }
+.credit-badge-sub { margin-top: 4px; font-size: 11.5px; color: #a9a69c; }
+.credit-hero.is-low .credit-badge-stars { color: #ff9c86; text-shadow: 0 0 22px rgba(216, 86, 63, .5); }
 
+.credit-meter { position: relative; margin-top: 14px; }
+.credit-meter-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 11px; color: #b9b5aa; }
+.credit-meter-head b { color: var(--brand-hi); font-size: 12px; }
+.credit-meter-bar {
+  position: relative;
+  height: 10px;
+  margin-top: 8px;
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  background: rgba(255, 255, 255, .1);
+}
+.credit-meter-bar i {
+  position: relative;
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--brand-lo), var(--brand), #ffe89a);
+  box-shadow: 0 0 14px rgba(255, 204, 56, .5);
+  transition: width .5s var(--ease);
+}
+.credit-meter-bar i::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, .55) 50%, transparent 80%);
+  background-size: 220% 100%;
+  animation: credit-shimmer 2.6s linear infinite;
+}
+.credit-meter p { margin: 10px 0 0; font-size: 12px; line-height: 1.6; color: #cfc9bb; }
+.credit-meter p b { color: var(--brand-hi); }
+
+@keyframes credit-glow { 0%, 100% { opacity: 1; } 50% { opacity: .72; } }
+@keyframes credit-shimmer { from { background-position: 180% 0; } to { background-position: -80% 0; } }
+
+/* --- 通用卡片头 -------------------------------------------------------- */
+.credit-card { padding: 18px 18px 16px; }
+.credit-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.credit-head h2 { margin: 0; font-size: 16px; }
+.credit-head small { color: var(--muted); font-size: 11px; }
+.credit-chip { font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: var(--r-pill); }
+.credit-chip.up { color: #3f7a2e; background: #e9f6e1; }
+.credit-chip.down { color: #b2402b; background: #ffe9e3; }
+
+/* --- 成长路径 ---------------------------------------------------------- */
+.credit-ladder { list-style: none; margin: 0; padding: 0; position: relative; }
+.credit-ladder::before {
+  content: '';
+  position: absolute;
+  left: 21px;
+  top: 26px;
+  bottom: 26px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(var(--brand), var(--line-2));
+}
+.credit-step { position: relative; display: flex; align-items: center; gap: 13px; padding: 9px 0; }
+.credit-step-dot {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  transition: transform .25s var(--ease), box-shadow .25s var(--ease), border-color .25s var(--ease);
+}
+.credit-step-dot b { font-size: 15px; line-height: 1.05; color: var(--ink-3); }
+.credit-step-dot i { font-style: normal; font-size: 8px; color: var(--faint); }
+.credit-step-body { flex: 1; min-width: 0; }
+.credit-step-body b { display: block; font-size: 14px; }
+.credit-step-body small { color: var(--muted); font-size: 11px; }
+
+.credit-step.is-current .credit-step-dot {
+  background: var(--brand-soft);
+  border-color: var(--brand-lo);
+  box-shadow: 0 0 0 5px rgba(255, 204, 56, .14), var(--sh-brand);
+  transform: scale(1.04);
+}
+.credit-step.is-current .credit-step-dot b { color: var(--brand-ink); }
+.credit-step.is-current .credit-step-dot i { color: var(--brand-lo); }
+.credit-step.is-past .credit-step-dot { background: var(--brand-soft); border-color: var(--brand); }
+.credit-step.is-past .credit-step-dot b { color: var(--brand-ink); }
+.credit-step.is-past .credit-step-dot i { color: var(--brand-lo); }
+
+.credit-step-tag {
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--brand-ink);
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-hi);
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+}
+.credit-step-check { color: var(--ok); display: inline-flex; }
+.credit-step-check .icon { width: 15px; height: 15px; }
+
+/* --- 加减分规则 -------------------------------------------------------- */
+.credit-feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+.credit-feed li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 13px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.credit-feed li.up { background: linear-gradient(100deg, #f3faef, #fff 62%); border-color: #dcecd4; }
+.credit-feed li.down { background: linear-gradient(100deg, #fff4f0, #fff 62%); border-color: #ffddd5; }
+.credit-delta {
+  flex: 0 0 auto;
+  min-width: 46px;
+  height: 42px;
+  padding: 0 8px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+}
+.up .credit-delta { background: #e6f4dd; color: #3f7a2e; }
+.down .credit-delta { background: #ffe6df; color: #c2402a; }
+.credit-feed li > div { flex: 1; min-width: 0; }
+.credit-feed li > div b { display: block; font-size: 13.5px; }
+.credit-feed li > div small { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.credit-feed-ic { color: var(--line-3); display: inline-flex; }
+.credit-feed-ic .icon { width: 18px; height: 18px; }
+
+/* --- 金额阶梯 ---------------------------------------------------------- */
+.credit-price {
+  margin-top: 14px;
+  padding: 12px 13px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  border: 1px dashed var(--line-2);
+}
+.credit-price > b { display: block; font-size: 11.5px; color: var(--ink-3); margin-bottom: 8px; }
+.credit-steps { display: flex; flex-wrap: wrap; gap: 7px; }
+.credit-steps span {
+  font-size: 11px;
+  padding: 5px 10px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  color: var(--ink-3);
+}
+.credit-steps i { font-style: normal; font-weight: 700; color: #c2402a; }
+.credit-note { margin: 12px 0 0; font-size: 11.5px; line-height: 1.6; color: var(--muted); }
+
+/* --- 红线 -------------------------------------------------------------- */
+.credit-redlines { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+.credit-redlines div {
+  text-align: center;
+  padding: 14px 6px 12px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fff6f3, #fff);
+  border: 1px solid #ffded7;
+}
+.credit-redlines b { display: block; font-size: 24px; line-height: 1; color: #c2402a; letter-spacing: -.02em; }
+.credit-redlines span { display: block; margin-top: 6px; font-size: 10.5px; line-height: 1.45; color: var(--muted); }
+
+/* --- 信誉记录时间线 ---------------------------------------------------- */
+.credit-timeline { list-style: none; margin: 0 0 14px; padding: 0; position: relative; }
+.credit-timeline::before { content: ''; position: absolute; left: 5px; top: 8px; bottom: 8px; width: 1px; background: var(--line-2); }
+.credit-timeline li { position: relative; display: flex; gap: 12px; padding: 8px 0 8px 18px; }
+.credit-tl-dot { position: absolute; left: 2px; top: 15px; width: 7px; height: 7px; border-radius: 50%; background: var(--line-3); }
+.credit-timeline li.up .credit-tl-dot { background: var(--ok); }
+.credit-timeline li.down .credit-tl-dot { background: var(--danger); }
+.credit-timeline li b { font-size: 13px; }
+.credit-timeline li.up b { color: #3f7a2e; }
+.credit-timeline li.down b { color: #c2402a; }
+.credit-timeline li p { margin: 2px 0; font-size: 12.5px; color: var(--ink-2); line-height: 1.55; }
+.credit-timeline li small { color: var(--muted); font-size: 10.5px; }
+.credit-empty { margin: 0 0 14px; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+
+/* --- 移动端 ------------------------------------------------------------ */
 @media (max-width: 640px) {
-  .credit-stars { font-size: 28px; letter-spacing: 2px; }
-  .credit-tier small { margin-left: 0; width: 100%; }
+  .credit-hero { padding: 16px 16px 18px; border-radius: var(--r-md); }
+  .credit-badge-stars { font-size: 28px; letter-spacing: 4px; }
+  .credit-badge-title { font-size: 21px; }
+  .credit-redlines { gap: 7px; }
+  .credit-redlines b { font-size: 20px; }
+  .credit-steps span { flex: 1 1 calc(50% - 7px); text-align: center; }
+  .credit-feed li { padding: 11px; gap: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .credit-badge-stars, .credit-meter-bar i::after { animation: none; }
 }
