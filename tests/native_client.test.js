@@ -11,7 +11,7 @@ console.log('Native client privacy checks passed');
 
 (async()=>{page.data.currentRoom=7;page.data.messages=[];let seen=[];app.request=async p=>{seen.push(p);return p.includes('after=100')?[{id:101,body:'new'}]:Array.from({length:100},(_,i)=>({id:i+1,body:'old'}));};await page.loadMessages();await page.loadMessages();assert.equal(page.data.messages.length,101);assert.ok(seen[1].includes('after=100'));console.log('Native chat cursor checks passed');})().catch(e=>{console.error(e);process.exitCode=1;});
 let appDefinition,pending;
-vm.runInNewContext(fs.readFileSync('web 7M/miniprogram/app.js','utf8'),{App:d=>appDefinition=d,wx:{getStorageSync:()=>'',request:o=>{pending=o;}},Promise,Error});
+vm.runInNewContext(fs.readFileSync('web 7M/miniprogram/app.js','utf8'),{App:d=>appDefinition=d,require:id=>{assert.equal(id,'./config');return require('../web 7M/miniprogram/config');},wx:{getStorageSync:()=>'',request:o=>{pending=o;}},Promise,Error});
 appDefinition.globalData.sessionVersion=0;
 const outstanding=appDefinition.request('/tickets');
 appDefinition.globalData.sessionVersion=1;

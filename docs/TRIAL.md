@@ -48,14 +48,14 @@ python manage_trial.py create-admin
 
 试用版必须运行Python后端并持久保存数据，不能上传到Netlify Drop的静态目录。此前的静态演示包只适合看效果。
 
-仓库根目录的 `render.yaml` 提供了一个可选的Render部署配置。它使用 **Starter服务及1GB持久盘，属于付费资源**；本次没有代购、创建线上实例或承诺当前价格。开通前由账号所有者核对账单，不能把免费临时磁盘当作长期数据保存。
+`Backend mission/render.yaml` 提供了一个可选的Render部署配置。它使用 **Starter服务及1GB持久盘，属于付费资源**；本次没有代购、创建线上实例或承诺当前价格。开通前由账号所有者核对账单，不能把免费临时磁盘当作长期数据保存。不同电脑共享数据的结构与验证见[共享数据与部署说明](共享数据与部署说明-2026-10-17.md)。
 
 操作步骤：
 
 1. 注册/登录Render，在其界面连接自己的GitHub私有仓库 `wangzirui471-collab/huali-corner`。只向平台授权所需仓库。
-2. 选择从仓库Blueprint创建，读取 `render.yaml`，核对服务与磁盘费用后再确认。
+2. 选择当前统一分支 `master`，从仓库Blueprint创建时显式指定路径 `Backend mission/render.yaml`；平台不支持自定义路径时按共享部署说明手动填写服务参数。核对服务与磁盘费用后再确认。
 3. 在平台安全输入界面设置自己的 `HUALI_ADMIN_PHONE`、`HUALI_ADMIN_PASSWORD`。使用独立管理号码和独立密码。
-4. 配置指定Python3.12.12，安装 `requirements.txt`，启动 `python server.py --trial --host 0.0.0.0 --trust-proxy`；数据库与图片位于持久盘 `/var/data/huali`。
+4. 配置Python3.12.12，工作目录保持仓库根，安装 `pip install -r "Backend mission/requirements.txt"`，启动 `python "Backend mission/server.py" --trial --host 0.0.0.0 --trust-proxy`；数据库与图片位于持久盘 `/var/data/huali`。
 5. 程序读取平台注入的 `RENDER_EXTERNAL_URL` 作为HTTPS访问源。如果平台没有提供，需自己设置 `HUALI_PUBLIC_ORIGIN` 为实际HTTPS网址，例如 `https://实际域名`，不带路径。
 6. 部署后先确认 `/api/health` 返回 `{"ok":true,"trial":true}`，再用两位普通用户测试注册、发布和订单。重启服务，确认账号与图片仍在，之后再分享实际网址。
 

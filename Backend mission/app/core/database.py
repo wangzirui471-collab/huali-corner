@@ -193,16 +193,12 @@ class _Conn:
                 self._raw.cursor().execute(stmt)
 
     def commit(self):
-        try:
-            self._raw.commit()
-        except Exception:
-            pass
+        # A failed commit must reach tx()/the caller. Reporting success here
+        # can make an order look saved even though the database rejected it.
+        self._raw.commit()
 
     def rollback(self):
-        try:
-            self._raw.rollback()
-        except Exception:
-            pass
+        self._raw.rollback()
 
     def close(self):
         if self._pool is not None:
@@ -227,7 +223,8 @@ class _Conn:
         """
         if self._dialect != 'sqlite':
             raise RuntimeError('当前为 MySQL 后端，sqlite3 backup 不可用；请改用 mysqldump 备份')
-        self._raw.backup(target)
+        destination = target._raw if isinstance(target, _Conn) else target
+        return self._raw.backup(destination)
 
     def __enter__(self):
         return self
@@ -238,12 +235,15 @@ class _Conn:
         # 「广州校区总聊」）会在连接关闭时被静默回滚，随后 join_room 找不到房间。
         try:
             if exc_type is None:
-                self._raw.commit()
+                try:
+                    self.commit()
+                except Exception:
+                    self.rollback()
+                    raise
             else:
-                self._raw.rollback()
-        except Exception:
-            pass
-        self.close()
+                self.rollback()
+        finally:
+            self.close()
 
 
 # MySQL 连接池：避免每次查询都做 TCP 握手。按 DSN 维度隔离。
