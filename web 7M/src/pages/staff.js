@@ -145,7 +145,9 @@ function productRow(p) {
        <button class="btn secondary danger" data-action="review-product" data-id="${p.id}" data-decision="reject">驳回并下架</button>`;
   } else if (removed) {
     // 恢复上架是改判，只有管理员能做；客服看到的是「找谁恢复」，不是一个点了会失败的按钮。
-    acts = `<span class="tag ${p.delisted_by ? 'danger' : ''}">${p.delisted_by ? '平台处置' : '卖家下架'}</span>` +
+    // delisted_by=0 只能说明「不是平台处置的」，可能是卖家自己下架，也可能是退款流程
+    // 按 §10.6 置的 removed——所以标「非平台下架」，不要武断写成「卖家下架」。
+    acts = `<span class="tag ${p.delisted_by ? 'danger' : ''}">${p.delisted_by ? '平台处置' : '非平台下架'}</span>` +
       (p.delisted_by && isAdmin()
         ? ` <button class="btn secondary" data-action="restore-product" data-id="${p.id}">恢复上架</button>`
         : '');
