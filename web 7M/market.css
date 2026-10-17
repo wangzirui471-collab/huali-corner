@@ -2028,6 +2028,10 @@ button.me-notice { width: 100%; text-align: left; cursor: pointer; border: 0; fo
 }
 .wx-reedit:hover { color: var(--brand-lo); }
 
+/* 客服会话头部的工单号：点一下回到工单，处理人不用在工单列表里翻。 */
+.wx-ticket-link { color: var(--brand-ink); font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.wx-ticket-link:hover { color: var(--brand-lo); }
+
 /* --- 成员抽屉 ------------------------------------------------------------ */
 .wx-members { width: 230px; flex: none; background: var(--surface); border-left: 1px solid var(--line); overflow-y: auto; padding: 14px 12px; }
 .wx-members[hidden] { display: none; }

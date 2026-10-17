@@ -23,11 +23,17 @@ export const clicks = {
   },
   report: (b, id) => ticketModal('report', null, id),
 
-  // 在线客服：建好与「转角客服」的私聊后直接跳进聊天窗，用户在熟悉的消息
-  // 界面里实时沟通；工单仍用于需要留痕的售后/举报/申诉。
-  'chat-support': async () => {
-    const r = await api('/support/room', {});
-    go('messages/' + r.id);
+  // 在线客服：先有工单才放行（后端同样会拦）。从工单页进来时带 ticket_id，
+  // 会话就绑定到那张单，客服打开就知道在聊哪件事。
+  'chat-support': async (b, id) => {
+    try{
+      const r = await api('/support/room', id ? {ticket_id:id} : {});
+      go('messages/' + r.id);
+    }catch(err){
+      toast(err.message);
+      // 被门槛拦下时直接把「提交问题」表单递到面前，别让用户自己找入口。
+      if (/先提交问题/.test(err.message)) ticketModal('other');
+    }
   },
 
   // 商品被平台处置或卷入退款/争议后，「我发布的」里给卖家的复核入口。

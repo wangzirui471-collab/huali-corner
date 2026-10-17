@@ -123,10 +123,11 @@ function renderRoomList(rooms, notices, activeId){
     `<span class="wx-room-main"><span class="wx-room-top"><b>订单与售后通知</b></span>`+
     `<span class="wx-room-preview">${notices.unread?notices.unread+' 条未读':'全部已读'}</span></span>`+
     (notices.unread?`<i class="wx-badge">${notices.unread}</i>`:'')+`</button>`+
-    (state.me?.role==='user'
+    // 「在线客服」只是入口：已经有客服会话的人直接看会话，不再重复摆一个按钮。
+    (state.me?.role==='user' && !rooms.joined.some(r=>r.support)
       ? `<button class="wx-room" data-action="chat-support" data-name="在线客服"><span class="wx-avatar support" data-tone="support">${icon('message')}</span>`+
         `<span class="wx-room-main"><span class="wx-room-top"><b>在线客服</b></span>`+
-        `<span class="wx-room-preview">实时咨询；售后 / 举报请走工单留痕</span></span></button>`
+        `<span class="wx-room-preview">先提交问题，受理后可实时沟通</span></span></button>`
       : '')+
     (joined.map(r => roomItem(r, activeId)).join('') ||
       `<p class="muted wx-empty-tip">还没有会话<br>去社区加入群聊，或在商品页联系卖家</p>`);
@@ -252,7 +253,7 @@ const NOTE_META = {
   const chatPanel = room ? `
     <header class="wx-chat-head">
       <button class="wx-back" data-go="messages">${icon('arrow')}</button>
-      <div class="wx-head-title"><h3>${e(room.name)}</h3><small>${room.kind==='private'?'私聊':room.count+' 位成员'}</small></div>
+      <div class="wx-head-title"><h3>${e(room.name)}</h3><small>${room.support?`客服会话${room.ticket_id?` · <span class="wx-ticket-link" data-go="ticket/${room.ticket_id}">工单 #${room.ticket_id}</span>`:''}`:(room.kind==='private'?'私聊':room.count+' 位成员')}</small></div>
       <div class="wx-head-actions">
         ${room.kind!=='private'?`<button class="text-button" data-action="toggle-members" data-id="${room.id}">成员</button>
         <button class="text-button" data-action="nominate" data-id="${room.id}">申请管理员</button>`

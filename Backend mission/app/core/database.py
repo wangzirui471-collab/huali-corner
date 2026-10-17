@@ -110,6 +110,9 @@ class Store:
             # 哪些是客服会话、这单归谁，多客服值守就会撞车。老库自动补列。
             if 'support' not in [x[1] for x in c.execute('PRAGMA table_info(rooms)')]:c.execute('ALTER TABLE rooms ADD COLUMN support INTEGER DEFAULT 0')
             if 'assignee' not in [x[1] for x in c.execute('PRAGMA table_info(rooms)')]:c.execute('ALTER TABLE rooms ADD COLUMN assignee INTEGER DEFAULT 0')
+            # 客服会话关联的工单：在线客服不是「谁点谁进」，要先有工单。
+            # 记下最近一次进入时对应的工单，客服打开会话就知道在聊哪件事。
+            if 'ticket_id' not in [x[1] for x in c.execute('PRAGMA table_info(rooms)')]:c.execute('ALTER TABLE rooms ADD COLUMN ticket_id INTEGER DEFAULT 0')
             c.execute("INSERT OR IGNORE INTO rooms(id,kind,name) VALUES(1,'general','广州校区总聊')")
     def connect(self):
         c=sqlite3.connect(self.path,timeout=20)

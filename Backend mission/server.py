@@ -145,7 +145,7 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/rooms':return self.respond(m.rooms(u))
             if p=='/api/rooms/join' and method=='POST':return self.respond(m.join_room(u,data['kind']))
             if p=='/api/rooms/private' and method=='POST':return self.respond(m.private_room(u,int(data['peer'])))
-            if p=='/api/support/room' and method=='POST':return self.respond(m.support_room(u))
+            if p=='/api/support/room' and method=='POST':return self.respond(m.support_room(u,data.get('ticket_id')))
             if p=='/api/support/claim' and method=='POST':return self.respond(m.claim_support_room(u,int(data['room_id']),data.get('action','claim')))
             if p=='/api/messages':return self.respond(m.send_message(u,int(data['room_id']),data['body'],data['key']) if method=='POST' else m.messages(u,int(query['room_id']),int(query.get('after',0))))
             if p=='/api/messages/recall' and method=='POST':return self.respond(m.recall_message(u,int(data['message_id'])))

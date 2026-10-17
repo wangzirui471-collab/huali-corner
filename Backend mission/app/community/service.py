@@ -103,7 +103,7 @@ class CommunityService(ValidationMixin):
             c.execute('UPDATE members SET last_read_id=COALESCE((SELECT MAX(id) FROM messages WHERE room_id=?),0) WHERE room_id=? AND last_read_id=0',(rid,rid))
         return self.row('SELECT * FROM rooms WHERE id=?',(rid,))
 
-    def support_room(self,u):
+    def support_room(self,u,ticket_id=None):
         """普通用户与平台客服的直达私聊。
 
         客服身份取「转角客服」昵称的平台账号（bootstrap_admin 与演示 seed
@@ -112,13 +112,27 @@ class CommunityService(ValidationMixin):
 
         房间额外打 support=1 标记：客服工作台据此区分「客服会话」和普通私聊，
         认领机制（assignee）也只看这类房间，避免污染用户之间的私聊。
+
+        **门槛（2026-10 修订）**：必须先提交过工单。原来是谁点「在线客服」
+        谁就能进，结果它变成绕过工单的免费咨询窗口——小事闲聊把客服池占满，
+        真正要售后的用户反而排不上。现在只放行「自己名下有未结案工单」的
+        用户，并把会话关联到那张工单（rooms.ticket_id），客服点开就知道
+        在聊哪件事，不用再问一遍。
         """
+        tid=None
+        if ticket_id:
+            t=self.row('SELECT id FROM tickets WHERE id=? AND user_id=?',(int(ticket_id),u))
+            self.require(t,'工单不存在或不属于你',404)
+            tid=t['id']
+        pending=self.row("SELECT id FROM tickets WHERE user_id=? AND status NOT IN ('resolved','rejected') ORDER BY id DESC LIMIT 1",(u,))
+        self.require(pending,'请先提交问题，提交后即可联系在线客服')
+        if not tid:tid=pending['id']
         staff=self.row("SELECT id FROM users WHERE nickname='转角客服' AND role IN ('admin','support','developer') LIMIT 1")
         if not staff:
             staff=self.row("SELECT id FROM users WHERE role IN ('support','admin','developer') ORDER BY (role='support') DESC, id LIMIT 1")
         self.require(staff and staff['id']!=u,'当前没有可用的在线客服，请改用「提交工单」留言')
         room=self.private_room(u,staff['id'])
-        with self.tx() as c:c.execute('UPDATE rooms SET support=1 WHERE id=?',(room['id'],))
+        with self.tx() as c:c.execute('UPDATE rooms SET support=1,ticket_id=? WHERE id=?',(tid,room['id']))
         return self.row('SELECT * FROM rooms WHERE id=?',(room['id'],))
 
     def claim_support_room(self,u,rid,action='claim'):
