@@ -1807,3 +1807,61 @@ button.kpi:hover .kpi-arrow { opacity: 1; transform: none; color: var(--t, var(-
   .desk-form-row { grid-template-columns: 1fr 1fr; }
   .desk-form-row > .btn { grid-column: 1 / -1; }
 }
+
+/* 28. 「我的」页（参考主流二手 App 的信息架构）
+   头像卡 → 通知条 → 五格数据 → 购买/出售宫格 → 发布横幅 → 服务宫格。
+   只用 :root 令牌不写死色值；窄屏优先，桌面限宽居中。
+   没有的功能（钱包/红包/足迹）不放占位格。 */
+.me-page { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.me-card { background: var(--surface); border-radius: var(--r-md); box-shadow: var(--sh-1); }
+
+.me-hero { display: flex; align-items: center; gap: 14px; padding: 18px 16px; }
+.me-hero .avatar.jumbo { width: 56px; height: 56px; font-size: 22px; flex: none; }
+.me-hero-main { flex: 1; min-width: 0; }
+.me-hero-main h2 { margin: 0 0 4px; font-size: 18px; }
+.me-hero-main p { margin: 0 0 6px; font-size: 12px; color: var(--ink-3); }
+.me-hero-side { display: flex; gap: 8px; flex: none; }
+.me-round { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--ink-2); display: grid; place-items: center; cursor: pointer; }
+.me-round:hover { background: var(--brand-soft); color: var(--brand-ink); border-color: var(--brand); }
+.me-round .icon { width: 18px; height: 18px; }
+
+.me-notice { display: flex; align-items: center; gap: 8px; padding: 10px 14px; font-size: 12px; color: var(--ink-3); background: var(--surface); border-radius: var(--r-md); box-shadow: var(--sh-1); }
+.me-notice .icon { width: 14px; height: 14px; flex: none; }
+.me-notice b { color: var(--brand-ink); }
+button.me-notice { width: 100%; text-align: left; cursor: pointer; border: 0; font: inherit; }
+.me-notice.alert { color: var(--brand-ink); background: var(--brand-soft); }
+
+.me-stats { display: grid; grid-template-columns: repeat(5, 1fr); padding: 14px 4px; }
+.me-stats > * { display: flex; flex-direction: column; align-items: center; gap: 4px; background: none; border: 0; font: inherit; color: inherit; cursor: pointer; }
+.me-stats > div { cursor: default; }
+.me-stats small { font-size: 11.5px; color: var(--ink-3); }
+.me-stats b { font-size: 17px; }
+.me-stats button:hover b { color: var(--brand-ink); }
+
+.me-orders { padding: 4px 0 10px; }
+.me-orders-head { display: flex; align-items: center; gap: 14px; padding: 12px 16px 2px; font-size: 14px; }
+.me-orders-body { display: flex; align-items: stretch; }
+.me-half { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 4px 6px 4px; }
+.me-vline { width: 1px; background: var(--line); margin: 12px 0; flex: none; }
+.me-tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 12px 2px; background: none; border: 0; font: inherit; color: var(--ink-2); border-radius: var(--r-xs); cursor: pointer; }
+.me-tile:hover { background: var(--surface-2); }
+.me-tile-icon { width: 40px; height: 40px; border-radius: 14px; background: var(--brand-soft); color: var(--brand-ink); display: grid; place-items: center; }
+.me-tile-icon .icon { width: 20px; height: 20px; }
+.me-tile small { font-size: 11.5px; }
+.me-tile.danger small { color: var(--danger); }
+.me-badge { position: absolute; top: 6px; right: 16%; min-width: 16px; height: 16px; padding: 0 4px; border-radius: var(--r-pill); background: var(--danger); color: #fff; font-size: 10px; font-style: normal; display: grid; place-items: center; }
+
+.me-banner { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--r-md); background: linear-gradient(100deg, var(--brand-soft), #fff3c4); box-shadow: var(--sh-1); }
+.me-banner-icon { width: 38px; height: 38px; border-radius: 12px; background: var(--brand); color: #5b430a; display: grid; place-items: center; flex: none; }
+.me-banner-icon .icon { width: 19px; height: 19px; }
+.me-banner > div { flex: 1; min-width: 0; }
+.me-banner b { display: block; font-size: 14px; }
+.me-banner small { color: var(--brand-ink); font-size: 11.5px; }
+.me-banner .btn { flex: none; }
+
+.me-tools { display: grid; grid-template-columns: repeat(4, 1fr); padding: 8px 4px 10px; }
+
+@media (max-width: 560px) {
+  .me-hero { padding: 16px 14px; }
+  .me-badge { right: 12%; }
+}
