@@ -218,10 +218,30 @@ class _Conn:
             except Exception:
                 pass
 
+    def backup(self, target):
+        """SQLite 在线备份 API 的代理（ops 备份与降权前快照依赖它）。
+
+        语义与 sqlite3.Connection.backup 一致：把本连接已提交的内容拷到 target。
+        MySQL 模式没有等价物，直接报错而不是静默产出空文件。
+        """
+        if self._dialect != 'sqlite':
+            raise RuntimeError('当前为 MySQL 后端，sqlite3 backup 不可用；请改用 mysqldump 备份')
+        self._raw.backup(target)
+
     def __enter__(self):
         return self
 
-    def __exit__(self, *a):
+    def __exit__(self, exc_type, exc, tb):
+        # 必须与 sqlite3.Connection 的上下文语义一致：成功则提交、异常则回滚，然后关闭。
+        # 少了这一步，`with store.connect() as c:` 里插入的种子行（例如 rooms 里的
+        # 「广州校区总聊」）会在连接关闭时被静默回滚，随后 join_room 找不到房间。
+        try:
+            if exc_type is None:
+                self._raw.commit()
+            else:
+                self._raw.rollback()
+        except Exception:
+            pass
         self.close()
 
 
