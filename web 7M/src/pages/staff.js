@@ -196,10 +196,10 @@ function fundsSection({ rows }) {
     ${rows.length ? `<div class="desk-table">${rows.map(r => `
       <div class="desk-row">
         <div class="desk-row-main"><b>订单 #${r.id}</b>
-          <small>支付 ¥${money(r.payment)} · 退款 ¥${money(r.refund)} · 净结算 ¥${money(r.net_settlement)} · 待结算 ¥${money(r.held)}</small></div>
+          <small>${e(statusNames[r.status] || r.status)} · 支付 ¥${money(r.payment)} · 退款 ¥${money(r.refund)} · 净结算 ¥${money(r.net_settlement)} · 待结算 ¥${money(r.held)}</small></div>
         <span class="tag ${r.consistent ? '' : 'danger'}">${r.consistent ? '账目一致' : '需要核查'}</span>
-        <button class="btn secondary" data-go="order/${r.id}">查看订单</button>
-      </div>`).join('')}</div>` : deskEmpty('暂无资金记录')}</section>`;
+      </div>`).join('')}</div>` : deskEmpty('暂无资金记录')}
+    <p class="muted">当前没有「按订单号查详情」的接口，所以这一栏只列账目。待办见 docs/管理端权限清单-v1.md 的 D2。</p></section>`;
 }
 
 function auditSection({ admin }) {

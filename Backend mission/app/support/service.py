@@ -169,6 +169,42 @@ class SupportService(ValidationMixin):
 
     def credit_history(self,u):
         return self.rows("SELECT delta,reason,ticket_id,created FROM audit WHERE target=? AND type='credit' ORDER BY id DESC",(u,))
+
+    @staticmethod
+    def mask_phone(phone):
+        """手机号脱敏。工作台不需要完整号码就能干活；
+        真需要联系当事人时再走单独的高敏流程。"""
+        phone=str(phone or '')
+        return phone[:3]+'****'+phone[-4:] if len(phone)>=7 else ''
+
+    def dossier(self,u,target):
+        """用户档案：把「这个人是谁、有没有前科、现在什么状态」集中到一屏，
+        不用在工单、商品、审计三处来回翻。
+
+        仅客服与管理员可查，且**每次查阅都写一条审计**——查档案本身就是高敏操作，
+        必须能回答「谁在什么时候看了谁」。
+
+        与 /api/profile 的区别：那个是给所有人看的公开主页（已收敛掉 role/status），
+        这个只在服务端开放，可以带 role、status、脱敏手机号和订单。
+        """
+        self.staff(u);target=int(target)
+        user=self.profile(target)
+        now=time.time()
+        with self.tx() as c:
+            c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',(u,target,'dossier_view','查阅用户档案',now))
+        phone=self.row('SELECT phone FROM users WHERE id=?',(target,))
+        orders=self.rows('SELECT id,buyer_id,seller_id,status,total,created FROM orders WHERE buyer_id=? OR seller_id=? ORDER BY id DESC LIMIT 50',(target,target))
+        for o in orders:o['role']='buyer' if o['buyer_id']==target else 'seller'
+        return {
+            'user':user,
+            'phone':self.mask_phone(phone['phone'] if phone else ''),
+            'orders':orders,
+            'products':self.my_products(target),
+            'tickets':self.rows('SELECT id,type,subject,status,order_id,product_id,created FROM tickets WHERE user_id=? ORDER BY id DESC LIMIT 50',(target,)),
+            'audit':self.rows('SELECT id,actor,target,type,delta,reason,ticket_id,created FROM audit WHERE target=? ORDER BY id DESC LIMIT 100',(target,)),
+            'served_by':u,
+        }
+
     def review(self,u,oid,rating,body):
         o=self.order(u,oid);self.require(o['status']=='completed' and u in [o['buyer_id'],o['seller_id']],'完成真实有效订单后才能评价')
         self.require(type(rating) is int and 1<=rating<=5,'评分需1至5分')

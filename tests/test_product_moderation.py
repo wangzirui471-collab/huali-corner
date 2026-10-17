@@ -1,0 +1,258 @@
+"""平台商品处置（强制下架 / 复核 / 恢复）与用户档案的测试。
+
+覆盖 docs/工作台接口契约.md 第 4 节列出的验收点，其中最容易漏掉、
+也最要紧的一条是：**平台下架后，卖家不能自己把商品重新上架**。
+没有这条，管理员下架等于白做。
+"""
+import io
+import sys
+import tempfile
+import time
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'Backend mission'))
+
+from app.market import Market, DomainError
+from PIL import Image
+
+
+class ModerationActionTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.m = Market(self.tmp.name)
+        self.seller = self.login('13800000031')
+        self.buyer = self.login('13800000032')
+        self.staff = self.login('19065322759')          # 平台管理员
+        # bootstrap_admin 只在 --trial 下可用（它带 _trial_only 守卫），
+        # 演示库里直接改角色来造一个客服账号。
+        self.support = self.login('13800000033')
+        with self.m.tx() as c:
+            c.execute("UPDATE users SET role='support' WHERE id=?", (self.support,))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def login(self, phone):
+        code = self.m.request_code(phone)['demo_code']
+        return self.m.login(phone, code)['user']['id']
+
+    def photos(self, u):
+        ids = []
+        for angle, color in zip(['front', 'side', 'top'], ['red', 'green', 'blue']):
+            buf = io.BytesIO()
+            Image.new('RGB', (100, 100), color).save(buf, 'PNG')
+            ids.append(self.m.add_upload(u, buf.getvalue(), angle)['id'])
+        return ids
+
+    def listing(self, u=None, **extra):
+        u = u or self.seller
+        data = dict(title='高等数学 第七版', category='books', price=1500, delivery_fee=300,
+                    delivery='both', region='A1楼下', description='实拍教材',
+                    photos=self.photos(u), college='计算机工程学院', edition='第七版',
+                    publisher='高等教育出版社', condition='有少量笔记', notes='少量',
+                    missing='无缺页', accessories='无附件', bought='2024-09', original_price=4500)
+        data.update(extra)
+        return self.m.publish(u, data)['id']
+
+    def status_of(self, pid):
+        return self.m.row('SELECT status,delisted_by FROM products WHERE id=?', (pid,))
+
+    # --- 权限 -------------------------------------------------------------
+
+    def test_ordinary_user_cannot_moderate(self):
+        pid = self.listing()
+        with self.assertRaises(DomainError) as ctx:
+            self.m.moderate_product(self.buyer, pid, 'delist', '看不顺眼')
+        self.assertEqual(ctx.exception.status, 403)
+        self.assertEqual(self.status_of(pid)['status'], 'available')
+
+    def test_support_role_can_moderate(self):
+        """客服也应当能下架引流商品——治理不该卡在管理员一个人身上。"""
+        pid = self.listing()
+        self.m.moderate_product(self.support, pid, 'delist', '商品描述里留了微信号')
+        self.assertEqual(self.status_of(pid)['status'], 'removed')
+
+    def test_cannot_moderate_own_listing(self):
+        pid = self.listing()
+        with self.assertRaises(DomainError) as ctx:
+            self.m.moderate_product(self.seller, pid, 'delist', '自己的东西')
+        self.assertEqual(ctx.exception.status, 403)
+
+    def test_missing_product_is_404(self):
+        with self.assertRaises(DomainError) as ctx:
+            self.m.moderate_product(self.staff, 999999, 'delist', '不存在')
+        self.assertEqual(ctx.exception.status, 404)
+
+    # --- 强制下架与「卖家不能自行恢复」 ------------------------------------
+
+    def test_delisted_product_leaves_the_feed(self):
+        pid = self.listing()
+        self.assertIn(pid, [p['id'] for p in self.m.products()])
+        self.m.moderate_product(self.staff, pid, 'delist', '疑似引流')
+        self.assertNotIn(pid, [p['id'] for p in self.m.products()])
+
+    def test_seller_cannot_relist_what_platform_delisted(self):
+        """这条是整件事的关键：没有它，卖家点一下「重新上架」就绕过去了。"""
+        pid = self.listing()
+        self.m.moderate_product(self.staff, pid, 'delist', '疑似引流')
+        with self.assertRaises(DomainError) as ctx:
+            self.m.set_product_status(self.seller, pid, 'relist')
+        self.assertEqual(ctx.exception.status, 403)
+        self.assertIn('平台处置', str(ctx.exception))
+        self.assertEqual(self.status_of(pid)['status'], 'removed')
+
+    def test_seller_can_still_relist_their_own_delisting(self):
+        """卖家自己下架的商品不受影响，仍然可以自行恢复。"""
+        pid = self.listing()
+        self.m.set_product_status(self.seller, pid, 'delist')
+        self.assertEqual(self.status_of(pid)['delisted_by'], 0)
+        self.m.set_product_status(self.seller, pid, 'relist')
+        self.assertEqual(self.status_of(pid)['status'], 'available')
+
+    def test_restore_clears_the_flag_and_returns_control_to_seller(self):
+        pid = self.listing()
+        self.m.moderate_product(self.staff, pid, 'delist', '误判，先下架')
+        self.m.moderate_product(self.staff, pid, 'restore', '申诉成立，恢复上架')
+        row = self.status_of(pid)
+        self.assertEqual(row['status'], 'available')
+        self.assertEqual(row['delisted_by'], 0)
+        self.m.set_product_status(self.seller, pid, 'delist')   # 卖家重新拿回控制权
+
+    def test_reserved_product_cannot_be_force_delisted(self):
+        pid = self.listing()
+        self.m.checkout(self.buyer, dict(product_ids=[pid], delivery='pickup', address='',
+            appointment=time.time() + 7200, key='k-mod-1'))
+        with self.assertRaises(DomainError):
+            self.m.moderate_product(self.staff, pid, 'delist', '想下架已预留的')
+
+    def test_delist_clears_active_promotion(self):
+        pid = self.listing()
+        self.m.promote(self.seller, pid, '7d')
+        self.m.moderate_product(self.staff, pid, 'delist', '违规')
+        self.assertEqual(self.m.row('SELECT promoted_until FROM products WHERE id=?', (pid,))['promoted_until'], 0)
+
+    # --- 留痕与通知 -------------------------------------------------------
+
+    def test_delisting_writes_audit_and_notifies_the_seller(self):
+        pid = self.listing()
+        self.m.moderate_product(self.staff, pid, 'delist', '商品描述里留了微信号')
+        record = self.m.row("SELECT * FROM audit WHERE type='product_moderate' ORDER BY id DESC")
+        self.assertIsNotNone(record)
+        self.assertEqual(record['actor'], self.staff)
+        self.assertEqual(record['target'], self.seller)
+        self.assertIn('微信号', record['reason'])
+        notices = self.m.notifications(self.seller)['items']
+        self.assertTrue(any(n['kind'] == 'product_moderate' and '下架' in n['body'] for n in notices))
+
+    def test_reason_is_required(self):
+        pid = self.listing()
+        with self.assertRaises(DomainError):
+            self.m.moderate_product(self.staff, pid, 'delist', '   ')
+
+    # --- 人工复核 ---------------------------------------------------------
+
+    def test_flagged_product_carries_review_marker(self):
+        pid = self.listing(title='未拆封避孕套 3只装')
+        self.assertTrue(self.m.product(pid, self.seller)['under_review'])
+
+    def test_approve_clears_the_review_marker(self):
+        pid = self.listing(title='未拆封避孕套 3只装')
+        self.m.review_product(self.staff, pid, 'approve', '确认是普通日用品，放行')
+        product = self.m.product(pid, self.seller)
+        self.assertFalse(product['under_review'])
+        self.assertIn('moderation', product)
+        self.assertTrue(product['moderation']['reviewed'])
+
+    def test_approve_notifies_the_seller(self):
+        pid = self.listing(title='未拆封避孕套 3只装')
+        self.m.review_product(self.staff, pid, 'approve', '放行')
+        notices = self.m.notifications(self.seller)['items']
+        self.assertTrue(any(n['kind'] == 'product_review' for n in notices))
+
+    def test_reject_delists_and_notifies(self):
+        pid = self.listing(title='未拆封避孕套 3只装')
+        self.m.review_product(self.staff, pid, 'reject', '校园场景不宜出售')
+        row = self.status_of(pid)
+        self.assertEqual(row['status'], 'removed')
+        self.assertEqual(row['delisted_by'], self.staff)
+        notices = self.m.notifications(self.seller)['items']
+        self.assertTrue(any(n['kind'] == 'product_moderate' and '下架' in n['body'] for n in notices))
+
+    def test_review_requires_a_pending_marker(self):
+        pid = self.listing()          # 干净商品，没有审核标记
+        with self.assertRaises(DomainError):
+            self.m.review_product(self.staff, pid, 'approve', '随便通过')
+
+    def test_review_cannot_be_done_twice(self):
+        pid = self.listing(title='未拆封避孕套 3只装')
+        self.m.review_product(self.staff, pid, 'approve', '放行')
+        with self.assertRaises(DomainError):
+            self.m.review_product(self.staff, pid, 'approve', '再来一次')
+
+    def test_reject_requires_a_reason(self):
+        pid = self.listing(title='未拆封避孕套 3只装')
+        with self.assertRaises(DomainError):
+            self.m.review_product(self.staff, pid, 'reject', '  ')
+
+    def test_invalid_decision_is_rejected(self):
+        pid = self.listing(title='未拆封避孕套 3只装')
+        with self.assertRaises(DomainError):
+            self.m.review_product(self.staff, pid, 'maybe', '拿不准')
+
+    def test_ordinary_user_cannot_review(self):
+        pid = self.listing(title='未拆封避孕套 3只装')
+        with self.assertRaises(DomainError) as ctx:
+            self.m.review_product(self.buyer, pid, 'approve', '我是买家')
+        self.assertEqual(ctx.exception.status, 403)
+
+
+class DossierTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.m = Market(self.tmp.name)
+        self.seller = self.login('13800000041')
+        self.staff = self.login('19065322759')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def login(self, phone):
+        code = self.m.request_code(phone)['demo_code']
+        return self.m.login(phone, code)['user']['id']
+
+    def test_ordinary_user_cannot_open_a_dossier(self):
+        with self.assertRaises(DomainError) as ctx:
+            self.m.dossier(self.seller, self.seller)
+        self.assertEqual(ctx.exception.status, 403)
+
+    def test_dossier_returns_profile_and_collections(self):
+        data = self.m.dossier(self.staff, self.seller)
+        for key in ('user', 'phone', 'orders', 'products', 'tickets', 'audit'):
+            self.assertIn(key, data)
+        self.assertEqual(data['user']['id'], self.seller)
+        self.assertIn('role', data['user'])
+        self.assertIn('status', data['user'])
+
+    def test_phone_is_masked(self):
+        data = self.m.dossier(self.staff, self.seller)
+        self.assertNotIn('13800000041', data['phone'])
+        self.assertIn('****', data['phone'])
+        self.assertTrue(data['phone'].endswith('0041'))
+
+    def test_viewing_a_dossier_leaves_an_audit_trail(self):
+        self.m.dossier(self.staff, self.seller)
+        record = self.m.row("SELECT * FROM audit WHERE type='dossier_view' ORDER BY id DESC")
+        self.assertIsNotNone(record)
+        self.assertEqual(record['actor'], self.staff)
+        self.assertEqual(record['target'], self.seller)
+
+    def test_each_view_is_recorded_separately(self):
+        self.m.dossier(self.staff, self.seller)
+        self.m.dossier(self.staff, self.seller)
+        count = self.m.row("SELECT COUNT(*) n FROM audit WHERE type='dossier_view' AND target=?", (self.seller,))['n']
+        self.assertEqual(count, 2)
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -124,6 +124,10 @@ class CatalogService(ValidationMixin):
             target='removed';clear_promote=True
         elif action=='relist':
             self.require(p['status']=='removed','只有「已下架」的商品可以重新上架')
+            # 这一句是「平台强制下架」能不能立住的关键：没有它，管理员刚下架，
+            # 卖家点一下「重新上架」就绕过去了，处置等于白做。
+            # delisted_by=0 表示卖家自己下架的，可以自行恢复；>0 表示平台处置，必须走申诉。
+            self.require(not (p['delisted_by'] or 0),'该商品由平台处置下架，需在客服中心申诉后由客服恢复',403)
             self.require(self.profile(u)['score']>=60,'信誉分低于60，暂不能重新上架；可在客服中心申诉',403)
             with self.connect() as c:
                 self.require(not self.refund_locked(c,pid),'该商品曾发生退款或争议，需联系客服复核后才能重新上架',403)
@@ -131,6 +135,73 @@ class CatalogService(ValidationMixin):
         else:raise DomainError('不支持的商品操作')
         with self.tx() as c:
             c.execute('UPDATE products SET status=?,promoted_until=? WHERE id=?',(target,0 if clear_promote else (p['promoted_until'] or 0),pid))
+        return self.product(pid,u)
+
+    def moderate_product(self,u,pid,action,reason):
+        """平台处置商品：强制下架 / 恢复上架。
+
+        为什么不复用卖家的 set_product_status：平台处置必须多做三件事，
+        而这三件事每一件都是「处置」这件事成立的前提：
+
+          1. 写审计 —— 谁在什么时候因为什么下架了哪件商品；
+          2. 通知卖家 —— 否则卖家只会发现东西凭空消失，不知道该找谁；
+          3. 记下 delisted_by —— 把「平台下架」和「卖家自己下架」区分开，
+             被平台处置的商品卖家不能自行恢复。
+
+        仅客服与管理员可调用；操作人不能是商品卖家（避免自己审自己）。
+        """
+        self.staff(u);reason=self.text(reason,500,'处置理由')
+        p=self.row('SELECT * FROM products WHERE id=?',(pid,))
+        self.require(p,'商品不存在',404)
+        self.require(p['seller_id']!=u,'不能处置自己发布的商品',403)
+        if action=='delist':
+            # 已预留/已售出的商品挂在别人的订单上，强行下架会让那张订单指向消失的商品。
+            # 这类要走工单流程（退款时会置 removed）。
+            self.require(p['status']=='available','只有在售商品可以强制下架；已预留或已售出的请通过工单处理')
+        elif action=='restore':
+            self.require(p['status']=='removed','只有已下架的商品可以恢复上架')
+        else:raise DomainError('不支持的处置动作')
+        now=time.time()
+        with self.tx() as c:
+            if action=='delist':
+                # 一并清掉未到期的置顶，否则恢复后会带着旧置顶时间直接跳到最前面。
+                c.execute("UPDATE products SET status='removed',delisted_by=?,promoted_until=0 WHERE id=?",(u,pid))
+            else:
+                c.execute("UPDATE products SET status='available',delisted_by=0 WHERE id=?",(pid,))
+            c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',(u,p['seller_id'],'product_moderate',reason,now))
+            body=(f'你的商品「{p["title"]}」（#{pid}）已被平台下架。理由：{reason}。'
+                  f'如有异议，可在客服中心提交申诉。') if action=='delist' else \
+                 f'你的商品「{p["title"]}」（#{pid}）已恢复上架。'
+            self.notify(c,p['seller_id'],'product_moderate',body)
+        return self.product(pid,u)
+
+    def review_product(self,u,pid,decision,reason=None):
+        """人工复核被自动审核标记为「平台限制」的商品。
+
+        自动审核（app/moderation）只把命中结果写进 products.data.moderation，
+        在此之前**没有任何代码把 reviewed 改回 true**，所以中危商品会永久停在
+        「审核中」角标上，message_for() 承诺的「通过后会正常展示」无法兑现。
+        这个方法是那个缺口的出口。
+
+        approve —— 撤下标记，商品照常展示；
+        reject  —— 驳回归到 moderate_product 走强制下架（含审计、通知、delisted_by）。
+        """
+        self.staff(u);self.require(decision in ['approve','reject'],'复核结论无效')
+        p=self.row('SELECT * FROM products WHERE id=?',(pid,))
+        self.require(p,'商品不存在',404)
+        self.require(p['seller_id']!=u,'不能复核自己发布的商品',403)
+        data=json.loads(p['data']);mark=data.get('moderation')
+        self.require(mark and not mark.get('reviewed'),'该商品当前没有待复核的审核标记')
+        if decision=='reject':
+            return self.moderate_product(u,pid,'delist',self.text(reason,500,'驳回理由'))
+        note=str(reason or '').strip()[:500]
+        mark.update({'reviewed':True,'reviewed_by':u,'reviewed_at':time.time()})
+        if note:mark['review_note']=note
+        data['moderation']=mark
+        with self.tx() as c:
+            c.execute('UPDATE products SET data=? WHERE id=?',(json.dumps(data,ensure_ascii=False),pid))
+            c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',(u,p['seller_id'],'product_review',note or '复核通过，未记录说明',time.time()))
+            self.notify(c,p['seller_id'],'product_review',f'你的商品「{p["title"]}」（#{pid}）已通过人工复核，恢复正常展示。')
         return self.product(pid,u)
 
     def promote(self,u,pid,tier):
