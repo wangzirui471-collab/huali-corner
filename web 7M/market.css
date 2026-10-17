@@ -1845,6 +1845,10 @@ button.me-notice { width: 100%; text-align: left; cursor: pointer; border: 0; fo
 
 .me-orders { padding: 4px 0 10px; }
 .me-orders-head { display: flex; align-items: center; gap: 14px; padding: 12px 16px 2px; font-size: 14px; }
+/* 「我的订单」从顶部导航收进「我的」页后，这里要有一个能进全部订单的总入口；
+   否则只能从某个状态格或「最近订单 · 查看全部」绕进去。 */
+.me-orders-head .me-orders-all { margin-left: auto; font-size: 11.5px; color: var(--muted); display: inline-flex; align-items: center; gap: 2px; }
+.me-orders-head .me-orders-all .icon { width: 13px; height: 13px; }
 .me-orders-body { display: flex; align-items: stretch; }
 .me-half { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 4px 6px 4px; }
 .me-vline { width: 1px; background: var(--line); margin: 12px 0; flex: none; }

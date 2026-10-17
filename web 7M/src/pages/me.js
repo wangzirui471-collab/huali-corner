@@ -146,7 +146,7 @@ export async function mine(){
     </section>
 
     <section class="me-card me-orders">
-      <div class="me-orders-head"><b>购买</b><span class="me-vline"></span><b>出售</b></div>
+      <div class="me-orders-head"><b>购买</b><span class="me-vline"></span><b>出售</b><button class="text-button me-orders-all" data-go="orders">全部订单${icon('arrow')}</button></div>
       <div class="me-orders-body">
         <div class="me-half">${buy.map(tileOf).join('')}</div>
         <span class="me-vline"></span>
