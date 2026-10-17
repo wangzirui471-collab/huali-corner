@@ -764,6 +764,68 @@ button { -webkit-tap-highlight-color: transparent; }
   .post-body { font-size: 13.5px; }
 }
 
+/* --- 29c. 帖子评论区（2026-10-17 抖音风格内嵌）---------------------------
+   不再弹窗：评论区就地展开在帖子卡片下方。主评论平铺，子回复缩进 + 左竖线，
+   并标出「回复 @谁」，一眼看清对话关系。 */
+.post-comments { padding: 14px 22px 18px; border-top: 1px solid var(--line); background: var(--surface-2); }
+.comments-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 6px; }
+.comments-head b { font-size: 13.5px; font-weight: 750; color: var(--ink); letter-spacing: -.2px; }
+.comments-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: var(--r-pill);
+  color: var(--faint); transition: background .15s, color .15s;
+}
+.comments-close:hover { background: var(--surface); color: var(--ink); }
+.comments-close .icon { width: 14px; height: 14px; }
+.more-comments { margin: 2px 0 6px; font-size: 12px; color: var(--muted); }
+.comments-body { }
+.comment-block { }
+.comment-item { display: flex; gap: 10px; padding: 9px 0; }
+.comment-avatar {
+  flex: none; width: 30px; height: 30px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--brand-soft); color: var(--brand-ink);
+  font-size: 13px; font-weight: 700;
+}
+.comment-main { flex: 1; min-width: 0; }
+.comment-meta { display: flex; align-items: baseline; gap: 8px; }
+.comment-meta b { font-size: 13px; font-weight: 700; color: var(--ink); }
+.comment-meta small { font-size: 11px; color: var(--faint); }
+.comment-text { margin: 3px 0 0; font-size: 13.5px; line-height: 1.65; color: var(--ink); word-break: break-word; white-space: pre-wrap; }
+.reply-at { color: var(--brand-lo); font-weight: 650; }
+.comment-reply { margin-top: 4px; padding: 0; font-size: 11.5px; color: var(--faint); transition: color .15s; }
+.comment-reply:hover { color: var(--ink-2); }
+.comment-children { margin-left: 40px; padding-left: 12px; border-left: 2px solid var(--line-2); }
+.comment-children .comment-item { padding: 6px 0; }
+.comment-children .comment-avatar { width: 26px; height: 26px; font-size: 11.5px; }
+.comment-children .comment-text { font-size: 13px; }
+.comment-inline { padding: 2px 0 10px 40px; }
+.comment-composer {
+  display: flex; align-items: flex-end; gap: 8px;
+  margin-top: 10px; padding: 11px 12px;
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-md);
+}
+.comment-composer textarea {
+  flex: 1; resize: none; border: 0; background: transparent; outline: none;
+  font: inherit; font-size: 13.5px; color: var(--ink);
+  min-height: 40px; max-height: 120px; line-height: 1.6;
+}
+.comment-composer textarea::placeholder { color: var(--faint); }
+.comment-composer .btn { flex: none; }
+.comment-composer.inline { margin-top: 2px; padding: 7px 10px; background: var(--surface); border-color: var(--line-3); }
+.comment-composer.inline .reply-hint { align-self: center; font-size: 12px; color: var(--brand-lo); font-weight: 650; white-space: nowrap; }
+.comment-composer.inline textarea { min-height: 32px; font-size: 13px; }
+.comments-empty { padding: 10px 0 4px; font-size: 13px; }
+.btn.ghost { background: var(--surface-2); color: var(--ink-3); border: 1px solid var(--line-2); }
+.btn.ghost:hover { background: var(--surface); color: var(--ink); }
+@media (max-width: 580px) {
+  .post-comments { padding: 12px 16px 16px; }
+  .comment-children { margin-left: 30px; padding-left: 8px; }
+  .comment-inline { padding-left: 30px; }
+  .comment-composer.inline { flex-wrap: wrap; }
+}
+}
+
 /* --- 19. 弹窗 / 轻提示 -------------------------------------------------- */
 .modal-backdrop { backdrop-filter: blur(3px); background: rgba(20, 22, 28, .42); }
 .modal { border-radius: var(--r-xl); box-shadow: var(--sh-3); border: 1px solid var(--line); }
