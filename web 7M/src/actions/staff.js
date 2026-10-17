@@ -74,6 +74,17 @@ export const clicks = {
       </form>`);
   },
 
+  // 恢复上架：把平台判过违规的商品放回市场，属于改判，只有管理员能做。
+  'restore-product': async (b, id) => {
+    modal(`<h2>恢复上架</h2>
+      <p class="muted">该商品会重新出现在首页与分类里，卖家会收到站内通知。</p>
+      <p class="muted">这是推翻平台之前的处置结论，请写清依据（申诉成立、误判、已整改等）。</p>
+      <form id="moderate-form" data-id="${id}" data-kind="restore" data-action="restore">
+        ${field('复核依据（必填，会写入审计）', 'reason', 'text', '', 'required maxlength="500"')}
+        <button class="btn primary full">确认恢复上架</button>
+      </form>`);
+  },
+
   // 自动审核标记为中危的商品：通过 / 驳回并下架。
   'review-product': async (b, id) => {
     const decision = b.dataset.decision === 'approve' ? 'approve' : 'reject';
@@ -103,6 +114,10 @@ export const submits = {
     if (kind === 'review') {
       await callDesk('/product/review', { id, decision: action, reason },
         action === 'approve' ? '已复核通过，商品恢复正常展示' : '已驳回并下架，卖家已收到通知');
+      return;
+    }
+    if (kind === 'restore') {
+      await callDesk('/product/moderate', { id, action: 'restore', reason }, '已恢复上架，卖家已收到通知');
       return;
     }
     await callDesk('/product/moderate', { id, action, reason }, '已下架，卖家已收到通知');

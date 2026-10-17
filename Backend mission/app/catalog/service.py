@@ -159,6 +159,11 @@ class CatalogService(ValidationMixin):
             # 这类要走工单流程（退款时会置 removed）。
             self.require(p['status']=='available','只有在售商品可以强制下架；已预留或已售出的请通过工单处理')
         elif action=='restore':
+            # 恢复上架是「把平台已经判过违规的商品放回市场」，属于改判，
+            # 只能由平台管理员做。客服可以下架，但不能自己推翻自己这一侧的处置，
+            # 否则「客服下架 → 客服恢复」就成了一个闭环，等于没有处置。
+            self.require(self.profile(u)['role']=='admin',
+                         '只有平台管理员可以恢复上架；客服可先下架，恢复需管理员复核',403)
             self.require(p['status']=='removed','只有已下架的商品可以恢复上架')
         else:raise DomainError('不支持的处置动作')
         now=time.time()
@@ -203,6 +208,17 @@ class CatalogService(ValidationMixin):
             c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',(u,p['seller_id'],'product_review',note or '复核通过，未记录说明',time.time()))
             self.notify(c,p['seller_id'],'product_review',f'你的商品「{p["title"]}」（#{pid}）已通过人工复核，恢复正常展示。')
         return self.product(pid,u)
+
+    def removed_products(self,u):
+        """平台视角的「已下架」列表。
+
+        products() 只出在售，my_products() 只出自己发布的，两处都看不到
+        「被平台下架的是哪些、谁下的、还能不能恢复」。没有这个视图，
+        强制下架就是个单向操作——下完之后连管理员自己都找不回来。
+        """
+        self.staff(u)
+        return [self.product(row['id'],u)
+                for row in self.rows("SELECT id FROM products WHERE status='removed' ORDER BY id DESC LIMIT 200")]
 
     def promote(self,u,pid,tier):
         """付费置顶：把自己的在售商品顶到首页/分类顶部，低价非强制。

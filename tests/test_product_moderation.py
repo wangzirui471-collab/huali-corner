@@ -73,6 +73,44 @@ class ModerationActionTests(unittest.TestCase):
         self.m.moderate_product(self.support, pid, 'delist', '商品描述里留了微信号')
         self.assertEqual(self.status_of(pid)['status'], 'removed')
 
+    def test_support_cannot_restore(self):
+        """恢复上架是改判，客服不能自己推翻自己这一侧的处置，否则等于没处置。"""
+        pid = self.listing()
+        self.m.moderate_product(self.support, pid, 'delist', '疑似引流')
+        with self.assertRaises(DomainError) as ctx:
+            self.m.moderate_product(self.support, pid, 'restore', '我觉得没事')
+        self.assertEqual(ctx.exception.status, 403)
+        self.assertIn('管理员', str(ctx.exception))
+        self.assertEqual(self.status_of(pid)['status'], 'removed')
+
+    def test_support_can_delist_but_admin_who_restores_is_recorded(self):
+        """客服下架、管理员恢复：两段操作各留一条审计，能看出是谁改判的。"""
+        pid = self.listing()
+        self.m.moderate_product(self.support, pid, 'delist', '疑似引流')
+        self.m.moderate_product(self.staff, pid, 'restore', '申诉成立')
+        actors = [r['actor'] for r in self.m.rows(
+            "SELECT actor FROM audit WHERE type='product_moderate' AND target=? ORDER BY id", (self.seller,))]
+        self.assertEqual(actors, [self.support, self.staff])
+
+    def test_removed_products_list_is_staff_only(self):
+        pid = self.listing()
+        self.m.moderate_product(self.staff, pid, 'delist', '违规')
+        self.assertIn(pid, [p['id'] for p in self.m.removed_products(self.staff)])
+        self.assertIn(pid, [p['id'] for p in self.m.removed_products(self.support)])
+        with self.assertRaises(DomainError) as ctx:
+            self.m.removed_products(self.buyer)
+        self.assertEqual(ctx.exception.status, 403)
+
+    def test_removed_products_marks_who_delisted(self):
+        pid = self.listing()
+        self.m.set_product_status(self.seller, pid, 'delist')     # 卖家自己下架
+        row = [p for p in self.m.removed_products(self.staff) if p['id'] == pid][0]
+        self.assertEqual(row['delisted_by'], 0)
+        self.m.set_product_status(self.seller, pid, 'relist')
+        self.m.moderate_product(self.staff, pid, 'delist', '平台处置')   # 平台下架
+        row = [p for p in self.m.removed_products(self.staff) if p['id'] == pid][0]
+        self.assertEqual(row['delisted_by'], self.staff)
+
     def test_cannot_moderate_own_listing(self):
         pid = self.listing()
         with self.assertRaises(DomainError) as ctx:

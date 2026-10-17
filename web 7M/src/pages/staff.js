@@ -41,6 +41,18 @@ const AUDIT_LABELS = {
   product_moderate: '平台处置商品', product_review: '审核商品'
 };
 
+// 当前登录者是不是平台管理员。客服与管理员看到的工作台不一样：
+// 客服可以受理工单、下架违规商品、复核商品；恢复上架、信誉调整、封禁只有管理员能做。
+// 后端也会逐次校验（server-side 才是真闸门），这里只是不给人看见必然失败的按钮。
+const isAdmin = () => state.me?.role === 'admin';
+
+function roleBanner() {
+  if (isAdmin()) return '';
+  return `<div class="notice">${icon('shield')}<span><b>你当前以客服身份登录。</b>
+    可以受理工单、强制下架违规商品、复核待审商品、查阅用户档案；
+    <b>恢复上架、信誉调整、封禁账号、人员授权</b>由平台管理员执行。</span></div>`;
+}
+
 function deskShell(section, title, desc, body) {
   return shell(
     `${heading('ADMIN DESK', title, desc)}<div class="desk">${deskNav(section)}<div class="desk-main">${body}</div></div>`,
@@ -125,15 +137,25 @@ function ticketsSection({ tickets }) {
 }
 
 function productRow(p) {
-  const review = p.under_review
-    ? '<span class="review-tag inline">审核中</span>'
-    : '';
-  const acts = p.under_review
-    ? `<button class="btn secondary" data-action="review-product" data-id="${p.id}" data-decision="approve">通过</button>
-       <button class="btn secondary danger" data-action="review-product" data-id="${p.id}" data-decision="reject">驳回并下架</button>`
-    : `<button class="btn secondary danger" data-action="moderate-product" data-id="${p.id}">强制下架</button>`;
+  const removed = p.status === 'removed';
+  const review = p.under_review ? '<span class="review-tag inline">审核中</span>' : '';
+  let acts;
+  if (p.under_review) {
+    acts = `<button class="btn secondary" data-action="review-product" data-id="${p.id}" data-decision="approve">通过</button>
+       <button class="btn secondary danger" data-action="review-product" data-id="${p.id}" data-decision="reject">驳回并下架</button>`;
+  } else if (removed) {
+    // 恢复上架是改判，只有管理员能做；客服看到的是「找谁恢复」，不是一个点了会失败的按钮。
+    acts = `<span class="tag ${p.delisted_by ? 'danger' : ''}">${p.delisted_by ? '平台处置' : '卖家下架'}</span>` +
+      (p.delisted_by && isAdmin()
+        ? ` <button class="btn secondary" data-action="restore-product" data-id="${p.id}">恢复上架</button>`
+        : '');
+  } else {
+    acts = `<button class="btn secondary danger" data-action="moderate-product" data-id="${p.id}">强制下架</button>`;
+  }
+  const tags = [removed ? 'removed' : 'available'];
+  if (p.under_review) tags.push('review');
   return row(
-    [p.under_review ? 'review' : 'normal'],
+    tags,
     { group: 'products', text: `#${p.id} ${p.title} ${p.nickname}` },
     `<div class="desk-row-main"><b>${e(p.title)}</b>
        <small>#${p.id} · ${e(p.nickname)} · ¥${money(p.price)} · ${e(statusNames[p.status] || p.status)}</small></div>
@@ -143,22 +165,28 @@ function productRow(p) {
   );
 }
 
-function productsSection({ products }) {
+function productsSection({ products, removed }) {
   const underReview = products.filter(p => p.under_review);
-  const body = products.length
-    ? `<div class="desk-list">${products.map(productRow).join('')}</div>`
-    : deskEmpty('当前没有在售商品');
+  const rows = [...products, ...removed];
   return `<section class="panel"><h2>商品治理</h2>
     <p class="muted">自动审核命中「平台限制」类目的商品会带「审核中」标记，放行展示但等人工判定。
-    下架必须填理由，会写入审计并通知卖家，卖家可在客服中心申诉。</p>
-    ${chips('products', [['review', `待人工复核 ${underReview.length}`]])}
-    ${body}</section>`;
+    下架必须填理由，会写入审计并通知卖家，卖家可在客服中心申诉；被平台下架的商品
+    卖家不能自行重新上架${isAdmin() ? '，由你复核后恢复' : '，恢复需平台管理员复核'}。</p>
+    ${chips('products', [
+      ['review', `待人工复核 ${underReview.length}`],
+      ['available', `在售 ${products.length}`],
+      ['removed', `已下架 ${removed.length}`]
+    ])}
+    ${rows.length ? `<div class="desk-list">${rows.map(p => productRow(p)).join('')}</div>`
+      : deskEmpty('当前没有商品')}</section>`;
 }
 
 function userRow(u) {
   const banned = u.status === 'banned';
+  // 封禁只有管理员能做，且不能封管理员自己或当前登录者。
+  const canBan = isAdmin() && u.id !== state.me.id && u.role !== 'admin';
   const acts = `<button class="btn secondary" data-go="dossier/${u.id}">用户档案</button>
-    ${u.id !== state.me.id && u.role !== 'admin'
+    ${canBan
       ? `<button class="text-button" data-action="ban" data-id="${u.id}" data-value="${banned ? 'false' : 'true'}">${banned ? '解封' : '封禁'}</button>`
       : ''}`;
   return row(
@@ -231,7 +259,8 @@ export async function staffDesk(section = 'overview') {
   } else if (key === 'tickets') {
     body = ticketsSection({ tickets: await api('/tickets') });
   } else if (key === 'products') {
-    body = productsSection({ products: await api('/products') });
+    const [products, removed] = await Promise.all([api('/products'), api('/product/removed')]);
+    body = productsSection({ products, removed });
   } else if (key === 'users') {
     body = usersSection({ admin: await api('/admin') });
   } else if (key === 'funds') {
@@ -249,5 +278,5 @@ export async function staffDesk(section = 'overview') {
     funds: '模拟资金对账，只看服务端账本。',
     audit: '平台每一次处置都在这里，可追溯。'
   }[key];
-  deskShell(key, title, blurb, body);
+  deskShell(key, title, blurb, roleBanner() + body);
 }

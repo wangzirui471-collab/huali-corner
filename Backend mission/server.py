@@ -107,6 +107,7 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/product/promote' and method=='POST':return self.respond(m.promote(u,int(data['id']),data.get('tier')))
             if p=='/api/product/moderate' and method=='POST':return self.respond(m.moderate_product(u,int(data['id']),data.get('action'),data.get('reason','')))
             if p=='/api/product/review' and method=='POST':return self.respond(m.review_product(u,int(data['id']),data.get('decision'),data.get('reason')))
+            if p=='/api/product/removed' and method=='GET':return self.respond(m.removed_products(u))
             if p=='/api/user/dossier' and method=='GET':return self.respond(m.dossier(u,int(query['id'])))
             if p=='/api/upload' and method=='POST':
                 try:content=base64.b64decode(data.get('content',''),validate=True)
