@@ -1,7 +1,7 @@
 'use strict';
 // 事件层 · 社区、私聊、群聊、群管理员
 
-import { $, e, toast, uid } from '../core/dom.js';
+import { e, toast } from '../core/dom.js';
 import { money } from '../core/format.js';
 import { state, saveCart, clearPendingWant } from '../core/state.js';
 import { api } from '../core/http.js';
@@ -9,9 +9,13 @@ import { go, render } from '../core/nav.js';
 import { modal, closeModal } from '../core/shell.js';
 import { field } from '../components/forms.js';
 import { needLogin } from '../auth/login.js';
-import { messageBubble } from '../pages/messages.js';
+import { chatClicks } from '../pages/messages.js';
 
+// 聊天室专属交互（撤回/移除/成员抽屉/表情面板）定义在 pages/messages.js，
+// 这里合并进全站事件表，页面保持零监听器风格。
 export const clicks = {
+  ...chatClicks,
+
   chat: async (b, id) => {
     if (!needLogin()) return;
     const r = await api('/rooms/private', {peer:id});
@@ -100,18 +104,8 @@ export const submits = {
     await render();
   },
 
-  // 聊天不整页重绘，只把新消息追加到当前会话流里，避免滚动位置和输入状态被重置。
-  'message-form': async ({ form, d }) => {
-    await api('/messages', {room_id:Number(form.dataset.room), body:d.message, key:uid()});
-    form.reset();
-    const messages = await api('/messages?room_id='+form.dataset.room+'&after='+state.messageCursor);
-    const stream = $('#chat-stream');
-    for (const m of messages){
-      stream.insertAdjacentHTML('beforeend', messageBubble(m));
-      state.messageCursor = m.id;
-    }
-    stream.scrollTop = stream.scrollHeight;
-  },
+  // 聊天发送已改由聊天页内的 wx-form 本地处理（需要读光标/滚动位置等局部状态），
+  // 这里不再有 message-form；公开演示版的说明页不涉及发送。
 
   'comment-form': async ({ form, d }) => {
     if (!needLogin()) return;

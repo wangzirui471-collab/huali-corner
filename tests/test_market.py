@@ -271,3 +271,55 @@ class MarketTests(unittest.TestCase):
             self.m.checkout(self.b,dict(product_ids=[p2],delivery='pickup',appointment=time.time()+7200,key='w2',want_id=w['id']))
 
 if __name__=='__main__':unittest.main()
+
+class ChatRoomTests(unittest.TestCase):
+    """微信风格聊天室：列表摘要、成员接口、消息撤回、首屏取最近一页。"""
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory()
+        self.m=Market(self.tmp.name)
+        self.a=self.login('13800000021'); self.b=self.login('13800000022')
+    def tearDown(self): self.tmp.cleanup()
+    def login(self,phone):
+        code=self.m.request_code(phone)['demo_code']
+        return self.m.login(phone,code)['user']['id']
+
+    def test_room_list_preview_and_unread(self):
+        r=self.m.join_room(self.a,'general'); self.m.join_room(self.b,'general')
+        self.m.send_message(self.a,r['id'],'大家好啊','k1')
+        row=[x for x in self.m.rooms(self.b)['joined'] if x['id']==r['id']][0]
+        self.assertEqual(row['last_body'],'大家好啊')
+        self.assertEqual(row['last_nick'],self.m.profile(self.a)['nickname'])
+        self.assertEqual(row['unread'],1)
+        self.m.messages(self.b,r['id'])  # 拉取即已读
+        row=[x for x in self.m.rooms(self.b)['joined'] if x['id']==r['id']][0]
+        self.assertEqual(row['unread'],0)
+
+    def test_room_members(self):
+        r=self.m.join_room(self.a,'general'); self.m.join_room(self.b,'general')
+        data=self.m.room_members(self.a,r['id'])
+        self.assertEqual(data['room']['kind'],'general')
+        self.assertIn(self.a,[m['user_id'] for m in data['members']])
+        stranger=self.login('13800000023')
+        with self.assertRaises(DomainError):self.m.room_members(stranger,r['id'])
+
+    def test_recall_window_and_permission(self):
+        r=self.m.private_room(self.a,self.b)
+        self.m.send_message(self.a,r['id'],'说错话了','k1')
+        mid=self.m.messages(self.a,r['id'])[0]['id']
+        with self.assertRaises(DomainError):self.m.recall_message(self.b,mid)   # 不能撤别人的
+        self.m.recall_message(self.a,mid)
+        msgs=self.m.messages(self.b,r['id'])
+        self.assertEqual(msgs[0]['removed'],2); self.assertEqual(msgs[0]['body'],'')
+        with self.assertRaises(DomainError):self.m.recall_message(self.a,mid)   # 已撤回不能再撤
+        self.m.send_message(self.a,r['id'],'太久了','k2')
+        mid2=self.m.messages(self.a,r['id'],mid)[0]['id']
+        with self.m.tx() as c:c.execute('UPDATE messages SET created=? WHERE id=?',(time.time()-180,mid2))
+        with self.assertRaises(DomainError):self.m.recall_message(self.a,mid2)  # 超 2 分钟不能撤
+
+    def test_initial_pull_returns_latest_tail(self):
+        r=self.m.join_room(self.a,'general')
+        for i in range(250):self.m.send_message(self.a,r['id'],'m%d'%i,'k%d'%i)
+        first=self.m.messages(self.a,r['id'])
+        self.assertEqual(len(first),200)
+        self.assertEqual(first[0]['body'],'m50'); self.assertEqual(first[-1]['body'],'m249')
+        self.assertEqual(self.m.messages(self.a,r['id'],first[-1]['id']),[])

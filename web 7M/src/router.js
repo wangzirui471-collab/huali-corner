@@ -6,6 +6,7 @@ import { toast } from './core/dom.js';
 import { state, bumpRenderId, clearPoll, demoFeatures } from './core/state.js';
 import { shell, heading, empty } from './core/shell.js';
 import { go, setRenderer } from './core/nav.js';
+import { refreshBadges } from './core/badges.js';
 import { needLogin, loginModal } from './auth/login.js';
 import { home } from './pages/home.js';
 import { product } from './pages/product.js';
@@ -63,6 +64,8 @@ export async function render(){
     };
     if (!funcs[route]) go('home');
     else await funcs[route]();
+    // 页面画完再刷角标：消息页 / 我的页刚发生过「标记已读」，强制绕过缓存。
+    refreshBadges(route === 'messages' || route === 'me');
   }catch(err){
     // 只有「最后一次发起的渲染」才显示错误页，避免慢请求回来后盖掉新页面。
     if (rid === state.renderId){

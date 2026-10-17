@@ -1,14 +1,58 @@
 """社区模块：帖子、评论、总聊与学院群、私聊、举报与屏蔽。"""
-import json, time
+import json, re, time
 from ..core.errors import ValidationMixin, DomainError
 from ..moderation import scan_text, scan_private, flag_of, message_for
 
 
 class CommunityService(ValidationMixin):
 
+    # @提及的解析口径：@ 后面跟 1–24 个非空白/非标点字符。
+    # 昵称在库里不唯一，多个同名的都会收到通知——宁可多发一条，
+    # 也不能让被 @ 的人错过。单条内容最多通知 10 个人，防刷。
+    MENTION_RE = re.compile(r'@([^\s@，。！？!?,.：:；;~]{1,24})')
+
     def rooms(self,u):
-        joined=self.rows('SELECT r.*,m.role,m.muted,(SELECT COUNT(*) FROM members z WHERE z.room_id=r.id) count FROM rooms r JOIN members m ON m.room_id=r.id WHERE m.user_id=?',(u,))
+        # 会话列表要像微信一样显示「最后一条消息」：摘要、时间、发言人。
+        # 三个独立子查询比 join 一条消息再聚合快不了多少，但可读性好得多；
+        # 摘要取 removed=0 的最新一条（被移除的消息不当作预览），时间取最新一条
+        # （包括被移除的，否则撤回后时间会倒退）。
+        joined=self.rows('''SELECT r.*,m.role,m.muted,m.last_read_id,
+            (SELECT COUNT(*) FROM members z WHERE z.room_id=r.id) count,
+            (SELECT CASE WHEN x.removed=2 THEN '' ELSE x.body END FROM messages x WHERE x.room_id=r.id AND x.removed=0 ORDER BY x.id DESC LIMIT 1) last_body,
+            (SELECT x.created FROM messages x WHERE x.room_id=r.id ORDER BY x.id DESC LIMIT 1) last_at,
+            (SELECT un.nickname FROM messages x JOIN users un ON un.id=x.user_id WHERE x.room_id=r.id ORDER BY x.id DESC LIMIT 1) last_nick
+            FROM rooms r JOIN members m ON m.room_id=r.id WHERE m.user_id=?''',(u,))
+        for r in joined:r['unread']=self._room_unread(u,r['id'],r['last_read_id'])
         return {'joined':joined,'general':self.row('SELECT *, (SELECT COUNT(*) FROM members WHERE room_id=1) count FROM rooms WHERE id=1'),'college':self.profile(u)['college']}
+
+    # --- 聊天未读 ----------------------------------------------------------
+    # 每个成员记一个 last_read_id（读过的最大消息 id），未读 = 比它新的、
+    # 别人发的、没被移除的消息。加入会话时把位点拨到当下，避免「入群即 99+」。
+    def _room_unread(self,u,rid,last_read):
+        n=self.row('SELECT COUNT(*) n FROM messages WHERE room_id=? AND id>? AND user_id<>? AND removed=0',
+                   (rid,int(last_read or 0),u))['n']
+        return min(n,99)
+
+    def chat_unread(self,u):
+        rows=self.rows('SELECT room_id,last_read_id FROM members WHERE user_id=?',(u,))
+        return min(sum(self._room_unread(u,r['room_id'],r['last_read_id']) for r in rows),99)
+
+    def _mark_room_read(self,c,rid,u,upto):
+        c.execute('UPDATE members SET last_read_id=MAX(last_read_id,?) WHERE room_id=? AND user_id=?',
+                  (int(upto),int(rid),u))
+
+    # --- @提及通知 ----------------------------------------------------------
+    def _notify_mentions(self,c,author_id,author,body,post_id,skip=()):
+        seen=set()
+        for raw in self.MENTION_RE.findall(body or ''):
+            name=raw.strip()
+            if not name or name in seen:continue
+            seen.add(name)
+            target=self.row('SELECT id FROM users WHERE nickname=?',(name,))
+            if not target or target['id']==author_id or target['id'] in skip:continue
+            self.notify(c,target['id'],'mention',f'{author} 在帖子中提到了你',post_id=post_id)
+            if len(seen)>=10:break
+
     def join_room(self,u,kind):
         self.require(kind in ['general','college'],'群类型不正确')
         college=self.profile(u)['college'] or '计算机工程学院'
@@ -27,6 +71,8 @@ class CommunityService(ValidationMixin):
             # 新建群的创建者自动成为群主，这样学院群里有人能禁言、删消息；
             # 加入已有群或总聊则保持普通成员。
             c.execute('INSERT OR IGNORE INTO members(room_id,user_id,role) VALUES(?,?,?)',(rid,u,'owner' if created else 'member'))
+            # 新加入的成员只算「加入之后」的未读：把已读位点拨到当前最新消息。
+            c.execute('UPDATE members SET last_read_id=COALESCE((SELECT MAX(id) FROM messages WHERE room_id=?),0) WHERE room_id=? AND user_id=? AND last_read_id=0',(rid,rid,u))
             return dict(c.execute('SELECT * FROM rooms WHERE id=?',(rid,)).fetchone())
     def private_room(self,u,peer):
         peer=int(peer);self.profile(peer);self.require(peer!=u,'不能给自己发私信')
@@ -36,13 +82,59 @@ class CommunityService(ValidationMixin):
             c.execute("INSERT OR IGNORE INTO rooms(kind,name,pair) VALUES('private',?,?)",(self.profile(peer)['nickname'],pair))
             rid=c.execute('SELECT id FROM rooms WHERE pair=?',(pair,)).fetchone()[0]
             for uid in [u,peer]:c.execute('INSERT OR IGNORE INTO members(room_id,user_id) VALUES(?,?)',(rid,uid))
+            c.execute('UPDATE members SET last_read_id=COALESCE((SELECT MAX(id) FROM messages WHERE room_id=?),0) WHERE room_id=? AND last_read_id=0',(rid,rid))
         return self.row('SELECT * FROM rooms WHERE id=?',(rid,))
     def member(self,u,r):
         m=self.row('SELECT * FROM members WHERE room_id=? AND user_id=?',(r,u))
         self.require(m is not None,'请先加入该群或会话',403);return m
     def messages(self,u,r,after=0):
         self.member(u,r)
-        return self.rows('SELECT m.id,m.room_id,m.user_id,CASE WHEN m.removed=1 THEN \'消息已被移除\' ELSE m.body END body,m.created,u.nickname FROM messages m JOIN users u ON u.id=m.user_id WHERE room_id=? AND m.id>? ORDER BY m.id LIMIT 100',(r,int(after)))
+        # removed 取值：0=正常 1=被管理员移除 2=发送者撤回。
+        # 移除的消息正文就地替换成提示语；撤回的正文清空（原文不能留在接口里），
+        # 前端按 removed 和 user_id 渲染「你/xxx 撤回了一条消息」。
+        # 首次拉取（after=0）返回最近 200 条——聊天窗打开时应该看到最新消息，
+        # 而不是从建群第一条开始翻；增量拉取保持 id>after 升序。
+        sql='''SELECT m.id,m.room_id,m.user_id,m.removed,
+                      CASE WHEN m.removed=1 THEN '消息已被移除' WHEN m.removed=2 THEN '' ELSE m.body END body,
+                      m.created,u.nickname
+               FROM messages m JOIN users u ON u.id=m.user_id WHERE {{cond}}
+               ORDER BY m.id {{order}} LIMIT {{limit}}'''
+        if after>0:
+            rows=self.rows(sql.replace('{{cond}}','m.room_id=? AND m.id>?').replace('{{order}}','ASC').replace('{{limit}}','200'),(r,int(after)))
+        else:
+            rows=self.rows('''SELECT * FROM (SELECT m.id,m.room_id,m.user_id,m.removed,
+                CASE WHEN m.removed=1 THEN '消息已被移除' WHEN m.removed=2 THEN '' ELSE m.body END body,
+                m.created,u.nickname FROM messages m JOIN users u ON u.id=m.user_id
+                WHERE m.room_id=? ORDER BY m.id DESC LIMIT 200) ORDER BY id ASC''',(r,))
+        # 拉取即视为读到：把已读位点拨到这批消息的最大 id。轮询每 3 秒一次，
+        # 但只有真的拉到新消息才会产生一次写事务，量可以忽略。
+        if rows:
+            with self.tx() as c:self._mark_room_read(c,r,u,rows[-1]['id'])
+        return rows
+
+    # --- 消息撤回 ----------------------------------------------------------
+    # 只允许撤回自己 2 分钟内的消息，且没被移除过。撤回是软删（removed=2）：
+    # 正文清掉，但记录保留——审核和工作台还需要知道「这里曾经有一条消息」。
+    def recall_message(self,u,mid):
+        m=self.row('SELECT * FROM messages WHERE id=?',(int(mid),))
+        self.require(m,'消息不存在',404)
+        self.require(m['user_id']==u,'只能撤回自己发送的消息',403)
+        self.require(m['removed']==0,'该消息已不可撤回')
+        self.require(time.time()-m['created']<=120,'超过两分钟的消息不能撤回了')
+        with self.tx() as c:c.execute('UPDATE messages SET removed=2 WHERE id=?',(m['id'],))
+        return {'ok':True}
+
+    # --- 会话成员 ----------------------------------------------------------
+    # 群聊右侧成员抽屉的数据源：昵称、角色（群主/管理员/成员）、禁言状态。
+    # 私聊也走这个接口，前端按 kind 决定渲染成员列表还是对方资料。
+    def room_members(self,u,r):
+        self.member(u,r)
+        room=self.row('SELECT * FROM rooms WHERE id=?',(r,))
+        members=self.rows('''SELECT m.user_id,m.role,m.muted,u.nickname,u.college
+            FROM members m JOIN users u ON u.id=m.user_id WHERE m.room_id=?
+            ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'moderator' THEN 1 ELSE 2 END,m.user_id''',(r,))
+        return {'room':{'id':room['id'],'name':room['name'],'kind':room['kind'],'pair':room['pair']},
+                'members':members}
     def send_message(self,u,r,body,key):
         member=self.member(u,r);self.require(not member['muted'],'你在该群已被禁言',403)
         body=self.text(body,2000,'消息');self.require(1<=len(str(key))<=100,'缺少消息标识')
@@ -76,17 +168,30 @@ class CommunityService(ValidationMixin):
         report=scan_text(body)
         self.require(not report['blocked'],'帖子不能发布：'+message_for(report),422)
         mark=flag_of(report)
-        with self.tx() as c:pid=c.execute('INSERT INTO posts(user_id,topic,body,created,moderation) VALUES(?,?,?,?,?)',
+        with self.tx() as c:
+            pid=c.execute('INSERT INTO posts(user_id,topic,body,created,moderation) VALUES(?,?,?,?,?)',
                                           (u,topic,body,time.time(),json.dumps(mark,ensure_ascii=False) if mark else None)).lastrowid
+            self._notify_mentions(c,u,self.profile(u)['nickname'],body,pid)
         return {'id':pid,'moderation':mark}
+
     def comments(self,p):return self.rows('SELECT c.*,u.nickname FROM comments c JOIN users u ON u.id=c.user_id WHERE post_id=? ORDER BY c.id LIMIT 100',(p,))
+
     def comment(self,u,p,body):
-        self.require(self.row('SELECT 1 FROM posts WHERE id=? AND removed=0',(p,)) is not None,'帖子不存在',404)
+        post=self.row('SELECT p.*,u.nickname author FROM posts p JOIN users u ON u.id=p.user_id WHERE p.id=? AND p.removed=0',(p,))
+        self.require(post is not None,'帖子不存在',404)
         body=self.text(body,1000,'回复')
         # 评论不落审核标记（没有「待审」这个环节，只有删），但高危照样拦。
         report=scan_text(body)
         self.require(not report['blocked'],'回复不能发布：'+message_for(report),422)
-        with self.tx() as c:c.execute('INSERT INTO comments(post_id,user_id,body,created) VALUES(?,?,?,?)',(p,u,body,time.time()))
+        with self.tx() as c:
+            c.execute('INSERT INTO comments(post_id,user_id,body,created) VALUES(?,?,?,?)',(p,u,body,time.time()))
+            me=self.profile(u)['nickname']
+            # 帖子作者的通知：正文摘要截到 24 字，通知列表一行能放下。
+            excerpt=post['body'][:24]+('…' if len(post['body'])>24 else '')
+            if post['user_id']!=u:
+                self.notify(c,post['user_id'],'post_reply',f'{me} 回复了你的帖子「{excerpt}」',post_id=p)
+            # @到的其他人单独通知；帖子作者已在上面通知过，这里跳过避免双份。
+            self._notify_mentions(c,u,me,body,p,skip={post['user_id']})
         return {'ok':True}
     def moderate(self,u,d):
         r=int(d['room_id']);member=self.member(u,r)

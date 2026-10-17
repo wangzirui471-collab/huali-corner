@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS ticket_messages(id INTEGER PRIMARY KEY,ticket_id INTE
 CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,actor INTEGER,target INTEGER,type TEXT,delta INTEGER,reason TEXT,ticket_id INTEGER,created REAL);
 CREATE TABLE IF NOT EXISTS reviews(id INTEGER PRIMARY KEY,order_id INTEGER,user_id INTEGER,rating INTEGER,body TEXT,created REAL,UNIQUE(order_id,user_id));
 CREATE TABLE IF NOT EXISTS rooms(id INTEGER PRIMARY KEY,kind TEXT,name TEXT,college TEXT DEFAULT '',sequence INTEGER DEFAULT 1,pair TEXT UNIQUE);
-CREATE TABLE IF NOT EXISTS members(room_id INTEGER,user_id INTEGER,muted INTEGER DEFAULT 0,role TEXT DEFAULT 'member',PRIMARY KEY(room_id,user_id));
+CREATE TABLE IF NOT EXISTS members(room_id INTEGER,user_id INTEGER,muted INTEGER DEFAULT 0,role TEXT DEFAULT 'member',last_read_id INTEGER DEFAULT 0,PRIMARY KEY(room_id,user_id));
 CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY,room_id INTEGER,user_id INTEGER,body TEXT,created REAL,request_key TEXT,removed INTEGER DEFAULT 0,moderation TEXT,UNIQUE(user_id,room_id,request_key));
 CREATE TABLE IF NOT EXISTS blocks(user_id INTEGER,target INTEGER,PRIMARY KEY(user_id,target));
 CREATE TABLE IF NOT EXISTS posts(id INTEGER PRIMARY KEY,user_id INTEGER,topic TEXT,body TEXT,created REAL,moderation TEXT,removed INTEGER DEFAULT 0);
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS comments(id INTEGER PRIMARY KEY,post_id INTEGER,user_
 CREATE TABLE IF NOT EXISTS offers(id INTEGER PRIMARY KEY,product_id INTEGER,buyer_id INTEGER,amount INTEGER,status TEXT DEFAULT 'pending',created REAL);
 CREATE TABLE IF NOT EXISTS nominations(id INTEGER PRIMARY KEY,user_id INTEGER,room_id INTEGER,reason TEXT,status TEXT DEFAULT 'pending',created REAL);
 CREATE TABLE IF NOT EXISTS wants(id INTEGER PRIMARY KEY,user_id INTEGER,keyword TEXT,budget INTEGER,description TEXT,status TEXT DEFAULT 'open',created REAL);
-CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY,user_id INTEGER,kind TEXT,order_id INTEGER,ticket_id INTEGER,body TEXT,read_at REAL,created REAL);
+CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY,user_id INTEGER,kind TEXT,order_id INTEGER,ticket_id INTEGER,body TEXT,read_at REAL,created REAL,post_id INTEGER);
 '''
 
 class Store:
@@ -90,6 +90,14 @@ class Store:
             if 'moderation' not in [x[1] for x in c.execute('PRAGMA table_info(messages)')]:c.execute('ALTER TABLE messages ADD COLUMN moderation TEXT')
             if 'moderation' not in [x[1] for x in c.execute('PRAGMA table_info(posts)')]:c.execute('ALTER TABLE posts ADD COLUMN moderation TEXT')
             if 'removed' not in [x[1] for x in c.execute('PRAGMA table_info(posts)')]:c.execute('ALTER TABLE posts ADD COLUMN removed INTEGER DEFAULT 0')
+            # 聊天已读位点：记到「读过的最大消息 id」。没有它就无法算未读角标，
+            # 「我的」页顶栏的小红数字只能靠 notifications 单一来源。
+            # 老库自动补列，0 = 从未读过（整个历史都算未读太多，下面查询里对
+            # last_read_id=0 的会话按最近 50 条封顶计数）。
+            if 'last_read_id' not in [x[1] for x in c.execute('PRAGMA table_info(members)')]:c.execute('ALTER TABLE members ADD COLUMN last_read_id INTEGER DEFAULT 0')
+            # 通知关联的帖子（帖子回复 / @提及）。订单与工单已有各自的列，
+            # 社区通知复用它们会让前端跳转逻辑变糊，单独补一列。
+            if 'post_id' not in [x[1] for x in c.execute('PRAGMA table_info(notifications)')]:c.execute('ALTER TABLE notifications ADD COLUMN post_id INTEGER')
             c.execute("INSERT OR IGNORE INTO rooms(id,kind,name) VALUES(1,'general','广州校区总聊')")
     def connect(self):
         c=sqlite3.connect(self.path,timeout=20)

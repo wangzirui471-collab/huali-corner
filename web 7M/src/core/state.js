@@ -9,6 +9,8 @@ export const state = {
   config: {},
   filter: {category:'', q:'', sort:''},
   poll: null,
+  // 聊天页的低频轮询（会话列表摘要刷新），与 poll 一起在路由切换时清掉。
+  poll2: null,
   renderId: 0,
   cart: [],
   // 逛逛页的「免费送」货架开关与频道筛选并列存在。
@@ -45,7 +47,10 @@ export const demoFeatures = {
 
 export function bumpRenderId(){ return ++state.renderId; }
 
-export function clearPoll(){ clearInterval(state.poll); state.poll = null; }
+export function clearPoll(){
+  clearInterval(state.poll); state.poll = null;
+  clearInterval(state.poll2); state.poll2 = null;
+}
 
 export function saveCart(){
   syncPendingWant();
