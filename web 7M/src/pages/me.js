@@ -18,7 +18,35 @@ import { field, selectField } from '../components/forms.js';
 import { card } from '../components/product-card.js';
 import { needLogin } from '../auth/login.js';
 
-export async function profile(id){const r=await api('/profile?id='+id),u=r.user;shell(`${heading('NICE TO MEET YOU','同学的转角','看看这位同学的公开信息和在售好物。')}<section class="panel profile-card"><span class="avatar jumbo">${e(u.nickname[0])}</span><div><h2>${e(u.nickname)}</h2><p>${e(u.college)} · ${e(u.major)} · ${e(u.education)}</p><p>${e(u.bio||'让闲置遇到真正需要它的人。')}</p><span class="tag">信誉 ${u.score}/100 · 不是交易担保</span></div>${state.me?.id!==u.id?`<button class="btn primary" data-action="chat" data-id="${u.id}">发私信</button>`:''}</section><h2>在售商品</h2><div class="product-grid">${r.products.filter(p=>p.status==='available').map(card).join('')}</div>`);}
+// 公开主页。看别人的时候是只读的；看自己的时候，资料编辑表单就在这里——
+// 「我的」页改版后不再放表单，编辑资料回到它归属的地方：主页。
+export async function profile(id){
+  const r=await api('/profile?id='+id),u=r.user;
+  const own=state.me&&state.me.id===u.id;
+  // 试用版学院是固定目录（state.config.colleges）；演示版与公开页允许自填，留空即可。
+  const collegeOptions=(state.config.colleges||[]).map(c=>`<option ${state.me&&state.me.college===c.source_name?'selected':''}>${e(c.source_name)}</option>`).join('');
+  shell(`${heading('NICE TO MEET YOU','同学的转角','看看这位同学的公开信息和在售好物。')}
+  <section class="panel profile-card">
+    <span class="avatar jumbo">${e(u.nickname[0])}</span>
+    <div><h2>${e(u.nickname)}</h2><p>${e(u.college)} · ${e(u.major)} · ${e(u.education)}</p><p>${e(u.bio||'让闲置遇到真正需要它的人。')}</p><span class="tag">信誉 ${u.score}/100 · 不是交易担保</span></div>
+    ${!own?`<button class="btn primary" data-action="chat" data-id="${u.id}">发私信</button>`:''}
+  </section>
+  <h2>在售商品</h2>
+  <div class="product-grid">${r.products.filter(p=>p.status==='available').map(card).join('')}</div>
+  ${own?`<form id="profile-form" class="panel">
+    <h2>编辑我的资料</h2>
+    <div class="form-grid">
+      ${field('昵称','nickname','text',state.me.nickname,'required maxlength="24"')}
+      ${selectField('当前状态','education',['本科','专科','已毕业','其他'])}
+      <label class="field"><span>学院（自填，非认证）</span><select name="college">${collegeOptions}<option value="">暂不填写</option></select></label>
+      ${field('专业（可选）','major','text',state.me.major)}
+    </div>
+    <label class="field"><span>简介</span><textarea name="bio" maxlength="300">${e(state.me.bio)}</textarea></label>
+    <button class="btn primary">保存资料</button>
+    <p class="muted">学院目录来自用户提供文件，部分名称可能为旧称；不展示实名或学生认证徽章。</p>
+  </form>`:''}`,'me');
+  if(own)$('[name=education]').value=state.me.education;
+}
 
 // --- 「我的」页 ------------------------------------------------------------
 
@@ -58,8 +86,8 @@ const noteRow = n => `<div class="me-note-row" data-go="messages/notice">
 export async function mine(){
   if(!needLogin())return;
   state.me=await api('/me');
-  const [history,myList,favList,myOrders,notices]=await Promise.all([
-    api('/credit/history'),api('/my-products'),api('/products?favorite=1'),api('/orders'),api('/notifications')
+  const [myList,favList,myOrders,notices]=await Promise.all([
+    api('/my-products'),api('/products?favorite=1'),api('/orders'),api('/notifications')
   ]);
   const me=state.me.id;
   // 按「我是买家还是卖家 + 订单状态」计数。口径与订单页一致：
@@ -166,25 +194,4 @@ export async function mine(){
       ${tile('','close','退出登录',0,'data-action="logout"','danger')}
       ${tile('','trash','注销账号',0,'data-action="deactivate"','danger')}
     </section>
-
-    <form id="profile-form" class="panel">
-      <h2>个人资料</h2>
-      <div class="form-grid">
-        ${field('昵称','nickname','text',state.me.nickname,'required maxlength="24"')}
-        ${selectField('当前状态','education',['本科','专科','已毕业','其他'])}
-        <label class="field"><span>学院（自填，非认证）</span><select name="college">${(state.config.colleges||[]).map(c=>`<option ${state.me.college===c.source_name?'selected':''}>${e(c.source_name)}</option>`).join('')}<option value="">暂不填写</option></select></label>
-        ${field('专业（可选）','major','text',state.me.major)}
-      </div>
-      <label class="field"><span>简介</span><textarea name="bio" maxlength="300">${e(state.me.bio)}</textarea></label>
-      <button class="btn primary">保存资料</button>
-      <p class="muted">学院目录来自用户提供文件，部分名称可能为旧称；不展示实名或学生认证徽章。</p>
-    </form>
-
-    <section class="panel">
-      <h2>信誉规则与申诉</h2>
-      <p>初始100分，低于60分暂停发布。举报和点赞不会自动改变信誉；处罚必须有审核理由，可通过客服申诉。</p>
-      ${history.map(h=>`<div class="case-message"><b>${h.delta>0?'+':''}${h.delta}分 · 工单 #${h.ticket_id}</b><p>${e(h.reason)}</p><small>${date(h.created)}</small></div>`).join('')}
-      <button class="btn secondary" data-action="appeal">申请信誉申诉</button>
-    </section>
-  </div>`,'me');
-  $('[name=education]').value=state.me.education;}
+  </div>`,'me');}
