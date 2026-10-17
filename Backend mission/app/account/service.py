@@ -15,8 +15,18 @@ from ..core.errors import ValidationMixin, DomainError
 class AccountService(ValidationMixin):
 
     def _trial_only(self):self.require(self.trial,'此接口仅供学院试用版使用',403)
+    # 账号标识：11 位手机号，或邮箱地址。
+    # 校园里不少同学习惯用邮箱记账号，运营者的调试账号也用邮箱更好记；
+    # 邮箱统一转小写，避免同一个邮箱因大小写差异被当成两个账号。
+    # 注意：request_code（短信验证码）仍只认手机号，邮箱收不到短信。
+    _PHONE_RE=re.compile(r'1[3-9][0-9]{9}')
+    _EMAIL_RE=re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+')
     def _phone(self,phone):
-        self.require(isinstance(phone,str) and re.fullmatch(r'1[3-9][0-9]{9}',phone),'请输入11位手机号')
+        if isinstance(phone,str):phone=phone.strip()
+        if isinstance(phone,str) and self._EMAIL_RE.fullmatch(phone):
+            self.require(len(phone)<=120,'邮箱地址过长')
+            return phone.lower()
+        self.require(isinstance(phone,str) and self._PHONE_RE.fullmatch(phone),'请输入11位手机号或邮箱')
         return phone
     def _password(self,password):
         # 下限取 6：原先是 12，对校园试用来讲太苛刻（用户反馈记不住）。
@@ -47,19 +57,19 @@ class AccountService(ValidationMixin):
         c.execute('INSERT OR REPLACE INTO auth_attempts VALUES(?,?,?)',(phone,attempts,reset_at))
         # Failed-attempt accounting must survive the domain error/transaction rollback.
         c.commit()
-        self.require(False,'手机号、密码或恢复码不正确',401)
+        self.require(False,'账号、密码或恢复码不正确',401)
     def register_password(self,phone,password,nickname):
         self._trial_only();phone=self._phone(phone);self._password(password)
         nickname=self.text(nickname,24,'昵称');salt,digest,rounds,recovery_digest,recovery=self._new_credential(password)
         with self.tx() as c:
-            self.require(not c.execute('SELECT 1 FROM users WHERE phone=?',(phone,)).fetchone(),'此手机号已注册，请登录或使用恢复码',409)
+            self.require(not c.execute('SELECT 1 FROM users WHERE phone=?',(phone,)).fetchone(),'此账号已注册，请登录或使用恢复码',409)
             uid=c.execute("INSERT INTO users(phone,nickname,college,role) VALUES(?,?,'计算机工程学院','user')",(phone,nickname)).lastrowid
             c.execute('INSERT INTO password_credentials VALUES(?,?,?,?,?)',(uid,salt,digest,rounds,recovery_digest))
             token=self._session(c,uid)
         return self._trial_result(uid,token,recovery)
     def login_password(self,phone,password):
         self._trial_only();phone=self._phone(phone)
-        self.require(isinstance(password,str) and len(password)<=128,'手机号、密码或恢复码不正确',401)
+        self.require(isinstance(password,str) and len(password)<=128,'账号、密码或恢复码不正确',401)
         with self.connect() as c:self._lock_check(c,phone)
         credential=self.row('SELECT p.*,u.status FROM password_credentials p JOIN users u ON u.id=p.user_id WHERE u.phone=?',(phone,))
         # Perform the KDF even for an unknown phone; do not disclose account existence.
@@ -87,7 +97,7 @@ class AccountService(ValidationMixin):
         return {'ok':True,'recovery_code':recovery}
     def recover_password(self,phone,recovery_code,new_password):
         self._trial_only();phone=self._phone(phone);self._password(new_password)
-        self.require(isinstance(recovery_code,str) and len(recovery_code)<=128,'手机号、密码或恢复码不正确',401)
+        self.require(isinstance(recovery_code,str) and len(recovery_code)<=128,'账号、密码或恢复码不正确',401)
         candidate=hashlib.sha256(recovery_code.encode()).hexdigest()
         salt,digest,rounds,recovery_digest,recovery=self._new_credential(new_password)
         with self.tx() as c:

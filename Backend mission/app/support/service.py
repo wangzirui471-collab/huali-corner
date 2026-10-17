@@ -172,9 +172,17 @@ class SupportService(ValidationMixin):
 
     @staticmethod
     def mask_phone(phone):
-        """手机号脱敏。工作台不需要完整号码就能干活；
-        真需要联系当事人时再走单独的高敏流程。"""
+        """账号脱敏。工作台不需要完整账号就能干活；
+        真需要联系当事人时再走单独的高敏流程。
+
+        账号现在可能是手机号或邮箱，两者脱敏方式不同：
+        手机号保留前 3 位与后 4 位；邮箱保留用户名前 2 位 + 完整域名
+        （域名本身不指向个人，保留它才能判断是不是校内邮箱）。"""
         phone=str(phone or '')
+        if '@' in phone:
+            name,_,domain=phone.partition('@')
+            if not domain:return ''
+            return (name[:2] if len(name)>2 else name[:1])+'***@'+domain
         return phone[:3]+'****'+phone[-4:] if len(phone)>=7 else ''
 
     def dossier(self,u,target):

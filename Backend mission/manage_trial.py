@@ -13,7 +13,7 @@ def main():
     parser.add_argument('action',choices=['create-admin','reset-password'])
     parser.add_argument('--data',default=os.environ.get('HUALI_DATA_DIR') or data_dir(True))
     args=parser.parse_args()
-    phone=input('手机号（仅作账号，不验证号码归属）：').strip()
+    phone=input('账号（11位手机号或邮箱，不验证归属）：').strip()
     password=getpass.getpass('新密码（6至128个字符）：')
     confirmation=getpass.getpass('再次输入新密码：')
     if password!=confirmation:parser.error('两次密码不一致')
@@ -23,7 +23,9 @@ def main():
             result=market.bootstrap_admin(phone,password)
             print('管理员已配置，账号ID：'+str(result['id'])+'。若已存在，不会覆盖原密码。')
         else:
-            market._phone(phone);market._password(password)
+            # 必须用 _phone() 的返回值：邮箱会被规范化为小写，
+            # 若继续用输入的原始值去查 users 表，大写邮箱账号会查不到。
+            phone=market._phone(phone);market._password(password)
             user=market.row('SELECT id FROM users WHERE phone=?',(phone,))
             market.require(user,'账号不存在',404)
             salt,digest,rounds,recovery_digest,recovery=market._new_credential(password)
