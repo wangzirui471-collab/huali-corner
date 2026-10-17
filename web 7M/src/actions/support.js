@@ -46,8 +46,42 @@ export const clicks = {
   },
 
   // 信誉分只能由平台管理员、且必须挂在一张已核实的工单上调整。
+  // 选违规类型按「基础分＋金额阶梯」自动算（方案 A）；留空则手填分值。
   credit(b, id){
-    modal(`<h2>信誉审核调整</h2><p class="muted">必须关联已核实工单，填写理由。举报不自动扣分，用户可申诉。</p><form id="credit-form" data-target="${id}">${field('关联工单编号','ticket_id','number','','required min="1"')}${field('调整分值（如 -10 或 +10）','delta','number','','required min="-100" max="100"')}<label class="field"><span>审核理由</span><textarea name="reason" required></textarea></label><button class="btn primary">确认调整并记录</button></form>`);
+    modal(`<h2>信誉审核调整</h2><p class="muted">必须关联已核实工单并填写理由。选违规类型按「基础分＋金额阶梯」自动算分，也可留空手填。</p>
+      <form id="credit-form" data-target="${id}">
+        ${field('关联工单编号','ticket_id','number','','required min="1"')}
+        <label class="field"><span>违规类型（选填）</span><select name="violation">
+          <option value="">手填分值，不自动算</option>
+          <option value="minor">轻微违规 · 基础 3 分</option>
+          <option value="moderate">中度违规 · 基础 8 分</option>
+          <option value="severe">严重违规 · 基础 15 分</option>
+        </select></label>
+        ${field('调整分值（扣分为负，如 -10；选类型后可留空）','delta','number','','min="-100" max="100"')}
+        <label class="field"><span>审核理由</span><textarea name="reason" required></textarea></label>
+        <p class="muted" id="credit-hint">金额阶梯：&lt;30 元 +0 · 30–100 +1 · 100–300 +3 · &gt;300 +6</p>
+        <div class="stack">
+          <button type="button" class="btn secondary" data-action="credit-preview">按价格计算建议分</button>
+          <button class="btn primary">确认调整并记录</button>
+        </div>
+      </form>`);
+  },
+
+  // 预览建议分：只读 dry_run，把「基础分 + 金额档」拆开给人看，并预填分值。
+  'credit-preview': async () => {
+    const form = $('#credit-form'); if (!form) return;
+    const violation = form.querySelector('[name=violation]').value;
+    const ticketId = form.querySelector('[name=ticket_id]').value;
+    if (!violation){ toast('请先选择违规类型'); return; }
+    if (!ticketId){ toast('请先填写关联工单编号'); return; }
+    const r = await api('/credit', {
+      target:Number(form.dataset.target), ticket_id:Number(ticketId),
+      violation, dry_run:true, reason:'预览'
+    });
+    const hint = $('#credit-hint');
+    if (hint) hint.innerHTML = `建议扣 <b>${r.suggested}</b> 分（${r.label}基础 ${r.base} ＋ 金额档 ${r.extra}；订单金额 ¥${money(r.amount)}）。可在此基础上手改分值。`;
+    const delta = form.querySelector('[name=delta]');
+    if (delta && !delta.value) delta.value = -r.suggested;
   },
 
   // 封禁 / 解封：比扣信誉分更硬的约束，仅管理员对非管理员账号操作。
@@ -98,14 +132,18 @@ export const submits = {
   },
 
   'credit-form': async ({ form, d }) => {
-    await api('/credit', {
+    const violation = d.violation || null;
+    const delta = d.delta === '' ? null : Number(d.delta);
+    if (!violation && delta === null){ toast('请填写调整分值，或选择违规类型自动计算'); return; }
+    const r = await api('/credit', {
       target:Number(form.dataset.target),
       ticket_id:Number(d.ticket_id),
-      delta:Number(d.delta),
+      delta,
+      violation,
       reason:d.reason
     });
     closeModal();
-    toast('信誉变动已审计记录');
+    toast(delta !== null ? '信誉变动已审计记录' : `已按价格计算并扣分（现信誉 ${r.score}/100）`);
     await render();
   }
 };

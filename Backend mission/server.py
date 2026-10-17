@@ -130,7 +130,7 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/ticket':return self.respond(m.ticket(u,int(query['id'])))
             if p=='/api/ticket/reply' and method=='POST':return self.respond(m.reply_ticket(u,int(data['id']),data))
             if p=='/api/ticket/resolve' and method=='POST':return self.respond(m.resolve_ticket(u,int(data['id']),data))
-            if p=='/api/credit' and method=='POST':return self.respond(m.credit_action(u,int(data['target']),data['delta'],data['reason'],int(data['ticket_id'])))
+            if p=='/api/credit' and method=='POST':return self.respond(m.credit_action(u,int(data['target']),data.get('delta'),data['reason'],int(data['ticket_id']),data.get('violation'),bool(data.get('dry_run',False))))
             if p=='/api/credit/history':return self.respond(m.credit_history(u))
             if p=='/api/review' and method=='POST':return self.respond(m.review(u,int(data['order_id']),data['rating'],data['body']))
             if p=='/api/rooms':return self.respond(m.rooms(u))

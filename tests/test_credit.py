@@ -149,5 +149,52 @@ class TrustedBadgeTests(unittest.TestCase):
         self.assertFalse(self.m.product(self.product())['seller_trusted'])
 
 
+class ViolationSuggestTests(unittest.TestCase):
+    """工单页「选违规类型自动算分」（方案 A 最后一公里）。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.m = Market(self.tmp.name, trial=True)
+        self.admin = self.m.bootstrap_admin('19065322759', 'adminpass1')['id']
+        self.seller = self.m.register_password('13800000001', 'seller123', '卖家')['user']['id']
+        self.buyer = self.m.register_password('13800000002', 'buyer123', '买家')['user']['id']
+        # 商品 + 150 元订单 + 关联工单（report 类型、已结案）
+        with self.m.tx() as c:
+            pid = c.execute("INSERT INTO products(seller_id,title,category,price,delivery_fee,delivery,region,status,data,created)"
+                            " VALUES(?,?,?,?,?,?,?,?,?,?)",
+                            (self.seller, '违规商品', 'living', 15000, 0, 'pickup', 'L1', 'available',
+                             json.dumps({'description': 'x'}, ensure_ascii=False), time.time())).lastrowid
+            oid = c.execute("INSERT INTO orders(buyer_id,seller_id,items,subtotal,delivery_fee,total,delivery,address,status,created)"
+                            " VALUES(?,?,?,?,?,?,?,?,?,?)",
+                            (self.buyer, self.seller, json.dumps([{'id': pid, 'title': '违规商品', 'photo': '', 'price': 15000}]),
+                             15000, 0, 15000, 'pickup', 'L1', 'completed', time.time())).lastrowid
+            self.tid = c.execute("INSERT INTO tickets(user_id,order_id,product_id,type,subject,body,status,created)"
+                                 " VALUES(?,?,?,?,?,?,?,?)",
+                                 (self.buyer, oid, pid, 'report', '货不对板', '详情', 'resolved', time.time())).lastrowid
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_dry_run_returns_breakdown_without_writing(self):
+        before = self.m.profile(self.seller)['score']
+        r = self.m.credit_action(self.admin, self.seller, None, '预览', self.tid, 'moderate', dry_run=True)
+        # 150 元 → 中度基础 8 + 金额档(100-300)=3 = 11
+        self.assertEqual(r['suggested'], 11)
+        self.assertEqual(r['base'], 8)
+        self.assertEqual(r['extra'], 3)
+        self.assertEqual(r['amount'], 15000)
+        self.assertEqual(self.m.profile(self.seller)['score'], before, 'dry_run 不应写库')
+
+    def test_violation_auto_applies_suggested_penalty(self):
+        before = self.m.profile(self.seller)['score']
+        self.m.credit_action(self.admin, self.seller, None, '货不对板，按价格处罚', self.tid, 'moderate')
+        self.assertEqual(self.m.profile(self.seller)['score'], before - 11)
+
+    def test_explicit_delta_overrides_suggestion(self):
+        before = self.m.profile(self.seller)['score']
+        self.m.credit_action(self.admin, self.seller, -5, '人工从轻', self.tid, 'moderate')
+        self.assertEqual(self.m.profile(self.seller)['score'], before - 5)
+
+
 if __name__ == '__main__':
     unittest.main()

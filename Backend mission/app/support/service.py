@@ -1,7 +1,7 @@
 """客服模块：工单受理与处理、信誉调整、订单评价。"""
 import json, time
 from ..core.errors import ValidationMixin, DomainError
-from ..account.credit import GOOD_REVIEW, AWARD_PER_REVIEW, AWARD_DAILY_CAP, AWARD_MONTHLY_CAP, AWARD_REASON_PREFIX, day_start, month_start
+from ..account.credit import GOOD_REVIEW, AWARD_PER_REVIEW, AWARD_DAILY_CAP, AWARD_MONTHLY_CAP, AWARD_REASON_PREFIX, day_start, month_start, suggest_penalty, VIOLATION_BASE, VIOLATION_LABEL
 
 
 class SupportService(ValidationMixin):
@@ -102,9 +102,23 @@ class SupportService(ValidationMixin):
                 self.notify(c,t['user_id'],'ticket_resolved',f'工单 #{tid} 已处理完成（{"退款" if outcome=="refund" else "结案" if outcome=="resolved" else "驳回"}），可到客服中心查看处理依据并申请复核。',t['order_id'],tid)
         return {'ok':True}
 
-    def credit_action(self,u,target,delta,reason,tid):
+    def credit_action(self,u,target,delta,reason,tid,violation=None,dry_run=False):
         self.staff(u);self.require(self.is_admin(u),'仅平台管理员或开发者可处理信誉',403)
-        self.require(u!=target,'不能处理自己的信誉');self.text(reason,1000,'处罚/复核理由');t=self.ticket(u,tid)
+        self.require(u!=target,'不能处理自己的信誉');t=self.ticket(u,tid)
+        # 方案 A：选了违规类型就按「基础分 + 金额阶梯」自动算建议扣分。
+        # dry_run 只算不写（工单页「计算建议分」预览用）；正式提交若没手填 delta
+        # 就用建议值。金额取工单关联订单的总额，没有订单则金额记 0。
+        if violation:
+            self.require(violation in VIOLATION_BASE,'违规类型无效')
+            amount=self._ticket_amount(t)
+            suggested=suggest_penalty(violation,amount)
+            if dry_run:
+                return {'suggested':suggested,'base':VIOLATION_BASE[violation],
+                        'extra':suggested-VIOLATION_BASE[violation],'amount':amount,
+                        'label':VIOLATION_LABEL[violation]}
+            if delta is None:
+                delta=-suggested
+        self.text(reason,1000,'处罚/复核理由')
         self.require(type(delta) is int and -100<=delta<=100 and delta!=0,'分值变动无效')
         self.require(t['status']=='resolved','请先核实工单并记录处理结论')
         self.check_conflict(u,t)
@@ -122,6 +136,11 @@ class SupportService(ValidationMixin):
             c.execute('INSERT INTO audit(actor,target,type,delta,reason,ticket_id,created) VALUES(?,?,?,?,?,?,?)',(u,target,'credit',delta,reason,tid,time.time()))
             self.notify(c,target,'credit',f'你的信誉分有变动（{delta:+d} 分），可到客服中心查看处理依据并申诉。',None,tid)
         return self.profile(target)
+
+    def _ticket_amount(self,t):
+        if not t.get('order_id'):return 0
+        o=self.row('SELECT total FROM orders WHERE id=?',(t['order_id'],))
+        return o['total'] if o else 0
 
     def ban_user(self,u,target,banned,reason):
         """封禁 / 解封账号：比扣信誉分更硬的约束。封禁后账号立即下线、
