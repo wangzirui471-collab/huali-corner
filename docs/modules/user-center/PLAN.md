@@ -48,25 +48,27 @@ Interfaces:
 Run: `python -m unittest discover -s tests -p test_user_profiles.py -v`。
 Expected: 专属用例全部通过，迁移/校验失败不改变原数据。
 
-## Task 2: A 完成 U01 接线后开发 U02
+## Task 2: U02 头像领域实现
 
 Files: 新增 `account/avatars.py`、`tests/test_user_avatars.py`，扩展本领域迁移和文档。
 Interfaces: 复用 U01 profile_version；新增 user_upload_avatar/user_set_avatar/user_is_public_avatar。
 
-- [ ] 合入 A 侧仅接线提交，真实 HTTP 验证 U01。
-- [ ] 先写并运行坏图、体积/像素、多帧、元数据、所有权和公开资格失败测试。
-- [ ] 实现专用上传、选择、移除；文件与数据库失败补偿；专属测试通过。
+- 用户于本轮要求先继续完成 U02/U03 的 B 侧实现；不再等待 A 接线才写代码，公共文件仍归 A。
+- 头像使用独立 user_avatar_uploads 表（仍存运行 uploads/），不改变旧 uploads 表列数，避免破坏原位置式 INSERT 或被当成商品/证据图。
+- [ ] 编写坏图、体积/像素、多帧、元数据、所有权、公开资格和失败补偿测试源码，不运行。
+- [ ] 实现专用上传、选择、移除与公开头像投影；只读检查。
 - [ ] 提交媒体权限接入清单与独立 U02 提交。
+- [ ] A 接线后执行真实 HTTP 与旧客户端兼容验证（由 A/用户运行）。
 
-## Task 3: A 完成媒体接线后开发 U03
+## Task 3: U03 网页实现
 
 Files: `pages/me.js`、新增 components/user-profile.js、user-avatar.js、actions/user-profile.js、user-center.css、tests/user_profile.test.mjs、user_center_browser_smoke.py。
 
-- [ ] 编写表单、跨会话晚响应、409 保留输入和文本转义测试，观察失败。
+- [ ] 编写表单、跨会话晚响应、409 保留输入和文本转义测试源码，不运行。
 - [ ] 实现表单/头像/公开主页，保留原入口，动作键以 user- 开头。
 - [ ] A 注册动作和样式后运行真实页面联调、四档宽度与截图。
 - [ ] 运行相关回归，记录实际失败及未运行项，三个任务分别提交并最终联合验收。
 
 ## 当前阶段
 
-先交付 Task 1 的领域实现与接入合同。Task 2/3 依赖 A 的接线提交，不能把未接线的页面或媒体路径声明为完成。
+按用户最新要求继续交付 Task 2/3 的 B 侧代码；A 的接线和运行验证仍是联合完成条件，不能把未接线的功能声明为可运行验收通过。

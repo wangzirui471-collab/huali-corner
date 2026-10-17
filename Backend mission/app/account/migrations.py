@@ -24,7 +24,6 @@ def migrate_account(connection: sqlite3.Connection) -> None:
             'INTEGER NOT NULL DEFAULT 0 '
             "CHECK(typeof(profile_version)='integer' AND profile_version>=0)"
         ),
-        # Selection and public media authorization are implemented in U02.
         'avatar_upload_id': 'TEXT',
     }
     for name, definition in additions.items():
@@ -44,3 +43,19 @@ def migrate_account(connection: sqlite3.Connection) -> None:
             UPDATE users SET study_status=CASE education
                 WHEN '已毕业' THEN 'graduated' ELSE 'unspecified' END
         ''')
+
+    # Keep the six-column legacy uploads table unchanged: existing catalog
+    # writers use positional INSERTs, and private evidence accepts its rows.
+    # A separate registry prevents an avatar becoming a product/evidence image.
+    connection.execute('''
+        CREATE TABLE IF NOT EXISTS user_avatar_uploads (
+            upload_id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            path TEXT NOT NULL,
+            digest TEXT NOT NULL,
+            created_at REAL NOT NULL
+        )
+    ''')
+    connection.execute('''
+        CREATE INDEX IF NOT EXISTS user_avatar_owner ON user_avatar_uploads(user_id)
+    ''')

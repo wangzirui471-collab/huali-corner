@@ -6,7 +6,7 @@
 
 ## 交付状态和边界
 
-本次仅提供 U01 的资料领域方法、增量迁移及测试源码，供 A 接线。
+U01 提供资料领域方法、增量迁移及测试源码，供 A 接线；后续 U02 的专用媒体合同见 AVATAR_INTEGRATION.md。
 未编辑公共入口，尚未注册新的 HTTP 路由，也未替换旧 AccountService 方法。
 本文件中的接线片段是给 A 的修改建议，不是本分支已经执行的改动。
 
@@ -158,8 +158,8 @@ HTTP 自查入口仍必须 `self.uid()`，不能把 URL/body 中的用户 ID 传
 
 ## 6 U02 U03 的保留合同和接线需求
 
-- U01 的 avatar_upload_id 是保留字段，avatar_url 当前固定 null；本提交不注册或承诺头像功能。
-- U02 继续交付 `user_upload_avatar`、`user_set_avatar`、`user_is_public_avatar`，届时补媒体接入细节。
+- U02 已编写专用头像领域，资料 DTO 返回当前有效的公开头像路径；无效或无头像时为 null。
+- U02 的 `user_upload_avatar`、`user_set_avatar`、`user_is_public_avatar`、`user_avatar_bytes` 接入见 AVATAR_INTEGRATION.md，尚未由 A 接线验证。
 - U03 继续交付独立 `actions/user-profile.js` 的 clicks/submits、`user-` 动作及表单 ID。
 - 此阶段没有前端动作/表单/样式需要 A 注册；不要提前引用不存在的文件。
 - 现有 core/http.js 抛出的 Error 未携带 HTTP status。U03 需要明确区分409；建议 A 后续在原错误上增加只读的 status 属性，保留 error/message 与既有调用方式。B 不另建请求/共享状态实现。
@@ -192,5 +192,5 @@ node tests/frontend_modules.test.mjs
 | AccountService.profile/update_profile 转发 | 待 A 填写 | 未接入 |
 | /api/user/profile GET/POST | 待 A 填写 | 未接入 |
 | 公开 DTO 与旧客户端兼容 | 待 A 验证 | 未联调 |
-| U02 媒体钩子 | 后续阶段 | 未实现 |
+| U02 媒体钩子 | 见 AVATAR_INTEGRATION.md | 已写领域代码，待 A 接入 |
 | U03 动作和样式 | 后续阶段 | 未实现 |

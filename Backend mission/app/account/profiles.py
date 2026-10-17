@@ -9,6 +9,7 @@ import sqlite3
 from typing import Any, TypedDict
 
 from ..core.errors import ValidationMixin
+from .avatars import user_public_avatar_url
 
 
 DEGREE_LEVELS = frozenset({'bachelor', 'junior_college', 'other', 'unspecified'})
@@ -68,14 +69,22 @@ def user_profile_dto(row: sqlite3.Row) -> UserProfileDTO:
         'degree_level': row['degree_level'],
         'study_status': row['study_status'],
         'profile_version': row['profile_version'],
-        'avatar_upload_id': row['avatar_upload_id'],
-        # U01 reserves the contract; U02 supplies authorized media projection.
+        'avatar_upload_id': None,
         'avatar_url': None,
     }
 
 
 class UserProfiles(ValidationMixin):
     """Uses Store.connect/tx and Market.trial without owning authentication."""
+
+    def user_profile_projection(self, connection: sqlite3.Connection,
+                                row: sqlite3.Row) -> UserProfileDTO:
+        result = user_profile_dto(row)
+        url = user_public_avatar_url(connection, self.root, row['id'], row['avatar_upload_id'])
+        if url is not None:
+            result['avatar_upload_id'] = row['avatar_upload_id']
+            result['avatar_url'] = url
+        return result
 
     def user_profile(self, actor_id: int) -> UserProfileDTO:
         """Read a profile by a server-resolved ID; HTTP authentication stays in A.
@@ -88,7 +97,7 @@ class UserProfiles(ValidationMixin):
         with closing(self.connect()) as connection:
             row = connection.execute(PROFILE_SELECT, (actor_id,)).fetchone()
             self.require(row is not None, '用户不存在', 404)
-            return user_profile_dto(row)
+            return self.user_profile_projection(connection, row)
 
     def user_update_profile(self, actor_id: int, payload: dict[str, Any]) -> UserProfileDTO:
         """Save only editable fields using the version read by this client."""
@@ -131,7 +140,8 @@ class UserProfiles(ValidationMixin):
             ''', (values['nickname'], values['major'], values['bio'], values['degree_level'],
                   values['study_status'], college, education, actor_id, version))
             self.require(cursor.rowcount == 1, '资料已更新，请重新载入并核对', 409)
-            return user_profile_dto(connection.execute(PROFILE_SELECT, (actor_id,)).fetchone())
+            return self.user_profile_projection(connection,
+                                                connection.execute(PROFILE_SELECT, (actor_id,)).fetchone())
 
     def user_update_legacy_profile(self, actor_id: int, payload: dict[str, Any]) -> UserProfileDTO:
         """Adapt /api/me without erasing new choices on an old-client round trip.
@@ -169,4 +179,5 @@ class UserProfiles(ValidationMixin):
                     degree_level=?,study_status=?,profile_version=profile_version+1 WHERE id=?
             ''', (nickname, college, str(payload.get('major', ''))[:80], str(payload.get('bio', ''))[:300],
                   education, degree_level, study_status, actor_id))
-            return user_profile_dto(connection.execute(PROFILE_SELECT, (actor_id,)).fetchone())
+            return self.user_profile_projection(connection,
+                                                connection.execute(PROFILE_SELECT, (actor_id,)).fetchone())
