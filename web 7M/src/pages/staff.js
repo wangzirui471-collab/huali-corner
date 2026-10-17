@@ -291,6 +291,9 @@ function userRow(u) {
   const tone = ROLE_TONE[u.role] || 'mute';
   const score = Math.max(0, Math.min(100, Number(u.score) || 0));
   const acts = `<button class="btn secondary" data-go="dossier/${u.id}">用户档案</button>
+    ${isAdmin() && u.id !== state.me.id
+      ? `<button class="text-button" data-action="credit" data-id="${u.id}">信誉调整</button>`
+      : ''}
     ${canBan
       ? `<button class="text-button ${banned ? '' : 'danger'}" data-action="ban" data-id="${u.id}" data-value="${banned ? 'false' : 'true'}">${banned ? '解封' : '封禁'}</button>`
       : ''}`;
@@ -451,7 +454,7 @@ function contentSection({ messages, posts }) {
 
 export async function staffDesk(section = 'overview') {
   if (!needLogin()) return;
-  if (!['admin', 'support'].includes(state.me.role)) throw new Error('没有客服权限');
+  if (!['admin', 'support', 'developer'].includes(state.me.role)) throw new Error('没有客服权限');
   const key = SECTIONS.some(([k]) => k === section) ? section : 'overview';
 
   let body;
