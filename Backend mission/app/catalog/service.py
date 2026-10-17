@@ -101,21 +101,36 @@ class CatalogService(ValidationMixin):
             result.append(p)
         return result
 
+    def refund_locked(self,c,pid):
+        """该商品是否卷入过退款/争议订单。
+
+        需求 §10.6：仅退款或部分退款时物品留在买家处，原卖家不再持有实物，
+        不能自行恢复出售；退款直接置 removed 后卖家又能点「重新上架」，
+        等于绕过了这条规则。凡是有争议或已退款订单引用过的商品，重新上架需客服复核。"""
+        for r in c.execute("SELECT items FROM orders WHERE status IN ('refunded','disputed')").fetchall():
+            if any(i['id']==pid for i in json.loads(r['items'])):return True
+        return False
+
     def set_product_status(self,u,pid,action):
         """下架 / 重新上架。只允许在 available 与 removed 之间切换。
         已被预订(reserved)或已售出(sold)的商品不能下架 —— 它们已经挂在别人的订单上，
-        下架会让那张订单指向一个消失的商品。"""
+        下架会让那张订单指向一个消失的商品。下架会一并清掉未到期的置顶，
+        否则重新上架时会带着旧的置顶时间直接跳到最前面。"""
         p=self.row('SELECT * FROM products WHERE id=?',(pid,))
         self.require(p,'商品不存在',404)
         self.require(p['seller_id']==u,'只能管理自己发布的商品',403)
         if action=='delist':
             self.require(p['status']=='available','只有「在售」的商品可以下架；已预订或已售出的不能下架')
-            target='removed'
+            target='removed';clear_promote=True
         elif action=='relist':
             self.require(p['status']=='removed','只有「已下架」的商品可以重新上架')
-            target='available'
+            self.require(self.profile(u)['score']>=60,'信誉分低于60，暂不能重新上架；可在客服中心申诉',403)
+            with self.connect() as c:
+                self.require(not self.refund_locked(c,pid),'该商品曾发生退款或争议，需联系客服复核后才能重新上架',403)
+            target='available';clear_promote=False
         else:raise DomainError('不支持的商品操作')
-        with self.tx() as c:c.execute('UPDATE products SET status=? WHERE id=?',(target,pid))
+        with self.tx() as c:
+            c.execute('UPDATE products SET status=?,promoted_until=? WHERE id=?',(target,0 if clear_promote else (p['promoted_until'] or 0),pid))
         return self.product(pid,u)
 
     def promote(self,u,pid,tier):

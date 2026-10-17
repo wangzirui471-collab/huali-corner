@@ -1430,3 +1430,98 @@ button { -webkit-tap-highlight-color: transparent; }
   .feed-filter { padding: 7px 11px; font-size: 12px; }
 }
 
+
+/* 消息页 · 订单与售后通知（站内通知，区别于聊天消息） */
+.notice-list { display: flex; flex-direction: column; gap: 10px; max-height: 62vh; overflow: auto; }
+.notice-item { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); padding: 12px 14px; }
+.notice-item.unread { border-color: var(--brand); background: var(--brand-soft); }
+.notice-item p { margin: 0 0 6px; line-height: 1.6; color: var(--ink-2); }
+.notice-item small { color: var(--muted); }
+
+/* ==========================================================================
+   26. 平台工作台（管理端）
+   左侧分区导航 + 右侧内容区。列表筛选走「行内显隐」（.desk-row[hidden]），
+   不触发 render() 重画整页，所以滚动位置不会丢、页面也不会闪。
+   所有类名统一用 desk- 前缀，和用户端页面样式隔离开。
+   ========================================================================== */
+
+.desk { display: grid; grid-template-columns: 172px minmax(0, 1fr); gap: 20px; align-items: start; }
+
+.desk-nav {
+  position: sticky;
+  top: calc(var(--header-h, 96px) + 14px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 10px;
+}
+.desk-tab { text-align: left; padding: 9px 12px; border-radius: var(--r-xs); font-size: 13px; color: var(--ink-3); font-weight: 500; }
+.desk-tab:hover { background: var(--surface-2); color: var(--ink); }
+.desk-tab.active { background: var(--brand-soft); color: var(--brand-ink); font-weight: 700; }
+
+.desk-main { min-width: 0; }
+
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.stat-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 16px; }
+.stat-card > span { display: block; font-size: 12px; color: var(--muted); }
+.stat-card > b { display: block; font-size: 26px; font-weight: 700; margin: 6px 0 2px; color: var(--ink); }
+.stat-card > small { font-size: 11px; color: var(--faint); }
+
+.desk-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0; }
+.chip { border: 1px solid var(--line-2); border-radius: var(--r-pill); padding: 5px 13px; font-size: 12px; color: var(--ink-3); background: var(--surface); }
+.chip:hover { border-color: var(--line-3); color: var(--ink); }
+.chip.active { background: var(--ink); border-color: var(--ink); color: #fff; font-weight: 600; }
+
+.desk-search {
+  display: flex; align-items: center; gap: 8px; max-width: 430px;
+  margin: 14px 0 2px; padding: 6px 10px;
+  background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-sm);
+}
+.desk-search .icon { width: 16px; height: 16px; flex: none; color: var(--muted); }
+.desk-search input { flex: 1; min-width: 0; border: 0; background: none; padding: 6px 2px; font-size: 13px; }
+.desk-search .btn { padding: 7px 14px; font-size: 12px; }
+
+.desk-list, .desk-table { display: flex; flex-direction: column; }
+.desk-row { display: flex; align-items: center; gap: 10px; padding: 13px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.desk-row:last-child { border-bottom: 0; }
+.desk-row[hidden] { display: none; }
+.desk-row-main { flex: 1; min-width: 0; }
+.desk-row-main > b { display: block; font-size: 13px; }
+.desk-row-main > small { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; }
+.desk-row-main > p { margin: 6px 0 0; font-size: 12px; color: var(--ink-3); line-height: 1.6; }
+.desk-row .btn { padding: 8px 14px; font-size: 12px; }
+.desk-row .score { font-size: 13px; color: var(--ink-2); }
+.desk-badge { flex: none; padding: 5px 9px; font-size: 11px; color: var(--ink-3); background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-xs); }
+.desk-empty { padding: 22px 0; text-align: center; color: var(--muted); font-size: 13px; }
+.desk-empty small { display: block; margin-top: 6px; color: var(--faint); font-size: 11px; line-height: 1.7; }
+
+.btn.secondary.danger { color: var(--danger); border-color: #f0cbc3; }
+.btn.secondary.danger:hover { background: var(--price-soft); }
+.review-tag.inline { position: static; }
+
+.desktop-navigation .nav-service.active { color: var(--brand-ink); font-weight: 700; }
+
+.dossier-head { display: flex; align-items: center; gap: 18px; }
+.dossier-head > div { flex: 1; min-width: 0; }
+.dossier-head h2 { margin: 0 0 6px; }
+.dossier-head p { margin: 0; font-size: 12px; color: var(--ink-3); line-height: 1.7; }
+.dossier-score { flex: none; text-align: right; }
+.dossier-score > span { display: block; font-size: 11px; color: var(--muted); }
+.dossier-score > b { font-size: 30px; font-weight: 700; color: var(--ok); }
+.dossier-score > b.low { color: var(--danger); }
+.dossier-score > small { font-size: 12px; color: var(--faint); }
+.dossier-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+.dossier-grid > .panel { margin-bottom: 0; }
+
+@media (max-width: 900px) {
+  .desk { grid-template-columns: 1fr; gap: 12px; }
+  .desk-nav { position: static; flex-direction: row; gap: 6px; overflow-x: auto; padding: 8px; }
+  .desk-tab { white-space: nowrap; }
+  .desk-row { flex-wrap: wrap; gap: 8px; }
+  .desk-row-main { flex-basis: 100%; }
+  .dossier-head { flex-wrap: wrap; gap: 12px; }
+  .dossier-score { text-align: left; }
+}

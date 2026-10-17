@@ -1,7 +1,7 @@
 'use strict';
 // 事件层 · 订单流转、付款前改单、结算、改约、评价
 
-import { toast } from '../core/dom.js';
+import { toast, uid } from '../core/dom.js';
 import { state, saveCart } from '../core/state.js';
 import { api } from '../core/http.js';
 import { go, render } from '../core/nav.js';
@@ -46,16 +46,21 @@ export const clicks = {
 };
 
 export const submits = {
+  // 卖家只能改交付时间（后端也只放行这一项），所以提交内容必须按角色裁剪，
+  // 否则卖家打开弹窗、一个字都不改直接保存，也会被「仅买家可调整订单中的商品」拒掉。
   'order-edit-form': async ({ form, d, fd }) => {
-    const keep = fd.getAll('keep').map(Number);
-    if (!keep.length) throw new Error('订单至少要保留一件商品');
-    await api('/order/update', {
+    const payload = {
       id:Number(form.dataset.id),
-      product_ids:keep,
-      delivery:d.delivery,
-      address:d.address,
       appointment:new Date(d.appointment).getTime()/1000
-    });
+    };
+    if (form.dataset.role === 'buyer'){
+      const keep = fd.getAll('keep').map(Number);
+      if (!keep.length) throw new Error('订单至少要保留一件商品');
+      payload.product_ids = keep;
+      payload.delivery = d.delivery;
+      payload.address = d.address;
+    }
+    await api('/order/update', payload);
     closeModal();
     toast('订单已修改');
     await render();
@@ -68,10 +73,10 @@ export const submits = {
       address:d.address,
       appointment:new Date(d.appointment).getTime()/1000,
       // 同一笔订单重复提交时用它做幂等，避免生成两张单。
-      key:crypto.randomUUID()
+      key:uid()
     };
     // 从「求购撮合」进来的订单带上求购编号，后端据此记 5% 撮合服务费。
-    if (state.pendingWant) payload.want_id = state.pendingWant;
+    if (state.pendingWant) payload.want_id = state.pendingWant.want;
     await api('/checkout', payload);
     state.cart = [];
     state.pendingWant = null;

@@ -33,7 +33,8 @@ export const icons = {
   filter:'M4 6h16M7 12h10M10 18h4',
   down:'M6 9l6 6 6-6',
   tag:'M3 12V4h8l9 9-8 8zM7.5 7.5h.01',
-  truck:'M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4M17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4'
+  truck:'M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4M17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4',
+  bell:'M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0'
 };
 
 export const icon = (name, cls='') => `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${icons[name]||icons.bag}"/></svg>`;
@@ -42,4 +43,16 @@ export function toast(text){
   $('#toast').textContent = text;
   $('#toast').classList.add('show');
   setTimeout(() => $('#toast').classList.remove('show'), 3500);
+}
+
+// 幂等请求标识。crypto.randomUUID 只在安全上下文（https / localhost / 127.0.0.1）里存在，
+// 而试用版经常被同学用局域网 IP 以 http 打开 —— 那里 randomUUID 是 undefined，
+// 结算和发消息会直接抛 TypeError。getRandomValues 不受安全上下文限制，用它兜底。
+export function uid(){
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, x => x.toString(16).padStart(2,'0')).join('');
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
 }

@@ -206,22 +206,6 @@ def _drop_covered(found):
     accepted.sort(key=lambda h: (h['start'], -RANK[h['action']]))
     return accepted
 
-    def scan(self, text, with_patterns=True):
-        """扫描一段文本，返回 {action, hits, blocked, message}。
-
-        action 取所有命中里最重的一级；无命中为 'ok'。
-        """
-        found = self.hits(text, with_patterns)
-        if not found:
-            return {'action': 'ok', 'hits': [], 'blocked': False, 'message': ''}
-        worst = max(found, key=lambda h: RANK[h['action']])
-        return {
-            'action': worst['action'],
-            'hits': found,
-            'blocked': worst['action'] == 'block',
-            'message': describe(worst),
-        }
-
 
 def describe(hit):
     """把一条命中翻译成给用户看的话。不暴露完整词表，只说命中了哪一类。"""

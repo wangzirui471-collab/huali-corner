@@ -17,11 +17,13 @@ import { community } from './pages/community.js';
 import { chats } from './pages/messages.js';
 import { profile, mine } from './pages/me.js';
 import { support, ticketPage } from './pages/support.js';
+import { staffDesk } from './pages/staff.js';
+import { dossier } from './pages/dossier.js';
 
 // 公开演示版只开放这四条只读路由。
 const DEMO_ROUTES = ['home', 'product', 'profile', 'community'];
 // 其余路由必须登录，未登录时先给一页说明再弹登录框。
-const AUTH_ROUTES = ['favorites', 'publish', 'cart', 'orders', 'listings', 'messages', 'me', 'support', 'staff', 'ticket'];
+const AUTH_ROUTES = ['favorites', 'publish', 'cart', 'orders', 'listings', 'messages', 'me', 'support', 'staff', 'dossier', 'ticket'];
 
 function publicDemoFeature(route){
   const [title, description] = demoFeatures[route] || ['功能预览', '该操作只在本地模拟版中提供。'];
@@ -53,7 +55,8 @@ export async function render(){
       profile: () => profile(id),
       me: mine,
       support: () => support(false),
-      staff: () => support(true),
+      staff: () => staffDesk(id),
+      dossier: () => dossier(id),
       ticket: () => ticketPage(id)
     };
     if (!funcs[route]) go('home');

@@ -13,3 +13,6 @@ artifacts/
 # 开源敏感词库不随仓库提交：体积大、许可各异、上游会持续更新。
 # 用 scripts/fetch_wordlists.py 按需拉取。自建词表在 app/moderation/data/*.txt，那个要提交。
 Backend mission/app/moderation/data/thirdparty/
+
+# 试用版首次启动生成的管理员初始口令（随机，仅本机可见）
+admin-initial-password.txt

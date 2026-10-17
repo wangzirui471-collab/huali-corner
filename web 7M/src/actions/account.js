@@ -25,11 +25,9 @@ export const clicks = {
     await setLogin(await api('/auth/login', {phone, code:c.demo_code}));
   },
 
-  // 试用版「管理员登录」：固定管理员号码 + 默认密码一键进入后台。
-  // 管理员改过密码后此按钮就不再适用，需手动输入新密码登录。
-  'admin-login': async () => {
-    await setLogin(await api('/auth/login', {phone:'19065322759', password:'HualiCorner@2026'}));
-  },
+  // 管理员/客服账号由运营者单独建立（manage_trial.py 或 HUALI_ADMIN_* 环境变量），
+  // 登录页不再提供固定号码 + 固定口令的一键入口——仓库是公开的，
+  // 那等于对外发布一个可用的管理员密码。
 
   logout: async () => {
     await api('/auth/logout', {});

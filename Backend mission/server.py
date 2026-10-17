@@ -63,7 +63,11 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/products' and method=='GET':return self.respond(m.products(self.optional_user(),query))
             if p=='/api/product' and method=='GET':return self.respond(m.product(int(query['id']),self.optional_user()))
             if p=='/api/profile' and method=='GET':
-                u=int(query['id']);return self.respond({'user':m.profile(u),'products':m.products(self.optional_user(),{'seller':str(u)})})
+                who=int(query['id']);profile=m.profile(who)
+                # 公开主页只给「资料」字段：role / status 属于账号治理信息，
+                # 公开出去等于对外暴露某人是否被封禁或已注销。
+                public={k:profile[k] for k in ('id','nickname','college','major','education','bio','score')}
+                return self.respond({'user':public,'products':m.products(self.optional_user(),{'seller':str(who)})})
             if p=='/api/posts' and method=='GET':return self.respond(m.posts(query.get('topic','')))
             if p=='/api/comments' and method=='GET':return self.respond(m.comments(int(query['id'])))
             if p=='/api/wants' and method=='GET':return self.respond(m.wants(self.optional_user()))
@@ -73,7 +77,12 @@ class Handler(BaseHTTPRequestHandler):
                 if upload['private']:
                     uid=self.uid();m.require(uid==upload['user_id'] or m.profile(uid)['role'] in ['admin','support'],'无权读取私密图片',403)
                 else:
-                    listed=any(fid in json.loads(r['data']).get('photos',[]).__str__() for r in m.rows("SELECT data FROM products WHERE status<>'removed'"))
+                    # 在售商品的图照常公开。商品一旦被下架、退款或封禁变成 removed，
+                    # 只要还有订单快照引用这张图，交易双方仍要能看到，
+                    # 否则「我的订单」里的商品缩略图会变成 403 裂图（订单存的是图片地址快照）。
+                    needle='/media/'+fid
+                    listed=bool(m.row("SELECT 1 FROM products WHERE status<>'removed' AND data LIKE ?",('%'+needle+'%',))) \
+                        or bool(m.row("SELECT 1 FROM orders WHERE items LIKE ?",('%'+needle+'%',)))
                     uid=self.optional_user();m.require(listed or uid==upload['user_id'],'图片尚未发布',403)
                 return self.respond(Path(upload['path']).read_bytes(),kind='image/webp')
             if not p.startswith('/api/'):
@@ -90,6 +99,7 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/me':return self.respond(m.update_profile(u,data) if method=='POST' else m.profile(u))
             if p=='/api/auth/logout':m.logout(self.token());return self.respond({'ok':True})
             if p=='/api/auth/deactivate' and method=='POST':return self.respond(m.deactivate(u))
+            if p=='/api/notifications':return self.respond(m.read_notifications(u,data.get('id') or None) if method=='POST' else m.notifications(u))
             if p=='/api/wants' and method=='POST':return self.respond(m.create_want(u,data))
             if p=='/api/publish' and method=='POST':return self.respond(m.publish(u,data))
             if p=='/api/my-products':return self.respond(m.my_products(u,query.get('status')))
@@ -188,14 +198,24 @@ def main():
     except (DomainError,ValueError) as error:ap.error(str(error))
     if args.trial and not phone:
         # 学院试用版默认不 seed 任何账号，客服/群管理/信誉调整会无人可用。
-        # 这里自动补一个管理员：号码固定，密码用默认值，方便登录界面「管理员登录」一键进入。
-        # 登录后可在「我的」里修改密码；改密码后「一键登录」按钮就不再适用，需手动输入。
-        auto_phone='19065322759';auto_password='HualiCorner@2026'
+        # 这里自动补一个管理员：号码固定，密码**每次部署随机生成**，
+        # 只打印一次并写入数据目录（该文件在 .gitignore 里，不进仓库）。
+        # 历史版本把固定口令写死在源码与前端一键按钮里，仓库又是公开的，
+        # 等于任何人都能拿到管理员身份——不再提供默认共享密码。
+        auto_phone='19065322759'
         created=not server.market.row('SELECT 1 FROM users WHERE phone=?',(auto_phone,))
         try:
-            server.market.bootstrap_admin(auto_phone,auto_password)
-            if created:print(f'已创建管理员：手机号 {auto_phone}，默认密码 {auto_password}（仅本地试用，可登录后修改）',flush=True)
-            else:print(f'管理员 {auto_phone} 已存在，未重复创建',flush=True)
+            if not created:
+                print(f'管理员 {auto_phone} 已存在，未重复创建；忘记密码可用 manage_trial.py 处理',flush=True)
+            else:
+                auto_password=secrets.token_urlsafe(12)
+                server.market.bootstrap_admin(auto_phone,auto_password)
+                hint=server.market.root/'admin-initial-password.txt'
+                hint.write_text(f'管理员手机号：{auto_phone}\n初始密码：{auto_password}\n'
+                                f'首次登录后请在「我的 → 修改密码」改掉，改完可删除本文件。\n',encoding='utf-8')
+                print(f'已创建管理员：手机号 {auto_phone}',flush=True)
+                print(f'初始密码：{auto_password}',flush=True)
+                print(f'（同一份也写到了 {hint}，该文件不入库；也可用 HUALI_ADMIN_PHONE/HUALI_ADMIN_PASSWORD 指定）',flush=True)
         except DomainError as error:
             # 号码已被注册成普通账号时不能自动提权（防越权校验拦截）。
             # 不能因此让整个服务起不来——提示运营者手动处理即可。

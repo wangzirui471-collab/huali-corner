@@ -1,9 +1,9 @@
 'use strict';
 // 事件层 · 社区、私聊、群聊、群管理员
 
-import { $, e, toast } from '../core/dom.js';
+import { $, e, toast, uid } from '../core/dom.js';
 import { money } from '../core/format.js';
-import { state, saveCart } from '../core/state.js';
+import { state, saveCart, clearPendingWant } from '../core/state.js';
 import { api } from '../core/http.js';
 import { go, render } from '../core/nav.js';
 import { modal, closeModal } from '../core/shell.js';
@@ -42,9 +42,23 @@ export const clicks = {
   'block-room': async (b, id) => {
     const r = await api('/rooms');
     const room = r.joined.find(x => x.id === id);
+    if (!room || !room.pair) throw new Error('会话不存在或已失效');
     const peer = room.pair.split(':').map(Number).find(x => x !== state.me.id);
     await api('/block', {target:peer, enabled:true});
     toast('已屏蔽，对方不能继续发消息');
+  },
+
+  // 买家在取货清单上可以主动放弃求购关联，避免下一笔无关订单被记服务费。
+  'clear-want': () => {
+    clearPendingWant();
+    toast('已取消求购关联，本次结算按普通下单处理');
+    render();
+  },
+
+  'read-notices': async () => {
+    await api('/notifications', {});
+    toast('已全部标记为已读');
+    await render();
   },
 
   'open-want': () => {
@@ -62,8 +76,10 @@ export const clicks = {
     const p = await api('/product?id='+id);
     if (p.seller_id === state.me.id) throw new Error('不能购买自己的商品');
     if (!state.cart.includes(id)) state.cart.push(id);
+    // 记住来源商品：该商品被移出清单或清单被清空时，这份求购关联要一起失效，
+    // 否则之后买任何东西都会带着这个 want_id（见 core/state.js 的 syncPendingWant）。
+    state.pendingWant = {want:Number(b.dataset.want), product:id};
     saveCart();
-    state.pendingWant = Number(b.dataset.want);
     closeModal();
     go('cart');
     toast('已加入取货清单，结算时记入 5% 撮合服务费');
@@ -86,7 +102,7 @@ export const submits = {
 
   // 聊天不整页重绘，只把新消息追加到当前会话流里，避免滚动位置和输入状态被重置。
   'message-form': async ({ form, d }) => {
-    await api('/messages', {room_id:Number(form.dataset.room), body:d.message, key:crypto.randomUUID()});
+    await api('/messages', {room_id:Number(form.dataset.room), body:d.message, key:uid()});
     form.reset();
     const messages = await api('/messages?room_id='+form.dataset.room+'&after='+state.messageCursor);
     const stream = $('#chat-stream');

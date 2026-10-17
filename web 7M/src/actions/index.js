@@ -12,12 +12,13 @@ import * as trade from './trade.js';
 import * as social from './social.js';
 import * as support from './support.js';
 import * as account from './account.js';
+import * as staff from './staff.js';
 
 // 公开演示版只放行这些只读交互，其余一律弹说明、不渲染任何表单。
 const DEMO_CLICK_ALLOWED = ['market-channel','market-shortcut','free-shelf','feed-sort','category','login','close','photo','share'];
 
-const clicks = {...ui.clicks, ...catalog.clicks, ...trade.clicks, ...social.clicks, ...support.clicks, ...account.clicks};
-const submits = {...catalog.submits, ...trade.submits, ...social.submits, ...support.submits, ...account.submits};
+const clicks = {...ui.clicks, ...catalog.clicks, ...trade.clicks, ...social.clicks, ...support.clicks, ...account.clicks, ...staff.clicks};
+const submits = {...catalog.submits, ...trade.submits, ...social.submits, ...support.submits, ...account.submits, ...staff.submits};
 
 export function registerActions(){
   document.addEventListener('click', async ev => {

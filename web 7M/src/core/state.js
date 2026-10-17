@@ -15,7 +15,9 @@ export const state = {
   freeShelf: false,
   // 消息页的增量拉取游标，提交消息后需要接着它继续追加。
   messageCursor: 0,
-  // 求购撮合：买家点「我要这个」后暂存求购编号，结算时带上以记撮合服务费。
+  // 求购撮合：买家点「我要这个」后暂存 {want, product}，结算时带上以记撮合服务费。
+  // 必须记住来源商品：用户中途清空购物车或把该商品移除后，这份关联要同时失效，
+  // 否则下一笔无关订单会带着 want_id，把那条求购错标成「已成交」并多记 5% 服务费。
   pendingWant: null
 };
 
@@ -46,9 +48,18 @@ export function bumpRenderId(){ return ++state.renderId; }
 export function clearPoll(){ clearInterval(state.poll); state.poll = null; }
 
 export function saveCart(){
+  syncPendingWant();
   sessionStorage.setItem('hc-cart-'+state.me.id, JSON.stringify(state.cart));
 }
 
 export function loadCart(){
   state.cart = JSON.parse(sessionStorage.getItem('hc-cart-'+state.me.id) || '[]');
+  state.pendingWant = null;
 }
+
+// 求购关联只对「来源商品仍在清单里」有效；商品被移除或清空清单后自动作废。
+export function syncPendingWant(){
+  if (state.pendingWant && !state.cart.includes(state.pendingWant.product)) state.pendingWant = null;
+}
+
+export function clearPendingWant(){ state.pendingWant = null; }

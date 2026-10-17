@@ -18,6 +18,11 @@ class SupportService(ValidationMixin):
             else:self.require(typ!='refund','退款必须关联订单')
             if pid:self.product(int(pid))
             tid=c.execute('INSERT INTO tickets(user_id,order_id,product_id,type,subject,body,created) VALUES(?,?,?,?,?,?,?)',(u,oid,pid,typ,subject,body,time.time())).lastrowid
+            if oid and typ=='refund':
+                self.notify(c,r['seller_id'],'ticket_refund', f'订单 #{oid} 买家已申请售后并暂停结算，请到客服中心查看进展。',oid,tid)
+            elif oid:
+                other=r['seller_id'] if u==r['buyer_id'] else r['buyer_id']
+                self.notify(c,other,'ticket_filed',f'订单 #{oid} 的对方提交了工单 #{tid}（{subject}）。',oid,tid)
         return self.ticket(u,tid)
 
     def ticket(self,u,tid):
@@ -37,7 +42,17 @@ class SupportService(ValidationMixin):
     def reply_ticket(self,u,tid,d):
         self.ticket(u,tid);internal=bool(d.get('internal',False))
         if internal:self.staff(u)
-        with self.tx() as c:c.execute('INSERT INTO ticket_messages(ticket_id,user_id,body,internal,created) VALUES(?,?,?,?,?)',(tid,u,self.text(d.get('body'),2000,'回复'),int(internal),time.time()))
+        with self.tx() as c:
+            c.execute('INSERT INTO ticket_messages(ticket_id,user_id,body,internal,created) VALUES(?,?,?,?,?)',(tid,u,self.text(d.get('body'),2000,'回复'),int(internal),time.time()))
+            # 客服/管理员的公开回复要能通知到相关用户；用户自己的补充留给工作台队列。
+            if not internal and self.profile(u)['role'] in ['support','admin']:
+                t=c.execute('SELECT user_id,order_id FROM tickets WHERE id=?',(tid,)).fetchone()
+                targets={t['user_id']}
+                if t['order_id']:
+                    o=c.execute('SELECT buyer_id,seller_id FROM orders WHERE id=?',(t['order_id'],)).fetchone()
+                    if o:targets.update([o['buyer_id'],o['seller_id']])
+                for target in targets-{u}:
+                    self.notify(c,target,'ticket_reply',f'工单 #{tid} 客服已回复，请到客服中心查看。',t['order_id'],tid)
         return self.ticket(u,tid)
 
     def check_conflict(self,u,t):
@@ -72,12 +87,18 @@ class SupportService(ValidationMixin):
                         elif amount<r['total']:self.journal(c,r['id'],'settlement',r['total']-amount)
                         c.execute("UPDATE orders SET status='refunded' WHERE id=?",(r['id'],))
                         # Refunded physical items are NOT automatically offered again.
+                        # 但求购撮合必须回滚，否则那条求购会永远停在「已成交」。
+                        self.restore_want(c,r)
+                        self.notify(c,r['buyer_id'],'refund_done',f'订单 #{r["id"]} 的退款工单已处理，模拟退款 ¥{amount/100:.2f}。',r['id'])
+                        self.notify(c,r['seller_id'],'refund_done',f'订单 #{r["id"]} 已按工单结论处理并模拟退款 ¥{amount/100:.2f}。',r['id'])
                         for p in json.loads(r['items']):c.execute("UPDATE products SET status='removed' WHERE id=?",(p['id'],))
                     elif r['status']=='disputed' and t['type']=='refund':
                         prior='completed' if r['completed_at'] else 'awaiting_receipt' if r['handover_at'] else 'awaiting_handover' if r['delivered_at'] else 'paid'
                         c.execute('UPDATE orders SET status=? WHERE id=?',(prior,r['id']))
                 c.execute("UPDATE tickets SET status='resolved',assignee=?,outcome=?,reason=? WHERE id=?",(u,outcome,reason,tid))
             c.execute('INSERT INTO audit(actor,type,reason,ticket_id,created) VALUES(?,?,?,?,?)',(u,'ticket_'+outcome,reason,tid,time.time()))
+            if outcome not in ('claim','review'):
+                self.notify(c,t['user_id'],'ticket_resolved',f'工单 #{tid} 已处理完成（{"退款" if outcome=="refund" else "结案" if outcome=="resolved" else "驳回"}），可到客服中心查看处理依据并申请复核。',t['order_id'],tid)
         return {'ok':True}
 
     def credit_action(self,u,target,delta,reason,tid):
@@ -98,24 +119,53 @@ class SupportService(ValidationMixin):
             self.require(not c.execute("SELECT 1 FROM audit WHERE target=? AND ticket_id=? AND type='credit'",(target,tid)).fetchone(),'该工单已处理过此用户信誉，请另行复核')
             c.execute('UPDATE users SET score=MAX(0,MIN(100,score+?)) WHERE id=?',(delta,target))
             c.execute('INSERT INTO audit(actor,target,type,delta,reason,ticket_id,created) VALUES(?,?,?,?,?,?,?)',(u,target,'credit',delta,reason,tid,time.time()))
+            self.notify(c,target,'credit',f'你的信誉分有变动（{delta:+d} 分），可到客服中心查看处理依据并申诉。',None,tid)
         return self.profile(target)
 
     def ban_user(self,u,target,banned,reason):
         """封禁 / 解封账号：比扣信誉分更硬的约束。封禁后账号立即下线、
         在售商品下架、无法登录或发起任何操作（鉴权层会拦）。
-        仅平台管理员可操作，且不能封禁管理员或自己。"""
+        仅平台管理员可操作，且不能封禁管理员或自己。
+
+        封禁还必须处理在途订单：卖家被封后不可能再登录推进交付，
+        原实现只下架商品，订单会永远卡在 paid / awaiting_handover，
+        买家只能自己慢慢摸索售后入口。"""
         self.staff(u);self.require(self.profile(u)['role']=='admin','仅平台管理员可封禁账号',403)
         self.require(u!=target,'不能封禁自己')
         self.text(reason,500,'封禁/解封理由')
         with self.tx() as c:
-            self.require(c.execute('SELECT 1 FROM users WHERE id=?',(target,)).fetchone(),'用户不存在',404)
-            self.require(c.execute('SELECT role FROM users WHERE id=?',(target,)).fetchone()['role']!='admin','不能封禁管理员',403)
-            c.execute("UPDATE users SET status=? WHERE id=?",('banned' if banned else 'active',target))
-            if banned:
+            user=c.execute('SELECT role,status FROM users WHERE id=?',(target,)).fetchone()
+            self.require(user,'用户不存在',404)
+            self.require(user['role']!='admin','不能封禁管理员',403)
+            now=time.time()
+            if not banned:
+                # 解封只针对「被封禁」的账号；注销过的账号不应被顺手复活。
+                self.require(user['status']=='banned','该账号当前不是封禁状态，无法解封')
+                c.execute("UPDATE users SET status='active' WHERE id=?",(target,))
+            else:
+                c.execute("UPDATE users SET status='banned' WHERE id=?",(target,))
                 c.execute('DELETE FROM sessions WHERE user_id=?',(target,))
                 c.execute("UPDATE products SET status='removed' WHERE seller_id=? AND status='available'",(target,))
-            c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',(u,target,'ban' if banned else 'unban',reason,time.time()))
+                self._settle_banned_orders(c,target,now)
+            c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',(u,target,'ban' if banned else 'unban',reason,now))
         return self.profile(target)
+
+    def _settle_banned_orders(self,c,target,now):
+        """封禁账号的在途订单：未付款的直接关闭，已付款但无法交付的转争议并替买家开工单。"""
+        for r in c.execute("SELECT * FROM orders WHERE (buyer_id=? OR seller_id=?) AND status='awaiting_payment'",(target,target)).fetchall():
+            c.execute("UPDATE orders SET status='cancelled' WHERE id=?",(r['id'],));self.release(c,r);self.restore_want(c,r)
+            self.notify(c,r['buyer_id'],'order_cancelled',f'订单 #{r["id"]} 因账号被处置已关闭，商品释放回在售。',r['id'])
+        for r in c.execute("SELECT * FROM orders WHERE seller_id=? AND status IN ('paid','awaiting_handover','awaiting_receipt')",(target,)).fetchall():
+            c.execute("UPDATE orders SET status='disputed' WHERE id=?",(r['id'],))
+            if not c.execute("SELECT 1 FROM tickets WHERE order_id=? AND type='refund' AND status NOT IN ('resolved','rejected')",(r['id'],)).fetchone():
+                c.execute("INSERT INTO tickets(user_id,order_id,type,subject,body,status,created) VALUES(?,?,?,?,?,'open',?)",
+                          (r['buyer_id'],r['id'],'refund',f'卖家账号被处置，订单 #{r["id"]} 待退款',
+                           '该订单卖家账号已被平台处置，无法继续交付。系统已自动转争议，等待客服核实后处理退款。',now))
+            self.notify(c,r['buyer_id'],'ticket_refund',f'订单 #{r["id"]} 卖家账号已被处置，已自动转入争议处理，客服会联系你核实退款。',r['id'])
+        for r in c.execute("SELECT * FROM orders WHERE buyer_id=? AND status IN ('paid','awaiting_handover')",(target,)).fetchall():
+            c.execute("UPDATE orders SET status='cancelled' WHERE id=?",(r['id'],));self.journal(c,r['id'],'refund',r['total'])
+            self.release(c,r);self.restore_want(c,r)
+            self.notify(c,r['seller_id'],'order_cancelled',f'订单 #{r["id"]} 因买家账号被处置已取消，商品释放回在售。',r['id'])
 
     def credit_history(self,u):
         return self.rows("SELECT delta,reason,ticket_id,created FROM audit WHERE target=? AND type='credit' ORDER BY id DESC",(u,))
