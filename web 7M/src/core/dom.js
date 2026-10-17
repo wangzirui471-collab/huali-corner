@@ -34,7 +34,11 @@ export const icons = {
   down:'M6 9l6 6 6-6',
   tag:'M3 12V4h8l9 9-8 8zM7.5 7.5h.01',
   truck:'M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4M17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4',
-  bell:'M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0'
+  bell:'M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0',
+  wallet:'M3 8a2 2 0 0 1 2-2h12v3M3 8v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H5M17 12.5h.01',
+  alert:'M12 3.5 21 19.5H3zM12 9.5v4M12 16.6h.01',
+  list:'M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01',
+  chart:'M2.5 20.5h19M5.5 20V12M10 20V6.5M14.5 20v-5.5M19 20V9'
 };
 
 export const icon = (name, cls='') => `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${icons[name]||icons.bag}"/></svg>`;

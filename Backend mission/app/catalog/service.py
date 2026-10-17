@@ -220,6 +220,56 @@ class CatalogService(ValidationMixin):
         return [self.product(row['id'],u)
                 for row in self.rows("SELECT id FROM products WHERE status='removed' ORDER BY id DESC LIMIT 200")]
 
+    def sellers(self,u):
+        """店铺视角：每个卖家还有多少在售、多少已被平台下架。
+
+        反引流实战里最常见的是「这个人整店都在导流」，而商品流是按商品平的，
+        运营得先自己看出「这 8 件都是同一个人发的」。这个接口就是那个视图。
+        """
+        self.staff(u)
+        return self.rows(
+            """SELECT p.seller_id id,u.nickname,u.score,u.status user_status,
+                      SUM(CASE WHEN p.status='available' THEN 1 ELSE 0 END) available,
+                      SUM(CASE WHEN p.status='removed' THEN 1 ELSE 0 END) removed,
+                      COUNT(*) total
+               FROM products p JOIN users u ON u.id=p.seller_id
+               GROUP BY p.seller_id
+               ORDER BY available DESC, total DESC LIMIT 200""")
+
+    def moderate_seller(self,u,seller_id,reason):
+        """批量下架整店：一次把该卖家全部在售商品置为平台处置。
+
+        为什么要有它：单件下架要一件一件点，遇到整店导流时运营会点到放弃，
+        或者干脆只下架最显眼的两件——剩下的继续在商品流里挂着。
+
+        为什么是**一个事务一次审计**而不是循环调用 moderate_product：
+        循环会产生 N 条审计、N 条通知，卖家打开通知中心看到 8 条一模一样的消息，
+        而审计里也看不出「这是一次整店处置」还是「运营点了 8 次」。
+        处置是一个动作，就应该只有一条记录。
+
+        权限：仅管理员。单件下架客服就能做，批量属于「一次改变一个店铺的状态」，
+        按分权原则（会不会让平台自己成为需要被追责的一方）归管理员。
+        """
+        self.admin(u)
+        seller_id=int(seller_id)
+        reason=self.text(reason,500,'处置理由')
+        self.require(seller_id!=u,'不能处置自己发布的商品')
+        seller=self.row('SELECT id,nickname FROM users WHERE id=?',(seller_id,))
+        self.require(seller,'卖家不存在',404)
+        rows=self.rows("SELECT id FROM products WHERE seller_id=? AND status='available'",(seller_id,))
+        self.require(rows,'该卖家当前没有在售商品可下架')
+        now=time.time()
+        with self.tx() as c:
+            for p in rows:
+                # 与单件下架一致：一并清掉未到期的置顶，避免恢复后带着旧置顶时间跳到最前。
+                c.execute("UPDATE products SET status='removed',delisted_by=?,promoted_until=0 WHERE id=?",(u,p['id']))
+            c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',
+                      (u,seller_id,'seller_moderate',f'整店下架 {len(rows)} 件：{reason}',now))
+            self.notify(c,seller_id,'product_moderate',
+                        f'你在售的 {len(rows)} 件商品已被平台下架。理由：{reason}。'
+                        f'如有异议，可在客服中心提交申诉。')
+        return {'id':seller_id,'count':len(rows),'ids':[p['id'] for p in rows]}
+
     def promote(self,u,pid,tier):
         """付费置顶：把自己的在售商品顶到首页/分类顶部，低价非强制。
         模拟支付（不扣真实款项）。未到期续期从当前到期时间累加，不吞剩余时长。"""

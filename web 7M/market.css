@@ -1498,6 +1498,223 @@ button { -webkit-tap-highlight-color: transparent; }
 .desk-empty { padding: 22px 0; text-align: center; color: var(--muted); font-size: 13px; }
 .desk-empty small { display: block; margin-top: 6px; color: var(--faint); font-size: 11px; line-height: 1.7; }
 
+/* --- 工作台视觉层（2026-10-17）----------------------------------------------
+   把「文字堆叠」改成有主次的运营界面。三条规则贯穿全文件：
+   1. 语义色只由 data-tone 驱动，六种 tone 在这里定义一次，组件不写死颜色；
+   2. 每行左侧固定 34px glyph 槽位，列表因此有了一条稳定的视觉轴；
+   3. 数字统一 tabular-nums，位数变化时列宽不跳动。                        */
+
+:root {
+  --tone-ok: #2f8f5b;     --tone-ok-bg: #e9f6ee;
+  --tone-warn: #b3791a;   --tone-warn-bg: #fdf3e0;
+  --tone-danger: #c2482f; --tone-danger-bg: #fdece8;
+  --tone-info: #2f6ea8;   --tone-info-bg: #e8f1fa;
+  --tone-violet: #6748ad; --tone-violet-bg: #f1ecfb;
+  --tone-mute: #6b6f77;   --tone-mute-bg: #f1f2f5;
+}
+
+[data-tone="ok"] { --t: var(--tone-ok); --tb: var(--tone-ok-bg); }
+[data-tone="warn"] { --t: var(--tone-warn); --tb: var(--tone-warn-bg); }
+[data-tone="danger"] { --t: var(--tone-danger); --tb: var(--tone-danger-bg); }
+[data-tone="info"] { --t: var(--tone-info); --tb: var(--tone-info-bg); }
+[data-tone="violet"] { --t: var(--tone-violet); --tb: var(--tone-violet-bg); }
+[data-tone="mute"] { --t: var(--tone-mute); --tb: var(--tone-mute-bg); }
+
+/* 概览数据卡：卡片本身是跳转入口，所以用 button 语义 + 悬停反馈 */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(196px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.kpi {
+  display: flex; align-items: center; gap: 13px;
+  padding: 15px 16px; text-align: left;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
+  box-shadow: var(--sh-1);
+  font: inherit; color: inherit; cursor: default;
+  transition: border-color .18s var(--ease, ease), box-shadow .18s var(--ease, ease), transform .18s var(--ease, ease);
+}
+button.kpi { cursor: pointer; }
+button.kpi:hover { border-color: var(--line-3); box-shadow: 0 10px 24px -16px rgba(28, 29, 33, .55); transform: translateY(-1px); }
+button.kpi:active { transform: translateY(0); }
+.kpi-glyph {
+  flex: none; width: 38px; height: 38px; border-radius: 11px;
+  display: grid; place-items: center; color: var(--t, var(--tone-mute)); background: var(--tb, var(--tone-mute-bg));
+}
+.kpi-glyph .icon { width: 19px; height: 19px; }
+.kpi-body { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.kpi-label { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .2px; }
+.kpi-value { font-size: 25px; font-weight: 780; line-height: 1.2; color: var(--ink); letter-spacing: -.6px; font-variant-numeric: tabular-nums; }
+.kpi[data-empty="1"] .kpi-value { color: var(--faint); font-weight: 650; }
+.kpi-hint { font-size: 11px; color: var(--faint); margin-top: 1px; }
+.kpi-arrow { flex: none; color: var(--faint); opacity: 0; transform: translateX(-4px); transition: .18s var(--ease, ease); }
+.kpi-arrow .icon { width: 15px; height: 15px; }
+button.kpi:hover .kpi-arrow { opacity: 1; transform: none; color: var(--t, var(--ink-3)); }
+
+/* 面板标题行：标题左、入口右，替代「h2 下面挂一段说明」的松散写法 */
+.desk-panel { padding: 18px 20px 8px; }
+.desk-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.desk-panel-head h2 { margin: 0; font-size: 15px; }
+.desk-panel-head .text-button { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: var(--ink-3); }
+.desk-panel-head .text-button:hover { color: var(--ink); }
+.desk-panel-head .text-button .icon { width: 13px; height: 13px; }
+.desk-lead { font-size: 12px; line-height: 1.8; color: var(--muted); margin: 0 0 4px; }
+
+/* 分区小结：一行交代「有多少、其中多少要动手」 */
+.desk-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 12px; font-size: 12px; color: var(--muted); }
+.desk-summary b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.desk-summary-flag { padding: 3px 10px; border-radius: var(--r-pill); color: var(--tone-warn); background: var(--tone-warn-bg); font-weight: 600; }
+.desk-summary-flag b { color: inherit; }
+
+/* 状态药丸：圆点 + 文案。tone 决定颜色，全站同一状态同一种颜色 */
+.state-pill {
+  flex: none; display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px 4px 8px; border-radius: var(--r-pill);
+  font-size: 11.5px; font-weight: 650; line-height: 1.5; white-space: nowrap;
+  color: var(--t, var(--tone-mute)); background: var(--tb, var(--tone-mute-bg));
+}
+.state-pill i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+
+/* 工单类型标签：方形，与圆形状态药丸区分开，避免两个圆角标签并排分不清 */
+.type-chip {
+  flex: none; padding: 3px 9px; border-radius: var(--r-xs);
+  font-size: 11px; font-weight: 650; white-space: nowrap;
+  color: var(--t, var(--tone-mute)); background: var(--tb, var(--tone-mute-bg));
+}
+
+/* 行首图标槽位。列表靠它对齐，而不是靠 padding 硬凑 */
+.row-glyph {
+  flex: none; width: 34px; height: 34px; border-radius: 10px;
+  display: grid; place-items: center;
+  color: var(--t, var(--tone-mute)); background: var(--tb, var(--tone-mute-bg));
+}
+.row-glyph .icon { width: 17px; height: 17px; }
+
+/* 列表行：加大呼吸，悬停时左侧亮一条品牌色，代替整行反白 */
+.desk-row {
+  padding: 12px 10px; gap: 12px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  transition: background .15s, box-shadow .15s;
+}
+.desk-row:hover { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--brand); }
+.desk-row:last-child { border-bottom: 0; }
+.desk-row-main > b { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+.desk-row-main > small { margin-top: 4px; line-height: 1.6; color: var(--muted); }
+
+/* 行内小元素 */
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .93em; color: var(--faint); }
+.amount { color: var(--price); font-weight: 700; font-variant-numeric: tabular-nums; }
+.claimed { color: var(--tone-ok); font-weight: 600; }
+.sep-dot { display: inline-block; width: 3px; height: 3px; margin: 0 7px; border-radius: 50%; background: var(--line-3); vertical-align: middle; }
+
+/* 用户头像按角色着色，一眼分得出客服、管理员、普通用户 */
+.role-avatar { flex: none; width: 34px; height: 34px; font-size: 13px; font-weight: 700; }
+.role-avatar[data-tone="admin"] { background: linear-gradient(150deg, #efe9fb, #e0d5f7); color: #5b41a0; }
+.role-avatar[data-tone="support"] { background: linear-gradient(150deg, #e7f1fb, #d5e6f6); color: #2f6ea8; }
+.role-avatar[data-tone="mute"] { background: linear-gradient(150deg, #f4f5f7, #ebecf0); color: #6b6f77; }
+
+/* 信誉分：数字 + 进度条，低于 60 转红（这是能不能发布商品的分界线） */
+.score-meter { flex: none; width: 84px; display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
+.score-num { display: flex; align-items: baseline; gap: 1px; font-variant-numeric: tabular-nums; }
+.score-num b { font-size: 14px; font-weight: 750; color: var(--ink); }
+.score-num small { font-size: 10px; color: var(--faint); }
+.meter { display: block; width: 100%; height: 4px; border-radius: 2px; background: var(--line-2); overflow: hidden; }
+.meter > span { display: block; height: 100%; border-radius: 2px; background: var(--tone-ok); transition: width .3s var(--ease, ease); }
+.score-meter[data-low="1"] .score-num b { color: var(--tone-danger); }
+.score-meter[data-low="1"] .meter > span { background: var(--tone-danger); }
+
+/* 资金对账：四个金额排成小列，右对齐等宽，扫一眼就能看出哪笔不平 */
+.recon-amounts { flex: none; display: grid; grid-template-columns: repeat(4, minmax(64px, auto)); gap: 16px; }
+.recon-amounts > span { display: flex; flex-direction: column; gap: 2px; align-items: flex-end; }
+.recon-amounts small { font-size: 10.5px; color: var(--faint); }
+.recon-amounts b { font-size: 12.5px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* 审计：一条贯穿的竖线 + 节点圆点，读起来是一条时间线而不是一堆卡片 */
+.audit-list { position: relative; }
+.audit-list::before {
+  content: ''; position: absolute; left: 25px; top: 26px; bottom: 26px;
+  width: 1px; background: var(--line-2); pointer-events: none;
+}
+.audit-row { position: relative; }
+.audit-dot {
+  position: relative; z-index: 1;
+  flex: none; width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center;
+  color: var(--t, var(--tone-mute)); background: var(--tb, var(--tone-mute-bg));
+  box-shadow: 0 0 0 3px var(--surface);
+}
+.audit-row:hover .audit-dot { box-shadow: 0 0 0 3px var(--surface-2); }
+.audit-dot .icon { width: 15px; height: 15px; }
+.audit-reason {
+  margin: 6px 0 0; padding: 7px 11px;
+  font-size: 12px; line-height: 1.65; color: var(--ink-3);
+  background: var(--surface-2); border-radius: var(--r-xs);
+  border-left: 2px solid var(--line-3);
+}
+
+/* 客服身份提示：比通用 .notice 更醒目一点，因为它决定了「哪些按钮不该出现」 */
+.desk-banner {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin-bottom: 16px; padding: 13px 16px;
+  border-radius: var(--r-md);
+  background: var(--brand-soft); color: var(--brand-ink);
+  font-size: 12px; line-height: 1.8;
+}
+.desk-banner .icon { width: 17px; height: 17px; flex: none; margin-top: 3px; }
+.desk-banner b { font-weight: 750; }
+
+.text-button.danger { color: var(--tone-danger); }
+.text-button.danger:hover { color: #a53a25; }
+
+/* --- 28. 工作台视觉层 v2（2026-10-17 收尾）-------------------------------
+   上一步把「分区导航」做成了纯文字一列，看起来像表单标签而不是导航。
+   这里补上：图标、选中态左侧品牌竖条、身份条、以及几处「伪输入框」的纠偏。 */
+
+/* 分区导航：图标 + 文案。选中项左侧亮一条品牌色，跟着人走而不是跟着字走。 */
+.desk-nav { padding: 9px; gap: 2px; }
+.desk-nav-label {
+  display: block; padding: 4px 10px 9px;
+  font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint);
+}
+.desk-tab { display: flex; align-items: center; gap: 9px; position: relative; padding: 9px 11px; }
+.desk-tab .icon { width: 16px; height: 16px; opacity: .5; flex: none; transition: opacity .15s, transform .15s; }
+.desk-tab:hover .icon { opacity: .85; }
+.desk-tab.active .icon { opacity: 1; }
+.desk-tab.active::before {
+  content: ''; position: absolute; left: -9px; top: 7px; bottom: 7px; width: 3px;
+  border-radius: 0 3px 3px 0; background: var(--brand-lo);
+}
+
+/* 筛选条：选中态用品牌色。黑色药丸在这套奶油色系里太跳，也不像「平台」的口气。 */
+.chip.active { background: var(--brand-soft); border-color: var(--brand-hi); color: var(--brand-ink); }
+
+/* 审计理由：之前是灰底方框 + 左边线，看起来像禁用的输入框。改成安静的引述小字。 */
+.audit-reason {
+  margin: 6px 0 0; padding: 0 0 0 10px;
+  border-left: 2px solid var(--line-2); background: none;
+  font-size: 12px; line-height: 1.7; color: var(--muted);
+}
+
+/* 身份条：先说「你是谁」，再说「你在这儿能做什么」。让工作台有「人」在场。 */
+.desk-id {
+  display: flex; align-items: center; gap: 13px;
+  margin: 0 0 16px; padding: 13px 16px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
+}
+.desk-id > .avatar { width: 36px; height: 36px; font-size: 14px; border-radius: 11px; }
+.desk-id-main { flex: 1; min-width: 0; }
+.desk-id-main b { display: block; font-size: 13.5px; font-weight: 700; color: var(--ink); }
+.desk-id-main small { display: block; margin-top: 2px; font-size: 11.5px; line-height: 1.6; color: var(--muted); }
+.desk-id .state-pill { margin-left: auto; }
+
+/* 窄屏：导航转横排，金额列收起（金额在标题行的 small 里仍可见） */
+@media (max-width: 860px) {
+  .desk { grid-template-columns: 1fr; gap: 14px; }
+  .desk-nav { position: static; flex-direction: row; overflow-x: auto; padding: 8px; }
+  .desk-tab { white-space: nowrap; }
+  .desk-panel { padding: 16px 14px 6px; }
+  .recon-amounts { display: none; }
+  .score-meter { width: 64px; }
+}
+
+
 .btn.secondary.danger { color: var(--danger); border-color: #f0cbc3; }
 .btn.secondary.danger:hover { background: var(--price-soft); }
 .review-tag.inline { position: static; }
@@ -1524,4 +1741,18 @@ button { -webkit-tap-highlight-color: transparent; }
   .desk-row-main { flex-basis: 100%; }
   .dossier-head { flex-wrap: wrap; gap: 12px; }
   .dossier-score { text-align: left; }
+}
+
+/* 27. 管理员工作台
+   与客服工作台共用 .desk-* 版式，这里只补管理员台独有的两个小件：
+   行内表单（新增词条 / 审计筛选）与说明性小字。
+   新增分区时优先复用 .panel / .desk-row / .state-pill，不要另起一套。 */
+.desk-form-row { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: end; margin: 4px 0 6px; }
+.desk-form-row .field { margin: 0; }
+.desk-form-row > .btn { height: 42px; white-space: nowrap; }
+.desk-hint { font-size: 11.5px; color: var(--muted); font-weight: 400; }
+
+@media (max-width: 720px) {
+  .desk-form-row { grid-template-columns: 1fr 1fr; }
+  .desk-form-row > .btn { grid-column: 1 / -1; }
 }

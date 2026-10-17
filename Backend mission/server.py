@@ -140,7 +140,31 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/moderate' and method=='POST':return self.respond(m.moderate(u,data))
             if p=='/api/nominate' and method=='POST':return self.respond(m.nominate(u,data))
             if p=='/api/admin':
-                m.staff(u);return self.respond({'users':m.rows('SELECT id,nickname,college,score,role,status FROM users'),'audit':m.rows('SELECT * FROM audit ORDER BY id DESC LIMIT 100'),'nominations':m.rows('SELECT n.*,u.nickname,r.name FROM nominations n JOIN users u ON u.id=n.user_id JOIN rooms r ON r.id=n.room_id')})
+                m.staff(u);return self.respond({'users':m.rows('SELECT id,nickname,college,score,role,status FROM users'),'audit':m.audit_log(u,limit=100),'nominations':m.rows('SELECT n.*,u.nickname,r.name FROM nominations n JOIN users u ON u.id=n.user_id JOIN rooms r ON r.id=n.room_id')})
+            if p=='/api/audit' and method=='GET':
+                return self.respond(m.audit_log(u,kind=query.get('type',''),actor=query.get('actor'),
+                                                since=query.get('since'),until=query.get('until'),
+                                                limit=query.get('limit',200)))
+            if p=='/api/audit/export' and method=='GET':
+                body=m.audit_csv(u,kind=query.get('type',''),actor=query.get('actor'),
+                                 since=query.get('since'),until=query.get('until'))
+                return self.respond(body,kind='text/csv; charset=utf-8')
+            if p=='/api/admin/staff' and method=='GET':return self.respond(m.staff_accounts(u))
+            if p=='/api/admin/staff' and method=='POST':return self.respond(m.create_staff(u,data))
+            if p=='/api/admin/staff/status' and method=='POST':return self.respond(m.set_staff_status(u,int(data['id']),data.get('status')))
+            if p=='/api/admin/staff/password' and method=='POST':return self.respond(m.reset_staff_password(u,int(data['id'])))
+            if p=='/api/admin/session/revoke' and method=='POST':return self.respond(m.revoke_sessions(u,int(data['id'])))
+            if p=='/api/admin/sellers' and method=='GET':return self.respond(m.sellers(u))
+            if p=='/api/admin/seller/delist' and method=='POST':return self.respond(m.moderate_seller(u,int(data['seller_id']),data.get('reason','')))
+            if p=='/api/admin/content' and method=='GET':return self.respond(m.flagged_content(u))
+            if p=='/api/admin/content/action' and method=='POST':return self.respond(m.content_action(u,data.get('kind'),int(data['id']),data.get('action','remove'),data.get('reason','')))
+            if p=='/api/moderation/words' and method=='GET':return self.respond(m.moderation_words(u))
+            if p=='/api/moderation/words' and method=='POST':
+                op=data.get('op')
+                if op=='add':return self.respond(m.add_moderation_word(u,data))
+                if op=='remove':return self.respond(m.remove_moderation_word(u,data.get('word')))
+                if op=='restore':return self.respond(m.restore_moderation_word(u,data.get('word')))
+                raise DomainError('不支持的操作')
             if p=='/api/admin/nominate' and method=='POST':
                 m.require(m.profile(u)['role']=='admin','仅平台管理员可任命',403)
                 with m.tx() as c:

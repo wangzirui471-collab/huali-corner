@@ -44,9 +44,9 @@ CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,actor INTEGER,target INT
 CREATE TABLE IF NOT EXISTS reviews(id INTEGER PRIMARY KEY,order_id INTEGER,user_id INTEGER,rating INTEGER,body TEXT,created REAL,UNIQUE(order_id,user_id));
 CREATE TABLE IF NOT EXISTS rooms(id INTEGER PRIMARY KEY,kind TEXT,name TEXT,college TEXT DEFAULT '',sequence INTEGER DEFAULT 1,pair TEXT UNIQUE);
 CREATE TABLE IF NOT EXISTS members(room_id INTEGER,user_id INTEGER,muted INTEGER DEFAULT 0,role TEXT DEFAULT 'member',PRIMARY KEY(room_id,user_id));
-CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY,room_id INTEGER,user_id INTEGER,body TEXT,created REAL,request_key TEXT,removed INTEGER DEFAULT 0,UNIQUE(user_id,room_id,request_key));
+CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY,room_id INTEGER,user_id INTEGER,body TEXT,created REAL,request_key TEXT,removed INTEGER DEFAULT 0,moderation TEXT,UNIQUE(user_id,room_id,request_key));
 CREATE TABLE IF NOT EXISTS blocks(user_id INTEGER,target INTEGER,PRIMARY KEY(user_id,target));
-CREATE TABLE IF NOT EXISTS posts(id INTEGER PRIMARY KEY,user_id INTEGER,topic TEXT,body TEXT,created REAL);
+CREATE TABLE IF NOT EXISTS posts(id INTEGER PRIMARY KEY,user_id INTEGER,topic TEXT,body TEXT,created REAL,moderation TEXT,removed INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS comments(id INTEGER PRIMARY KEY,post_id INTEGER,user_id INTEGER,body TEXT,created REAL);
 CREATE TABLE IF NOT EXISTS offers(id INTEGER PRIMARY KEY,product_id INTEGER,buyer_id INTEGER,amount INTEGER,status TEXT DEFAULT 'pending',created REAL);
 CREATE TABLE IF NOT EXISTS nominations(id INTEGER PRIMARY KEY,user_id INTEGER,room_id INTEGER,reason TEXT,status TEXT DEFAULT 'pending',created REAL);
@@ -82,6 +82,14 @@ class Store:
             # 必须走客服申诉）。没有这一列，「平台下架」和「自己下架」在库里长得一模一样，
             # 管理员下架后卖家点一下「重新上架」就绕过去了。老库自动补列。
             if 'delisted_by' not in [x[1] for x in c.execute('PRAGMA table_info(products)')]:c.execute('ALTER TABLE products ADD COLUMN delisted_by INTEGER DEFAULT 0')
+            # 最后登录时间：人员管理要能回答「这个客服上次登录是什么时候」。
+            # 没有这一列时只能拿 sessions.expires 反推（会话固定 7 天），
+            # 而会话被强制下线删掉之后就彻底查不到了。
+            if 'last_login' not in [x[1] for x in c.execute('PRAGMA table_info(users)')]:c.execute('ALTER TABLE users ADD COLUMN last_login REAL DEFAULT 0')
+            # 聊天与帖子的审核标记。与商品一样只存命中摘要，不存原始长文本。
+            if 'moderation' not in [x[1] for x in c.execute('PRAGMA table_info(messages)')]:c.execute('ALTER TABLE messages ADD COLUMN moderation TEXT')
+            if 'moderation' not in [x[1] for x in c.execute('PRAGMA table_info(posts)')]:c.execute('ALTER TABLE posts ADD COLUMN moderation TEXT')
+            if 'removed' not in [x[1] for x in c.execute('PRAGMA table_info(posts)')]:c.execute('ALTER TABLE posts ADD COLUMN removed INTEGER DEFAULT 0')
             c.execute("INSERT OR IGNORE INTO rooms(id,kind,name) VALUES(1,'general','广州校区总聊')")
     def connect(self):
         c=sqlite3.connect(self.path,timeout=20)

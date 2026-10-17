@@ -12,6 +12,14 @@
 // 列表筛选刻意做成「行内 DOM 过滤」而不是重新渲染整页：
 // 旧工作台每点一次操作就 await render()，整页重画会丢滚动位置、页面还会闪。
 // 过滤只需要显隐行，所以在这里直接改 hidden，不经过 render。
+//
+// 视觉约定（2026-10-17 重做）：
+//   - 所有状态用 `state-pill` + `data-tone`，tone 只有 6 个取值：
+//     ok（绿）/ warn（橙）/ danger（红）/ info（蓝）/ violet（紫）/ mute（灰）。
+//     同一个状态在工单、商品、用户三处必须长得一样，否则「黄色是待处理还是警告」
+//     每换一页就得重新猜。
+//   - 每行左侧留一个 34px 的 glyph 槽位，给图标一个固定的落脚点，
+//     列表因此有了一条稳定的视觉轴，而不是一堆长短不齐的文字。
 
 import { e, icon } from '../core/dom.js';
 import { money, date } from '../core/format.js';
@@ -21,16 +29,31 @@ import { shell, heading } from '../core/shell.js';
 import { needLogin } from '../auth/login.js';
 
 const SECTIONS = [
-  ['overview', '概览'],
-  ['tickets', '工单'],
-  ['products', '商品治理'],
-  ['users', '用户'],
-  ['funds', '资金'],
-  ['audit', '审计']
+  ['overview', '概览', 'home'],
+  ['tickets', '工单', 'message'],
+  ['products', '商品治理', 'tag'],
+  ['content', '内容治理', 'alert'],
+  ['users', '用户', 'user'],
+  ['funds', '资金', 'wallet'],
+  ['audit', '审计', 'list']
 ];
 
 const TICKET_TYPES = { refund: '售后', report: '举报', appeal: '申诉', reschedule: '改约', other: '咨询' };
 const ROLE_NAMES = { user: '普通用户', support: '客服', admin: '平台管理员' };
+
+// 工单类型色：售后偏紫（要动钱）、举报偏红（要处置）、申诉偏橙（要复核）、改约偏蓝（只是协调）。
+const TICKET_TONE = { refund: 'violet', report: 'danger', appeal: 'warn', reschedule: 'info', other: 'mute' };
+
+// 状态色：全站唯一一份映射。新增状态时只改这里，不要在某个页面里单独写颜色。
+const STATUS_TONE = {
+  open: 'warn', processing: 'info', review: 'violet', resolved: 'ok',
+  active: 'ok', banned: 'danger', deactivated: 'mute',
+  available: 'ok', reserved: 'warn', sold: 'mute', removed: 'mute',
+  awaiting_payment: 'warn', paid: 'info', awaiting_handover: 'info', awaiting_receipt: 'violet',
+  completed: 'ok', cancelled: 'mute', disputed: 'danger', refunded: 'danger'
+};
+
+const ROLE_TONE = { user: 'mute', support: 'info', admin: 'violet' };
 
 // 这些动作登记在册，供前端提示与后端契约对齐（见 docs/工作台接口契约.md）。
 const AUDIT_LABELS = {
@@ -38,7 +61,23 @@ const AUDIT_LABELS = {
   moderation: '内容处置', appointment: '任命群管理员', ticket_claim: '认领工单',
   ticket_refund: '同意退款', ticket_reject: '驳回工单', ticket_resolved: '结案',
   ticket_review: '提交复核', dossier_view: '查阅用户档案',
-  product_moderate: '平台处置商品', product_review: '审核商品'
+  product_moderate: '平台处置商品', product_review: '审核商品',
+  // 这两个此前没有翻译，审计页直接漏出了英文 key（role_change / operator_password_reset）。
+  role_change: '角色变更', operator_password_reset: '重置密码'
+};
+
+const AUDIT_TONES = {
+  product_moderate: 'danger', product_review: 'warn', dossier_view: 'info',
+  role_change: 'violet', operator_password_reset: 'warn', credit: 'warn',
+  ban: 'danger', unban: 'ok', ticket_refund: 'ok', ticket_resolved: 'ok',
+  appointment: 'info', promote: 'info', moderation: 'warn'
+};
+
+const AUDIT_GLYPHS = {
+  product_moderate: 'trash', product_review: 'shield', dossier_view: 'user',
+  role_change: 'user', operator_password_reset: 'refresh', credit: 'chart',
+  ban: 'close', unban: 'check', ticket_refund: 'wallet', ticket_resolved: 'check',
+  appointment: 'plus', promote: 'tag', moderation: 'alert'
 };
 
 // 当前登录者是不是平台管理员。客服与管理员看到的工作台不一样：
@@ -46,30 +85,67 @@ const AUDIT_LABELS = {
 // 后端也会逐次校验（server-side 才是真闸门），这里只是不给人看见必然失败的按钮。
 const isAdmin = () => state.me?.role === 'admin';
 
+const statePill = (label, tone = 'mute') =>
+  `<span class="state-pill" data-tone="${tone}"><i aria-hidden="true"></i>${e(label)}</span>`;
+
+const sepDot = '<span class="sep-dot" aria-hidden="true"></span>';
+
 function roleBanner() {
   if (isAdmin()) return '';
-  return `<div class="notice">${icon('shield')}<span><b>你当前以客服身份登录。</b>
+  return `<div class="desk-banner">${icon('shield')}<span><b>你当前以客服身份登录。</b>
     可以受理工单、强制下架违规商品、复核待审商品、查阅用户档案；
     <b>恢复上架、信誉调整、封禁账号、人员授权</b>由平台管理员执行。</span></div>`;
 }
 
+// 工作台骨架。刻意**不抽到公共组件**：pages/admin-desk.js 是另一路并行改的，
+// 两个文件各自持有私有实现、共用 market.css 的类名，谁保存都不会把对方改断。
+// 等两边都稳定了再抽公共层，成本只有几十行。
 function deskShell(section, title, desc, body) {
   return shell(
-    `${heading('ADMIN DESK', title, desc)}<div class="desk">${deskNav(section)}<div class="desk-main">${body}</div></div>`,
+    `${heading('SUPPORT DESK', title, desc)}<div class="desk">${deskNav(section)}<div class="desk-main">${body}</div></div>`,
     'staff'
   );
 }
 
 function deskNav(active) {
-  return `<nav class="desk-nav" aria-label="工作台分区">${SECTIONS.map(([key, label]) =>
-    `<button class="desk-tab ${key === active ? 'active' : ''}" data-go="staff/${key}">${label}</button>`
+  return `<nav class="desk-nav" aria-label="工作台分区"><span class="desk-nav-label">工作台</span>${SECTIONS.map(([key, label, ic]) =>
+    `<button class="desk-tab ${key === active ? 'active' : ''}" data-go="staff/${key}">${icon(ic)}<span>${label}</span></button>`
   ).join('')}</nav>`;
 }
 
-function statCards(items) {
-  return `<div class="stat-grid">${items.map(([label, value, hint]) =>
-    `<div class="stat-card"><span>${e(label)}</span><b>${e(String(value))}</b>${hint ? `<small>${e(hint)}</small>` : ''}</div>`
-  ).join('')}</div>`;
+// 身份条：进入工作台第一眼应该看到「我是谁、以什么身份在做事」，
+// 而不是一上来就面对一张数据表。客服看到的是客服该做的，管理员看到的是全部。
+function identityBar() {
+  const me = state.me || {};
+  const role = ROLE_NAMES[me.role] || me.role || '未知身份';
+  const tone = ROLE_TONE[me.role] || 'mute';
+  const line = isAdmin()
+    ? '今天是平台管理员：可处置商品与内容、管理人员权限、复核每一笔对账。'
+    : '今天以客服身份值守：受理工单、处置违规商品，需要动权限时找管理员。';
+  return `<div class="desk-id">
+    <span class="avatar role-avatar" data-tone="${tone}">${e((me.nickname || '?')[0])}</span>
+    <div class="desk-id-main"><b>${e(me.nickname || '工作人员')}</b><small>${line}</small></div>
+    ${statePill(role, tone)}
+  </div>`;
+}
+
+// 概览的数据卡。这些卡**本身就是跳转入口** —— 文案写着「点工单认领」，
+// 那卡片就必须真能点，否则这句提示只是一句正确的废话。
+function kpiCard([label, value, hint, tone, glyph, to]) {
+  const inner = `<span class="kpi-glyph" data-tone="${tone}">${icon(glyph)}</span>
+    <span class="kpi-body">
+      <span class="kpi-label">${e(label)}</span>
+      <b class="kpi-value">${e(String(value))}</b>
+      <small class="kpi-hint">${e(hint)}</small>
+    </span>
+    ${to ? `<span class="kpi-arrow" aria-hidden="true">${icon('arrow')}</span>` : ''}`;
+  return to
+    ? `<button class="kpi" data-tone="${tone}" data-empty="${value ? 0 : 1}" data-go="${to}">${inner}</button>`
+    : `<div class="kpi" data-tone="${tone}" data-empty="${value ? 0 : 1}">${inner}</div>`;
+}
+
+function panelHead(title, action) {
+  return `<header class="desk-panel-head"><h2>${e(title)}</h2>${action || ''}</header>`;
 }
 
 // 单选筛选条。同一分区只放一条，避免多组筛选叠加带来的心智负担。
@@ -86,58 +162,80 @@ function deskEmpty(text, hint = '') {
   return `<p class="desk-empty">${e(text)}${hint ? `<small>${e(hint)}</small>` : ''}</p>`;
 }
 
-function row(tags, search, inner) {
-  return `<div class="desk-row" data-group="${e(search.group)}" data-tags="${e(tags.join(' '))}" data-search="${e(search.text)}">${inner}</div>`;
+// 列表行的统一骨架。data-* 是行内筛选（actions/staff.js 的 applyChips /
+// applySearch）的契约，改结构时这三个属性不能动。
+// glyph 槽位保持在最左侧，行内第一个 <b> 必须是标题（moderate-product 用它取商品名）。
+function row(tags, search, inner, opts = {}) {
+  const glyph = opts.glyph
+    ? `<span class="row-glyph" data-tone="${opts.tone || 'mute'}">${icon(opts.glyph)}</span>`
+    : '';
+  return `<div class="desk-row" data-group="${e(search.group)}" data-tags="${e(tags.join(' '))}" data-search="${e(search.text)}">${glyph}${inner}</div>`;
 }
 
 // --- 各分区 ---------------------------------------------------------------
 
 function overviewSection({ tickets, admin, products }) {
-  const byStatus = s => tickets.filter(t => t.status === s).length;
   const underReview = products.filter(p => p.under_review);
   const banned = admin.users.filter(u => u.status === 'banned');
   const pending = tickets.filter(t => t.status === 'open');
   const busy = tickets.filter(t => ['processing', 'review'].includes(t.status));
 
-  const todo = [
-    ['待处理工单', pending.length, '点「工单」认领', 'staff/tickets'],
-    ['处理中 / 待复核', busy.length, '需要推进或复核', 'staff/tickets'],
-    ['待人工复核商品', underReview.length, '自动审核标记为中危', 'staff/products'],
-    ['已封禁账号', banned.length, '可在用户分区查看', 'staff/users']
+  const kpis = [
+    ['待处理工单', pending.length, pending.length ? '等待认领' : '全部已认领', 'warn', 'message', 'staff/tickets'],
+    ['处理中 / 待复核', busy.length, busy.length ? '需要推进或复核' : '没有积压', 'info', 'clock', 'staff/tickets'],
+    ['待人工复核商品', underReview.length, underReview.length ? '自动审核标记为中危' : '没有待审商品', 'violet', 'shield', 'staff/products'],
+    ['已封禁账号', banned.length, banned.length ? '可在用户分区解封' : '没有封禁记录', 'danger', 'user', 'staff/users']
   ];
 
-  return statCards(todo.map(([a, b, c]) => [a, b, c])) +
-    `<section class="panel"><h2>最近工单</h2>${tickets.length
-      ? `<div class="desk-list">${tickets.slice(0, 6).map(ticketRow).join('')}</div>`
-      : deskEmpty('暂无工单')}</section>` +
+  return `<div class="kpi-grid">${kpis.map(kpiCard).join('')}</div>` +
+    `<section class="panel desk-panel">
+      ${panelHead('最近工单', `<button class="text-button" data-go="staff/tickets">全部工单${icon('arrow')}</button>`)}
+      ${tickets.length
+        ? `<div class="desk-list">${tickets.slice(0, 6).map(ticketRow).join('')}</div>`
+        : deskEmpty('暂无工单', '用户从订单页或客服中心发起反馈后会出现在这里。')}
+    </section>` +
     (underReview.length
-      ? `<section class="panel"><h2>待复核商品</h2><div class="desk-list">${underReview.slice(0, 6).map(productRow).join('')}</div></section>`
+      ? `<section class="panel desk-panel">
+          ${panelHead('待复核商品', `<button class="text-button" data-go="staff/products">去处置${icon('arrow')}</button>`)}
+          <div class="desk-list">${underReview.slice(0, 6).map(productRow).join('')}</div>
+        </section>`
       : '');
 }
 
 function ticketRow(t) {
-  const tag = `${e(TICKET_TYPES[t.type] || t.type)}`;
+  const type = TICKET_TYPES[t.type] || t.type;
+  const tone = TICKET_TONE[t.type] || 'mute';
   return row(
     [t.status, t.type],
     { group: 'tickets', text: `#${t.id} ${t.subject} ${t.nickname}` },
-    `<span class="desk-badge">${tag}</span>
-     <div class="desk-row-main"><b>${e(t.subject)}</b><small>#${t.id} · ${e(t.nickname)} · ${date(t.created)}${t.assignee ? ' · 已认领' : ''}</small></div>
-     <span class="tag">${e(statusNames[t.status] || t.status)}</span>
-     <button class="btn secondary" data-go="ticket/${t.id}">查看</button>`
+    `<div class="desk-row-main">
+       <b>${e(t.subject)}</b>
+       <small><span class="mono">#${t.id}</span>${sepDot}${e(t.nickname)}${sepDot}${date(t.created)}${t.assignee ? `${sepDot}<span class="claimed">已认领</span>` : ''}</small>
+     </div>
+     <span class="type-chip" data-tone="${tone}">${e(type)}</span>
+     ${statePill(statusNames[t.status] || t.status, STATUS_TONE[t.status])}
+     <button class="btn secondary" data-go="ticket/${t.id}">查看</button>`,
+    { glyph: 'message', tone }
   );
 }
 
 function ticketsSection({ tickets }) {
+  const open = tickets.filter(t => t.status === 'open').length;
   const body = tickets.length
     ? `<div class="desk-list">${tickets.map(ticketRow).join('')}</div>`
     : deskEmpty('暂无工单', '用户从订单页或客服中心发起反馈后会出现在这里。');
-  return `${chips('tickets', [
-    ['open', '待处理'], ['processing', '处理中'], ['review', '待复核'], ['resolved', '已解决']
-  ])}<section class="panel">${body}</section>`;
+  return `<div class="desk-summary">
+      <span>共 <b>${tickets.length}</b> 条工单</span>
+      ${open ? `<span class="desk-summary-flag">其中 <b>${open}</b> 条待认领</span>` : '<span class="muted">没有待认领的工单</span>'}
+    </div>
+    ${chips('tickets', [
+      ['open', '待处理'], ['processing', '处理中'], ['review', '待复核'], ['resolved', '已解决']
+    ])}<section class="panel desk-panel">${body}</section>`;
 }
 
 function productRow(p) {
   const removed = p.status === 'removed';
+  const tone = p.under_review ? 'warn' : removed ? (p.delisted_by ? 'danger' : 'mute') : 'ok';
   const review = p.under_review ? '<span class="review-tag inline">审核中</span>' : '';
   let acts;
   if (p.under_review) {
@@ -160,20 +258,22 @@ function productRow(p) {
     tags,
     { group: 'products', text: `#${p.id} ${p.title} ${p.nickname}` },
     `<div class="desk-row-main"><b>${e(p.title)}</b>
-       <small>#${p.id} · ${e(p.nickname)} · ¥${money(p.price)} · ${e(statusNames[p.status] || p.status)}</small></div>
+       <small><span class="mono">#${p.id}</span>${sepDot}${e(p.nickname)}${sepDot}<span class="amount">¥${money(p.price)}</span>${sepDot}${e(statusNames[p.status] || p.status)}</small></div>
      ${review}
+     ${statePill(statusNames[p.status] || p.status, STATUS_TONE[p.status])}
      <button class="btn secondary" data-go="product/${p.id}">查看</button>
-     ${acts}`
+     ${acts}`,
+    { glyph: 'tag', tone }
   );
 }
 
 function productsSection({ products, removed }) {
   const underReview = products.filter(p => p.under_review);
   const rows = [...products, ...removed];
-  return `<section class="panel"><h2>商品治理</h2>
-    <p class="muted">自动审核命中「平台限制」类目的商品会带「审核中」标记，放行展示但等人工判定。
-    下架必须填理由，会写入审计并通知卖家，卖家可在客服中心申诉；被平台下架的商品
-    卖家不能自行重新上架${isAdmin() ? '，由你复核后恢复' : '，恢复需平台管理员复核'}。</p>
+  return `<section class="panel desk-panel">
+    ${panelHead('全部商品')}
+    <p class="desk-lead">命中「平台限制」类目的商品会带「审核中」标记，放行展示、等人判定；
+    下架必须填理由并通知卖家，被平台下架的商品卖家不能自行重新上架。</p>
     ${chips('products', [
       ['review', `待人工复核 ${underReview.length}`],
       ['available', `在售 ${products.length}`],
@@ -187,17 +287,23 @@ function userRow(u) {
   const banned = u.status === 'banned';
   // 封禁只有管理员能做，且不能封管理员自己或当前登录者。
   const canBan = isAdmin() && u.id !== state.me.id && u.role !== 'admin';
+  const tone = ROLE_TONE[u.role] || 'mute';
+  const score = Math.max(0, Math.min(100, Number(u.score) || 0));
   const acts = `<button class="btn secondary" data-go="dossier/${u.id}">用户档案</button>
     ${canBan
-      ? `<button class="text-button" data-action="ban" data-id="${u.id}" data-value="${banned ? 'false' : 'true'}">${banned ? '解封' : '封禁'}</button>`
+      ? `<button class="text-button ${banned ? '' : 'danger'}" data-action="ban" data-id="${u.id}" data-value="${banned ? 'false' : 'true'}">${banned ? '解封' : '封禁'}</button>`
       : ''}`;
   return row(
     [u.role, u.status],
     { group: 'users', text: `#${u.id} ${u.nickname} ${u.college}` },
-    `<div class="desk-row-main"><b>${e(u.nickname)}</b>
-       <small>#${u.id} · ${e(ROLE_NAMES[u.role] || u.role)} · ${e(u.college || '')}</small></div>
-     ${banned ? '<span class="tag danger">已封禁</span>' : ''}
-     <b class="score">${u.score}/100</b>
+    `<span class="avatar role-avatar" data-tone="${tone}">${e((u.nickname || '?')[0])}</span>
+     <div class="desk-row-main"><b>${e(u.nickname)}</b>
+       <small><span class="mono">#${u.id}</span>${sepDot}${e(ROLE_NAMES[u.role] || u.role)}${u.college ? `${sepDot}${e(u.college)}` : ''}</small></div>
+     ${banned ? statePill('已封禁', 'danger') : ''}
+     <div class="score-meter" data-low="${score < 60 ? 1 : 0}" title="信誉分 ${score}/100">
+       <span class="score-num"><b>${score}</b><small>/100</small></span>
+       <span class="meter" aria-hidden="true"><span style="width:${score}%"></span></span>
+     </div>
      ${acts}`
   );
 }
@@ -205,48 +311,141 @@ function userRow(u) {
 function usersSection({ admin }) {
   const users = admin.users || [];
   const banned = users.filter(u => u.status === 'banned').length;
-  return `<section class="panel"><h2>用户</h2>
-    <p class="muted">按昵称、编号或学院搜索。手机号不在此展示；用户档案里也只给脱敏信息。</p>
+  const staff = users.filter(u => u.role !== 'user').length;
+  return `<section class="panel desk-panel">
+    ${panelHead('全部账号')}
+    <p class="desk-lead">按昵称、编号或学院搜索。手机号不在此展示，用户档案里也只给脱敏信息。</p>
     <form id="desk-search-form" data-group="users" class="desk-search">
       ${icon('search')}<input name="q" type="search" placeholder="搜昵称 / #编号 / 学院" aria-label="搜索用户">
       <button class="btn secondary">搜索</button>
     </form>
+    <div class="desk-summary">
+      <span>共 <b>${users.length}</b> 个账号</span>
+      <span><b>${staff}</b> 个工作人员</span>
+      ${banned ? `<span class="desk-summary-flag">已封禁 <b>${banned}</b></span>` : ''}
+    </div>
     ${chips('users', [['user', '普通用户'], ['support', '客服'], ['admin', '平台管理员'], ['banned', `已封禁 ${banned}`]])}
     <div class="desk-list">${users.map(userRow).join('')}</div></section>`;
 }
 
+function reconRow(r) {
+  const tone = r.consistent ? 'ok' : 'danger';
+  const cell = (label, value) => `<span><small>${label}</small><b>¥${money(value)}</b></span>`;
+  return `<div class="desk-row recon-row">
+    <span class="row-glyph" data-tone="${tone}">${icon(r.consistent ? 'check' : 'alert')}</span>
+    <div class="desk-row-main">
+      <b>订单 <span class="mono">#${r.id}</span></b>
+      <small>${e(statusNames[r.status] || r.status)}</small>
+    </div>
+    <div class="recon-amounts">
+      ${cell('支付', r.payment)}${cell('退款', r.refund)}${cell('净结算', r.net_settlement)}${cell('待结算', r.held)}
+    </div>
+    ${statePill(r.consistent ? '账目一致' : '需要核查', tone)}
+  </div>`;
+}
+
 function fundsSection({ rows }) {
   const off = rows.filter(r => !r.consistent);
-  return `${statCards([
-    ['订单总数', rows.length, '全部模拟账目'],
-    ['账目不一致', off.length, off.length ? '需要人工核查' : '全部平账'],
-    ['待结算合计', money(rows.reduce((s, r) => s + (r.held || 0), 0)), '托管中的模拟资金']
-  ])}<section class="panel"><h2>模拟资金对账</h2>
-    <p class="muted">对账口径：支付 ＝ 退款 ＋ 净结算 ＋ 待结算。所有金额为模拟记录，不代表真实到账。</p>
-    ${rows.length ? `<div class="desk-table">${rows.map(r => `
-      <div class="desk-row">
-        <div class="desk-row-main"><b>订单 #${r.id}</b>
-          <small>${e(statusNames[r.status] || r.status)} · 支付 ¥${money(r.payment)} · 退款 ¥${money(r.refund)} · 净结算 ¥${money(r.net_settlement)} · 待结算 ¥${money(r.held)}</small></div>
-        <span class="tag ${r.consistent ? '' : 'danger'}">${r.consistent ? '账目一致' : '需要核查'}</span>
-      </div>`).join('')}</div>` : deskEmpty('暂无资金记录')}
-    <p class="muted">当前没有「按订单号查详情」的接口，所以这一栏只列账目。待办见 docs/管理端权限清单-v1.md 的 D2。</p></section>`;
+  const held = rows.reduce((s, r) => s + (r.held || 0), 0);
+  const kpis = [
+    ['订单总数', rows.length, '全部为模拟账目', 'info', 'list'],
+    ['待结算合计', `¥${money(held)}`, '托管中的模拟资金', 'warn', 'wallet'],
+    ['账目不一致', off.length, off.length ? '需要人工核查' : '全部平账', off.length ? 'danger' : 'ok', off.length ? 'alert' : 'check']
+  ];
+  return `<div class="kpi-grid">${kpis.map(kpiCard).join('')}</div>
+    <section class="panel desk-panel">
+      ${panelHead('模拟资金对账')}
+      <p class="desk-lead">对账口径：支付 ＝ 退款 ＋ 净结算 ＋ 待结算。所有金额为模拟记录，不代表真实到账。</p>
+      ${rows.length ? `<div class="desk-table">${rows.map(reconRow).join('')}</div>` : deskEmpty('暂无资金记录')}
+    </section>`;
+}
+
+function auditRow(a, names) {
+  const label = AUDIT_LABELS[a.type] || a.type;
+  const tone = AUDIT_TONES[a.type] || 'info';
+  const glyph = AUDIT_GLYPHS[a.type] || 'list';
+  // 操作人只给 id 时退化成「#2」，有昵称就给人名 —— 审计是给人看的，不是给数据库看的。
+  const who = id => names[id] || `#${id}`;
+  const meta = [
+    `<span class="mono">#${a.id}</span>`,
+    `操作人 ${e(who(a.actor))}`,
+    a.target ? `对象 ${e(who(a.target))}` : '',
+    date(a.created)
+  ].filter(Boolean).join(sepDot);
+  return `<div class="desk-row audit-row" data-group="audit" data-tags="${e(a.type)}" data-search="${e(`${a.type} ${label} ${a.reason || ''} #${a.id} ${who(a.actor)}`)}">
+    <span class="audit-dot" data-tone="${tone}">${icon(glyph)}</span>
+    <div class="desk-row-main">
+      <b>${e(label)}</b>
+      <small>${meta}</small>
+      ${a.reason ? `<p class="audit-reason">${e(a.reason)}</p>` : ''}
+    </div>
+    ${a.delta ? statePill(`${a.delta > 0 ? '+' : ''}${a.delta} 分`, a.delta < 0 ? 'danger' : 'ok') : ''}
+    ${a.ticket_id ? `<button class="btn secondary" data-go="ticket/${a.ticket_id}">工单 #${a.ticket_id}</button>` : ''}
+  </div>`;
 }
 
 function auditSection({ admin }) {
   const audit = admin.audit || [];
+  const names = Object.fromEntries((admin.users || []).map(u => [u.id, u.nickname]));
   const kinds = [...new Set(audit.map(a => a.type))];
-  const body = `<div class="desk-list">${audit.map(a => row(
-    [a.type],
-    { group: 'audit', text: `${a.type} ${a.reason || ''} #${a.id}` },
-    `<div class="desk-row-main"><b>${e(AUDIT_LABELS[a.type] || a.type)}</b>
-       <small>#${a.id} · 操作人 #${a.actor}${a.target ? ` · 对象 #${a.target}` : ''} · ${date(a.created)}</small>
-       <p>${e(a.reason || '')}</p></div>
-     ${a.delta ? `<span class="tag ${a.delta < 0 ? 'danger' : ''}">${a.delta > 0 ? '+' : ''}${a.delta} 分</span>` : ''}
-     ${a.ticket_id ? `<button class="btn secondary" data-go="ticket/${a.ticket_id}">工单 #${a.ticket_id}</button>` : ''}`)).join('')}</div>`;
-  return `<section class="panel"><h2>操作审计</h2>
-    <p class="muted">所有平台处置都在这里留痕。查阅用户档案本身也会留下记录。</p>
+  return `<section class="panel desk-panel">
+    ${panelHead('操作审计')}
+    <p class="desk-lead">所有平台处置都在这里留痕。查阅用户档案本身也会留下记录。</p>
     ${chips('audit', kinds.slice(0, 8).map(k => [k, AUDIT_LABELS[k] || k]))}
-    ${audit.length ? body : deskEmpty('暂无操作记录')}</section>`;
+    ${audit.length
+      ? `<div class="desk-list audit-list">${audit.map(a => auditRow(a, names)).join('')}</div>`
+      : deskEmpty('暂无操作记录')}
+  </section>`;
+}
+
+function contentRow(item, kind) {
+  const label = kind === 'message' ? '聊天消息' : '社区帖子';
+  const verdict = item.moderation?.verdict || item.moderation?.level || 'review';
+  const tone = verdict === 'report' ? 'danger' : 'warn';
+  const hits = (item.moderation?.hits || []).map(h => h.word || h).filter(Boolean);
+  // 治理列表用来判断「要不要点进去看」，不读全文；想看上下文去原帖。
+  const flat = String(item.body || '').replace(/\s+/g, ' ');
+  const excerpt = flat.length > 90 ? flat.slice(0, 90) + '…' : flat;
+  const where = kind === 'message'
+    ? `${e(item.nickname)} · ${e(item.room_name || '私聊')}`
+    : `${e(item.nickname)} · ${e(item.topic || '无标题')}`;
+  const tags = [kind, item.removed ? 'removed' : 'live', verdict];
+  return row(
+    tags,
+    { group: 'content', text: `#${item.id} ${item.body || ''} ${item.nickname} ${hits.join(' ')}` },
+    `<div class="desk-row-main"><b>${e(excerpt || '(空内容)')}</b>
+       <small><span class="mono">${label} #${item.id}</span>${sepDot}${where}${sepDot}${date(item.created)}</small>
+       ${hits.length ? `<small class="audit-reason">命中：${e(hits.slice(0, 6).join('、'))}</small>` : ''}</div>
+     ${statePill(item.removed ? '已移除' : '展示中', item.removed ? 'mute' : 'ok')}
+     ${item.removed
+       ? `<button class="btn secondary" data-action="content-restore" data-kind="${kind}" data-id="${item.id}">恢复</button>`
+       : `<button class="btn secondary danger" data-action="content-remove" data-kind="${kind}" data-id="${item.id}">移除</button>`}`,
+    { glyph: kind === 'message' ? 'message' : 'community', tone }
+  );
+}
+
+function contentSection({ messages, posts }) {
+  const all = [
+    ...(messages || []).map(m => ['message', m]),
+    ...(posts || []).map(p => ['post', p])
+  ].sort((a, b) => (b[1].created || 0) - (a[1].created || 0));
+  const removed = all.filter(([, it]) => it.removed).length;
+  return `<section class="panel desk-panel">
+    ${panelHead('待判内容')}
+    <p class="desk-lead">自动审核把命中「送审」级别的聊天与帖子放在这里——它们已经发出去了，
+    等人判断。移除是软删除，正文留着，申诉或误判时可恢复；命中「拦截」级的当场就被拒绝，不会入库。</p>
+    <div class="desk-summary">
+      <span>共 <b>${all.length}</b> 条待判内容</span>
+      ${removed ? `<span class="desk-summary-flag">已移除 <b>${removed}</b></span>` : '<span class="muted">全部仍在展示</span>'}
+    </div>
+    ${chips('content', [
+      ['live', '展示中'], ['removed', '已移除'],
+      ['message', '聊天消息'], ['post', '社区帖子']
+    ])}
+    ${all.length
+      ? `<div class="desk-list">${all.map(([kind, it]) => contentRow(it, kind)).join('')}</div>`
+      : deskEmpty('没有需要人工判断的内容', '自动审核只把 review / report 级别的内容送到这里。')}
+  </section>`;
 }
 
 export async function staffDesk(section = 'overview') {
@@ -263,6 +462,8 @@ export async function staffDesk(section = 'overview') {
   } else if (key === 'products') {
     const [products, removed] = await Promise.all([api('/products'), api('/product/removed')]);
     body = productsSection({ products, removed });
+  } else if (key === 'content') {
+    body = contentSection(await api('/admin/content'));
   } else if (key === 'users') {
     body = usersSection({ admin: await api('/admin') });
   } else if (key === 'funds') {
@@ -276,9 +477,10 @@ export async function staffDesk(section = 'overview') {
     overview: '待办优先：先看还有多少工单没认领、多少商品在等人工复核。',
     tickets: '认领、核实、处理、结案，每一步都留记录。',
     products: '违禁品与交易外流的处置入口，全部留痕并通知卖家。',
+    content: '自动审核送审的聊天与帖子，移除可回滚。',
     users: '查看账号状态与信誉，进入用户档案看全貌。',
     funds: '模拟资金对账，只看服务端账本。',
     audit: '平台每一次处置都在这里，可追溯。'
   }[key];
-  deskShell(key, title, blurb, roleBanner() + body);
+  return deskShell(key, title, blurb, identityBar() + roleBanner() + body);
 }

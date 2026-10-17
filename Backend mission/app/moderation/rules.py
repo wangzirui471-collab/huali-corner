@@ -103,38 +103,114 @@ def load_words(directory=None):
     """
     directory = Path(directory or DATA_DIR)
     words, skipped = [], []
-    files = []
-    for folder in (directory, directory / 'thirdparty'):
-        if folder.is_dir():
-            files.extend(sorted(folder.glob('*.txt')))
+    files = _word_files(directory)
     for path in files:
-        # 必须显式 utf-8：Windows 上 Python 3.8 的 open() 默认走 GBK，
-        # 会让中文词表直接读成乱码（项目在院校目录 JSON 上踩过同一个坑）。
-        for raw in path.read_text(encoding='utf-8', errors='replace').splitlines():
-            line = raw.strip()
-            if not line or line.startswith('#'):
-                continue
-            parts = [p.strip() for p in line.split('|')]
-            if len(parts) != 4:
-                skipped.append((path.name, raw, '字段数不是 4'))
-                continue
-            word, category, level, action = parts
-            if len(word) < 2:
-                skipped.append((path.name, word, '单字词条误伤面太大'))
-                continue
-            if action not in RANK:
-                skipped.append((path.name, word, f'未知处置 {action}'))
+        for word, category, level, action, reason in _parse_file(path):
+            if reason:
+                skipped.append((path.name, word, reason))
                 continue
             words.append({'word': word, 'category': category, 'level': level,
                           'action': action, 'source': path.name})
     return words, skipped
 
 
-class RuleSet:
-    """一份可复用的规则集合。进程内建一次，之后只做扫描。"""
+def _word_files(directory):
+    files = []
+    for folder in (directory, directory / 'thirdparty'):
+        if folder.is_dir():
+            files.extend(sorted(folder.glob('*.txt')))
+    return files
 
-    def __init__(self, directory=None):
+
+def _parse_file(path):
+    """逐行解析词表，产出 (词条, 分类, 级别, 处置, 拒收原因)。
+
+    必须显式 utf-8：Windows 上 Python 3.8 的 open() 默认走 GBK，
+    会让中文词表直接读成乱码（项目在院校目录 JSON 上踩过同一个坑）。
+    """
+    for raw in path.read_text(encoding='utf-8', errors='replace').splitlines():
+        line = raw.strip()
+        if not line or line.startswith('#'):
+            continue
+        parts = [p.strip() for p in line.split('|')]
+        if len(parts) != 4:
+            yield raw, '', '', '', '字段数不是 4'
+            continue
+        word, category, level, action = parts
+        if len(word) < 2:
+            yield word, category, level, action, '单字词条误伤面太大'
+            continue
+        if action not in RANK:
+            yield word, category, level, action, f'未知处置 {action}'
+            continue
+        yield word, category, level, action, ''
+
+
+# --- 运行时覆盖 -------------------------------------------------------------
+#
+# 词表维护界面改的是**数据目录**里的两个文件，不是仓库里的 data/*.txt：
+#
+#   <数据目录>/moderation/custom.txt     运营新增的词条，格式与内置词表一致
+#   <数据目录>/moderation/disabled.txt   被停用的词条，一行一个
+#
+# 为什么分开两个文件而不是直接改内置词表：
+#   1. 内置词表随 git 走，运行时改写会让每次升级都产生冲突；
+#   2. 「停用一条内置词条」如果靠删除实现，下次拉取代码就复活了，
+#      必须有一个独立的「黑名单的黑名单」才能稳定生效。
+
+CUSTOM_FILE = 'custom.txt'
+DISABLED_FILE = 'disabled.txt'
+
+
+def load_overrides(overlay):
+    """读取运行时覆盖。返回 (自定义词条, 停用词集合, 拒收的条目)。
+
+    overlay 为空目录或不存在时返回空覆盖——调用方不必先建目录。
+    """
+    if not overlay:
+        return [], set(), []
+    folder = Path(overlay)
+    custom, skipped = [], []
+    path = folder / CUSTOM_FILE
+    if path.is_file():
+        for word, category, level, action, reason in _parse_file(path):
+            if reason:
+                skipped.append((CUSTOM_FILE, word, reason))
+                continue
+            custom.append({'word': word, 'category': category, 'level': level,
+                           'action': action, 'source': 'custom.txt'})
+    disabled = set()
+    path = folder / DISABLED_FILE
+    if path.is_file():
+        for raw in path.read_text(encoding='utf-8', errors='replace').splitlines():
+            line = raw.strip()
+            if line and not line.startswith('#'):
+                disabled.add(line)
+    return custom, disabled, skipped
+
+
+
+class RuleSet:
+    """一份可复用的规则集合。进程内建一次，之后只做扫描。
+
+    overlay 是运行时覆盖目录（见 load_overrides）：运营在界面上新增或停用的词条
+    存在那里。规则改动后调用方需要重建 RuleSet（moderation.reload() 已包好）。
+    """
+
+    def __init__(self, directory=None, overlay=None):
         self.words, self.skipped = load_words(directory)
+        self.custom, self.disabled, skipped = load_overrides(overlay)
+        self.skipped.extend(skipped)
+        known = {w['word'] for w in self.words}
+        # 停用优先于新增：一条词被停用后，即便内置词表里也有，也不再生效。
+        if self.disabled:
+            self.words = [w for w in self.words if w['word'] not in self.disabled]
+            known = {w['word'] for w in self.words}
+        for item in self.custom:
+            if item['word'] in known or item['word'] in self.disabled:
+                continue
+            self.words.append(item)
+            known.add(item['word'])
         self.automaton = _Automaton()
         for item in self.words:
             self.automaton.add(item['word'], item)

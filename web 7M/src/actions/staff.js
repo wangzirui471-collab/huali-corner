@@ -16,22 +16,8 @@ import { render } from '../core/nav.js';
 import { modal, closeModal } from '../core/shell.js';
 import { field } from '../components/forms.js';
 
-// 后端接口还没落地的动作，用一句人话提示，而不是抛「接口不存在」。
-// 接口补齐后（契约见 docs/工作台接口契约.md）这里的兜底自然失效，可整段删掉。
-const PENDING = {
-  '/product/moderate': '强制下架',
-  '/product/review': '商品复核'
-};
-
 async function callDesk(path, payload, okMessage) {
-  try {
-    await api(path, payload);
-  } catch (err) {
-    if (/接口不存在/.test(err.message)) {
-      throw new Error(`${PENDING[path] || '该操作'}的后端接口（${path}）尚未接入；前端已就绪，接口补齐后即可生效`);
-    }
-    throw err;
-  }
+  await api(path, payload);
   closeModal();
   toast(okMessage);
   await render();

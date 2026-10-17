@@ -11,6 +11,8 @@ Java 里由 Spring 容器负责装配，Python 这里用多继承显式拼装。
     trade      交易
     community  社区
     support    客服
+    staff      人员与权限（平台侧账号）
+    moderation 内容审核（词库 + 扫描 + 词库维护）
     ops        运维
 
 路由层在 Backend mission/server.py，不在包内 —— 它只做 HTTP 解析与转发。
@@ -23,16 +25,24 @@ from .catalog.service import CatalogService
 from .trade.service import TradeService
 from .community.service import CommunityService
 from .support.service import SupportService
+from .staff.service import StaffService
+from .moderation.service import ModerationService
+from . import moderation
 from .ops.service import OpsService
 from pathlib import Path
 
 
 class Market(Store, AccountService, CatalogService, TradeService,
-             CommunityService, SupportService, OpsService):
+             CommunityService, SupportService, StaffService,
+             ModerationService, OpsService):
     """试用版应用的组合根。"""
 
     def __init__(self,root,trial=False):
         self.trial=trial;super().__init__(root)
+        # 词库的运行时覆盖目录跟着数据目录走：
+        # 同一份代码跑 var / var-trial 两个实例时，运营在试用版改的词条
+        # 不会影响另一份数据；改动的文件也不进 git。
+        moderation.configure(self.root/'moderation')
         with self.tx() as c:
             mode='trial' if trial else 'demo';previous=c.execute("SELECT value FROM settings WHERE key='auth_mode'").fetchone()
             self.require(not previous or previous['value']==mode,'演示和学院试用必须使用不同的数据目录',409)

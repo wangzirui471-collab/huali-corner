@@ -14,6 +14,18 @@ from ..core.errors import ValidationMixin, DomainError
 
 class AccountService(ValidationMixin):
 
+    # 账号不可用时的提示。三种状态的含义完全不同，混成一句「已注销或已被封禁」
+    # 会让被停用的客服以为自己被封号了，直接去找人吵架。
+    STATUS_MESSAGES = {
+        'banned': '该账号已被封禁，如有异议可在客服中心申诉',
+        'deactivated': '该账号已注销',
+        'disabled': '该账号已被平台停用，请联系管理员',
+    }
+
+    @classmethod
+    def status_message(cls, status):
+        return cls.STATUS_MESSAGES.get(status, '账号状态异常，请联系管理员')
+
     def _trial_only(self):self.require(self.trial,'此接口仅供学院试用版使用',403)
     # 账号标识：11 位手机号，或邮箱地址。
     # 校园里不少同学习惯用邮箱记账号，运营者的调试账号也用邮箱更好记；
@@ -78,8 +90,10 @@ class AccountService(ValidationMixin):
             self._lock_check(c,phone)
             current=c.execute('SELECT p.*,u.status FROM password_credentials p JOIN users u ON u.id=p.user_id WHERE u.phone=?',(phone,)).fetchone()
             if not current or not secrets.compare_digest(current['digest'],digest):self._failed_auth(c,phone)
-            self.require(current['status']=='active','该账号已注销或已被封禁',403)
+            self.require(current['status']=='active',self.status_message(current['status']),403)
+            now=time.time()
             c.execute('DELETE FROM auth_attempts WHERE phone=?',(phone,));uid=current['user_id'];token=self._session(c,uid)
+            c.execute('UPDATE users SET last_login=? WHERE id=?',(now,uid))
         return self._trial_result(uid,token)
     def change_password(self,uid,old_password,new_password):
         self._trial_only();self._password(new_password)
@@ -138,17 +152,19 @@ class AccountService(ValidationMixin):
                 c.commit();raise DomainError('验证码错误、过期或已使用',401)
             c.execute('DELETE FROM otp WHERE phone=?',(phone,))
             existing=c.execute('SELECT status FROM users WHERE phone=?',(phone,)).fetchone()
-            self.require(not existing or existing['status']=='active','该账号已注销或已被封禁',403)
+            self.require(not existing or existing['status']=='active',
+                         self.status_message(existing['status']) if existing else '',403)
             c.execute('INSERT OR IGNORE INTO users(phone,nickname) VALUES(?,?)',(phone,'同学'+phone[-4:]))
             uid=c.execute('SELECT id FROM users WHERE phone=?',(phone,)).fetchone()[0]
             token=secrets.token_urlsafe(32)
             c.execute('INSERT INTO sessions VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),uid,time.time()+86400*7))
+            c.execute('UPDATE users SET last_login=? WHERE id=?',(time.time(),uid))
         return {'token':token,'user':self.profile(uid),'simulation':True}
 
     def user(self,token):
         r=self.row('SELECT s.user_id,u.status FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires>?',(hashlib.sha256(token.encode()).hexdigest(),time.time()))
         self.require(r,'请先登录',401)
-        self.require(r['status']=='active','账号已注销或已被封禁',403)
+        self.require(r['status']=='active',self.status_message(r['status']),403)
         return r['user_id']
 
     def logout(self,token):
@@ -181,3 +197,7 @@ class AccountService(ValidationMixin):
         return self.profile(u)
 
     def staff(self,u):self.require(self.profile(u)['role'] in ['admin','support'],'仅客服或管理员可操作',403)
+    def admin(self,u):
+        """平台管理员闸门。用于「客服能做，但管理员才能担责」的那一类操作：
+        人员授权、恢复上架、改判、动账。"""
+        self.require(self.profile(u)['role']=='admin','仅平台管理员可操作',403)

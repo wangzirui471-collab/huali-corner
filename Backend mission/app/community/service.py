@@ -1,6 +1,7 @@
 """社区模块：帖子、评论、总聊与学院群、私聊、举报与屏蔽。"""
-import time
+import json, time
 from ..core.errors import ValidationMixin, DomainError
+from ..moderation import scan_text, scan_private, flag_of, message_for
 
 
 class CommunityService(ValidationMixin):
@@ -46,12 +47,20 @@ class CommunityService(ValidationMixin):
         member=self.member(u,r);self.require(not member['muted'],'你在该群已被禁言',403)
         body=self.text(body,2000,'消息');self.require(1<=len(str(key))<=100,'缺少消息标识')
         room=self.row('SELECT * FROM rooms WHERE id=?',(r,))
-        if room['kind']=='private':
+        private=room['kind']=='private'
+        if private:
             peer=self.row('SELECT user_id FROM members WHERE room_id=? AND user_id<>?',(r,u))['user_id']
             self.require(not self.row('SELECT 1 FROM blocks WHERE (user_id=? AND target=?) OR (user_id=? AND target=?)',(u,peer,peer,u)),'该会话已被屏蔽',403)
+        # 聊天是反引流的主战场之一：群里一句「加微信」能带走一整群的人。
+        # 私聊用另一套尺度——联系方式放行，站外平台/站外收款/违禁品照拦，
+        # 理由见 moderation.scan_private() 的注释。
+        report=(scan_private if private else scan_text)(body)
+        self.require(not report['blocked'],'消息不能发送：'+message_for(report),422)
+        mark=flag_of(report)
         with self.tx() as c:
-            c.execute('INSERT OR IGNORE INTO messages(room_id,user_id,body,created,request_key) VALUES(?,?,?,?,?)',(r,u,body,time.time(),key))
-        return {'ok':True}
+            c.execute('INSERT OR IGNORE INTO messages(room_id,user_id,body,created,request_key,moderation) VALUES(?,?,?,?,?,?)',
+                      (r,u,body,time.time(),key,json.dumps(mark,ensure_ascii=False) if mark else None))
+        return {'ok':True,'moderation':mark}
     def block(self,u,target,enabled):
         self.require(u!=int(target),'不能屏蔽自己')
         with self.tx() as c:
@@ -59,16 +68,25 @@ class CommunityService(ValidationMixin):
             else:c.execute('DELETE FROM blocks WHERE user_id=? AND target=?',(u,int(target)))
         return {'ok':True}
     def posts(self,topic=''):
-        return self.rows('SELECT p.*,u.nickname,u.college,(SELECT COUNT(*) FROM comments c WHERE c.post_id=p.id) replies FROM posts p JOIN users u ON u.id=p.user_id WHERE (?=\'\' OR topic=?) ORDER BY p.id DESC LIMIT 100',(topic,topic))
+        return self.rows('SELECT p.*,u.nickname,u.college,(SELECT COUNT(*) FROM comments c WHERE c.post_id=p.id) replies FROM posts p JOIN users u ON u.id=p.user_id WHERE p.removed=0 AND (?=\'\' OR topic=?) ORDER BY p.id DESC LIMIT 100',(topic,topic))
     def add_post(self,u,d):
         body=self.text(d.get('body'),2000,'帖子内容');topic=d.get('topic','交流')
         self.require(topic in ['交流','求购','毕业季','互助'],'分区不正确')
-        with self.tx() as c:pid=c.execute('INSERT INTO posts(user_id,topic,body,created) VALUES(?,?,?,?)',(u,topic,body,time.time())).lastrowid
-        return {'id':pid}
+        # 帖子是公开的引流入口，尺度按最严的来：联系方式也算高危。
+        report=scan_text(body)
+        self.require(not report['blocked'],'帖子不能发布：'+message_for(report),422)
+        mark=flag_of(report)
+        with self.tx() as c:pid=c.execute('INSERT INTO posts(user_id,topic,body,created,moderation) VALUES(?,?,?,?,?)',
+                                          (u,topic,body,time.time(),json.dumps(mark,ensure_ascii=False) if mark else None)).lastrowid
+        return {'id':pid,'moderation':mark}
     def comments(self,p):return self.rows('SELECT c.*,u.nickname FROM comments c JOIN users u ON u.id=c.user_id WHERE post_id=? ORDER BY c.id LIMIT 100',(p,))
     def comment(self,u,p,body):
-        self.require(self.row('SELECT 1 FROM posts WHERE id=?',(p,)) is not None,'帖子不存在',404)
-        with self.tx() as c:c.execute('INSERT INTO comments(post_id,user_id,body,created) VALUES(?,?,?,?)',(p,u,self.text(body,1000,'回复'),time.time()))
+        self.require(self.row('SELECT 1 FROM posts WHERE id=? AND removed=0',(p,)) is not None,'帖子不存在',404)
+        body=self.text(body,1000,'回复')
+        # 评论不落审核标记（没有「待审」这个环节，只有删），但高危照样拦。
+        report=scan_text(body)
+        self.require(not report['blocked'],'回复不能发布：'+message_for(report),422)
+        with self.tx() as c:c.execute('INSERT INTO comments(post_id,user_id,body,created) VALUES(?,?,?,?)',(p,u,body,time.time()))
         return {'ok':True}
     def moderate(self,u,d):
         r=int(d['room_id']);member=self.member(u,r)
@@ -83,6 +101,53 @@ class CommunityService(ValidationMixin):
     def nominate(self,u,d):
         self.member(u,int(d['room_id']))
         with self.tx() as c:c.execute('INSERT INTO nominations(user_id,room_id,reason,created) VALUES(?,?,?,?)',(u,int(d['room_id']),self.text(d.get('reason'),500,'申请理由'),time.time()))
+        return {'ok':True}
+
+    # --- 内容治理（工作台） ----------------------------------------------
+    def flagged_content(self,u,limit=200):
+        """自动审核打标的聊天消息与帖子。
+
+        只有 review / report 级别会出现在这里——block 级别的根本没能入库，
+        没有可处置的对象。这就是「拦截」与「送审」的分界：
+        拦截是当场拒绝，送审是先放出去、再让人来判断。
+        """
+        self.staff(u);limit=max(1,min(int(limit or 200),500))
+        messages=self.rows(
+            """SELECT m.id,m.room_id,m.user_id,m.body,m.created,m.moderation,m.removed,
+                      u.nickname,r.name room_name,r.kind room_kind
+               FROM messages m JOIN users u ON u.id=m.user_id JOIN rooms r ON r.id=m.room_id
+               WHERE m.moderation IS NOT NULL ORDER BY m.id DESC LIMIT ?""",(limit,))
+        posts=self.rows(
+            """SELECT p.id,p.user_id,p.topic,p.body,p.created,p.moderation,p.removed,u.nickname
+               FROM posts p JOIN users u ON u.id=p.user_id
+               WHERE p.moderation IS NOT NULL ORDER BY p.id DESC LIMIT ?""",(limit,))
+        for item in messages+posts:
+            try:item['moderation']=json.loads(item['moderation']) if item['moderation'] else None
+            except (TypeError,ValueError):item['moderation']=None
+        return {'messages':messages,'posts':posts}
+
+    def content_action(self,u,kind,cid,action,reason):
+        """移除 / 恢复一条被打标的聊天消息或帖子。
+
+        移除以「软删除」实现（removed=1）：正文留着，用户侧显示「已被移除」，
+        这样当事人申诉、或后来发现判错时还能还原，而不是数据已经没了。
+        """
+        self.staff(u)
+        self.require(kind in ('message','post'),'内容类型无效')
+        self.require(action in ('remove','restore'),'操作无效')
+        reason=self.text(reason,500,'处置理由')
+        table='messages' if kind=='message' else 'posts'
+        row=self.row(f'SELECT id,user_id FROM {table} WHERE id=?',(int(cid),))
+        self.require(row,f'{"消息" if kind=="message" else "帖子"}不存在',404)
+        self.require(row['user_id']!=u,'不能处置自己发布的内容')
+        label='聊天消息' if kind=='message' else '社区帖子'
+        with self.tx() as c:
+            c.execute(f'UPDATE {table} SET removed=? WHERE id=?',(1 if action=='remove' else 0,int(cid)))
+            c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',
+                      (u,row['user_id'],'content_'+action,f'{label} #{cid}：{reason}',time.time()))
+            if action=='remove':
+                self.notify(c,row['user_id'],'content_removed',
+                            f'你发布的一条{label}因「{reason}」已被移除。如有异议可在客服中心申诉。')
         return {'ok':True}
 
     # --- 校园求购撮合 ---------------------------------------------------

@@ -170,6 +170,49 @@ class SupportService(ValidationMixin):
     def credit_history(self,u):
         return self.rows("SELECT delta,reason,ticket_id,created FROM audit WHERE target=? AND type='credit' ORDER BY id DESC",(u,))
 
+    def audit_log(self,u,kind='',actor=None,since=None,until=None,limit=200):
+        """审计查询。
+
+        可见范围是分权的最后一块：**客服只能看自己经手的记录**。
+        理由是最小必要——客服需要复核「我昨天那单是怎么处理的」，
+        但不需要看到同事和管理员的全部动作，尤其不该看到指向自己的处置记录。
+        管理员可以按操作人筛，用于回答「这个客服上个月做了什么」。
+        """
+        self.staff(u)
+        role=self.profile(u)['role']
+        limit=max(1,min(int(limit or 200),1000))
+        where,args=[],[]
+        if role!='admin':
+            where.append('a.actor=?');args.append(u)
+        elif actor:
+            where.append('a.actor=?');args.append(int(actor))
+        if kind:
+            where.append('a.type=?');args.append(str(kind))
+        if since:
+            where.append('a.created>=?');args.append(float(since))
+        if until:
+            where.append('a.created<=?');args.append(float(until))
+        sql=('SELECT a.id,a.actor,a.target,a.type,a.delta,a.reason,a.ticket_id,a.created,'
+             'u.nickname actor_name FROM audit a LEFT JOIN users u ON u.id=a.actor')
+        if where:sql+=' WHERE '+' AND '.join(where)
+        sql+=' ORDER BY a.id DESC LIMIT ?';args.append(limit)
+        return self.rows(sql,tuple(args))
+
+    def audit_csv(self,u,**kw):
+        """导出 CSV。加 BOM，否则 Excel 打开中文是乱码。"""
+        import csv, io
+        rows=self.audit_log(u,limit=1000,**kw)
+        buffer=io.StringIO(newline='')
+        writer=csv.writer(buffer)
+        writer.writerow(['编号','时间','操作人','操作人昵称','类型','对象用户','分值','理由','工单'])
+        import datetime
+        for r in rows:
+            stamp=datetime.datetime.fromtimestamp(r['created']).strftime('%Y-%m-%d %H:%M:%S') if r['created'] else ''
+            writer.writerow([r['id'],stamp,r['actor'],r.get('actor_name') or '',
+                             r['type'],r['target'] or '',r['delta'] if r['delta'] is not None else '',
+                             r['reason'] or '',r['ticket_id'] or ''])
+        return ('\ufeff'+buffer.getvalue()).encode('utf-8')
+
     @staticmethod
     def mask_phone(phone):
         """账号脱敏。工作台不需要完整账号就能干活；
