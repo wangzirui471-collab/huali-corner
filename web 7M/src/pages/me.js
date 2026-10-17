@@ -9,43 +9,34 @@
 // 分工提示：本文件属协作者领地（见 docs/前端协作规范.md），
 // 本轮由平台端侧代为重构，协作者后续在此文件内继续迭代即可。
 
-import { $, e, icon } from '../core/dom.js';
+import { e, icon } from '../core/dom.js';
 import { date, money } from '../core/format.js';
 import { state, statusNames } from '../core/state.js';
 import { api } from '../core/http.js';
 import { shell, heading } from '../core/shell.js';
-import { field, selectField } from '../components/forms.js';
 import { card } from '../components/product-card.js';
+import { userAvatar } from '../components/user-avatar.js';
+import { userProfileSummary, userProfileForm, userAvatarForm } from '../components/user-profile.js';
 import { needLogin } from '../auth/login.js';
 
-// 公开主页。看别人的时候是只读的；看自己的时候，资料编辑表单就在这里——
+// 公开主页。看别人的时候是只读的；看自己的时候，资料与头像表单就在这里——
 // 「我的」页改版后不再放表单，编辑资料回到它归属的地方：主页。
 export async function profile(id){
   const r=await api('/profile?id='+id),u=r.user;
   const own=state.me&&state.me.id===u.id;
-  // 试用版学院是固定目录（state.config.colleges）；演示版与公开页允许自填，留空即可。
-  const collegeOptions=(state.config.colleges||[]).map(c=>`<option ${state.me&&state.me.college===c.source_name?'selected':''}>${e(c.source_name)}</option>`).join('');
+  // 自己的主页读 /user/profile：只有它带 profile_version，改昵称、换头像都靠
+  // 这个版本号发现「另一个标签页已经改过」。别人的主页走公开接口，不带版本。
+  const self=own&&!window.HUALI_STATIC_DEMO?await api('/user/profile'):null;
   shell(`${heading('NICE TO MEET YOU','同学的转角','看看这位同学的公开信息和在售好物。')}
-  <section class="panel profile-card">
-    <span class="avatar jumbo">${e(u.nickname[0])}</span>
+  ${self
+    ? `<div class="user-center" data-user-center data-user-owner="${u.id}"><div data-user-summary>${userProfileSummary(self)}</div>${userProfileForm(self)}${userAvatarForm(self)}</div>`
+    : `<section class="panel profile-card">
+    ${userAvatar(u,'large')}
     <div><h2>${e(u.nickname)}${u.trusted?'<span class="trusted-pill">诚信客户</span>':''}</h2><p>${e(u.college)} · ${e(u.major)} · ${e(u.education)}</p><p>${e(u.bio||'让闲置遇到真正需要它的人。')}</p><span class="tag">信誉 ${u.score}/100 · 不是交易担保</span></div>
-    ${!own?`<button class="btn primary" data-action="chat" data-id="${u.id}">发私信</button>`:''}
-  </section>
+    <button class="btn primary" data-action="chat" data-id="${u.id}">发私信</button>
+  </section>`}
   <h2>在售商品</h2>
-  <div class="product-grid">${r.products.filter(p=>p.status==='available').map(card).join('')}</div>
-  ${own?`<form id="profile-form" class="panel">
-    <h2>编辑我的资料</h2>
-    <div class="form-grid">
-      ${field('昵称','nickname','text',state.me.nickname,'required maxlength="24"')}
-      ${selectField('当前状态','education',['本科','专科','已毕业','其他'])}
-      <label class="field"><span>学院（自填，非认证）</span><select name="college">${collegeOptions}<option value="">暂不填写</option></select></label>
-      ${field('专业（可选）','major','text',state.me.major)}
-    </div>
-    <label class="field"><span>简介</span><textarea name="bio" maxlength="300">${e(state.me.bio)}</textarea></label>
-    <button class="btn primary">保存资料</button>
-    <p class="muted">学院目录来自用户提供文件，部分名称可能为旧称；不展示实名或学生认证徽章。</p>
-  </form>`:''}`,'me');
-  if(own)$('[name=education]').value=state.me.education;
+  <div class="product-grid">${r.products.filter(p=>p.status==='available').map(card).join('')}</div>`,'me');
 }
 
 // --- 「我的」页 ------------------------------------------------------------
@@ -124,7 +115,7 @@ export async function mine(){
   shell(`
   <div class="me-page">
     <section class="me-card me-hero">
-      <span class="avatar jumbo">${e(state.me.nickname[0])}</span>
+      ${userAvatar(state.me,'large')}
       <div class="me-hero-main">
         <h2>${e(state.me.nickname)}</h2>
         <p>${e(state.me.college||'学院未填写')}${state.me.education?` · ${e(state.me.education)}`:''}</p>

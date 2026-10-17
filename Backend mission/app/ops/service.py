@@ -28,9 +28,13 @@ class OpsService(ValidationMixin):
                 source.backup(dest)
             with closing(sqlite3.connect(dbpath)) as snapshot:
                 uploads=snapshot.execute('SELECT path FROM uploads').fetchall()
+                # 头像清单也从这同一个快照读：另开一个 live 连接去查，可能把比库里
+                # 新的文件写进包，恢复后就会指向一个数据库里不存在的 upload_id。
+                avatars=self.user_avatar_backup_entries(snapshot)
             with zipfile.ZipFile(path,'w',zipfile.ZIP_DEFLATED) as archive:
                 archive.write(dbpath,'market.sqlite3')
                 for upload in uploads:
                     file=Path(upload[0]);archive.write(file,'uploads/'+file.name)
-                archive.writestr('manifest.json',json.dumps({'simulation':True,'created':time.time(),'files':len(uploads),'restore':'Stop server. Extract SQLite and uploads to an empty data directory; uploads paths are rebound on startup.'}))
+                for avatar,relative in avatars:archive.write(avatar,relative)
+                archive.writestr('manifest.json',json.dumps({'simulation':True,'created':time.time(),'files':len(uploads)+len(avatars),'restore':'Stop server. Extract SQLite and uploads to an empty data directory; uploads paths are rebound on startup.'}))
         return str(path)

@@ -25,7 +25,10 @@ export const state = {
   // 求购撮合：买家点「我要这个」后暂存 {want, product}，结算时带上以记撮合服务费。
   // 必须记住来源商品：用户中途清空购物车或把该商品移除后，这份关联要同时失效，
   // 否则下一笔无关订单会带着 want_id，把那条求购错标成「已成交」并多记 5% 服务费。
-  pendingWant: null
+  pendingWant: null,
+  // 页面里创建过的 blob: URL（头像本地预览等）。集中登记才能保证换页/换账号时
+  // 全部 revoke：漏一个就泄漏一份内存，反复上传头像会持续涨。
+  mediaURLs: new Set()
 };
 
 export const statusNames = {

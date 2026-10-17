@@ -33,6 +33,13 @@ function publicDemoFeature(route){
   shell(`${heading('PUBLIC PREVIEW',title,description)}<section class="panel" data-public-demo-feature><h2>公开演示 · 无需注册</h2><p>仅展示虚构样例，不收集手机号、收货地址或聊天内容，不接收商品发布、付款或客服工单。</p><button class="btn primary" data-go="home">返回逛逛</button></section>`, route);
 }
 
+// blob: URL 只对本次渲染有意义（头像本地预览）。换页统一回收，
+// 否则每换一次头像就漏一份内存，来回切页越积越多。
+function releaseMediaURLs(){
+  for (const url of state.mediaURLs){ try{ URL.revokeObjectURL(url); }catch{} }
+  state.mediaURLs.clear();
+}
+
 export async function render(){
   // config 未就绪时放弃本次渲染：main.js 的初始化流程拿到 /api/config 之后
   // 还会再渲染一次当前路由。若不放弃，登录框会在 auth_mode 还没到位时被画出
@@ -41,6 +48,7 @@ export async function render(){
   if (!state.config.name) return;
   const rid = bumpRenderId();
   clearPoll();
+  releaseMediaURLs();
   window.scrollTo(0, 0);
   const [route, id] = (location.hash.slice(1) || 'home').split('/');
   try{

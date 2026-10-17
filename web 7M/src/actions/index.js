@@ -14,14 +14,21 @@ import * as support from './support.js';
 import * as account from './account.js';
 import * as staff from './staff.js';
 import * as admin from './admin.js';
+import * as userProfile from './user-profile.js';
 
 // 公开演示版只放行这些只读交互，其余一律弹说明、不渲染任何表单。
 const DEMO_CLICK_ALLOWED = ['market-channel','market-shortcut','free-shelf','feed-sort','category','login','close','photo','share'];
 
-const clicks = {...ui.clicks, ...catalog.clicks, ...trade.clicks, ...social.clicks, ...support.clicks, ...account.clicks, ...staff.clicks, ...admin.clicks};
-const submits = {...catalog.submits, ...trade.submits, ...social.submits, ...support.submits, ...account.submits, ...staff.submits, ...admin.submits};
+const clicks = {...ui.clicks, ...catalog.clicks, ...trade.clicks, ...social.clicks, ...support.clicks, ...account.clicks, ...staff.clicks, ...admin.clicks, ...userProfile.clicks};
+const submits = {...catalog.submits, ...trade.submits, ...social.submits, ...support.submits, ...account.submits, ...staff.submits, ...admin.submits, ...userProfile.submits};
 
 export function registerActions(){
+  // 头像的两个事件必须在捕获/独立阶段注册：
+  //   · change 不能漏：重新选文件后，上一张「确认设为头像」必须立刻失效，
+  //     否则用户会确认成上一张图；
+  //   · img 的 error 不冒泡，只能在捕获阶段接，用来把裂图退回默认头像。
+  document.addEventListener('change', userProfile.avatarFileChange);
+  document.addEventListener('error', userProfile.avatarImageError, true);
   document.addEventListener('click', async ev => {
     const goBtn = ev.target.closest('[data-go]');
     if (goBtn){ go(goBtn.dataset.go); return; }

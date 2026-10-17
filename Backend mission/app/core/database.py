@@ -80,13 +80,14 @@ CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY,user_id INTEGER,
 #   · 保留字 key / type 用反引号引用
 #   · 带 UNIQUE/PRIMARY KEY 的文本列用 VARCHAR（MySQL 对 TEXT 建唯一索引在严格模式下受限）
 MYSQL_SCHEMA = '''
-CREATE TABLE IF NOT EXISTS users(id INT PRIMARY KEY AUTO_INCREMENT,phone VARCHAR(32) NOT NULL UNIQUE,nickname VARCHAR(64) NOT NULL,college VARCHAR(64) DEFAULT '计算机工程学院',major VARCHAR(64) DEFAULT '',education VARCHAR(32) DEFAULT '本科',bio TEXT,role VARCHAR(32) DEFAULT 'user',score INT DEFAULT 100 CHECK (score BETWEEN 0 AND 100),status VARCHAR(32) DEFAULT 'active',last_login DOUBLE DEFAULT 0);
+CREATE TABLE IF NOT EXISTS users(id INT PRIMARY KEY AUTO_INCREMENT,phone VARCHAR(32) NOT NULL UNIQUE,nickname VARCHAR(64) NOT NULL,college VARCHAR(64) DEFAULT '计算机工程学院',major VARCHAR(64) DEFAULT '',education VARCHAR(32) DEFAULT '本科',bio TEXT,role VARCHAR(32) DEFAULT 'user',score INT DEFAULT 100 CHECK (score BETWEEN 0 AND 100),status VARCHAR(32) DEFAULT 'active',last_login DOUBLE DEFAULT 0,degree_level VARCHAR(16) NOT NULL DEFAULT 'unspecified',study_status VARCHAR(16) NOT NULL DEFAULT 'unspecified',profile_version INT NOT NULL DEFAULT 0,avatar_upload_id VARCHAR(64) NULL);
 CREATE TABLE IF NOT EXISTS otp(phone VARCHAR(32) NOT NULL PRIMARY KEY,digest TEXT,expires DOUBLE,attempts INT DEFAULT 0);
 CREATE TABLE IF NOT EXISTS sessions(token VARCHAR(128) NOT NULL PRIMARY KEY,user_id INT,expires DOUBLE);
 CREATE TABLE IF NOT EXISTS settings(`key` VARCHAR(64) NOT NULL PRIMARY KEY,value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS password_credentials(user_id INT NOT NULL PRIMARY KEY,salt TEXT NOT NULL,digest TEXT NOT NULL,rounds INT NOT NULL,recovery_digest TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS auth_attempts(phone VARCHAR(32) NOT NULL PRIMARY KEY,attempts INT NOT NULL,reset_at DOUBLE NOT NULL);
 CREATE TABLE IF NOT EXISTS uploads(id VARCHAR(64) NOT NULL PRIMARY KEY,user_id INT,path TEXT,digest TEXT,angle VARCHAR(16),private INT DEFAULT 0);
+CREATE TABLE IF NOT EXISTS user_avatar_uploads(upload_id VARCHAR(64) NOT NULL PRIMARY KEY,user_id INT NOT NULL,path TEXT NOT NULL,digest TEXT NOT NULL,created_at DOUBLE NOT NULL,INDEX user_avatar_uploads_owner(user_id));
 CREATE TABLE IF NOT EXISTS products(id INT PRIMARY KEY AUTO_INCREMENT,seller_id INT,title VARCHAR(255),category VARCHAR(32),price INT,delivery_fee INT,delivery VARCHAR(32),region VARCHAR(32),status VARCHAR(32) DEFAULT 'available',data TEXT,created DOUBLE,promoted_until DOUBLE DEFAULT 0,delisted_by INT DEFAULT 0);
 CREATE TABLE IF NOT EXISTS reactions(user_id INT,product_id INT,kind VARCHAR(16),PRIMARY KEY(user_id,product_id,kind));
 CREATE TABLE IF NOT EXISTS orders(id INT PRIMARY KEY AUTO_INCREMENT,buyer_id INT,seller_id INT,items TEXT,subtotal INT,delivery_fee INT,total INT,delivery VARCHAR(32),address TEXT,appointment DOUBLE,status VARCHAR(48),created DOUBLE,paid_at DOUBLE,delivered_at DOUBLE,handover_at DOUBLE,completed_at DOUBLE,request_key VARCHAR(64),schedule_confirmed INT DEFAULT 0,want_id INT,UNIQUE(buyer_id,request_key));
@@ -384,6 +385,13 @@ class Store:
                 if 'ticket_id' not in [x[1] for x in c.execute('PRAGMA table_info(rooms)')]:
                     c.execute('ALTER TABLE rooms ADD COLUMN ticket_id INTEGER DEFAULT 0')
                 c.execute("INSERT OR IGNORE INTO rooms(id,kind,name) VALUES(1,'general','广州校区总聊')")
+                # 账号领域的增量迁移（degree_level / study_status / profile_version /
+                # avatar_upload_id 四个列 + user_avatar_uploads 表）。放在这里而不是
+                # 账号模块自己初始化，是因为它必须和其它补列跑在同一个启动事务里：
+                # 任何一处失败都要整体回滚，不能留下「列建了、表没建」的半截库。
+                # 延迟导入：core 不该在模块加载期依赖 account 领域。
+                from ..account.migrations import migrate_account
+                migrate_account(c)
         else:
             with self.connect() as c:
                 c.executescript(MYSQL_SCHEMA)

@@ -258,8 +258,12 @@ class AccountService(ValidationMixin):
         return {'ok':True,'freed_phone':self.mask_phone(user['phone'])}
 
     def profile(self,u):
-        r=self.row('SELECT id,nickname,college,major,education,bio,role,score,status FROM users WHERE id=?',(u,))
-        self.require(r,'用户不存在',404);r.update(self.credit_badge(u,r['score']));return r
+        # 资料 DTO 由 account/profiles.py 统一产出（含头像地址、资料版本、学历/在读状态），
+        # 星级仍然在这里叠加：它是算出来的、不落库，属于展示层聚合而不是资料字段。
+        dto=self.user_profile(u)
+        row=self.row('SELECT status FROM users WHERE id=?',(u,))
+        if row:dto['status']=row['status']
+        dto.update(self.credit_badge(u,dto['score']));return dto
 
     def credit_badge(self,u,score=None):
         """信誉星级（不落库）：有效好评 = 买家给卖家的 4-5 星；严重违规 = 单次扣分 ≥15；
@@ -272,9 +276,11 @@ class AccountService(ValidationMixin):
         return star_badge(good,severe,score,adjust)
 
     def update_profile(self,u,d):
-        nickname=self.text(d.get('nickname'),24,'昵称');college='计算机工程学院' if self.trial else str(d.get('college',''))[:80];major=str(d.get('major',''))[:80]
-        education=d.get('education','本科');self.require(education in ['本科','专科','已毕业','其他'],'暂不开放该层次')
-        with self.tx() as c:c.execute('UPDATE users SET nickname=?,college=?,major=?,education=?,bio=? WHERE id=?',(nickname,college,major,education,str(d.get('bio',''))[:300],u))
+        # 旧接口（/api/me POST）字段名、截断策略、试用版固定学院都不变，内部改走新版
+        # 适配器：唯一的行为差别是每次保存都会递增 profile_version，否则旧页面存一次
+        # 资料，新页面手里的版本号就跟着失效，并发保护等于没写。
+        # 返回值仍走 profile()，保证老调用方拿到的响应形状和以前一致（含星级）。
+        self.user_update_legacy_profile(u,d)
         return self.profile(u)
 
     def staff(self,u):self.require(self.is_staff(u),'仅客服、管理员或开发者可操作',403)

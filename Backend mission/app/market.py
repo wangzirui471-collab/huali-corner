@@ -21,6 +21,8 @@ Java 里由 Spring 容器负责装配，Python 这里用多继承显式拼装。
 from .core.database import Store
 from .core.errors import DomainError, ValidationMixin
 from .account.service import AccountService
+from .account.profiles import UserProfiles
+from .account.avatars import UserAvatars
 from .catalog.service import CatalogService
 from .trade.service import TradeService
 from .community.service import CommunityService
@@ -32,7 +34,7 @@ from .ops.service import OpsService
 from pathlib import Path
 
 
-class Market(Store, AccountService, CatalogService, TradeService,
+class Market(Store, AccountService, UserProfiles, UserAvatars, CatalogService, TradeService,
              CommunityService, SupportService, StaffService,
              ModerationService, OpsService):
     """试用版应用的组合根。"""
