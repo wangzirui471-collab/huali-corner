@@ -679,6 +679,11 @@ button { -webkit-tap-highlight-color: transparent; }
 .tag { color: var(--brand-ink); background: var(--brand-soft); font-weight: 650; border-radius: var(--r-pill); }
 .tag.danger { color: #a8452f; background: #ffeee9; }
 .notice { color: #907a3f; background: #fffaea; border-radius: var(--r-sm); font-size: 11.5px; }
+/* 图标 + 标题 + 说明的竖向提示。通用 .notice 是 flex row，标题会被挤成
+   「未关/联订/单」竖排，工单页这类多行提示必须显式改成列布局。 */
+.notice-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 12px; }
+.notice-stack b { white-space: nowrap; }
+.notice-stack p { margin: 0; line-height: 1.65; }
 .notice.review { background: #fff5da; color: #7f6116; border-left: 3px solid #e0a92c; flex-direction: column; gap: 4px; }
 .notice.review b { font-size: 12px; }
 .notice.review p { margin: 0; line-height: 1.7; }
@@ -2092,7 +2097,9 @@ button.me-notice { width: 100%; text-align: left; cursor: pointer; border: 0; fo
 .notice-item > div { flex: 1; min-width: 0; }
 .notice-item p { margin: 0 0 6px; }
 
-/* 29. 诚信客户标签（信誉分制度 · 方案 A）
-   卖家信誉 ≥90 即在商品卡与主页亮标签，实时读分，掉档自动消失。 */
-.trusted-tag { position: absolute; top: 10px; left: 10px; z-index: 3; background: rgba(55,160,106,.95); color: #fff; font-size: 10px; font-weight: 700; padding: 4px 9px; border-radius: var(--r-pill); backdrop-filter: blur(6px); }
+/* 29. 诚信客户标签（经营记录达标）
+   发布≥10 件、至少 1 笔交付、全部按时、无退款才亮标。
+   跟着卖家昵称走，不做绝对定位：商品图左上角已经属于版次/成色角标，
+   两个标签抢同一个 top/left 会直接叠在一起。 */
+.trusted-tag { display: inline-flex; align-items: center; flex: none; margin-left: 5px; padding: 1px 6px; border-radius: var(--r-pill); background: rgba(55,160,106,.14); color: #2e7d4f; font-size: 9px; font-weight: 700; line-height: 1.6; border: 1px solid rgba(55,160,106,.28); white-space: nowrap; }
 .trusted-pill { display: inline-block; vertical-align: 2px; margin-left: 8px; padding: 2px 9px; border-radius: var(--r-pill); background: rgba(55,160,106,.12); color: #2e7d4f; font-size: 11px; font-weight: 700; border: 1px solid rgba(55,160,106,.3); }

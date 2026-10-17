@@ -77,30 +77,32 @@ class SupportService(ValidationMixin):
         return self.ticket(u,tid)
 
     def ticket_order_candidates(self,u,tid):
-        """补关联时的候选订单：只列与工单当事人或所涉商品有关的订单。
+        """补关联时的候选订单：工单涉及商品的，只列真的包含该商品的订单。
 
-        不做全量订单搜索——客服不需要翻整个平台，只需要在「这张工单可能
-        指的那几笔交易」里挑。涉及商品的排前面（matched_product），
-        因为它们最可能是用户真正想投诉的那笔。
+        不能按「当事人参与的订单」宽口径列：工单商品卖家的其它交易会被
+        一并端出来，既泄露无关买家的交易，也让客服在一堆噪音里挑。
+        没有关联商品的工单（纯咨询/信誉申诉）才回退到当事人订单。
         """
         self.staff(u);t=self.ticket(u,tid)
+        pid=t.get('product_id')
         parties={t['user_id']}
-        if t.get('product_id'):
-            p=self.row('SELECT seller_id FROM products WHERE id=?',(t['product_id'],))
-            if p:parties.add(p['seller_id'])
-        hit,other=[],[]
+        if not pid:
+            if t.get('order_id'):
+                o=self.row('SELECT buyer_id,seller_id FROM orders WHERE id=?',(t['order_id'],))
+                if o:parties.update([o['buyer_id'],o['seller_id']])
+        out=[]
         for r in self.rows('SELECT id,buyer_id,seller_id,items,total,status,created FROM orders ORDER BY id DESC'):
             items=json.loads(r['items'] or '[]')
-            matched=bool(t.get('product_id') and any(int(x.get('id') or 0)==t['product_id'] for x in items))
+            matched=bool(pid and any(int(x.get('id') or 0)==pid for x in items))
             related=bool(parties & {r['buyer_id'],r['seller_id']})
-            if not (matched or related):continue
-            row={'id':r['id'],'total':r['total'],'status':r['status'],'created':r['created'],
-                 'buyer':self.profile(r['buyer_id'])['nickname'],
-                 'seller':self.profile(r['seller_id'])['nickname'],
-                 'titles':[x.get('title','') for x in items],'matched_product':matched}
-            (hit if matched else other).append(row)
-            if len(hit)+len(other)>=30:break
-        return hit+other
+            if pid and not matched:continue
+            if not pid and not related:continue
+            out.append({'id':r['id'],'total':r['total'],'status':r['status'],'created':r['created'],
+                        'buyer':self.profile(r['buyer_id'])['nickname'],
+                        'seller':self.profile(r['seller_id'])['nickname'],
+                        'titles':[x.get('title','') for x in items],'matched_product':matched})
+            if len(out)>=30:break
+        return out
 
     def ticket(self,u,tid):
         r=self.row('SELECT t.*,u.nickname FROM tickets t JOIN users u ON u.id=t.user_id WHERE t.id=?',(tid,));self.require(r,'工单不存在',404)

@@ -4,7 +4,6 @@ from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
 from urllib.parse import urlsplit,parse_qs,unquote
 from app.market import Market,DomainError
 from app.seed import seed as seed_data
-from app.account.credit import is_trusted
 from app.core.config import WEB,COLLEGES_JSON,data_dir
 # Windows registry associations can label .js as text/plain. Core web types
 # must be deterministic because browsers enforce nosniff for scripts/styles.
@@ -68,7 +67,7 @@ class Handler(BaseHTTPRequestHandler):
                 # 公开主页只给「资料」字段：role / status 属于账号治理信息，
                 # 公开出去等于对外暴露某人是否被封禁或已注销。
                 public={k:profile[k] for k in ('id','nickname','college','major','education','bio','score')}
-                public['trusted']=is_trusted(profile['score'])
+                public['trusted']=m.trusted_map([who]).get(who,False)
                 return self.respond({'user':public,'products':m.products(self.optional_user(),{'seller':str(who)})})
             if p=='/api/posts' and method=='GET':return self.respond(m.posts(query.get('topic',''),query.get('limit','20'),query.get('offset','0')))
             if p=='/api/comments' and method=='GET':return self.respond(m.comments(int(query['id']),query.get('before')))
@@ -98,7 +97,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(file.read_bytes(),kind=ASSET_TYPES.get(file.suffix.lower()) or mimetypes.guess_type(str(file))[0] or 'application/octet-stream')
             u=self.uid()
             if p=='/api/auth/password' and method=='POST':return self.respond(m.change_password(u,data.get('old_password'),data.get('new_password')))
-            if p=='/api/me':return self.respond(m.update_profile(u,data) if method=='POST' else m.profile(u))
+            if p=='/api/me':
+                if method=='POST':return self.respond(m.update_profile(u,data))
+                me=m.profile(u)
+                # 个人页的「诚信客户」pill 读这个字段；它和商品卡上的标签
+                # 必须来自同一套判定（发布≥10 + 至少1笔交付 + 全按时 + 无退款）。
+                me['trusted']=m.trusted_map([u]).get(u,False)
+                return self.respond(me)
             if p=='/api/auth/logout':m.logout(self.token());return self.respond({'ok':True})
             if p=='/api/auth/deactivate' and method=='POST':return self.respond(m.deactivate(u))
             if p=='/api/notifications':return self.respond(m.read_notifications(u,data.get('id') or None) if method=='POST' else m.notifications(u))

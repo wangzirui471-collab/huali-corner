@@ -3,7 +3,6 @@ import hashlib, io, json, secrets, time
 from PIL import Image, ImageOps, UnidentifiedImageError
 from ..core.errors import ValidationMixin, DomainError
 from ..moderation import scan_product, message_for, report_of
-from ..account.credit import is_trusted
 
 # 付费置顶档位：档位 -> (天数, 模拟价格·分)。低价非强制，免费商品自然下沉。
 PROMOTE_TIERS={'1d':(1,100),'3d':(3,300),'7d':(7,500)}
@@ -62,9 +61,9 @@ class CatalogService(ValidationMixin):
         self.require(r,'商品不存在',404)
         data=json.loads(r.pop('data'));data.pop('proof',None)
         moderation=data.pop('moderation',None);r.update(data)
-        # 诚信客户标签：卖家信誉分 ≥ 门槛即在商品上亮标签，实时读 score，
-        # 掉到门槛以下自动消失（见 account/credit.py）。
-        r['seller_trusted']=is_trusted(r['score'])
+        # 诚信客户标签：按真实经营记录算（发布≥10、至少1笔交付、全部按时、无退款），
+        # 不再用「信誉分≥90」——新账号初始就是100分，旧规则等于人手一个标签。
+        r['seller_trusted']=self.trusted_map([r['seller_id']]).get(r['seller_id'],False)
         # 审核标记对外只暴露「是否在审」这一个布尔值，**不公开命中词**——
         # 公开了就等于把词表变成「哪个词会触发审核」的查询接口，等于教人绕过。
         # 卖家本人和工作台能看到具体命中了什么，便于申诉与处置。
@@ -98,7 +97,6 @@ class CatalogService(ValidationMixin):
             d=json.loads(r['data'] or '{}');d.pop('proof',None)
             mod=d.pop('moderation',None)
             p=dict(r);p.pop('data',None);p.update(d)
-            p['seller_trusted']=is_trusted(p['score'])
             # 审核标记只外露「是否在审」布尔值，不公开命中词（否则词表变成绕行指引）。
             p['under_review']=bool(mod and not mod.get('reviewed'))
             base.append(p)
@@ -111,7 +109,10 @@ class CatalogService(ValidationMixin):
         # 置顶商品提到最前（稳定排序：置顶组内仍保持上面的价格/最新顺序）。
         now=time.time();base.sort(key=lambda p:0 if (p.get('promoted_until') or 0)>now else 1)
         page_items=base[(page-1)*limit:page*limit] if limit else base
+        # 诚信客户按页批量算：只查这一页涉及的卖家，避免全量商品的 N+1。
+        trusted=self.trusted_map([p['seller_id'] for p in page_items])
         for p in page_items:
+            p['seller_trusted']=trusted.get(p['seller_id'],False)
             p['likes']=self.row("SELECT COUNT(*) n FROM reactions WHERE product_id=? AND kind='like'",(p['id'],))['n']
             p['liked']=bool(u and self.row("SELECT 1 FROM reactions WHERE product_id=? AND user_id=? AND kind='like'",(p['id'],u)))
             p['favorited']=bool(u and self.row("SELECT 1 FROM reactions WHERE product_id=? AND user_id=? AND kind='favorite'",(p['id'],u)))

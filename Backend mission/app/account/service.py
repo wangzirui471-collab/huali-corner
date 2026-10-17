@@ -10,9 +10,39 @@ import time
 ROUNDS=600000
 import hashlib, re, secrets, time
 from ..core.errors import ValidationMixin, DomainError
+from .credit import is_trusted
 
 
 class AccountService(ValidationMixin):
+
+    def trusted_map(self, seller_ids):
+        """批量判定「诚信客户」，返回 {seller_id: bool}。
+
+        商品流一页几十件，逐个卖家查「发布数 + 交付表现」会变成 N+1；
+        这里按卖家集合一次查完。规则见 account/credit.py：
+        发布 ≥ 10 件、至少 1 笔交付、全部按时、无退款。
+        封禁/注销账号直接排除——标签是给正常经营的账号看的。
+        """
+        ids=[int(x) for x in set(seller_ids or []) if x]
+        if not ids:return {}
+        marks=','.join('?'*len(ids));args=tuple(ids)
+        stats={i:{'listings':0,'delivered':0,'late':0,'refunded':0} for i in ids}
+        for r in self.rows('SELECT seller_id,COUNT(*) n FROM products WHERE seller_id IN (%s) GROUP BY seller_id'%marks,args):
+            stats[r['seller_id']]['listings']=r['n']
+        # delivered：真正发生过交付的订单。老数据可能没有 delivered_at，
+        # 但状态已进入「待收货/已完成/退款」也说明交付过，一并计入。
+        # late：卖家标记交付的时间晚于约定时间。
+        # refunded：退款订单单独计数，出现即失去标签。
+        for r in self.rows(
+            'SELECT seller_id,'
+            " SUM(CASE WHEN delivered_at IS NOT NULL OR handover_at IS NOT NULL"
+            " OR status IN ('awaiting_receipt','completed','refunded','partial_refunded') THEN 1 ELSE 0 END) delivered,"
+            " SUM(CASE WHEN delivered_at IS NOT NULL AND appointment>0 AND delivered_at>appointment THEN 1 ELSE 0 END) late,"
+            " SUM(CASE WHEN status IN ('refunded','partial_refunded') THEN 1 ELSE 0 END) refunded"
+            ' FROM orders WHERE seller_id IN (%s) GROUP BY seller_id'%marks,args):
+            stats[r['seller_id']].update(delivered=r['delivered'] or 0,late=r['late'] or 0,refunded=r['refunded'] or 0)
+        inactive={r['id'] for r in self.rows("SELECT id FROM users WHERE id IN (%s) AND status<>'active'"%marks,args)}
+        return {i:(i not in inactive) and is_trusted(**v) for i,v in stats.items()}
 
     # 账号不可用时的提示。三种状态的含义完全不同，混成一句「已注销或已被封禁」
     # 会让被停用的客服以为自己被封号了，直接去找人吵架。

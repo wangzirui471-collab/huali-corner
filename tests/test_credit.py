@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'Backend mission'))
 
 from app.market import Market, DomainError
 from app.account.credit import (
-    suggest_penalty, is_trusted, TRUSTED_SCORE,
+    suggest_penalty, is_trusted, TRUSTED_MIN_LISTINGS, TRUSTED_MIN_DELIVERED,
     AWARD_DAILY_CAP, AWARD_MONTHLY_CAP, AWARD_PER_REVIEW,
 )
 
@@ -42,11 +42,19 @@ class CreditRuleTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             suggest_penalty('bogus', 1000)
 
-    def test_trusted_threshold(self):
-        self.assertTrue(is_trusted(TRUSTED_SCORE))
-        self.assertTrue(is_trusted(100))
-        self.assertFalse(is_trusted(TRUSTED_SCORE - 1))
-        self.assertFalse(is_trusted(0))
+    def test_trusted_requires_listings_and_delivery(self):
+        # 刚注册的账号：一件没发、一单没交，不能凭空是诚信客户。
+        self.assertFalse(is_trusted())
+        # 只发布、不交付：不够。
+        self.assertFalse(is_trusted(listings=TRUSTED_MIN_LISTINGS, delivered=0))
+        # 商品数量不够：不够。
+        self.assertFalse(is_trusted(listings=TRUSTED_MIN_LISTINGS - 1, delivered=5))
+        # 发布满 10 且至少 1 笔交付：达标。
+        self.assertTrue(is_trusted(listings=TRUSTED_MIN_LISTINGS, delivered=TRUSTED_MIN_DELIVERED))
+        # 有一次延迟交付就失去标签。
+        self.assertFalse(is_trusted(listings=TRUSTED_MIN_LISTINGS, delivered=5, late=1))
+        # 有退款订单同样不算——交易出了问题，与「诚信」矛盾。
+        self.assertFalse(is_trusted(listings=TRUSTED_MIN_LISTINGS, delivered=5, refunded=1))
 
 
 class GoodReviewAwardTests(unittest.TestCase):
@@ -118,35 +126,68 @@ class GoodReviewAwardTests(unittest.TestCase):
 
 
 class TrustedBadgeTests(unittest.TestCase):
-    """诚信客户标签：商品 payload 与主页 flag 按实时分数走。"""
+    """诚信客户标签：按真实经营记录，而不是注册即得的信誉分。"""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.m = Market(self.tmp.name, trial=True)
         self.seller = self.m.register_password('13800000001', 'seller123', '卖家')['user']['id']
+        self.buyer = self.m.register_password('13800000002', 'buyer123', '买家')['user']['id']
 
     def tearDown(self):
         self.tmp.cleanup()
 
-    def product(self):
+    def listings(self, n=TRUSTED_MIN_LISTINGS):
+        """给卖家挂 n 件在售商品，返回最后一件的 id（用来读标签）。"""
+        pid = None
+        with self.m.tx() as c:
+            for i in range(n):
+                pid = c.execute(
+                    'INSERT INTO products(seller_id,title,category,price,delivery_fee,delivery,region,status,data,created)'
+                    ' VALUES(?,?,?,?,?,?,?,?,?,?)',
+                    (self.seller, '诚信测试商品%d' % i, 'living', 1000, 0, 'pickup', 'L1', 'available',
+                     json.dumps({'description': 'x'}, ensure_ascii=False), time.time())).lastrowid
+        return pid
+
+    def order(self, status='completed', due=1000.0, delivered=900.0):
+        """造一笔订单：due 是约定交付时间，delivered 是卖家实际标记交付的时间。"""
         with self.m.tx() as c:
             return c.execute(
-                'INSERT INTO products(seller_id,title,category,price,delivery_fee,delivery,region,status,data,created)'
-                ' VALUES(?,?,?,?,?,?,?,?,?,?)',
-                (self.seller, '诚信测试商品', 'living', 1000, 0, 'pickup', 'L1', 'available',
-                 json.dumps({'description': 'x'}, ensure_ascii=False), time.time())).lastrowid
+                'INSERT INTO orders(buyer_id,seller_id,items,subtotal,delivery_fee,total,delivery,address,'
+                'appointment,status,created,delivered_at,handover_at,completed_at)'
+                ' VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                (self.buyer, self.seller,
+                 json.dumps([{'id': 1, 'title': '测试商品', 'price': 1000}], ensure_ascii=False),
+                 1000, 0, 1000, 'pickup', 'L1', due, status, time.time(),
+                 delivered, delivered, delivered if status == 'completed' else None)).lastrowid
 
-    def set_score(self, v):
+    def test_new_seller_without_delivery_has_no_badge(self):
+        # 发满 10 件但一单没交：仍是新人，不是诚信客户。
+        pid = self.listings()
+        self.assertFalse(self.m.product(pid)['seller_trusted'])
+
+    def test_ten_listings_and_all_on_time_gets_badge(self):
+        pid = self.listings()
+        self.order(due=1000.0, delivered=900.0)
+        self.assertTrue(self.m.product(pid)['seller_trusted'])
+        self.assertTrue(self.m.trusted_map([self.seller])[self.seller])
+
+    def test_late_delivery_loses_badge(self):
+        pid = self.listings()
+        self.order(due=1000.0, delivered=1200.0)   # 晚于约定 200 秒
+        self.assertFalse(self.m.product(pid)['seller_trusted'])
+
+    def test_refund_loses_badge(self):
+        pid = self.listings()
+        self.order(status='refunded')
+        self.assertFalse(self.m.product(pid)['seller_trusted'])
+
+    def test_banned_seller_has_no_badge(self):
+        pid = self.listings()
+        self.order()
         with self.m.tx() as c:
-            c.execute('UPDATE users SET score=? WHERE id=?', (v, self.seller))
-
-    def test_trusted_seller_gets_badge(self):
-        self.set_score(95)
-        self.assertTrue(self.m.product(self.product())['seller_trusted'])
-
-    def test_below_threshold_loses_badge(self):
-        self.set_score(TRUSTED_SCORE - 1)
-        self.assertFalse(self.m.product(self.product())['seller_trusted'])
+            c.execute("UPDATE users SET status='banned' WHERE id=?", (self.seller,))
+        self.assertFalse(self.m.trusted_map([self.seller])[self.seller])
 
 
 class ViolationSuggestTests(unittest.TestCase):
