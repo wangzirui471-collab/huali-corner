@@ -79,10 +79,6 @@ function orderRow(o) {
     <b class="me-order-amount">¥${money(o.total)}</b></div>`;
 }
 
-// 通知预览行。与 messages/notice 的列表同一份数据，这里只显示最近三条。
-const noteRow = n => `<div class="me-note-row" data-go="messages/notice">
-  <p>${e(n.body)}</p><small>${date(n.created)}</small></div>`;
-
 export async function mine(){
   if(!needLogin())return;
   state.me=await api('/me');
@@ -102,15 +98,17 @@ export async function mine(){
     ['在售',listingCount,'listings']
   ];
 
-  // 购买 / 出售宫格。
+  // 购买 / 出售宫格。每个格子通到订单页的一个**预筛视图**（orders.js 的
+  // 查询参数），而不是一律甩到全部订单列表——「退款/售后 1」点进去就该
+  // 只看到那一单。口径必须与 orders.js 的 ORDER_GROUPS 完全一致。
   const buy=[
-    ['待付款',countBy('buyer',['awaiting_payment']),'wallet','orders'],
-    ['待收货',countBy('buyer',['paid','awaiting_handover','awaiting_receipt']),'truck','orders'],
-    ['退款/售后',countBy('buyer',['disputed','refunded']),'refresh','orders']
+    ['待付款',countBy('buyer',['awaiting_payment']),'wallet','orders/?role=buy&f=to_pay'],
+    ['待收货',countBy('buyer',['paid','awaiting_handover','awaiting_receipt']),'truck','orders/?role=buy&f=receiving'],
+    ['退款/售后',countBy('buyer',['disputed','refunded']),'refresh','orders/?role=buy&f=aftersale']
   ];
   const sell=[
-    ['待发货',countBy('seller',['paid','awaiting_handover']),'bag','orders'],
-    ['我卖出的',myOrders.filter(o=>o.seller_id===me).length,'tag','orders'],
+    ['待发货',countBy('seller',['paid','awaiting_handover']),'bag','orders/?role=sell&f=to_ship'],
+    ['我卖出的',myOrders.filter(o=>o.seller_id===me).length,'tag','orders/?role=sell'],
     ['我发布的',myList.length,'plus','listings']
   ];
   const tileOf=([label,n,ic,go])=>tile(go,ic,label,n);
@@ -131,11 +129,6 @@ export async function mine(){
       </div>
     </section>
 
-    <section class="me-card me-quick">
-      <button data-go="orders">${icon('bag')}<b>我的订单</b></button>
-      <button data-go="favorites">${icon('heart')}<b>我的收藏</b></button>
-    </section>
-
     ${notices.unread
       ? `<button class="me-notice alert" data-go="messages/notice">${icon('bell')}你有 <b>${notices.unread}</b> 条未读订单通知，点击查看</button>`
       : `<div class="me-notice">${icon('shield')}模拟交易试用 · 不扣真实款项 · 平台依据规则保障双方权益</div>`}
@@ -152,6 +145,11 @@ export async function mine(){
         <span class="me-vline"></span>
         <div class="me-half">${sell.map(tileOf).join('')}</div>
       </div>
+      <div class="me-orders-more">
+        ${tile('favorites','heart','我的收藏',favoriteCount)}
+        ${tile('listings','tag','在售商品',listingCount)}
+        ${tile('messages/notice','bell','消息通知',notices.unread)}
+      </div>
     </section>
 
     <section class="me-banner">
@@ -163,27 +161,6 @@ export async function mine(){
     <section class="me-card me-sec">
       ${secHead('最近订单', myOrders.length ? 'orders' : '')}
       ${myOrders.length ? myOrders.slice(0,3).map(orderRow).join('') : meEmpty('还没有订单。逛逛首页，看中的直接下单一分钟搞定。')}
-    </section>
-
-    <section class="me-card me-sec">
-      ${secHead('我的收藏', favoriteCount ? 'favorites' : '')}
-      ${favoriteCount
-        ? `<div class="me-goods">${favList.slice(0,4).map(card).join('')}</div>`
-        : meEmpty('还没收藏过商品。看到想要的先收着，降价了也好对比。')}
-    </section>
-
-    <section class="me-card me-sec">
-      ${secHead('在售商品', listingCount ? 'listings' : '')}
-      ${listingCount
-        ? `<div class="me-goods">${myList.filter(p=>p.status==='available').slice(0,4).map(card).join('')}</div>`
-        : meEmpty('还没有在售的商品。上面那条黄色横幅就是入口。')}
-    </section>
-
-    <section class="me-card me-sec">
-      ${secHead('消息通知', notices.items.length ? 'messages/notice' : '')}
-      ${notices.items.length
-        ? notices.items.slice(0,3).map(noteRow).join('')
-        : meEmpty('暂无通知。下单、付款、交付、售后等节点会在这里提醒你。')}
     </section>
 
     <section class="me-card me-tools">
