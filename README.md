@@ -10,6 +10,16 @@
 
 要发链接给同学看效果，可使用独立的[公开演示版部署说明](docs/PUBLIC_DEMO.md)。仓库 `artifacts/huali-corner-public-demo.zip` 可直接解压后上传静态托管平台，不需要让自己的电脑持续运行。该包只展示虚构数据，未提供真实注册、地址填写、交易或后台入口。公网网址需要在托管平台实际部署后生成。
 
+## 分支
+
+三个分支：`master`（主分支 · 生产级，GitHub 默认分支，原 `main` 已改名）、`dev/frontend`、
+`dev/backend`（副分支 · 开发级）。两个人各推自己的副分支，再合并进 `master`，
+流程见[前端协作规范 · Git 流程](docs/前端协作规范.md)第 8 节。
+
+2026-10-17 把原来 8 个 `feat/*`、`fix/*`、`ops/*` 分支收成这三支。删除前每个都打了
+`archive/<原分支名>` 的 tag，要翻旧代码直接 `git checkout archive/feat/layered-completion`，
+`git tag -l "archive/*"` 看全部。
+
 ## 目录结构
 
 2026-10-15 整理后的布局：前后端分家。
