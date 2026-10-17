@@ -1,1 +1,12 @@
-{"description":"华立转角本地模拟原型；请在开发者工具中填写自己的AppID。","projectname":"huali-corner","appid":"touristappid","compileType":"miniprogram","miniprogramRoot":"./","setting":{"urlCheck":true,"es6":true,"minified":true}}
+{
+  "description": "华立转角 · 校园二手（体验版）。把 appid 换成自己的真实 AppID 后才能上传体验版；urlCheck 已关，方便本地/局域网调试。",
+  "projectname": "huali-corner",
+  "appid": "touristappid",
+  "compileType": "miniprogram",
+  "miniprogramRoot": "./",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "minified": true
+  }
+}
