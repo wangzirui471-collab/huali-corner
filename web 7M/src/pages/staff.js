@@ -39,7 +39,7 @@ const SECTIONS = [
 ];
 
 const TICKET_TYPES = { refund: '售后', report: '举报', appeal: '申诉', reschedule: '改约', other: '咨询' };
-const ROLE_NAMES = { user: '普通用户', support: '客服', admin: '平台管理员' };
+const ROLE_NAMES = { user: '普通用户', support: '客服', admin: '平台管理员', developer: '开发者' };
 
 // 工单类型色：售后偏紫（要动钱）、举报偏红（要处置）、申诉偏橙（要复核）、改约偏蓝（只是协调）。
 const TICKET_TONE = { refund: 'violet', report: 'danger', appeal: 'warn', reschedule: 'info', other: 'mute' };
@@ -53,7 +53,7 @@ const STATUS_TONE = {
   completed: 'ok', cancelled: 'mute', disputed: 'danger', refunded: 'danger'
 };
 
-const ROLE_TONE = { user: 'mute', support: 'info', admin: 'violet' };
+const ROLE_TONE = { user: 'mute', support: 'info', admin: 'violet', developer: 'warn' };
 
 // 这些动作登记在册，供前端提示与后端契约对齐（见 docs/工作台接口契约.md）。
 const AUDIT_LABELS = {
@@ -83,7 +83,7 @@ const AUDIT_GLYPHS = {
 // 当前登录者是不是平台管理员。客服与管理员看到的工作台不一样：
 // 客服可以受理工单、下架违规商品、复核商品；恢复上架、信誉调整、封禁只有管理员能做。
 // 后端也会逐次校验（server-side 才是真闸门），这里只是不给人看见必然失败的按钮。
-const isAdmin = () => state.me?.role === 'admin';
+const isAdmin = () => ['admin', 'developer'].includes(state.me?.role);
 
 const statePill = (label, tone = 'mute') =>
   `<span class="state-pill" data-tone="${tone}"><i aria-hidden="true"></i>${e(label)}</span>`;
@@ -93,8 +93,8 @@ const sepDot = '<span class="sep-dot" aria-hidden="true"></span>';
 function roleBanner() {
   if (isAdmin()) return '';
   return `<div class="desk-banner">${icon('shield')}<span><b>你当前以客服身份登录。</b>
-    可以受理工单、强制下架违规商品、复核待审商品、查阅用户档案；
-    <b>恢复上架、信誉调整、封禁账号、人员授权</b>由平台管理员执行。</span></div>`;
+    可以受理工单、强制下架违规商品、复核待审商品、复核申诉后恢复商品上架、查阅用户档案；
+    <b>信誉调整、封禁账号、人员授权</b>由平台管理员执行。</span></div>`;
 }
 
 // 工作台骨架。刻意**不抽到公共组件**：pages/admin-desk.js 是另一路并行改的，
@@ -242,11 +242,12 @@ function productRow(p) {
     acts = `<button class="btn secondary" data-action="review-product" data-id="${p.id}" data-decision="approve">通过</button>
        <button class="btn secondary danger" data-action="review-product" data-id="${p.id}" data-decision="reject">驳回并下架</button>`;
   } else if (removed) {
-    // 恢复上架是改判，只有管理员能做；客服看到的是「找谁恢复」，不是一个点了会失败的按钮。
-    // delisted_by=0 只能说明「不是平台处置的」，可能是卖家自己下架，也可能是退款流程
-    // 按 §10.6 置的 removed——所以标「非平台下架」，不要武断写成「卖家下架」。
-    acts = `<span class="tag ${p.delisted_by ? 'danger' : ''}">${p.delisted_by ? '平台处置' : '非平台下架'}</span>` +
-      (p.delisted_by && isAdmin()
+    // 恢复上架由客服/管理员复核执行（申诉工单的闭环出口）。delisted_by>0 是
+    // 平台处置；delisted_by=0 但 relist_locked 是退款冻结——卷入过退款/争议，
+    // 卖家同样不能自行上架，两类的出口都是这里的「恢复上架」。
+    const locked = !!(p.delisted_by || p.relist_locked);
+    acts = `<span class="tag ${p.delisted_by ? 'danger' : ''}">${p.delisted_by ? '平台处置' : (p.relist_locked ? '退款冻结' : '非平台下架')}</span>` +
+      (locked
         ? ` <button class="btn secondary" data-action="restore-product" data-id="${p.id}">恢复上架</button>`
         : '');
   } else {
@@ -286,7 +287,7 @@ function productsSection({ products, removed }) {
 function userRow(u) {
   const banned = u.status === 'banned';
   // 封禁只有管理员能做，且不能封管理员自己或当前登录者。
-  const canBan = isAdmin() && u.id !== state.me.id && u.role !== 'admin';
+  const canBan = isAdmin() && u.id !== state.me.id && !['admin', 'developer'].includes(u.role);
   const tone = ROLE_TONE[u.role] || 'mute';
   const score = Math.max(0, Math.min(100, Number(u.score) || 0));
   const acts = `<button class="btn secondary" data-go="dossier/${u.id}">用户档案</button>

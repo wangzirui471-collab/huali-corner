@@ -10,9 +10,19 @@ from app.core.config import data_dir
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=['create-admin','reset-password'])
+    parser.add_argument('action',choices=['create-admin','reset-password','set-role'])
     parser.add_argument('--data',default=os.environ.get('HUALI_DATA_DIR') or data_dir(True))
+    parser.add_argument('--phone',default=None,help='账号（set-role 用，可免交互）')
+    parser.add_argument('--role',default=None,help='角色：user/support/admin/developer（set-role 用）')
     args=parser.parse_args()
+    if args.action=='set-role':
+        # 引导「第一个开发者」：此时系统里还没有开发者能授权，必须由操作者线下命令破冰。
+        market=Market(args.data,trial=True)
+        market.require(args.phone,'--phone 必填')
+        market.require(args.role,'--role 必填')
+        result=market.set_role_operator(args.phone,args.role)
+        print(f"已把 {result['phone']}（#{result['id']}）的角色调整为 {result['role']}")
+        return
     phone=input('账号（11位手机号或邮箱，不验证归属）：').strip()
     password=getpass.getpass('新密码（6至128个字符）：')
     confirmation=getpass.getpass('再次输入新密码：')

@@ -270,7 +270,37 @@ class MarketTests(unittest.TestCase):
         with self.assertRaises(DomainError):
             self.m.checkout(self.b,dict(product_ids=[p2],delivery='pickup',appointment=time.time()+7200,key='w2',want_id=w['id']))
 
+    def test_refund_locked_product_support_review_and_restore(self):
+        """退款冻结的商品：卖家侧锁定原因可见，客服复核申诉后可恢复上架。"""
+        p=self.listing();o=self.checkout([p]);oid=o['id']
+        self.m.order_action(self.b,oid,'pay',{})
+        self.m.order_action(self.a,oid,'deliver',{})
+        self.m.order_action(self.b,oid,'handover',{})
+        t=self.m.create_ticket(self.b,dict(type='refund',order_id=oid,subject='与描述不符',body='申请退款'))
+        self.m.resolve_ticket(self.staff,t['id'],dict(outcome='refund',reason='核实属实，全额退款',amount=o['total']))
+        row=[x for x in self.m.my_products(self.a) if x['id']==p][0]
+        self.assertEqual(row['status'],'removed')
+        self.assertTrue(row['relist_locked']); self.assertIn('客服',row['lock_reason'])
+        with self.assertRaises(DomainError):self.m.set_product_status(self.a,p,'relist')
+        # 把账号降为普通客服：恢复上架必须客服也能做，否则申诉在客服手里断头
+        with self.m.tx() as c:c.execute("UPDATE users SET role='support' WHERE id=?",(self.staff,))
+        appeal=self.m.create_ticket(self.a,dict(type='appeal',product_id=p,subject='重新上架复核',body='已与买家协商解决，申请复核'))
+        self.m.resolve_ticket(self.staff,appeal['id'],dict(outcome='claim',reason='受理申诉'))
+        self.m.moderate_product(self.staff,p,'restore','申诉成立，双方已和解，同意恢复')
+        self.assertEqual(self.m.product(p,self.a)['status'],'available')
+        # available 商品不携带锁定标志（该标志只在已下架行上出现），状态即可证明解锁
+        self.assertNotIn('relist_locked',[x for x in self.m.my_products(self.a) if x['id']==p][0])
+
+    def test_seller_self_delist_relists_freely(self):
+        p=self.listing()
+        self.m.set_product_status(self.a,p,'delist')
+        row=[x for x in self.m.my_products(self.a) if x['id']==p][0]
+        self.assertFalse(row['relist_locked'])
+        self.m.set_product_status(self.a,p,'relist')
+        self.assertEqual(self.m.product(p,self.a)['status'],'available')
+
 if __name__=='__main__':unittest.main()
+
 
 class ChatRoomTests(unittest.TestCase):
     """微信风格聊天室：列表摘要、成员接口、消息撤回、首屏取最近一页。"""

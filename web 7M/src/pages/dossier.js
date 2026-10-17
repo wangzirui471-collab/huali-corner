@@ -17,8 +17,8 @@ import { api } from '../core/http.js';
 import { shell, heading } from '../core/shell.js';
 import { needLogin } from '../auth/login.js';
 
-const ROLE_NAMES = { user: '普通用户', support: '客服', admin: '平台管理员' };
-const ROLE_TONE = { user: 'mute', support: 'info', admin: 'violet' };
+const ROLE_NAMES = { user: '普通用户', support: '客服', admin: '平台管理员', developer: '开发者' };
+const ROLE_TONE = { user: 'mute', support: 'info', admin: 'violet', developer: 'warn' };
 const USER_STATUS = { active: '正常', banned: '已封禁', deactivated: '已注销' };
 const USER_TONE = { active: 'ok', banned: 'danger', deactivated: 'mute' };
 const TICKET_TYPES = { refund: '售后', report: '举报', appeal: '申诉', reschedule: '改约', other: '咨询' };

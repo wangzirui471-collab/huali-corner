@@ -34,15 +34,35 @@ function confirmForm(op, title, body, okText, attrs = '') {
 
 export const clicks = {
   'staff-create': () => {
+    const roles = state.me?.role === 'developer'
+      ? [['support', '客服（日常处置）'], ['admin', '管理员（授权与改判）'], ['developer', '开发者（最高权限）']]
+      : [['support', '客服（日常处置）']];
     modal(`<h2>新建运营账号</h2>
-      <p class="muted">客服负责日常处置；管理员还能恢复上架、授权、维护词库。
+      <p class="muted">客服负责日常处置；管理员还能恢复上架、授权、维护词库；开发者可任命管理员。
       账号一旦建好，口令只有对方知道，管理员也看不到——忘了用「重置密码」。</p>
       <form id="staff-create-form">
         ${field('账号（11 位手机号或邮箱）', 'phone', 'text', '', 'required autocomplete="off" placeholder="13900000000 或 name@qq.com"')}
         ${field('昵称', 'nickname', 'text', '', 'required maxlength="24" placeholder="如：夜班客服小陈"')}
-        ${selectField('角色', 'role', [['support', '客服（日常处置）'], ['admin', '管理员（授权与改判）']])}
+        ${selectField('角色', 'role', roles)}
         ${field('初始密码', 'password', 'password', '', 'required minlength="6" maxlength="128" autocomplete="new-password"')}
         <button class="btn primary full">创建账号</button>
+      </form>`);
+  },
+
+  // 改身份：四级权限。开发者可授任意角色；管理员只能设/废客服。
+  'change-role': async (b, id) => {
+    const name = b.closest('.desk-row')?.querySelector('b')?.textContent?.trim() || `#${id}`;
+    const isDev = state.me?.role === 'developer';
+    const options = isDev
+      ? [['user', '普通用户'], ['support', '客服'], ['admin', '管理员'], ['developer', '开发者']]
+      : [['user', '普通用户'], ['support', '客服']];
+    modal(`<h2>调整身份 · ${name}</h2>
+      <p class="muted">${isDev
+        ? '你以开发者身份操作，可任命/降级管理员、设/废客服。改权立即生效并踢掉对方全部会话。'
+        : '你以管理员身份操作，只能设置或废除客服。改权立即生效并踢掉对方全部会话。'}</p>
+      <form id="change-role-form" data-id="${id}">
+        ${selectField('新身份', 'role', options)}
+        <button class="btn primary full">确认调整</button>
       </form>`);
   },
 
@@ -123,6 +143,10 @@ export const clicks = {
 };
 
 export const submits = {
+  'change-role-form': async ({ form, d }) => {
+    await call('/admin/role', { target: Number(form.dataset.id), role: d.role }, '身份已调整，对方会话已失效');
+  },
+
   'staff-create-form': async ({ d }) => {
     const result = await api('/admin/staff', {
       phone: d.phone, nickname: d.nickname, role: d.role, password: d.password

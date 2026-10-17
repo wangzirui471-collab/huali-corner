@@ -195,7 +195,7 @@ class CommunityService(ValidationMixin):
         return {'ok':True}
     def moderate(self,u,d):
         r=int(d['room_id']);member=self.member(u,r)
-        self.require(member['role'] in ['owner','moderator'] or self.profile(u)['role']=='admin','没有群管理权限',403)
+        self.require(member['role'] in ['owner','moderator'] or self.is_admin(u),'没有群管理权限',403)
         self.require(self.row('SELECT kind FROM rooms WHERE id=?',(r,))['kind']!='private','不能管理他人私聊')
         with self.tx() as c:
             if d['action']=='mute':c.execute('UPDATE members SET muted=? WHERE room_id=? AND user_id=?',(int(bool(d.get('muted',True))),r,int(d['target'])))

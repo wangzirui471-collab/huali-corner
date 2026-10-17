@@ -13,6 +13,15 @@ export const clicks = {
   'new-ticket': () => ticketModal('other'),
   appeal: () => ticketModal('appeal'),
   report: (b, id) => ticketModal('report', null, id),
+
+  // 商品被平台处置或卷入退款/争议后，「我发布的」里给卖家的复核入口。
+  // 直接开一张关联该商品的申诉工单——卖家不需要自己去客服页找表单，
+  // 也不需要知道「申诉」和「联系客服」是两条什么流程。
+  'relist-appeal': (b, id) => {
+    ticketModal('appeal', null, id);
+    const s = document.querySelector('[name=subject]');
+    if (s) s.value = `商品 #${id} 重新上架复核申请`;
+  },
   'report-community': (b, id) => {
     ticketModal('report');
     $('[name=subject]').value = '社区帖子 #'+id+' 举报';

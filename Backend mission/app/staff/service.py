@@ -14,8 +14,8 @@ import time
 
 from ..core.errors import ValidationMixin
 
-ROLE_NAMES = {'support': '客服', 'admin': '平台管理员'}
-STAFF_ROLES = ('support', 'admin')
+ROLE_NAMES = {'support': '客服', 'admin': '平台管理员', 'developer': '开发者'}
+STAFF_ROLES = ('support', 'admin', 'developer')
 
 
 class StaffService(ValidationMixin):
@@ -27,7 +27,7 @@ class StaffService(ValidationMixin):
         rows = self.rows(
             """SELECT u.id,u.phone,u.nickname,u.role,u.status,u.last_login,
                       (SELECT COUNT(*) FROM sessions s WHERE s.user_id=u.id AND s.expires>?) sessions
-               FROM users u WHERE u.role IN ('support','admin') ORDER BY u.role DESC, u.id""",
+               FROM users u WHERE u.role IN ('support','admin','developer') ORDER BY u.role DESC, u.id""",
             (now,))
         for r in rows:
             r['role_name'] = ROLE_NAMES.get(r['role'], r['role'])
@@ -42,7 +42,9 @@ class StaffService(ValidationMixin):
         """
         self.admin(u)
         role = d.get('role') or 'support'
-        self.require(role in STAFF_ROLES, '角色只能是客服（support）或管理员（admin）')
+        self.require(role in STAFF_ROLES, '角色只能是客服（support）、管理员（admin）或开发者（developer）')
+        if self.role_of(u) != 'developer':
+            self.require(role == 'support', '只有开发者可以创建管理员或开发者账号', 403)
         phone = self._phone(d.get('phone'))
         password = self._password(d.get('password'))
         nickname = self.text(d.get('nickname'), 24, '昵称')
@@ -122,11 +124,48 @@ class StaffService(ValidationMixin):
         self.require(target != u, '要退出自己的登录请使用「退出」按钮')
         user = self.profile(target)
         if user['role'] in STAFF_ROLES:
-            # 踢同事下线等于中断他正在做的处置，必须管理员决定。
-            self.require(self.profile(u)['role'] == 'admin', '只有平台管理员可以强制下线客服或管理员账号', 403)
+            # 踢同事下线等于中断他正在做的处置，必须管理员及以上决定。
+            self.require(self.is_admin(u), '只有平台管理员或开发者可以强制下线客服/管理员账号', 403)
         with self.tx() as c:
             count = c.execute('SELECT COUNT(*) n FROM sessions WHERE user_id=?', (target,)).fetchone()['n']
             c.execute('DELETE FROM sessions WHERE user_id=?', (target,))
             c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',
                       (u, target, 'session_revoke', f'强制下线「{user["nickname"]}」，注销 {count} 个会话', time.time()))
         return {'revoked': count}
+
+    def change_role(self, u, d):
+        """调整某个账号的角色等级。四级权限的分权核心。
+
+        规则（与 AccountService.ROLE_RANK 对齐，rank 越小权限越低）：
+          - 只有管理员(2)或开发者(3)能调角色；
+          - 只能授予**严格低于自己**的角色：管理员只能设/废客服、把客服降回普通用户，
+            开发者可以任命/降级管理员（以及客服、用户）；
+          - 开发者额外可以晋升他人为开发者（交付最高权限）；
+          - 不能调整自己，也不能调整同级或更高级的账号；
+          - 降级一名开发者前，必须保证还剩至少一名开发者在岗，避免锁死最高权限。
+        改权立即生效：踢掉目标全部会话，避免对方拿着旧令牌继续以旧身份操作。
+        """
+        self.admin(u)
+        target = int(d['target'])
+        new_role = d.get('role')
+        self.require(new_role in self.ROLE_RANK, '未知角色', 400)
+        self.require(target != u, '不能调整自己的角色；请让另一位开发者操作', 403)
+        actor = self.profile(u); a_rank = self.ROLE_RANK[actor['role']]
+        t = self.profile(target); t_rank = self.ROLE_RANK[t['role']]
+        n_rank = self.ROLE_RANK[new_role]
+        if a_rank == 2:
+            self.require(new_role in ('user', 'support'), '管理员只能设置或废除客服', 403)
+        else:
+            self.require(n_rank < a_rank or new_role == 'developer', '只能授予低于自己的角色', 403)
+        self.require(t_rank < a_rank or (a_rank == 3 and t_rank == 3), '不能调整同级或更高等级的账号', 403)
+        with self.tx() as c:
+            if t['role'] == 'developer' and new_role != 'developer':
+                devs = c.execute("SELECT COUNT(*) n FROM users WHERE role='developer' AND status='active'", ()).fetchone()['n']
+                self.require(devs > 1, '至少保留一名开发者在岗', 403)
+            c.execute('UPDATE users SET role=? WHERE id=?', (new_role, target))
+            c.execute('DELETE FROM sessions WHERE user_id=?', (target,))
+            c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',
+                      (u, target, 'role_change',
+                       f'将「{t["nickname"]}」从{ROLE_NAMES.get(t["role"], t["role"])}调整为{ROLE_NAMES.get(new_role, new_role)}',
+                       time.time()))
+        return {'ok': True}

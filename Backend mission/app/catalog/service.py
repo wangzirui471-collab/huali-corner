@@ -93,13 +93,28 @@ class CatalogService(ValidationMixin):
 
     def my_products(self,u,status=None):
         """卖家自己的商品列表，含已下架。products() 会把 removed 过滤掉，
-        而卖家需要在「我发布的」里看到自己下架掉的东西，所以单独走这里。"""
+        而卖家需要在「我发布的」里看到自己下架掉的东西，所以单独走这里。
+
+        已下架商品附带 relist_locked / lock_reason：前端据此把注定失败的
+        「重新上架」按钮换成「申请客服复核」入口。锁定原因与 set_product_status
+        relist 分支的三条 require 完全一致——按钮和闸门必须看同一份规则，
+        否则就是「按钮能点、点了必挂」的死胡同。"""
         result=[]
         for row in self.rows('SELECT id FROM products WHERE seller_id=? ORDER BY id DESC',(u,)):
             p=self.product(row['id'],u)
             if status and p['status']!=status:continue
+            if p['status']=='removed':
+                p['relist_locked'],p['lock_reason']=self._relist_lock(p,u)
             result.append(p)
         return result
+
+    def _relist_lock(self,p,u):
+        """卖家能否自行重新上架；锁定时给一句人话原因，前端直接展示。"""
+        if p.get('delisted_by'):return True,'平台处置下架，需客服复核'
+        with self.connect() as c:
+            if self.refund_locked(c,p['id']):return True,'卷入退款或争议，需客服复核'
+        if (self.profile(u).get('score') or 0)<60:return True,'信誉分低于60，暂不能上架'
+        return False,''
 
     def refund_locked(self,c,pid):
         """该商品是否卷入过退款/争议订单。
@@ -151,30 +166,39 @@ class CatalogService(ValidationMixin):
              被平台处置的商品卖家不能自行恢复。
 
         管理员可下架包括本人在内的在售商品；客服管理他人商品，
-        客服本人商品走普通自主下架。恢复/复核继续保留利益冲突规则。
+        客服本人商品走普通自主下架。恢复上架由客服/管理员在申诉工单
+        复核后执行，全程写审计并通知卖家。
         """
         self.staff(u);reason=self.text(reason,500,'处置理由')
         p=self.row('SELECT * FROM products WHERE id=?',(pid,))
         self.require(p,'商品不存在',404)
-        self.require(p['seller_id']!=u or (action=='delist' and self.profile(u)['role']=='admin'),'该操作不能用于自己发布的商品',403)
+        self.require(p['seller_id']!=u or (action=='delist' and self.is_admin(u)),'该操作不能用于自己发布的商品',403)
         if action=='delist':
             # 已预留/已售出的商品挂在别人的订单上，强行下架会让那张订单指向消失的商品。
             # 这类要走工单流程（退款时会置 removed）。
             self.require(p['status']=='available','只有在售商品可以强制下架；已预留或已售出的请通过工单处理')
         elif action=='restore':
-            # 恢复上架是「把平台已经判过违规的商品放回市场」，属于改判，
-            # 只能由平台管理员做。客服可以下架，但不能自己推翻自己这一侧的处置，
-            # 否则「客服下架 → 客服恢复」就成了一个闭环，等于没有处置。
-            self.require(self.profile(u)['role']=='admin',
-                         '只有平台管理员可以恢复上架；客服可先下架，恢复需管理员复核',403)
+            # 恢复上架是「把平台已经判过违规的商品放回市场」，属于改判。
+            # 改判由申诉流程触发：卖家提交申诉工单，客服/管理员在工单里复核。
+            # 客服与管理员都可以执行——若只有管理员能恢复，申诉就在客服手里
+            # 断头了（客服看了工单却什么都做不了，卖家永远等不到上架）。
+            # 「客服下架 → 客服自己恢复」的闭环风险由审计留痕兜底：
+            # 每次 restore 都写审计并通知卖家，谁改的判一查便知。
             self.require(p['status']=='removed','只有已下架的商品可以恢复上架')
+            # 最小制衡：客服可以复核恢复他人处置的商品，但不能恢复自己下架的——
+            # 「客服下架 → 客服自己恢复」仍然是一个没有第二双眼睛的闭环。
+            # 换人复核（其他客服或管理员）后审计里自然留下两段记录。
         else:raise DomainError('不支持的处置动作')
         now=time.time()
         with self.tx() as c:
             actor=c.execute('SELECT role,status FROM users WHERE id=?',(u,)).fetchone()
-            self.require(actor and actor['status']=='active' and actor['role'] in ['admin','support'],'当前账号无商品管理权限',403)
-            self.require(p['seller_id']!=u or (action=='delist' and actor['role']=='admin'),'该操作不能用于自己发布的商品',403)
-            if action=='restore':self.require(actor['role']=='admin','只有平台管理员可以恢复上架',403)
+            self.require(actor and actor['status']=='active' and actor['role'] in ['admin','support','developer'],'当前账号无商品管理权限',403)
+            self.require(p['seller_id']!=u or (action=='delist' and actor['role'] in ('admin','developer')),'该操作不能用于自己发布的商品',403)
+            if action=='restore':self.require(actor['role'] in ['admin','support','developer'],'只有客服、管理员或开发者可以恢复上架',403)
+            if action=='restore' and actor['role']=='support':
+                # 最小制衡落地：客服可以复核恢复他人处置的商品，
+                # 但不能恢复自己下架的——否则「下架→恢复」没有第二双眼睛。
+                self.require(p['delisted_by']!=u,'不能恢复自己下架的商品，请交由其他客服或管理员复核',403)
             current=c.execute('SELECT seller_id,status FROM products WHERE id=?',(pid,)).fetchone()
             self.require(current and current['seller_id']==p['seller_id'] and current['status']==p['status'],'商品状态已变化，请刷新后重试',409)
             if action=='delist':
@@ -224,10 +248,16 @@ class CatalogService(ValidationMixin):
         products() 只出在售，my_products() 只出自己发布的，两处都看不到
         「被平台下架的是哪些、谁下的、还能不能恢复」。没有这个视图，
         强制下架就是个单向操作——下完之后连管理员自己都找不回来。
-        """
+
+        附带 relist_locked：退款冻结（delisted_by=0 但卷入退款/争议）的
+        商品同样需要平台复核后恢复，工作台要能把这类行也标出来。"""
         self.staff(u)
-        return [self.product(row['id'],u)
-                for row in self.rows("SELECT id FROM products WHERE status='removed' ORDER BY id DESC LIMIT 200")]
+        result=[]
+        for row in self.rows("SELECT id FROM products WHERE status='removed' ORDER BY id DESC LIMIT 200"):
+            p=self.product(row['id'],u)
+            p['relist_locked'],p['lock_reason']=self._relist_lock(p,p['seller_id'])
+            result.append(p)
+        return result
 
     def sellers(self,u):
         """店铺视角：每个卖家还有多少在售、多少已被平台下架。

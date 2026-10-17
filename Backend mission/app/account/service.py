@@ -129,7 +129,7 @@ class AccountService(ValidationMixin):
         with self.tx() as c:
             existing=c.execute('SELECT * FROM users WHERE phone=?',(phone,)).fetchone()
             if existing:
-                self.require(existing['role']=='admin','不能把已注册普通账号自动升级为管理员；请使用独立管理号码',409)
+                self.require(existing['role'] in ('admin','developer'),'不能把已注册普通账号自动升级为管理员；请使用独立管理号码',409)
                 return self.profile(existing['id'])
             uid=c.execute("INSERT INTO users(phone,nickname,role,college) VALUES(?,'转角客服','admin','计算机工程学院')",(phone,)).lastrowid
             c.execute('INSERT INTO password_credentials VALUES(?,?,?,?,?)',(uid,salt,digest,rounds,recovery_digest))
@@ -196,8 +196,36 @@ class AccountService(ValidationMixin):
         with self.tx() as c:c.execute('UPDATE users SET nickname=?,college=?,major=?,education=?,bio=? WHERE id=?',(nickname,college,major,education,str(d.get('bio',''))[:300],u))
         return self.profile(u)
 
-    def staff(self,u):self.require(self.profile(u)['role'] in ['admin','support'],'仅客服或管理员可操作',403)
+    def staff(self,u):self.require(self.is_staff(u),'仅客服、管理员或开发者可操作',403)
     def admin(self,u):
         """平台管理员闸门。用于「客服能做，但管理员才能担责」的那一类操作：
-        人员授权、恢复上架、改判、动账。"""
-        self.require(self.profile(u)['role']=='admin','仅平台管理员可操作',403)
+        人员授权、恢复上架、改判、动账。开发者拥有管理员的全部权限。"""
+        self.require(self.is_admin(u),'仅平台管理员或开发者可操作',403)
+
+    # --- 角色层级 ----------------------------------------------------------
+    # 四级：user(0) < support(1) < admin(2) < developer(3)。
+    # 开发者是最高权限：可任命/降级管理员；管理员可设/废客服、封号；
+    # 客服日常值守；用户无后台权限。层级判断统一走这里，别在业务里手写比较。
+    ROLE_RANK = {'user':0,'support':1,'admin':2,'developer':3}
+
+    def role_of(self,u):return self.profile(u)['role']
+    def is_staff(self,u):return self.role_of(u) in ('support','admin','developer')
+    def is_admin(self,u):return self.role_of(u) in ('admin','developer')
+
+    def set_role_operator(self, phone, role):
+        """本地 / 服务器操作者专用：直接设定任意账号角色。
+
+        只用于引导「第一个开发者」——在此之前系统里没有开发者，
+        而开发者权限要求又有开发者在场才能授予，必须由操作者在线下命令里破冰。
+        不挂 HTTP 路由，永远走 manage_trial.py / 启动脚本。
+        """
+        self._trial_only()
+        self.require(role in self.ROLE_RANK,'未知角色')
+        phone=self._phone(phone)
+        with self.tx() as c:
+            row=c.execute('SELECT id,role FROM users WHERE phone=?',(phone,)).fetchone()
+            self.require(row,'账号不存在',404)
+            c.execute('UPDATE users SET role=? WHERE id=?',(role,row['id']))
+            c.execute('INSERT INTO audit(target,type,reason,created) VALUES(?,?,?,?)',
+                      (row['id'],'role_change',f'服务器操作者通过本地命令将角色调整为{role}',time.time()))
+        return self.profile(row['id'])

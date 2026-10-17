@@ -75,15 +75,26 @@ class ModerationActionTests(unittest.TestCase):
         self.m.moderate_product(self.support, pid, 'delist', '商品描述里留了微信号')
         self.assertEqual(self.status_of(pid)['status'], 'removed')
 
-    def test_support_cannot_restore(self):
-        """恢复上架是改判，客服不能自己推翻自己这一侧的处置，否则等于没处置。"""
+    def test_support_cannot_restore_own_delist(self):
+        """客服可以复核恢复他人处置的商品，但不能恢复自己下架的——
+        「下架→恢复」必须有第二双眼睛。他人处置的则可以恢复（申诉闭环）。"""
         pid = self.listing()
         self.m.moderate_product(self.support, pid, 'delist', '疑似引流')
         with self.assertRaises(DomainError) as ctx:
             self.m.moderate_product(self.support, pid, 'restore', '我觉得没事')
         self.assertEqual(ctx.exception.status, 403)
-        self.assertIn('管理员', str(ctx.exception))
+        self.assertIn('自己下架', str(ctx.exception))
         self.assertEqual(self.status_of(pid)['status'], 'removed')
+        # 换管理员复核：可以恢复
+        self.m.moderate_product(self.staff, pid, 'restore', '复核误判，同意恢复')
+        self.assertEqual(self.status_of(pid)['status'], 'available')
+
+    def test_support_can_restore_others_delist(self):
+        """申诉闭环：客服下架、另一名客服复核恢复是被允许的（审计留痕）。"""
+        pid = self.listing()
+        self.m.moderate_product(self.staff, pid, 'delist', '管理员处置')
+        self.m.moderate_product(self.support, pid, 'restore', '申诉成立，已核实')
+        self.assertEqual(self.status_of(pid)['status'], 'available')
 
     def test_support_can_delist_but_admin_who_restores_is_recorded(self):
         """客服下架、管理员恢复：两段操作各留一条审计，能看出是谁改判的。"""

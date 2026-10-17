@@ -35,7 +35,7 @@ class SupportService(ValidationMixin):
         return r
 
     def tickets(self,u):
-        if self.profile(u)['role'] in ['admin','support']:ids=self.rows('SELECT id FROM tickets ORDER BY id DESC')
+        if self.profile(u)['role'] in ['admin','support','developer']:ids=self.rows('SELECT id FROM tickets ORDER BY id DESC')
         else:ids=self.rows('SELECT t.id FROM tickets t LEFT JOIN orders o ON o.id=t.order_id WHERE t.user_id=? OR o.seller_id=? OR o.buyer_id=? ORDER BY t.id DESC',(u,u,u))
         return [self.ticket(u,r['id']) for r in ids]
 
@@ -45,7 +45,7 @@ class SupportService(ValidationMixin):
         with self.tx() as c:
             c.execute('INSERT INTO ticket_messages(ticket_id,user_id,body,internal,created) VALUES(?,?,?,?,?)',(tid,u,self.text(d.get('body'),2000,'回复'),int(internal),time.time()))
             # 客服/管理员的公开回复要能通知到相关用户；用户自己的补充留给工作台队列。
-            if not internal and self.profile(u)['role'] in ['support','admin']:
+            if not internal and self.profile(u)['role'] in ['support','admin','developer']:
                 t=c.execute('SELECT user_id,order_id FROM tickets WHERE id=?',(tid,)).fetchone()
                 targets={t['user_id']}
                 if t['order_id']:
@@ -102,7 +102,7 @@ class SupportService(ValidationMixin):
         return {'ok':True}
 
     def credit_action(self,u,target,delta,reason,tid):
-        self.staff(u);self.require(self.profile(u)['role']=='admin','仅平台管理员可处理信誉',403)
+        self.staff(u);self.require(self.is_admin(u),'仅平台管理员或开发者可处理信誉',403)
         self.require(u!=target,'不能处理自己的信誉');self.text(reason,1000,'处罚/复核理由');t=self.ticket(u,tid)
         self.require(type(delta) is int and -100<=delta<=100 and delta!=0,'分值变动无效')
         self.require(t['status']=='resolved','请先核实工单并记录处理结论')
@@ -130,13 +130,13 @@ class SupportService(ValidationMixin):
         封禁还必须处理在途订单：卖家被封后不可能再登录推进交付，
         原实现只下架商品，订单会永远卡在 paid / awaiting_handover，
         买家只能自己慢慢摸索售后入口。"""
-        self.staff(u);self.require(self.profile(u)['role']=='admin','仅平台管理员可封禁账号',403)
+        self.staff(u);self.require(self.is_admin(u),'仅平台管理员或开发者可封禁账号',403)
         self.require(u!=target,'不能封禁自己')
         self.text(reason,500,'封禁/解封理由')
         with self.tx() as c:
             user=c.execute('SELECT role,status FROM users WHERE id=?',(target,)).fetchone()
             self.require(user,'用户不存在',404)
-            self.require(user['role']!='admin','不能封禁管理员',403)
+            self.require(user['role'] not in ('admin','developer'),'不能封禁管理员或开发者',403)
             now=time.time()
             if not banned:
                 # 解封只针对「被封禁」的账号；注销过的账号不应被顺手复活。
@@ -182,7 +182,7 @@ class SupportService(ValidationMixin):
         role=self.profile(u)['role']
         limit=max(1,min(int(limit or 200),1000))
         where,args=[],[]
-        if role!='admin':
+        if role not in ('admin','developer'):
             where.append('a.actor=?');args.append(u)
         elif actor:
             where.append('a.actor=?');args.append(int(actor))

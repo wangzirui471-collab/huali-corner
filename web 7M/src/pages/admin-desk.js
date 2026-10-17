@@ -42,7 +42,11 @@ const BLURBS = {
   audit: '客服只能看到自己经手的记录；管理员可按人、类型、时间筛选并导出 CSV。'
 };
 
-const ROLE_TONE = { support: 'info', admin: 'violet' };
+const ROLE_TONE = { support: 'info', admin: 'violet', developer: 'warn' };
+const ROLE_NAMES = { support: '客服', admin: '平台管理员', developer: '开发者' };
+const ROLE_RANK = { user: 0, support: 1, admin: 2, developer: 3 };
+// 当前登录者是不是开发者——只有开发者能改管理员/开发者的身份，也能新建管理员。
+const isDeveloper = () => state.me?.role === 'developer';
 const ACTION_NAMES = { block: '拦截', review: '送审', report: '仅记录' };
 const ACTION_TONE = { block: 'danger', review: 'warn', report: 'mute' };
 
@@ -106,11 +110,15 @@ function deskNav(active) {
 // 身份条：管理员台的首页里，第一眼该看到「我是谁、以什么身份在做事」。
 function identityBar() {
   const me = state.me || {};
+  const role = me.role === 'developer' ? '开发者' : '平台管理员';
+  const tone = me.role === 'developer' ? 'warn' : 'violet';
   return `<div class="desk-id">
-    <span class="avatar role-avatar" data-tone="admin">${e((me.nickname || '?')[0])}</span>
-    <div class="desk-id-main"><b>${e(me.nickname || '平台管理员')}</b>
-      <small>以平台管理员身份登录：人员授权、整店处置、词库维护、审计导出都在这里。</small></div>
-    ${statePill('平台管理员', 'violet')}
+    <span class="avatar role-avatar" data-tone="${tone}">${e((me.nickname || '?')[0])}</span>
+    <div class="desk-id-main"><b>${e(me.nickname || role)}</b>
+      <small>${me.role === 'developer'
+        ? '以开发者身份登录：可任命管理员、调整任何账号角色，其余与管理员一致。'
+        : '以平台管理员身份登录：设置/废除客服、封号、整店处置、词库维护、审计导出。'}</small></div>
+    ${statePill(role, tone)}
   </div>`;
 }
 
@@ -187,7 +195,8 @@ function personRow(a) {
   const seen = a.last_login ? date(a.last_login) : (a.online ? '本次会话进行中' : '从未');
   const acts = self
     ? '<span class="tag">当前登录</span>'
-    : `<button class="btn secondary" data-action="staff-status" data-id="${a.id}" data-value="${disabled ? 'active' : 'disabled'}">${disabled ? '启用' : '停用'}</button>
+    : `<button class="btn secondary" data-action="change-role" data-id="${a.id}">改身份</button>
+       <button class="btn secondary" data-action="staff-status" data-id="${a.id}" data-value="${disabled ? 'active' : 'disabled'}">${disabled ? '启用' : '停用'}</button>
        <button class="btn secondary" data-action="staff-reset" data-id="${a.id}">重置密码</button>
        ${a.online ? `<button class="text-button danger" data-action="staff-revoke" data-id="${a.id}">强制下线</button>` : ''}`;
   return row(
@@ -208,14 +217,15 @@ function peopleSection({ staff }) {
   const disabled = staff.filter(a => a.status === 'disabled').length;
   return `<section class="panel desk-panel">
     ${panelHead('运营账号', '<button class="btn primary" data-action="staff-create">新建账号</button>')}
-    <p class="desk-lead">这里管的是<strong>平台自己人</strong>：客服与管理员。停用不等于封禁——
-    客服离职只停用（账号不能登录，历史记录全保留）；封禁是针对违规用户的处置，会下架其全部商品。</p>
+    <p class="desk-lead">这里管的是<strong>平台自己人</strong>：客服、管理员、开发者。四级权限——
+    开发者任命管理员，管理员设置/废除客服并封号，客服日常值守。
+    改身份立即生效并踢掉对方全部会话，操作全程留痕。</p>
     <div class="desk-summary">
       <span>共 <b>${staff.length}</b> 个账号</span>
       <span><b>${staff.filter(a => a.online).length}</b> 个在线</span>
       ${disabled ? `<span class="desk-summary-flag">已停用 <b>${disabled}</b></span>` : ''}
     </div>
-    ${chips('people', [['admin', '管理员'], ['support', '客服'], ['disabled', '已停用']])}
+    ${chips('people', [['developer', '开发者'], ['admin', '管理员'], ['support', '客服'], ['disabled', '已停用']])}
     ${staff.length ? `<div class="desk-list">${staff.map(personRow).join('')}</div>` : deskEmpty('还没有运营账号')}
   </section>`;
 }
@@ -374,8 +384,8 @@ function auditSection({ rows, params }) {
 
 export async function adminDesk(raw = '') {
   if (!needLogin()) return;
-  if (state.me.role !== 'admin') {
-    shell(heading('ACCESS DENIED', '这里只对平台管理员开放',
+  if (!['admin', 'developer'].includes(state.me.role)) {
+    shell(heading('ACCESS DENIED', '这里只对平台管理员或开发者开放',
       '客服的日常工作在「客服工作台」，恢复上架、人员授权、词库维护由管理员负责。') +
       `<section class="panel"><p>如果你是客服，请点顶栏的「客服工作台」。</p>
        <button class="btn primary" data-go="staff">去客服工作台</button></section>`, 'staff');

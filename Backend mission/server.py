@@ -156,6 +156,7 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/admin/staff' and method=='POST':return self.respond(m.create_staff(u,data))
             if p=='/api/admin/staff/status' and method=='POST':return self.respond(m.set_staff_status(u,int(data['id']),data.get('status')))
             if p=='/api/admin/staff/password' and method=='POST':return self.respond(m.reset_staff_password(u,int(data['id'])))
+            if p=='/api/admin/role' and method=='POST':return self.respond(m.change_role(u,data))
             if p=='/api/admin/session/revoke' and method=='POST':return self.respond(m.revoke_sessions(u,int(data['id'])))
             if p=='/api/admin/sellers' and method=='GET':return self.respond(m.sellers(u))
             if p=='/api/admin/seller/delist' and method=='POST':return self.respond(m.moderate_seller(u,int(data['seller_id']),data.get('reason','')))
