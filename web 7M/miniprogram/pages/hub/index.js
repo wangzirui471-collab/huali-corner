@@ -148,6 +148,9 @@ Page({...require('../../features/catalog-actions'),data:{tab:'me',authMode:'pass
       await app.refreshNotifications?.();
       if (!current()) return;
       if(notice.entity_type==='chat'){this.cursor=0;this.setData({tab:'messages',currentRoom:notice.entity_id,messages:[]});await this.load();}
+      else if (notice.entity_type==='product') {
+        wx.navigateTo({url:'/pages/detail/index?id='+notice.entity_id});
+      }
       else if (notice.entity_type==='ticket') {
         this.setData({tab:'support'});await this.load();
         if (current()) await this.openTicket({currentTarget:{dataset:{id:notice.entity_id}}});

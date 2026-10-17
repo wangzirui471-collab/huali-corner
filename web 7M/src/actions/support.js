@@ -27,8 +27,9 @@ export const clicks = {
   },
 
   backup: async () => {
-    await api('/backup', {});
-    toast('数据库一致性备份已保存到本地数据目录');
+    const result=await api('/backup', {});
+    toast('备份已创建：'+result.file);
+    await render();
   },
 
   // 信誉分只能由平台管理员、且必须挂在一张已核实的工单上调整。

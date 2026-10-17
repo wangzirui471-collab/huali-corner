@@ -9,7 +9,7 @@ export async function inboxClick(button){
       if (action === 'open') {
         await context.request('/notifications/read', {id:Number(button.dataset.notificationId)});
         if (!context.isCurrent()) return;
-        context.go(({order:'orders',ticket:'ticket',chat:'messages'}[button.dataset.kind]||'messages') + '/' + button.dataset.entity);
+        context.go(({order:'orders',ticket:'ticket',chat:'messages',product:'product'}[button.dataset.kind]||'messages') + '/' + button.dataset.entity);
         await refresh();
       } else if (action === 'read-all') {
         await context.request('/notifications/read', {through_id:Number(button.dataset.through)});

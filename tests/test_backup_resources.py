@@ -49,7 +49,9 @@ class BackupResourceTests(unittest.TestCase):
         # 临时目录来自 ops/service.py。patch 的是它们各自 import 进来的模块对象。
         with patch('app.core.database.sqlite3.connect',connect),patch('app.ops.service.tempfile.TemporaryDirectory',temporary_directory):
             yield
-        self.assertEqual(len(connections),3)
+        # Three snapshot handles plus the persisted backup-status transaction.
+        self.assertEqual(len(connections),4)
+        self.assertTrue(all(connection.closed for connection in connections))
 
     def test_backup_closes_all_handles_before_temporary_database_cleanup(self):
         with self.windows_file_lock_check():backup=self.market._backup()

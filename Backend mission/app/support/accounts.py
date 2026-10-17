@@ -38,7 +38,7 @@ class SupportAccounts:
 
     def support_accounts(self, administrator_id):
         self._administrator(administrator_id)
-        return self.rows("SELECT id,nickname,phone,is_active FROM users WHERE role='support' ORDER BY id")
+        return self.rows("SELECT u.id,u.nickname,u.phone,u.is_active,(SELECT COUNT(*) FROM tickets t WHERE t.assignee=u.id AND t.status<>'resolved') pending_count FROM users u WHERE u.role='support' ORDER BY u.id")
 
     def set_support_active(self, administrator_id, user_id, is_active):
         self._administrator(administrator_id)
@@ -49,6 +49,12 @@ class SupportAccounts:
             connection.execute('UPDATE users SET is_active=? WHERE id=?', (int(is_active), user_id))
             if not is_active:
                 connection.execute('DELETE FROM sessions WHERE user_id=?', (user_id,))
+                pending = connection.execute("SELECT id FROM tickets WHERE assignee=? AND status<>'resolved'", (user_id,)).fetchall()
+                for ticket in pending:
+                    connection.execute("UPDATE tickets SET assignee=NULL,status=CASE WHEN status='review' THEN 'review' ELSE 'open' END WHERE id=?", (ticket['id'],))
+                    connection.execute('INSERT INTO audit(actor,target,type,reason,ticket_id,created) VALUES(?,?,?,?,?,?)',
+                                       (administrator_id,user_id,'ticket_handoff','客服停用，未结工单退回公共队列，复核状态保留',ticket['id'],time.time()))
+                    self.notify_ticket(connection,ticket['id'],'handoff:'+str(ticket['id'])+':'+str(time.time_ns()),'客服交接：工单等待重新指派',actor=administrator_id,queue=True)
             connection.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',
                                (administrator_id, user_id, 'support_active', '启用客服' if is_active else '停用客服并撤销会话', time.time()))
         return {'ok': True}

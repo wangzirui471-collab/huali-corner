@@ -19,6 +19,24 @@ class OpsService(ValidationMixin):
         self._administrator(u);return self._backup()
 
     def _backup(self):
+        try:
+            result = self._write_backup()
+        except Exception as error:
+            with self.tx() as c:
+                c.execute("INSERT OR REPLACE INTO settings VALUES('backup_last_error',?)", (str(error)[:500],))
+            raise
+        with self.tx() as c:
+            c.execute("INSERT OR REPLACE INTO settings VALUES('backup_last_success',?)", (json.dumps({'file':Path(result).name,'created':time.time(),'bytes':Path(result).stat().st_size}),))
+            c.execute("DELETE FROM settings WHERE key='backup_last_error'")
+        return result
+
+    def operations_status(self, user_id):
+        self._administrator(user_id)
+        settings = {r['key']:r['value'] for r in self.rows("SELECT key,value FROM settings WHERE key IN ('backup_last_success','backup_last_error')")}
+        return {'last_backup':json.loads(settings['backup_last_success']) if settings.get('backup_last_success') else None,
+                'last_error':settings.get('backup_last_error'), 'simulation':True}
+
+    def _write_backup(self):
         directory=self.root/'backups';directory.mkdir(exist_ok=True);path=directory/f'market-{time.time_ns()}.zip'
         with tempfile.TemporaryDirectory() as tmp:
             dbpath=Path(tmp)/'market.sqlite3'

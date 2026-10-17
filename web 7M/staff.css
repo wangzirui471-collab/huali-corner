@@ -1,0 +1,68 @@
+/* Staff workspace stays separate from marketplace presentation. */
+.btn.danger { color: #b91c1c; background: #fff1f2; border: 1px solid #fecdd3; box-shadow: none; }
+.btn.danger:hover { background: #ffe4e6; border-color: #e11d48; }
+.staff-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 18px 28px; background: #fff; border-bottom: 1px solid var(--line); }
+.staff-header .brand { display: flex; align-items: center; gap: 12px; font-size: 17px; font-weight: 700; }
+.staff-header .header-actions { display: flex; align-items: center; gap: 20px; }
+.staff-header [data-go="messages"] { position: relative; }
+.staff-main { max-width: 1600px; padding: 28px; margin: auto; }
+.staff-layout { display: grid; grid-template-columns: 200px minmax(0,1fr); gap: 26px; align-items: start; }
+.staff-navigation { position: sticky; top: 18px; padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+.staff-navigation strong { padding: 14px 12px; font-size: 16px; }
+.staff-navigation button { padding: 13px 12px; border-radius: 10px; text-align: left; color: #555d67; }
+.staff-navigation button:hover, .staff-navigation button.selected { background: #fff5cc; color: #6b5000; font-weight: 650; }
+.staff-content { min-width: 0; }
+.staff-content .page-heading { margin-top: 0; }
+.staff-stats { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 12px; margin-bottom: 22px; }
+.staff-stats .panel { padding: 18px; margin: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 14px; text-align: left; }
+.staff-stats span { font-size: 12px; color: #667085; }
+.staff-stats strong { font-size: 30px; }
+.staff-filter { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 16px; margin-top: 18px; }
+.staff-filter > button { align-self: start; justify-self: start; }
+.staff-search { display: flex; gap: 12px; margin: 18px 0; }
+.staff-search input { flex: 1; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.staff-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 24px; }
+.staff-pagination span { font-size: 12px; color: #667085; }
+.case-row-status { display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
+.staff-content .ticket-row { gap: 12px; }
+.staff-content .ticket-row > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+.staff-content .ticket-row small { line-height: 1.7; }
+.staff-content .user-table small { display: block; margin-top: 5px; }
+.staff-entry { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-color: #e7bc42; }
+.staff-entry h2, .staff-entry p { margin: 0; }
+.staff-entry p { margin-top: 8px; font-size: 12px; }
+.support-case { align-items: start; }
+.internal-note { padding: 12px; border-radius: 8px; background: #fff7e6; border-color: #e9b44c; }
+.refund-summary { flex-direction: column; }
+.case-source-photos, .case-evidence-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.evidence-view { display: block; width: 100%; max-height: 55vh; object-fit: contain; background: #f5f6f7; }
+.evidence-gallery { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.evidence-gallery button { width: 74px; height: 74px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; }
+.evidence-gallery img { width: 100%; height: 100%; object-fit: cover; }
+@media(max-width:1000px) {
+  .staff-main { padding: 18px; }
+  .staff-layout { grid-template-columns: 170px minmax(0,1fr); gap: 16px; }
+  .staff-stats { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .staff-content .support-case { grid-template-columns: minmax(0,1fr); }
+}
+@media(max-width:650px) {
+  .staff-header { padding: 14px 12px; align-items: flex-start; }
+  .staff-header .brand { font-size: 13px; gap: 7px; }
+  .staff-header .brand-mark { width: 30px; height: 30px; }
+  .staff-header .header-actions { gap: 10px; font-size: 11px; }
+  .staff-main { padding: 12px; }
+  .staff-layout { grid-template-columns: minmax(0,1fr); gap: 12px; }
+  .staff-navigation { position: static; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); padding: 8px; margin: 0; gap: 4px; }
+  .staff-navigation strong { grid-column: 1/-1; padding: 7px; }
+  .staff-navigation button { text-align: center; padding: 10px 4px; font-size: 12px; }
+  .staff-stats { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+  .staff-stats .panel { padding: 14px; }
+  .staff-content .panel { padding: 16px; }
+  .staff-content .ticket-row { flex-wrap: wrap; gap: 8px; }
+  .staff-content .ticket-row > span:nth-child(2) { flex: 1; }
+  .case-row-status { width: 100%; flex-direction: row; flex-wrap: wrap; }
+  .staff-pagination { flex-wrap: wrap; }
+  .staff-pagination .btn { padding: 10px; }
+  .staff-search { flex-wrap: wrap; }
+  .staff-entry { align-items: flex-start; flex-direction: column; }
+}

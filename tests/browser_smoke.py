@@ -14,7 +14,7 @@ def run():
   try:
    with sync_playwright() as p:
     browser=p.chromium.launch(executable_path='/usr/bin/chromium',headless=True,args=['--no-sandbox'])
-    page=browser.new_page(viewport={'width':1440,'height':1000});page.on('pageerror',lambda e:errors.append(str(e)))
+    page=browser.new_page(viewport={'width':1440,'height':1000});page.on('pageerror',lambda e:errors.append(str(e)));page.on('dialog',lambda d:d.accept())
     page.goto('http://127.0.0.1:'+str(server.server_port),wait_until='networkidle')
     page.get_by_text('计算机工程学院',exact=False).first.wait_for()
     assert page.locator('.product-card').count()>=6
@@ -61,6 +61,7 @@ def run():
     page.locator('[name=reason]').fill('测试：核实后双方同意退款')
     page.get_by_role('button',name='模拟退款',exact=True).click()
     page.get_by_text('已解决',exact=False).first.wait_for()
+    page.get_by_role('button',name='返回交易首页',exact=True).click()
     page.get_by_role('button',name='社区',exact=True).first.click()
     page.get_by_role('button',name='加入总聊',exact=True).click()
     page.locator('[name=message]').fill('软件试点群聊测试')

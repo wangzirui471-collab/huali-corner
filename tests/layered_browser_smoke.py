@@ -30,6 +30,7 @@ def run():
     def page_for(session):
      page=browser.new_page(viewport={'width':390,'height':844})
      page.on('pageerror',lambda e:errors.append(str(e)))
+     page.on('dialog',lambda d:d.accept())
      page.on('response',lambda r:failed.append((r.status,r.url)) if r.status>=400 else None)
      page.goto(base,wait_until='networkidle')
      page.evaluate('(token)=>sessionStorage.setItem("hc-token",token)',session['token'])
@@ -52,7 +53,6 @@ def run():
     page.locator('.publish-submit button').click();expect(page.locator('.detail-grid')).to_be_visible()
     assert m.product(pid)['price']==1825;checks.append('原地编辑并保留三张实拍')
     page.goto(base+'/#listings');expect(page.get_by_role('button',name='编辑',exact=True)).to_be_visible()
-    page.on('dialog',lambda d:d.accept())
     page.get_by_role('button',name='下架',exact=True).click();expect(page.get_by_role('button',name='恢复上架',exact=True)).to_be_visible()
     page.get_by_role('button',name='恢复上架',exact=True).click();expect(page.get_by_role('button',name='下架',exact=True)).to_be_visible();checks.append('主动下架与恢复')
     page.goto(base+'/#home');page.locator('[data-action=open-filter]').click()

@@ -24,6 +24,7 @@ import { helpPage } from './pages/help.js';
 import { chats } from './pages/messages.js';
 import { profile, mine } from './pages/me.js';
 import { supportPage as support, ticketPage } from './pages/support.js';
+import { staffPage } from './pages/staff.js';
 
 // 公开演示版只开放这四条只读路由。
 const DEMO_ROUTES = ['home', 'product', 'profile', 'community'];
@@ -69,7 +70,7 @@ export async function render(){
       profile: () => profile(id),
       me: mine,
       support: () => support(false),
-      staff: () => support(true),
+      staff: () => staffPage(id||'overview',query||''),
       ticket: () => ticketPage(id)
     };
     if (!funcs[route]) go('home');

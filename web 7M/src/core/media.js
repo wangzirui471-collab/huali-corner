@@ -2,7 +2,7 @@
 import { state } from './state.js';
 export function releaseMedia(){for(const url of state.mediaURLs)URL.revokeObjectURL(url);state.mediaURLs.clear();}
 export async function listingMedia(product){
- if(product.status!=='removed'||product.seller_id!==state.me?.id)return product;
+ if(product.status!=='removed'||(product.seller_id!==state.me?.id&&!['admin','support'].includes(state.me?.role)))return product;
  const token=state.token,epoch=state.renderId;
  const photos=await Promise.all(product.photos.map(async photo=>{
   if(!photo.url.startsWith('/media/'))return photo;

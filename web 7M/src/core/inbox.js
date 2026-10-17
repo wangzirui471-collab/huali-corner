@@ -80,7 +80,7 @@ export function attach(context) {
   }
 
 export function rows(items, context) {
-    return items.map(item => `<button class="notification-row ${item.read_at ? '' : 'unread'}" data-inbox-action="open" data-notification-id="${item.id}" data-kind="${escape(item.entity_type)}" data-entity="${item.entity_id}"><span class="notification-symbol">${item.entity_type === 'order' ? '单' : item.entity_type === 'chat' ? '聊' : '助'}</span><span><b>${escape(item.title)}</b><small>${item.entity_type === 'order' ? '订单' : item.entity_type === 'chat' ? '私信' : '工单'} #${item.entity_id} · ${escape(context.date(item.created_at))}${item.read_at ? ' · 已读' : ' · 未读'}</small></span><span aria-hidden="true">›</span></button>`).join('');
+    return items.map(item => `<button class="notification-row ${item.read_at ? '' : 'unread'}" data-inbox-action="open" data-notification-id="${item.id}" data-kind="${escape(item.entity_type)}" data-entity="${item.entity_id}"><span class="notification-symbol">${item.entity_type === 'order' ? '单' : item.entity_type === 'chat' ? '聊' : item.entity_type === 'product' ? '品' : '助'}</span><span><b>${escape(item.title)}</b><small>${item.entity_type === 'order' ? '订单' : item.entity_type === 'chat' ? '私信' : item.entity_type === 'product' ? '商品' : '工单'} #${item.entity_id} · ${escape(context.date(item.created_at))}${item.read_at ? ' · 已读' : ' · 未读'}</small></span><span aria-hidden="true">›</span></button>`).join('');
   }
 
 export async function panel(context) {

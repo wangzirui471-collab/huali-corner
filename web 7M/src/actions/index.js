@@ -8,6 +8,8 @@ import { go } from '../core/nav.js';
 import { publicDemoNotice } from '../auth/login.js';
 import * as ui from './ui.js';
 import * as catalog from './catalog.js';
+import * as moderation from './moderation.js';
+import * as staff from './staff.js';
 import * as trade from './trade.js';
 import * as social from './social.js';
 import * as support from './support.js';
@@ -21,10 +23,16 @@ import { inboxClick } from './inbox.js';
 // 公开演示版只放行这些只读交互，其余一律弹说明、不渲染任何表单。
 const DEMO_CLICK_ALLOWED = ['market-channel','market-shortcut','free-shelf','feed-sort','category','login','close','photo','share','open-filter','clear-filters','share-filters','feed-tab','more-products'];
 
-const clicks = {...ui.clicks, ...catalog.clicks, ...trade.clicks, ...social.clicks, ...support.clicks, ...account.clicks, ...publishing.clicks,...catalogFilters.clicks,...help.clicks};
-const submits = {...catalog.submits, ...trade.submits, ...social.submits, ...support.submits, ...account.submits, ...publishing.submits,...catalogFilters.submits,...help.submits};
+const clicks = {...ui.clicks, ...catalog.clicks, ...moderation.clicks, ...staff.clicks, ...trade.clicks, ...social.clicks, ...support.clicks, ...account.clicks, ...publishing.clicks,...catalogFilters.clicks,...help.clicks};
+const submits = {...catalog.submits, ...moderation.submits, ...staff.submits, ...trade.submits, ...social.submits, ...support.submits, ...account.submits, ...publishing.submits,...catalogFilters.submits,...help.submits};
 
 export function registerActions(){
+  document.addEventListener('change',ev=>{
+    if(ev.target.matches('#op-case-reply [name="internal"]')) {
+      const send=ev.target.closest('form').querySelector('[data-case-reply-send]');
+      if(send)send.textContent=ev.target.checked?'保存内部备注（当事人不可见）':'发送给当事人';
+    }
+  });
   document.addEventListener('input',ev=>{if(['queue_query','queue_type','queue_status'].includes(ev.target.name))filterCases();});
   document.addEventListener('click', async ev => {
     const goBtn = ev.target.closest('[data-go]');

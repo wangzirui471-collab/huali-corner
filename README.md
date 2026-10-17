@@ -116,6 +116,8 @@ python server.py
 
 ## 验证
 
+管理员／客服的商品详情下架、独立工作台、工单分页、关联快照、退款与信誉确认，以及交接与备份状态，见 [管理工作台使用说明](docs/STAFF_WORKSPACE.md)。
+
 ```bash
 python3 -m unittest discover -s tests -v
 node tests/native_client.test.js

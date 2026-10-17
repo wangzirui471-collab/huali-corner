@@ -33,6 +33,12 @@ class SupportService(ValidationMixin):
             if pid:self.product(int(pid))
             tid=c.execute('INSERT INTO tickets(user_id,order_id,product_id,type,subject,body,created) VALUES(?,?,?,?,?,?,?)',(u,oid,pid,typ,subject,body,time.time())).lastrowid
             c.execute('UPDATE tickets SET refund_mode=?,related_ticket_id=?,post_id=? WHERE id=?',(refund_mode,related,post_id,tid))
+            sources = self.case_sources({'product_id': pid, 'post_id': post_id})
+            sources.pop('captured', None)
+            if related:
+                sources = self.case_sources(dict(original))
+                sources.pop('captured', None)
+            c.execute('UPDATE tickets SET source_snapshot=? WHERE id=?', (json.dumps(sources, ensure_ascii=False), tid))
             self.save_evidence(c,tid,u,evidence,False)
             self.notify_ticket(c,tid,f'ticket:{tid}:created','有新的售后／反馈工单',actor=u,queue=True)
         return self.ticket(u,tid)
@@ -45,6 +51,8 @@ class SupportService(ValidationMixin):
         if r['restricted']:
             safe={k:r.get(k) for k in ['id','user_id','order_id','product_id','post_id','type','subject','status','assignee','created','nickname']}
             return {**safe,'restricted':True,'body':'','reason':'','messages':[],'evidence':[]}
+        r['sources'] = self.case_sources(r)
+        r.pop('source_snapshot', None)
         r['messages']=self.rows('SELECT m.*,u.nickname FROM ticket_messages m JOIN users u ON u.id=m.user_id WHERE ticket_id=? AND (?=1 OR internal=0) ORDER BY m.id',(tid,int(staff)))
         r['evidence']=[{'id':x['upload_id'],'url':'/media/'+x['upload_id'],'internal':bool(x['internal'])} for x in self.rows('SELECT upload_id,internal FROM ticket_evidence WHERE ticket_id=? AND (?=1 OR internal=0) ORDER BY created_at',(tid,int(staff)))]
         return r

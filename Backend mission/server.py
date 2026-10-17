@@ -76,7 +76,7 @@ class Handler(BaseHTTPRequestHandler):
                     uid=self.uid();m.require(uid==upload['user_id'] or m.can_view_evidence(uid,fid),'无权读取私密图片',403)
                 else:
                     listed=any(fid in json.loads(r['data']).get('photos',[]).__str__() for r in m.rows("SELECT data FROM products WHERE status<>'removed'"))
-                    uid=self.optional_user();m.require(listed or uid==upload['user_id'],'图片尚未发布',403)
+                    uid=self.optional_user();m.require(listed or uid==upload['user_id'] or m.can_read_catalog_media(uid,fid),'图片尚未发布',403)
                 return self.respond(Path(upload['path']).read_bytes(),kind='image/webp')
             if not p.startswith('/api/'):
                 web=self.server.web
@@ -114,6 +114,11 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/publish' and method=='POST':return self.respond(m.publish(u,data))
             if p=='/api/my-products':return self.respond(m.my_products(u,query.get('status')))
             if p=='/api/product/status' and method=='POST':return self.respond(m.set_product_status(u,int(data['id']),data['action']))
+            if p=='/api/product/moderation' and method=='POST':return self.respond(m.moderate_product(u,int(data['id']),data.get('reason')))
+            if p=='/api/staff/queue' and method=='GET':return self.respond(m.staff_queue(u,query))
+            if p=='/api/admin/audit' and method=='GET':return self.respond(m.admin_audit(u,query))
+            if p=='/api/admin/operations' and method=='GET':return self.respond(m.operations_status(u))
+            if p=='/api/credit/options' and method=='GET':return self.respond(m.credit_options(u,int(query['target_user_id'])))
             if p=='/api/upload' and method=='POST':
                 try:content=base64.b64decode(data.get('content',''),validate=True)
                 except ValueError:raise DomainError('无效图片编码')

@@ -74,7 +74,7 @@ def run():
     work=page_for(worker);work.goto(base+'/#ticket/'+str(ticket_id))
     expect(work.get_by_text('未分配给你的工单',exact=False)).to_be_visible()
     work.locator('[name=reason]').fill('认领互助反馈');work.get_by_role('button',name='认领后查看详情').click()
-    expect(work.locator('.description')).to_contain_text('需要了解互助规则')
+    expect(work.locator('.support-case > section > .description')).to_contain_text('需要了解互助规则')
     m.resolve_ticket(admin['id'],ticket_id,dict(outcome='resolved',reason='已答复规则'))
     b.reload();expect(b.locator('#op-case-reply')).to_have_count(0)
     b.get_by_role('button',name='提交关联申诉／新材料').click()
