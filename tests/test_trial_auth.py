@@ -1,11 +1,16 @@
 import hashlib
 import json
+import sys
 import tempfile
 import time
 import unittest
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
+
+# 单文件运行时（unittest discover -p "test_trial_auth.py"）不会自动加后端目录，
+# 之前只能靠字母序更早的测试模块顺手插进去，单独跑必然报 No module named 'app'。
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'Backend mission'))
 
 from app.market import Market, DomainError
 
@@ -49,6 +54,19 @@ class TrialAuthTests(unittest.TestCase):
     def test_invalid_phone_or_short_or_oversized_password_rejected(self):
         for phone,password in [('bad',self.password),('13900000011','short'),('13900000011','x'*129)]:
             with self.subTest(phone=phone,length=len(password)),self.assertRaises(DomainError):
+                self.market.register_password(phone,password,'同学')
+
+    def test_password_floor_is_six_characters(self):
+        """下限从 12 放宽到 6：6 位可以注册，5 位仍被拒，上限 128 不变。
+
+        放宽的原因：12 位对校园试用来讲太苛刻，用户反馈记不住。
+        6 是常见的最低门槛；再往下就没有意义了。
+        """
+        accepted=self.market.register_password('13900000021','zj1234','六位同学')
+        self.assertTrue(accepted['token'])
+        self.assertEqual(self.market.login_password('13900000021','zj1234')['user']['id'],accepted['user']['id'])
+        for phone,password in [('13900000022','zj123'),('13900000023','x'*129)]:
+            with self.subTest(length=len(password)),self.assertRaises(DomainError):
                 self.market.register_password(phone,password,'同学')
 
     def test_unknown_phone_and_wrong_password_return_same_error(self):

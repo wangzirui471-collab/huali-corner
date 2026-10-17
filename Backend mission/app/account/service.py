@@ -19,7 +19,9 @@ class AccountService(ValidationMixin):
         self.require(isinstance(phone,str) and re.fullmatch(r'1[3-9][0-9]{9}',phone),'请输入11位手机号')
         return phone
     def _password(self,password):
-        self.require(isinstance(password,str) and 12<=len(password)<=128,'密码需为12至128个字符，不要使用其他网站的密码')
+        # 下限取 6：原先是 12，对校园试用来讲太苛刻（用户反馈记不住）。
+        # 6 是常见的最低门槛，再往下就没有意义了——上限 128 保持不变。
+        self.require(isinstance(password,str) and 6<=len(password)<=128,'密码需为6至128个字符，不要使用其他网站的密码')
         return password
     @staticmethod
     def _derive(password,salt,rounds=ROUNDS):

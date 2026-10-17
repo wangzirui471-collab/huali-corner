@@ -39,14 +39,17 @@ export function recoveryNotice(code){
 }
 
 function passwordField(name, label, autocomplete){
-  return `<label class="field"><span>${label}</span><input type="password" name="${name}" required minlength="12" maxlength="128" autocomplete="${autocomplete}"></label>`;
+  // 只有「设置新密码」才加长度下限；登录框不加 ——
+  // 否则一旦调整下限，老账号会被自己当年设的旧密码挡在门外。
+  const floor = autocomplete === 'new-password' ? ' minlength="6"' : '';
+  return `<label class="field"><span>${label}</span><input type="password" name="${name}" required${floor} maxlength="128" autocomplete="${autocomplete}"></label>`;
 }
 
 // 试用版：手机号 + 密码，不发短信，手机号也不做实名/学籍认证。
 export function trialLoginModal(mode='login'){
   const phone = field('手机号（未验证）','phone','tel','','required pattern="1[3-9][0-9]{9}" autocomplete="username" placeholder="仅作账号使用"');
   const title = mode === 'register' ? '加入华立转角' : mode === 'recover' ? '用恢复码找回账号' : '欢迎回到华立转角';
-  modal(`<span class="eyebrow">计算机工程学院 · 小范围试用</span><h2>${title}</h2><p class="muted">手机号未验证，不发送短信，不作为实名、学籍或号码归属认证。交易和付款均为模拟。</p><div class="stack"><button class="btn secondary" data-action="trial-auth-mode" data-value="login">账号登录</button><button class="btn secondary" data-action="trial-auth-mode" data-value="register">注册账号</button></div><form id="${mode==='register'?'register-form':mode==='recover'?'recover-form':'login-form'}">${phone}${mode==='register'?field('昵称','nickname','text','','required maxlength="24" autocomplete="nickname"'):''}${mode==='recover'?field('账号恢复码','recovery_code','password','','required maxlength="128" autocomplete="off"'):''}${mode==='recover'?passwordField('new_password','新密码（12至128个字符）','new-password'):passwordField('password','密码（12至128个字符）',mode==='register'?'new-password':'current-password')}${mode!=='login'?passwordField('password_confirm','再输入一次密码','new-password'):''}${mode==='register'?'<label class="field"><span><input type="checkbox" name="agree" required> 我了解本版为模拟交易，同意保存账号、发布内容和必要订单记录；不填写身份证、宿舍房号或支付信息。</span></label>':''}<button class="btn primary full">${mode==='register'?'注册并登录':mode==='recover'?'重置密码':'登录'}</button></form><button class="text-button" data-action="trial-auth-mode" data-value="recover">使用恢复码找回</button><p class="muted">使用未在其他网站使用过的密码。恢复码只展示一次，请私下保存；无法仅凭手机号找回账号。管理员与客服账号由平台运营者单独建立，登录页不提供任何共享默认口令。</p>`);
+  modal(`<span class="eyebrow">计算机工程学院 · 小范围试用</span><h2>${title}</h2><p class="muted">手机号未验证，不发送短信，不作为实名、学籍或号码归属认证。交易和付款均为模拟。</p><div class="stack"><button class="btn secondary" data-action="trial-auth-mode" data-value="login">账号登录</button><button class="btn secondary" data-action="trial-auth-mode" data-value="register">注册账号</button></div><form id="${mode==='register'?'register-form':mode==='recover'?'recover-form':'login-form'}">${phone}${mode==='register'?field('昵称','nickname','text','','required maxlength="24" autocomplete="nickname"'):''}${mode==='recover'?field('账号恢复码','recovery_code','password','','required maxlength="128" autocomplete="off"'):''}${mode==='recover'?passwordField('new_password','新密码（6至128个字符）','new-password'):passwordField('password','密码（6至128个字符）',mode==='register'?'new-password':'current-password')}${mode!=='login'?passwordField('password_confirm','再输入一次密码','new-password'):''}${mode==='register'?'<label class="field"><span><input type="checkbox" name="agree" required> 我了解本版为模拟交易，同意保存账号、发布内容和必要订单记录；不填写身份证、宿舍房号或支付信息。</span></label>':''}<button class="btn primary full">${mode==='register'?'注册并登录':mode==='recover'?'重置密码':'登录'}</button></form><button class="text-button" data-action="trial-auth-mode" data-value="recover">使用恢复码找回</button><p class="muted">使用未在其他网站使用过的密码。恢复码只展示一次，请私下保存；无法仅凭手机号找回账号。管理员与客服账号由平台运营者单独建立，登录页不提供任何共享默认口令。</p>`);
 }
 
 export function loginModal(){
@@ -56,5 +59,5 @@ export function loginModal(){
 }
 
 export function changePasswordModal(){
-  modal(`<h2>修改密码</h2><form id="change-password-form">${field('原密码','old_password','password','','required maxlength="128" autocomplete="current-password"')}${field('新密码','new_password','password','','required minlength="12" maxlength="128" autocomplete="new-password"')}${field('再输入一次新密码','password_confirm','password','','required minlength="12" maxlength="128" autocomplete="new-password"')}<p class="muted">修改后所有设备退出登录，并生成新的恢复码。</p><button class="btn primary">确认修改密码</button></form>`);
+  modal(`<h2>修改密码</h2><form id="change-password-form">${field('原密码','old_password','password','','required maxlength="128" autocomplete="current-password"')}${field('新密码','new_password','password','','required minlength="6" maxlength="128" autocomplete="new-password"')}${field('再输入一次新密码','password_confirm','password','','required minlength="6" maxlength="128" autocomplete="new-password"')}<p class="muted">修改后所有设备退出登录，并生成新的恢复码。</p><button class="btn primary">确认修改密码</button></form>`);
 }

@@ -14,7 +14,7 @@ def main():
     parser.add_argument('--data',default=os.environ.get('HUALI_DATA_DIR') or data_dir(True))
     args=parser.parse_args()
     phone=input('手机号（仅作账号，不验证号码归属）：').strip()
-    password=getpass.getpass('新密码（12至128个字符）：')
+    password=getpass.getpass('新密码（6至128个字符）：')
     confirmation=getpass.getpass('再次输入新密码：')
     if password!=confirmation:parser.error('两次密码不一致')
     try:
