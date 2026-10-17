@@ -4,6 +4,7 @@ from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
 from urllib.parse import urlsplit,parse_qs,unquote
 from app.market import Market,DomainError
 from app.seed import seed as seed_data
+from app.account.credit import is_trusted
 from app.core.config import WEB,COLLEGES_JSON,data_dir
 # Windows registry associations can label .js as text/plain. Core web types
 # must be deterministic because browsers enforce nosniff for scripts/styles.
@@ -67,6 +68,7 @@ class Handler(BaseHTTPRequestHandler):
                 # 公开主页只给「资料」字段：role / status 属于账号治理信息，
                 # 公开出去等于对外暴露某人是否被封禁或已注销。
                 public={k:profile[k] for k in ('id','nickname','college','major','education','bio','score')}
+                public['trusted']=is_trusted(profile['score'])
                 return self.respond({'user':public,'products':m.products(self.optional_user(),{'seller':str(who)})})
             if p=='/api/posts' and method=='GET':return self.respond(m.posts(query.get('topic','')))
             if p=='/api/comments' and method=='GET':return self.respond(m.comments(int(query['id'])))
@@ -134,6 +136,7 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/rooms':return self.respond(m.rooms(u))
             if p=='/api/rooms/join' and method=='POST':return self.respond(m.join_room(u,data['kind']))
             if p=='/api/rooms/private' and method=='POST':return self.respond(m.private_room(u,int(data['peer'])))
+            if p=='/api/support/room' and method=='POST':return self.respond(m.support_room(u))
             if p=='/api/messages':return self.respond(m.send_message(u,int(data['room_id']),data['body'],data['key']) if method=='POST' else m.messages(u,int(query['room_id']),int(query.get('after',0))))
             if p=='/api/messages/recall' and method=='POST':return self.respond(m.recall_message(u,int(data['message_id'])))
             if p=='/api/room/members':return self.respond(m.room_members(u,int(query['room_id'])))

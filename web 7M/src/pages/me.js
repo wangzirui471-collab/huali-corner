@@ -28,7 +28,7 @@ export async function profile(id){
   shell(`${heading('NICE TO MEET YOU','同学的转角','看看这位同学的公开信息和在售好物。')}
   <section class="panel profile-card">
     <span class="avatar jumbo">${e(u.nickname[0])}</span>
-    <div><h2>${e(u.nickname)}</h2><p>${e(u.college)} · ${e(u.major)} · ${e(u.education)}</p><p>${e(u.bio||'让闲置遇到真正需要它的人。')}</p><span class="tag">信誉 ${u.score}/100 · 不是交易担保</span></div>
+    <div><h2>${e(u.nickname)}${u.trusted?'<span class="trusted-pill">诚信客户</span>':''}</h2><p>${e(u.college)} · ${e(u.major)} · ${e(u.education)}</p><p>${e(u.bio||'让闲置遇到真正需要它的人。')}</p><span class="tag">信誉 ${u.score}/100 · 不是交易担保</span></div>
     ${!own?`<button class="btn primary" data-action="chat" data-id="${u.id}">发私信</button>`:''}
   </section>
   <h2>在售商品</h2>

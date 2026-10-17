@@ -1,6 +1,7 @@
 """客服模块：工单受理与处理、信誉调整、订单评价。"""
 import json, time
 from ..core.errors import ValidationMixin, DomainError
+from ..account.credit import GOOD_REVIEW, AWARD_PER_REVIEW, AWARD_DAILY_CAP, AWARD_MONTHLY_CAP, AWARD_REASON_PREFIX, day_start, month_start
 
 
 class SupportService(ValidationMixin):
@@ -260,5 +261,30 @@ class SupportService(ValidationMixin):
         o=self.order(u,oid);self.require(o['status']=='completed' and u in [o['buyer_id'],o['seller_id']],'完成真实有效订单后才能评价')
         self.require(type(rating) is int and 1<=rating<=5,'评分需1至5分')
         with self.tx() as c:
+            existing=c.execute('SELECT rating FROM reviews WHERE order_id=? AND user_id=?',(oid,u)).fetchone()
             c.execute('INSERT INTO reviews(order_id,user_id,rating,body,created) VALUES(?,?,?,?,?) ON CONFLICT(order_id,user_id) DO UPDATE SET rating=excluded.rating,body=excluded.body',(oid,u,rating,self.text(body,500,'评价'),time.time()))
+            # 好评成交自动加分（方案 A）：4–5 星给「被评价方」+1。
+            # 只有「从没评过」或「从差评改成好评」时加——重复好评、好评改好评
+            # 都不重复加；好评改差评不回扣（已发的分不追回，规则从简）。
+            if rating>=GOOD_REVIEW and (not existing or existing['rating']<GOOD_REVIEW):
+                ratee=o['seller_id'] if u==o['buyer_id'] else o['buyer_id']
+                self._award_good_review(c,ratee,oid,rating)
         return {'ok':True,'simulation':True}
+
+    def _award_good_review(self,c,target,oid,rating):
+        """好评加分的落库：查日/月上限 → 加分 → 写审计（actor=0 表示系统）→ 通知。
+
+        上限是按「自动好评加分」单独计的（reason 前缀区分），不把管理员
+        手工加分算进来——申诉成功那种 +分 不该占用好评的名额。
+        """
+        now=time.time()
+        day=day_start(now);month=month_start(now)
+        q=c.execute("SELECT COUNT(*) n FROM audit WHERE target=? AND type='credit' AND delta>0 AND reason LIKE ? AND created>=?",(target,AWARD_REASON_PREFIX+'%',day)).fetchone()['n']
+        if q>=AWARD_DAILY_CAP:return
+        m=c.execute("SELECT COUNT(*) n FROM audit WHERE target=? AND type='credit' AND delta>0 AND reason LIKE ? AND created>=?",(target,AWARD_REASON_PREFIX+'%',month)).fetchone()['n']
+        if m>=AWARD_MONTHLY_CAP:return
+        reason=f'{AWARD_REASON_PREFIX}（订单 #{oid} · {rating} 星）'
+        c.execute('UPDATE users SET score=MIN(100,score+?) WHERE id=?',(AWARD_PER_REVIEW,target))
+        c.execute("INSERT INTO audit(actor,target,type,delta,reason,created) VALUES(?,?,?,?,?,?)",(0,target,'credit',AWARD_PER_REVIEW,reason,now))
+        self.notify(c,target,'credit',f'你因订单 #{oid} 获得好评，信誉分 +{AWARD_PER_REVIEW}。')
+

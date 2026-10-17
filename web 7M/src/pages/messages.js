@@ -107,6 +107,11 @@ function renderRoomList(rooms, notices, activeId){
     `<span class="wx-room-main"><span class="wx-room-top"><b>订单与售后通知</b></span>`+
     `<span class="wx-room-preview">${notices.unread?notices.unread+' 条未读':'全部已读'}</span></span>`+
     (notices.unread?`<i class="wx-badge">${notices.unread}</i>`:'')+`</button>`+
+    (state.me?.role==='user'
+      ? `<button class="wx-room" data-action="chat-support" data-name="在线客服"><span class="wx-avatar support" data-tone="support">${icon('message')}</span>`+
+        `<span class="wx-room-main"><span class="wx-room-top"><b>在线客服</b></span>`+
+        `<span class="wx-room-preview">实时咨询；售后 / 举报请走工单留痕</span></span></button>`
+      : '')+
     (joined.map(r => roomItem(r, activeId)).join('') ||
       `<p class="muted wx-empty-tip">还没有会话<br>去社区加入群聊，或在商品页联系卖家</p>`);
 }

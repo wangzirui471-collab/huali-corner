@@ -84,6 +84,19 @@ class CommunityService(ValidationMixin):
             for uid in [u,peer]:c.execute('INSERT OR IGNORE INTO members(room_id,user_id) VALUES(?,?)',(rid,uid))
             c.execute('UPDATE members SET last_read_id=COALESCE((SELECT MAX(id) FROM messages WHERE room_id=?),0) WHERE room_id=? AND last_read_id=0',(rid,rid))
         return self.row('SELECT * FROM rooms WHERE id=?',(rid,))
+
+    def support_room(self,u):
+        """普通用户与平台客服的直达私聊。
+
+        客服身份取「转角客服」昵称的平台账号（bootstrap_admin 与演示 seed
+        都用这个昵称），不存在则退回任一客服/管理员。复用 private_room——
+        聊天室已有的未读、禁言、审核、撤回全部免费继承，不必再造一套客服 IM。
+        """
+        staff=self.row("SELECT id FROM users WHERE nickname='转角客服' AND role IN ('admin','support','developer') LIMIT 1")
+        if not staff:
+            staff=self.row("SELECT id FROM users WHERE role IN ('support','admin','developer') ORDER BY (role='support') DESC, id LIMIT 1")
+        self.require(staff and staff['id']!=u,'当前没有可用的在线客服，请改用「提交工单」留言')
+        return self.private_room(u,staff['id'])
     def member(self,u,r):
         m=self.row('SELECT * FROM members WHERE room_id=? AND user_id=?',(r,u))
         self.require(m is not None,'请先加入该群或会话',403);return m

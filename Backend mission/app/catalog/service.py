@@ -3,6 +3,7 @@ import hashlib, io, json, secrets, time
 from PIL import Image, ImageOps, UnidentifiedImageError
 from ..core.errors import ValidationMixin, DomainError
 from ..moderation import scan_product, message_for, report_of
+from ..account.credit import is_trusted
 
 # 付费置顶档位：档位 -> (天数, 模拟价格·分)。低价非强制，免费商品自然下沉。
 PROMOTE_TIERS={'1d':(1,100),'3d':(3,300),'7d':(7,500)}
@@ -61,6 +62,9 @@ class CatalogService(ValidationMixin):
         self.require(r,'商品不存在',404)
         data=json.loads(r.pop('data'));data.pop('proof',None)
         moderation=data.pop('moderation',None);r.update(data)
+        # 诚信客户标签：卖家信誉分 ≥ 门槛即在商品上亮标签，实时读 score，
+        # 掉到门槛以下自动消失（见 account/credit.py）。
+        r['seller_trusted']=is_trusted(r['score'])
         # 审核标记对外只暴露「是否在审」这一个布尔值，**不公开命中词**——
         # 公开了就等于把词表变成「哪个词会触发审核」的查询接口，等于教人绕过。
         # 卖家本人和工作台能看到具体命中了什么，便于申诉与处置。

@@ -299,6 +299,17 @@ class MarketTests(unittest.TestCase):
         self.m.set_product_status(self.a,p,'relist')
         self.assertEqual(self.m.product(p,self.a)['status'],'available')
 
+    def test_support_room_connects_user_to_desk(self):
+        """在线客服：普通用户直达「转角客服」私聊，双方可互发、重复进入同会话。"""
+        r=self.m.support_room(self.a)
+        self.assertEqual(r['kind'],'private'); self.assertEqual(r['name'],'转角客服')
+        self.m.send_message(self.a,r['id'],'在吗，想咨询运费','k1')
+        desk=self.m.messages(self.staff,r['id'])
+        self.assertEqual(desk[0]['body'],'在吗，想咨询运费')
+        self.m.send_message(self.staff,r['id'],'您好，请问寄到哪个楼？','k2')
+        self.assertEqual(self.m.messages(self.a,r['id'])[-1]['body'],'您好，请问寄到哪个楼？')
+        self.assertEqual(self.m.support_room(self.a)['id'],r['id'])
+
 if __name__=='__main__':unittest.main()
 
 

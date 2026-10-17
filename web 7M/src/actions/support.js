@@ -14,6 +14,13 @@ export const clicks = {
   appeal: () => ticketModal('appeal'),
   report: (b, id) => ticketModal('report', null, id),
 
+  // 在线客服：建好与「转角客服」的私聊后直接跳进聊天窗，用户在熟悉的消息
+  // 界面里实时沟通；工单仍用于需要留痕的售后/举报/申诉。
+  'chat-support': async () => {
+    const r = await api('/support/room', {});
+    go('messages/' + r.id);
+  },
+
   // 商品被平台处置或卷入退款/争议后，「我发布的」里给卖家的复核入口。
   // 直接开一张关联该商品的申诉工单——卖家不需要自己去客服页找表单，
   // 也不需要知道「申诉」和「联系客服」是两条什么流程。

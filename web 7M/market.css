@@ -1937,6 +1937,8 @@ button.me-notice { width: 100%; text-align: left; cursor: pointer; border: 0; fo
 .wx-avatar[data-tone="4"] { background: #e0616a; } .wx-avatar[data-tone="5"] { background: #3aa1bf; }
 .wx-avatar.notice { background: linear-gradient(150deg, var(--brand-hi), var(--brand-lo)); color: #5c440a; }
 .wx-avatar.notice .icon { width: 20px; height: 20px; }
+.wx-avatar.support { background: linear-gradient(150deg, #2f9d6f, #1f7d58); color: #fff; }
+.wx-avatar.support .icon { width: 20px; height: 20px; }
 .wx-avatar-link { cursor: pointer; flex: none; }
 .wx-chat .wx-avatar { width: 38px; height: 38px; font-size: 15px; }
 
@@ -2087,3 +2089,8 @@ button.me-notice { width: 100%; text-align: left; cursor: pointer; border: 0; fo
 .notice-ic .icon { width: 16px; height: 16px; }
 .notice-item > div { flex: 1; min-width: 0; }
 .notice-item p { margin: 0 0 6px; }
+
+/* 29. 诚信客户标签（信誉分制度 · 方案 A）
+   卖家信誉 ≥90 即在商品卡与主页亮标签，实时读分，掉档自动消失。 */
+.trusted-tag { position: absolute; top: 10px; left: 10px; z-index: 3; background: rgba(55,160,106,.95); color: #fff; font-size: 10px; font-weight: 700; padding: 4px 9px; border-radius: var(--r-pill); backdrop-filter: blur(6px); }
+.trusted-pill { display: inline-block; vertical-align: 2px; margin-left: 8px; padding: 2px 9px; border-radius: var(--r-pill); background: rgba(55,160,106,.12); color: #2e7d4f; font-size: 11px; font-weight: 700; border: 1px solid rgba(55,160,106,.3); }
