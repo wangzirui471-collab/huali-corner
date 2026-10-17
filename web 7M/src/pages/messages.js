@@ -41,24 +41,27 @@ function timeSep(prev, cur){
 // --- 消息渲染 ------------------------------------------------------------
 // removed：0=正常 1=被移除 2=已撤回。撤回/移除渲染成居中系统行，
 // 不再渲染气泡——正文也不会下发（后端已替换/清空）。
+//
+// 撤回后的原文只留在本页内存（recalledDrafts）里，供「重新编辑」回填。
+// 刷新后服务端已清空正文，这条链接自然消失——和微信一致：撤回不是存草稿。
+export const recalledDrafts = new Map();
+
 export function renderMessage(m, room){
-  if (m.removed === 2) return `<div class="wx-sys" data-mid="${m.id}">${m.user_id===state.me.id?'你撤回了一条消息':e(m.nickname)+' 撤回了一条消息'}</div>`;
+  if (m.removed === 2){
+    const mine = m.user_id === state.me.id;
+    const draft = mine && recalledDrafts.has(m.id);
+    return `<div class="wx-sys wx-recalled" data-mid="${m.id}">${mine?'你撤回了一条消息':e(m.nickname)+' 撤回了一条消息'}${draft?` <button type="button" class="wx-reedit" data-action="reedit" data-id="${m.id}">重新编辑</button>`:''}</div>`;
+  }
   if (m.removed === 1) return `<div class="wx-sys" data-mid="${m.id}">${e(m.body)}</div>`;
   const mine = m.user_id === state.me.id;
   const showNick = room.kind !== 'private' && !mine;
-  // 撤回按钮：自己的、两分钟内、还没被处理过的消息，悬浮时显示。
-  const recallable = mine && (Date.now()/1000 - m.created) <= 120;
-  // 移除按钮：群主/管理员在群里可移除任何人的消息；私聊不开放。
-  const canModerate = room.kind !== 'private' &&
-    (['owner','moderator'].includes(room.myRole||'') || isAdmin(state.me));
-  const acts = `<span class="wx-msg-acts">`+
-    (recallable?`<button type="button" data-action="recall" data-id="${m.id}">撤回</button>`:'')+
-    (canModerate?`<button type="button" data-action="remove-msg" data-id="${m.id}">移除</button>`:'')+
-    `</span>`;
-  return `<div class="wx-msg ${mine?'mine':''}" data-mid="${m.id}">${mine?acts:''}`+
+  // 撤回 / 删除 / 移除不再挂在气泡上：统一走右键（桌面）或长按（手机）菜单。
+  // 悬浮按钮会挡住消息，而右键菜单和微信的操作习惯一致。
+  // data-* 属性供菜单判断「能不能撤回、是不是自己的」。
+  return `<div class="wx-msg ${mine?'mine':''}" data-mid="${m.id}" data-mine="${mine?1:0}" data-created="${m.created}">`+
     `<span class="wx-avatar-link" data-go="profile/${m.user_id}">${avatar(m.nickname, m.user_id)}</span>`+
     `<div class="wx-bubble-wrap">${showNick?`<span class="wx-nick">${e(m.nickname)}</span>`:''}`+
-    `<p class="wx-bubble">${e(m.body)}</p></div>${mine?'':acts}</div>`;
+    `<p class="wx-bubble">${e(m.body)}</p></div></div>`;
 }
 
 // 把一批消息追加进消息流（自动补时间分隔），返回这批里最大的 id。
@@ -149,6 +152,37 @@ export async function toggleMembers(roomId){
   drawer.hidden = false;
 }
 
+// --- 消息右键菜单 ---------------------------------------------------------
+// 桌面右键、手机长按共用同一个菜单。位置按视口夹紧；点外面 / Esc / 滚动都关闭，
+// 避免菜单浮在页面上收不掉。
+let menuEl = null, menuBound = false;
+function closeMessageMenu(){ if (menuEl){ menuEl.remove(); menuEl = null; } }
+function ensureMenuBound(){
+  if (menuBound) return;
+  menuBound = true;
+  document.addEventListener('mousedown', ev => { if (menuEl && !menuEl.contains(ev.target)) closeMessageMenu(); });
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeMessageMenu(); });
+  window.addEventListener('scroll', closeMessageMenu, true);
+}
+function openMessageMenu(x, y, items){
+  closeMessageMenu(); ensureMenuBound();
+  const el = document.createElement('div');
+  el.className = 'wx-menu';
+  el.innerHTML = items.map((it, i) => `<button type="button" data-i="${i}"${it.danger?' class="danger"':''}>${e(it.label)}</button>`).join('');
+  document.body.appendChild(el);
+  const r = el.getBoundingClientRect();
+  el.style.left = Math.max(8, Math.min(x, window.innerWidth - r.width - 8)) + 'px';
+  el.style.top = Math.max(8, Math.min(y, window.innerHeight - r.height - 8)) + 'px';
+  el.addEventListener('click', ev => {
+    const b = ev.target.closest('[data-i]');
+    if (!b) return;
+    closeMessageMenu();
+    const item = items[Number(b.dataset.i)];
+    if (item) item.run();
+  });
+  menuEl = el;
+}
+
 // --- 聊天页事件（经 actions 委托分派，见 actions/social.js 的合并） -------
 export const chatClicks = {
   'toggle-members': (b, id) => toggleMembers(id),
@@ -158,19 +192,15 @@ export const chatClicks = {
     if (p) p.hidden = !p.hidden;
   },
 
-  recall: async (b, id) => {
-    await api('/messages/recall', {message_id:id});
-    const el = document.querySelector(`.wx-msg[data-mid="${id}"]`);
-    if (el) el.outerHTML = '<div class="wx-sys">你撤回了一条消息</div>';
-    toast('已撤回');
-  },
-
-  'remove-msg': async (b, id) => {
-    const roomId = Number(document.querySelector('#wx-form')?.dataset.room);
-    await api('/moderate', {room_id:roomId, action:'remove_message', message_id:id});
-    const el = document.querySelector(`.wx-msg[data-mid="${id}"]`);
-    if (el) el.outerHTML = '<div class="wx-sys">消息已被移除</div>';
-    toast('已移除该消息');
+  // 撤回后的「重新编辑」：把当时缓存的原文填回输入框，光标放末尾。
+  reedit: (b, id) => {
+    const text = recalledDrafts.get(id);
+    const editor = $('#wx-editor');
+    if (text === undefined || !editor){ toast('原文已不可用，请重新输入'); return; }
+    editor.value = text;
+    editor.focus();
+    editor.setSelectionRange(text.length, text.length);
+    editor.dispatchEvent(new Event('input'));
   },
 
   'mute-member': async (b, id) => {
@@ -334,6 +364,66 @@ const NOTE_META = {
   };
   try{ await pullNew(); }catch(err){ toast(err.message); return; }
   stream.scrollTop = stream.scrollHeight;
+
+  // --- 右键 / 长按菜单：复制、撤回、删除、移除 --------------------------
+  // 三个操作的语义必须分清：
+  //   撤回 —— 2 分钟内、只限自己发的，对所有人都生效（后端 removed=2）；
+  //   删除 —— 只从我的聊天记录里抹掉，对方不受影响（后端 message_hides）；
+  //   移除 —— 群主/管理员在群里处置他人消息（后端 removed=1）。
+  const doRecall = async (mid, body) => {
+    try{ await api('/messages/recall', {message_id:mid}); }catch(err){ toast(err.message); return; }
+    recalledDrafts.set(mid, body);
+    const el = document.querySelector(`.wx-msg[data-mid="${mid}"]`);
+    if (el) el.outerHTML = `<div class="wx-sys wx-recalled" data-mid="${mid}">你撤回了一条消息 <button type="button" class="wx-reedit" data-action="reedit" data-id="${mid}">重新编辑</button></div>`;
+    toast('已撤回，可重新编辑');
+  };
+  const doHide = async mid => {
+    try{ await api('/messages/hide', {message_id:mid}); }catch(err){ toast(err.message); return; }
+    document.querySelector(`.wx-msg[data-mid="${mid}"]`)?.remove();
+  };
+  const doRemove = async mid => {
+    try{ await api('/moderate', {room_id:room.id, action:'remove_message', message_id:mid}); }catch(err){ toast(err.message); return; }
+    const el = document.querySelector(`.wx-msg[data-mid="${mid}"]`);
+    if (el) el.outerHTML = `<div class="wx-sys" data-mid="${mid}">消息已被移除</div>`;
+    toast('已移除该消息');
+  };
+  const messageMenu = (msgEl, x, y) => {
+    const mid = Number(msgEl.dataset.mid);
+    const mine = msgEl.dataset.mine === '1';
+    const created = Number(msgEl.dataset.created);
+    const body = msgEl.querySelector('.wx-bubble')?.textContent || '';
+    const items = [{
+      label: '复制',
+      run: () => navigator.clipboard.writeText(body).then(() => toast('已复制')).catch(() => toast('复制失败'))
+    }];
+    if (mine && Date.now()/1000 - created <= 120) items.push({ label: '撤回', run: () => doRecall(mid, body) });
+    items.push({ label: '删除', danger: true, run: () => doHide(mid) });
+    if (room.kind !== 'private' && (['owner','moderator'].includes(room.myRole||'') || isAdmin(state.me)))
+      items.push({ label: '移除', danger: true, run: () => doRemove(mid) });
+    openMessageMenu(x, y, items);
+  };
+
+  stream.addEventListener('contextmenu', ev => {
+    const msgEl = ev.target.closest('.wx-msg');
+    if (!msgEl) return;
+    ev.preventDefault();
+    messageMenu(msgEl, ev.clientX, ev.clientY);
+  });
+  // 手机没有右键：长按 500ms 打开同一个菜单；手指移动或抬起就取消，
+  // 避免用户只是在滚动列表时误触。
+  let pressTimer = null, pressEl = null;
+  stream.addEventListener('touchstart', ev => {
+    pressEl = ev.target.closest('.wx-msg');
+    if (!pressEl) return;
+    const t = ev.touches[0];
+    clearTimeout(pressTimer);
+    pressTimer = setTimeout(() => { if (pressEl) messageMenu(pressEl, t.clientX, t.clientY); pressEl = null; }, 500);
+  }, {passive:true});
+  const cancelPress = () => { clearTimeout(pressTimer); pressEl = null; };
+  stream.addEventListener('touchend', cancelPress);
+  stream.addEventListener('touchmove', cancelPress);
+  stream.addEventListener('touchcancel', cancelPress);
+
   state.poll = setInterval(async () => {
     try{ await pullNew(); }catch{ /* 轮询失败静默，下个周期再试 */ }
   }, 3000);

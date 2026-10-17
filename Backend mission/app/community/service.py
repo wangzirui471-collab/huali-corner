@@ -157,13 +157,17 @@ class CommunityService(ValidationMixin):
                       m.created,u.nickname
                FROM messages m JOIN users u ON u.id=m.user_id WHERE {{cond}}
                ORDER BY m.id {{order}} LIMIT {{limit}}'''
+        # 「仅自己删除」不进 removed：removed 是「对所有人撤回/移除」，
+        # 删除只影响本人，用 message_hides 过滤即可。两个分支都要带这个条件，
+        # 否则删掉的消息会在下一次轮询或刷新时又冒出来。
+        hidden='AND NOT EXISTS(SELECT 1 FROM message_hides h WHERE h.message_id=m.id AND h.user_id=?)'
         if after>0:
-            rows=self.rows(sql.replace('{{cond}}','m.room_id=? AND m.id>?').replace('{{order}}','ASC').replace('{{limit}}','200'),(r,int(after)))
+            rows=self.rows(sql.replace('{{cond}}','m.room_id=? AND m.id>? '+hidden).replace('{{order}}','ASC').replace('{{limit}}','200'),(r,int(after),u))
         else:
             rows=self.rows('''SELECT * FROM (SELECT m.id,m.room_id,m.user_id,m.removed,
                 CASE WHEN m.removed=1 THEN '消息已被移除' WHEN m.removed=2 THEN '' ELSE m.body END body,
                 m.created,u.nickname FROM messages m JOIN users u ON u.id=m.user_id
-                WHERE m.room_id=? ORDER BY m.id DESC LIMIT 200) ORDER BY id ASC''',(r,))
+                WHERE m.room_id=? '''+hidden+''' ORDER BY m.id DESC LIMIT 200) ORDER BY id ASC''',(r,u))
         # 拉取即视为读到：把已读位点拨到这批消息的最大 id。轮询每 3 秒一次，
         # 但只有真的拉到新消息才会产生一次写事务，量可以忽略。
         if rows:
@@ -180,6 +184,19 @@ class CommunityService(ValidationMixin):
         self.require(m['removed']==0,'该消息已不可撤回')
         self.require(time.time()-m['created']<=120,'超过两分钟的消息不能撤回了')
         with self.tx() as c:c.execute('UPDATE messages SET removed=2 WHERE id=?',(m['id'],))
+        return {'ok':True}
+
+    # --- 仅自己删除 --------------------------------------------------------
+    # 聊天里的「删除」和「撤回」是两件事：撤回让所有人都看不到（限 2 分钟），
+    # 删除只把自己聊天记录里的这条抹掉，对方不受影响。因此这里写
+    # message_hides 而不是改 messages.removed——后者会把消息变成
+    # 「已撤回」展示给所有人看。
+    def hide_message(self,u,mid):
+        m=self.row('SELECT id,room_id FROM messages WHERE id=?',(int(mid),))
+        self.require(m,'消息不存在',404)
+        self.member(u,m['room_id'])
+        with self.tx() as c:
+            c.execute('INSERT OR IGNORE INTO message_hides(user_id,message_id,created) VALUES(?,?,?)',(u,m['id'],time.time()))
         return {'ok':True}
 
     # --- 会话成员 ----------------------------------------------------------
@@ -240,30 +257,49 @@ class CommunityService(ValidationMixin):
         # 一条超过 100 条评论的帖子，最新回复（含用户刚发的）反而看不到。
         # 这里 DESC 取最新 100 条再倒序返回，保证最新评论一定可见；
         # before 游标用于「加载更早评论」。
+        # 每条评论带 parent 关系：parent_id=0 为直接评论帖子，>0 时把父评论作者
+        # 一并带出（parent_user_id/parent_nickname），前端据此渲染「谁回复谁」。
         limit=100
+        base='''SELECT c.*,u.nickname,
+            pc.user_id AS parent_user_id, pu.nickname AS parent_nickname
+            FROM comments c JOIN users u ON u.id=c.user_id
+            LEFT JOIN comments pc ON pc.id=c.parent_id
+            LEFT JOIN users pu ON pu.id=pc.user_id
+            WHERE c.post_id=?'''
         if before:
-            rows=self.rows('SELECT c.*,u.nickname FROM comments c JOIN users u ON u.id=c.user_id WHERE post_id=? AND c.id<? ORDER BY c.id DESC LIMIT ?',(p,int(before),limit))
+            rows=self.rows(base+' AND c.id<? ORDER BY c.id DESC LIMIT ?',(p,int(before),limit))
         else:
-            rows=self.rows('SELECT c.*,u.nickname FROM comments c JOIN users u ON u.id=c.user_id WHERE post_id=? ORDER BY c.id DESC LIMIT ?',(p,limit))
+            rows=self.rows(base+' ORDER BY c.id DESC LIMIT ?',(p,limit))
         rows.reverse()
         return rows
 
-    def comment(self,u,p,body):
+    def comment(self,u,p,body,parent_id=0):
         post=self.row('SELECT p.*,u.nickname author FROM posts p JOIN users u ON u.id=p.user_id WHERE p.id=? AND p.removed=0',(p,))
         self.require(post is not None,'帖子不存在',404)
         body=self.text(body,1000,'回复')
+        parent_id=int(parent_id or 0)
+        parent=None
+        if parent_id:
+            # 只允许回复同一帖子下的评论，防止把别帖的评论挂过来制造乱序。
+            parent=self.row('SELECT * FROM comments WHERE id=? AND post_id=?',(parent_id,p))
+            self.require(parent is not None,'要回复的评论不存在',404)
         # 评论不落审核标记（没有「待审」这个环节，只有删），但高危照样拦。
         report=scan_text(body)
         self.require(not report['blocked'],'回复不能发布：'+message_for(report),422)
         with self.tx() as c:
-            c.execute('INSERT INTO comments(post_id,user_id,body,created) VALUES(?,?,?,?)',(p,u,body,time.time()))
+            c.execute('INSERT INTO comments(post_id,user_id,body,created,parent_id) VALUES(?,?,?,?,?)',(p,u,body,time.time(),parent_id))
             me=self.profile(u)['nickname']
             # 帖子作者的通知：正文摘要截到 24 字，通知列表一行能放下。
             excerpt=post['body'][:24]+('…' if len(post['body'])>24 else '')
+            notified={post['user_id']}
             if post['user_id']!=u:
                 self.notify(c,post['user_id'],'post_reply',f'{me} 回复了你的帖子「{excerpt}」',post_id=p)
-            # @到的其他人单独通知；帖子作者已在上面通知过，这里跳过避免双份。
-            self._notify_mentions(c,u,me,body,p,skip={post['user_id']})
+            # 回复某条评论时，被回复的评论作者也要收到通知（除非他本人就是帖子作者/自己）。
+            if parent and parent['user_id']!=u and parent['user_id'] not in notified:
+                notified.add(parent['user_id'])
+                self.notify(c,parent['user_id'],'post_reply',f'{me} 回复了你在帖子「{excerpt}」中的评论',post_id=p)
+            # @到的其他人单独通知；已通知过的作者跳过，避免双份。
+            self._notify_mentions(c,u,me,body,p,skip=notified)
         return {'ok':True}
     def moderate(self,u,d):
         r=int(d['room_id']);member=self.member(u,r)

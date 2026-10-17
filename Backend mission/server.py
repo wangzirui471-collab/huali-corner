@@ -149,10 +149,12 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/support/claim' and method=='POST':return self.respond(m.claim_support_room(u,int(data['room_id']),data.get('action','claim')))
             if p=='/api/messages':return self.respond(m.send_message(u,int(data['room_id']),data['body'],data['key']) if method=='POST' else m.messages(u,int(query['room_id']),int(query.get('after',0))))
             if p=='/api/messages/recall' and method=='POST':return self.respond(m.recall_message(u,int(data['message_id'])))
+            # 仅自己删除：只从我的聊天记录里移除，对方仍可见。
+            if p=='/api/messages/hide' and method=='POST':return self.respond(m.hide_message(u,int(data['message_id'])))
             if p=='/api/room/members':return self.respond(m.room_members(u,int(query['room_id'])))
             if p=='/api/block' and method=='POST':return self.respond(m.block(u,int(data['target']),bool(data.get('enabled',True))))
             if p=='/api/posts' and method=='POST':return self.respond(m.add_post(u,data))
-            if p=='/api/comments' and method=='POST':return self.respond(m.comment(u,int(data['post_id']),data['body']))
+            if p=='/api/comments' and method=='POST':return self.respond(m.comment(u,int(data['post_id']),data['body'],int(data.get('parent_id') or 0)))
             if p=='/api/moderate' and method=='POST':return self.respond(m.moderate(u,data))
             if p=='/api/nominate' and method=='POST':return self.respond(m.nominate(u,data))
             if p=='/api/admin':

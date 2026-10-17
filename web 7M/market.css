@@ -1984,12 +1984,49 @@ button.me-notice { width: 100%; text-align: left; cursor: pointer; border: 0; fo
 .wx-msg.mine .wx-bubble { background: #95ec69; border-top-right-radius: 2px; }
 
 /* 悬浮操作：撤回 / 移除。平时隐藏，hover 时浮在气泡外侧。 */
-.wx-msg-acts { display: none; position: absolute; top: -4px; font-size: 11px; white-space: nowrap; }
-.wx-msg:not(.mine) .wx-msg-acts { left: 50px; }
-.wx-msg.mine .wx-msg-acts { right: 50px; }
-.wx-msg:hover .wx-msg-acts { display: flex; gap: 8px; background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-xs); padding: 3px 8px; box-shadow: var(--sh-2); }
-.wx-msg-acts button { border: none; background: none; cursor: pointer; font-size: 11px; color: var(--ink-3); padding: 0; }
-.wx-msg-acts button:hover { color: var(--danger); }
+/* 消息右键 / 长按菜单（复制、撤回、删除、移除）。
+   微信式浮动菜单：贴在鼠标或手指位置，点外面/Esc/滚动由 JS 关闭。 */
+.wx-menu {
+  position: fixed;
+  z-index: 80;
+  min-width: 132px;
+  padding: 5px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 32px rgba(20, 22, 26, .18);
+}
+.wx-menu button {
+  display: block;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+.wx-menu button:hover { background: var(--surface-2); }
+.wx-menu button.danger { color: var(--danger); }
+
+/* 撤回后的「重新编辑」：紧跟在系统提示后面，像微信那样可点回填。 */
+.wx-reedit {
+  border: 0;
+  background: none;
+  padding: 0;
+  margin-left: 4px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--brand-ink);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.wx-reedit:hover { color: var(--brand-lo); }
 
 /* --- 成员抽屉 ------------------------------------------------------------ */
 .wx-members { width: 230px; flex: none; background: var(--surface); border-left: 1px solid var(--line); overflow-y: auto; padding: 14px 12px; }

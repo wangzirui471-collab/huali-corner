@@ -45,9 +45,10 @@ CREATE TABLE IF NOT EXISTS reviews(id INTEGER PRIMARY KEY,order_id INTEGER,user_
 CREATE TABLE IF NOT EXISTS rooms(id INTEGER PRIMARY KEY,kind TEXT,name TEXT,college TEXT DEFAULT '',sequence INTEGER DEFAULT 1,pair TEXT UNIQUE);
 CREATE TABLE IF NOT EXISTS members(room_id INTEGER,user_id INTEGER,muted INTEGER DEFAULT 0,role TEXT DEFAULT 'member',last_read_id INTEGER DEFAULT 0,PRIMARY KEY(room_id,user_id));
 CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY,room_id INTEGER,user_id INTEGER,body TEXT,created REAL,request_key TEXT,removed INTEGER DEFAULT 0,moderation TEXT,UNIQUE(user_id,room_id,request_key));
+CREATE TABLE IF NOT EXISTS message_hides(user_id INTEGER,message_id INTEGER,created REAL,PRIMARY KEY(user_id,message_id));
 CREATE TABLE IF NOT EXISTS blocks(user_id INTEGER,target INTEGER,PRIMARY KEY(user_id,target));
 CREATE TABLE IF NOT EXISTS posts(id INTEGER PRIMARY KEY,user_id INTEGER,topic TEXT,body TEXT,created REAL,moderation TEXT,removed INTEGER DEFAULT 0);
-CREATE TABLE IF NOT EXISTS comments(id INTEGER PRIMARY KEY,post_id INTEGER,user_id INTEGER,body TEXT,created REAL);
+CREATE TABLE IF NOT EXISTS comments(id INTEGER PRIMARY KEY,post_id INTEGER,user_id INTEGER,body TEXT,created REAL,parent_id INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS offers(id INTEGER PRIMARY KEY,product_id INTEGER,buyer_id INTEGER,amount INTEGER,status TEXT DEFAULT 'pending',created REAL,accepted_at REAL);
 CREATE TABLE IF NOT EXISTS nominations(id INTEGER PRIMARY KEY,user_id INTEGER,room_id INTEGER,reason TEXT,status TEXT DEFAULT 'pending',created REAL);
 CREATE TABLE IF NOT EXISTS wants(id INTEGER PRIMARY KEY,user_id INTEGER,keyword TEXT,budget INTEGER,description TEXT,status TEXT DEFAULT 'open',created REAL);
@@ -90,6 +91,9 @@ class Store:
             if 'moderation' not in [x[1] for x in c.execute('PRAGMA table_info(messages)')]:c.execute('ALTER TABLE messages ADD COLUMN moderation TEXT')
             if 'moderation' not in [x[1] for x in c.execute('PRAGMA table_info(posts)')]:c.execute('ALTER TABLE posts ADD COLUMN moderation TEXT')
             if 'removed' not in [x[1] for x in c.execute('PRAGMA table_info(posts)')]:c.execute('ALTER TABLE posts ADD COLUMN removed INTEGER DEFAULT 0')
+            # 评论的回复关系：parent_id=0 表示直接评论帖子，>0 表示回复某条评论。
+            # 没有它，评论区只能平铺，无法呈现「谁回复谁」的嵌套结构。老库自动补列。
+            if 'parent_id' not in [x[1] for x in c.execute('PRAGMA table_info(comments)')]:c.execute('ALTER TABLE comments ADD COLUMN parent_id INTEGER DEFAULT 0')
             # 聊天已读位点：记到「读过的最大消息 id」。没有它就无法算未读角标，
             # 「我的」页顶栏的小红数字只能靠 notifications 单一来源。
             # 老库自动补列，0 = 从未读过（整个历史都算未读太多，下面查询里对
