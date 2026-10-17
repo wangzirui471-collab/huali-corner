@@ -3,13 +3,22 @@ from pathlib import Path
 from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
 from urllib.parse import urlsplit,parse_qs,unquote
 from app.market import Market,DomainError
+from app.account.avatars import MAX_AVATAR_BYTES
 from app.seed import seed as seed_data
 from app.core.config import WEB,COLLEGES_JSON,data_dir
+# 头像走 JSON base64 上传：编码后体积是原文件的 4/3，再留一点 JSON 外壳余量。
+# 这个上限只用在头像路由上；其余 POST 仍是下面那个 8 MiB，不扩大既有面。
+AVATAR_JSON_LIMIT=4*((MAX_AVATAR_BYTES+2)//3)+65536
 # Windows registry associations can label .js as text/plain. Core web types
 # must be deterministic because browsers enforce nosniff for scripts/styles.
 ASSET_TYPES={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml; charset=utf-8','.png':'image/png','.webp':'image/webp','.ico':'image/x-icon'}
 
 class Handler(BaseHTTPRequestHandler):
+    # HTTP/1.1 才能复用连接。默认是 1.0，每个请求都要新开一条 TCP：
+    # 本机感觉不出来，但走 Cloudflare Tunnel 时首页要拉 39 个 ES 模块，
+    # 39 次握手 × 一百多毫秒就是几秒，还容易让边缘侧超时回 502。
+    # respond() 每条响应都带 Content-Length，所以开着 keep-alive 是安全的。
+    protocol_version='HTTP/1.1'
     def setup(self):
         super().setup();self.connection.settimeout(20)
     def log_message(self,*args):pass
@@ -50,6 +59,9 @@ class Handler(BaseHTTPRequestHandler):
             data={}
             if method=='POST':
                 length=int(self.headers.get('Content-Length','0'));m.require(0<length<=8*1024*1024,'请求过大或为空',413)
+                # 头像有更严的上限：必须在读 body 之前就拒，否则 3 MB 的无用载荷
+                # 已经进了内存才报错，限速和并发额度都白吃了。
+                if p=='/api/user/avatar/upload':m.require(length<=AVATAR_JSON_LIMIT,'头像过大',413)
                 try:data=json.loads(self.rfile.read(length))
                 except (ValueError,UnicodeDecodeError):raise DomainError('无效JSON')
                 m.require(isinstance(data,dict),'请求需为对象')
@@ -78,13 +90,18 @@ class Handler(BaseHTTPRequestHandler):
                 who=int(query['id']);profile=m.profile(who)
                 # 公开主页只给「资料」字段：role / status 属于账号治理信息，
                 # 公开出去等于对外暴露某人是否被封禁或已注销。
-                public={k:profile[k] for k in ('id','nickname','college','major','education','bio','score')}
+                public={k:profile[k] for k in ('id','nickname','college','major','education','bio','score','avatar_url')}
                 public['trusted']=m.trusted_map([who]).get(who,False)
                 return self.respond({'user':public,'products':m.products(self.optional_user(),{'seller':str(who)})})
             if p=='/api/posts' and method=='GET':return self.respond(m.posts(query.get('topic',''),query.get('limit','20'),query.get('offset','0')))
             if p=='/api/comments' and method=='GET':return self.respond(m.comments(int(query['id']),query.get('before')))
             if p=='/api/wants' and method=='GET':return self.respond(m.wants(self.optional_user()))
             if p=='/api/want' and method=='GET':return self.respond(m.want(self.optional_user(),int(query['id'])))
+            if p.startswith('/media/ua_'):
+                # 头像必须优先分流：它们不登记在旧 uploads 表里，落到下面那条通用查询
+                # 只会得到 404。授权完全在 user_avatar_bytes 里判（当前公开的任何人可读，
+                # 其余只有启用中的本人可读），这里不做第二次放行，也不走客服越权那套。
+                return self.respond(m.user_avatar_bytes(self.optional_user(),p.split('/')[-1]),kind='image/webp')
             if p.startswith('/media/'):
                 fid=p.split('/')[-1];upload=m.row('SELECT * FROM uploads WHERE id=?',(fid,));m.require(upload,'图片不存在',404)
                 if upload['private']:
@@ -108,6 +125,22 @@ class Handler(BaseHTTPRequestHandler):
                 m.require(file.is_file(),'页面不存在',404)
                 return self.respond(file.read_bytes(),kind=ASSET_TYPES.get(file.suffix.lower()) or mimetypes.guess_type(str(file))[0] or 'application/octet-stream')
             u=self.uid()
+            # 用户中心：资料读写。写接口只认白名单字段（昵称/专业/简介/学历/在读状态/版本），
+            # 出现 education、college、role、score 等未列字段直接 400，不静默忽略——
+            # 静默忽略会让前端以为改成功了，用户看到的却是没变。
+            if p=='/api/user/profile':
+                return self.respond(m.user_profile(u) if method=='GET' else m.user_update_profile(u,data))
+            if p=='/api/user/avatar/upload' and method=='POST':
+                m.require(set(data)=={'content'},'头像参数不合法')
+                value=data['content'];m.require(isinstance(value,str) and value,'无效图片编码')
+                m.require(len(value)<=4*((MAX_AVATAR_BYTES+2)//3),'头像过大',413)
+                try:content=base64.b64decode(value,validate=True)
+                except (ValueError,TypeError):raise DomainError('无效图片编码')
+                # 二进制合法性（格式/像素/动画/meta）全部由领域函数判，这里不重复实现。
+                return self.respond(m.user_upload_avatar(u,content))
+            if p=='/api/user/avatar' and method=='POST':
+                m.require(set(data)=={'upload_id','profile_version'},'头像参数不合法')
+                return self.respond(m.user_set_avatar(u,data['upload_id'],data['profile_version']))
             if p=='/api/auth/password' and method=='POST':return self.respond(m.change_password(u,data.get('old_password'),data.get('new_password')))
             if p=='/api/me':
                 if method=='POST':return self.respond(m.update_profile(u,data))
@@ -220,10 +253,13 @@ class Handler(BaseHTTPRequestHandler):
 class Server(ThreadingHTTPServer):
     daemon_threads=True
     def __init__(self,*args,**kwargs):
-        self.slots=threading.BoundedSemaphore(32)
+        # 并发上限。原先是 32，超了直接 shutdown_request —— 本机够用，但走公网隧道时
+        # 首页冷启动会同时打开三四十条连接（每个 ES 模块一条），被拒的连接在
+        # Cloudflare 边缘侧表现为 502，于是页面随机加载不出来。放宽到 256 并允许短暂排队。
+        self.slots=threading.BoundedSemaphore(256)
         super().__init__(*args,**kwargs)
     def process_request(self,request,client_address):
-        if not self.slots.acquire(blocking=False):self.shutdown_request(request);return
+        if not self.slots.acquire(timeout=5):self.shutdown_request(request);return
         try:super().process_request(request,client_address)
         except Exception:self.slots.release();raise
     def process_request_thread(self,request,client_address):
