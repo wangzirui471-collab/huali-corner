@@ -1997,6 +1997,8 @@ button.me-notice { width: 100%; text-align: left; cursor: pointer; border: 0; fo
 .wx-role { font-style: normal; font-size: 10px; font-weight: 700; color: #b8860b; background: var(--brand-soft); border-radius: 4px; padding: 1px 4px; flex: none; }
 .wx-role.mod { color: #2f6ea8; background: #e8f1fa; }
 .wx-role.muted-t { color: var(--muted); background: var(--surface-2); border: 1px solid var(--line-2); }
+.wx-role.ok { color: #1f7d58; background: #e1f5ee; }
+.wx-role.pending { color: #b3791a; background: #fdf3e0; }
 .wx-member .text-button { font-size: 11px; }
 
 /* --- 输入区 -------------------------------------------------------------- */

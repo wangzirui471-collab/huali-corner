@@ -310,6 +310,33 @@ class MarketTests(unittest.TestCase):
         self.assertEqual(self.m.messages(self.a,r['id'])[-1]['body'],'您好，请问寄到哪个楼？')
         self.assertEqual(self.m.support_room(self.a)['id'],r['id'])
 
+    def test_support_room_claim_prevents_double_pickup(self):
+        """客服会话认领：先认领者持有，后来者不抢单；释放后可接手。"""
+        r=self.m.support_room(self.a)
+        with self.m.tx() as c:c.execute("INSERT INTO users(phone,nickname,role,college) VALUES('13800000999','客服B','support','计算机工程学院')")
+        s2=self.m.row("SELECT id FROM users WHERE nickname='客服B'")['id']
+        c1=self.m.claim_support_room(self.staff,r['id'])
+        self.assertTrue(c1['ok']); self.assertEqual(c1['assignee'],self.staff)
+        # 客服B 再认领：被拒，返回持有人，不改变 assignee
+        c2=self.m.claim_support_room(s2,r['id'])
+        self.assertFalse(c2['ok']); self.assertEqual(c2['assignee'],self.staff)
+        self.assertEqual(c2['assignee_name'],'转角客服')
+        # 释放后客服B 接手成功
+        self.m.claim_support_room(self.staff,r['id'],'release')
+        c3=self.m.claim_support_room(s2,r['id'])
+        self.assertTrue(c3['ok']); self.assertEqual(c3['assignee'],s2)
+        # 普通用户不能认领
+        with self.assertRaises(DomainError):self.m.claim_support_room(self.a,r['id'])
+
+    def test_support_room_visible_in_staff_pool(self):
+        """客服池：未加入的客服也能在 rooms() 里看到待接入的客服会话。"""
+        r=self.m.support_room(self.a)
+        with self.m.tx() as c:c.execute("INSERT INTO users(phone,nickname,role,college) VALUES('13800000998','客服C','support','计算机工程学院')")
+        s2=self.m.row("SELECT id FROM users WHERE nickname='客服C'")['id']
+        row=[x for x in self.m.rooms(s2)['joined'] if x['id']==r['id']][0]
+        self.assertTrue(row.get('via_pool')); self.assertEqual(row['assignee'],0)
+        self.assertEqual(row['kind'],'private')
+
 if __name__=='__main__':unittest.main()
 
 

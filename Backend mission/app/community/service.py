@@ -20,9 +20,27 @@ class CommunityService(ValidationMixin):
             (SELECT COUNT(*) FROM members z WHERE z.room_id=r.id) count,
             (SELECT CASE WHEN x.removed=2 THEN '' ELSE x.body END FROM messages x WHERE x.room_id=r.id AND x.removed=0 ORDER BY x.id DESC LIMIT 1) last_body,
             (SELECT x.created FROM messages x WHERE x.room_id=r.id ORDER BY x.id DESC LIMIT 1) last_at,
-            (SELECT un.nickname FROM messages x JOIN users un ON un.id=x.user_id WHERE x.room_id=r.id ORDER BY x.id DESC LIMIT 1) last_nick
+            (SELECT un.nickname FROM messages x JOIN users un ON un.id=x.user_id WHERE x.room_id=r.id ORDER BY x.id DESC LIMIT 1) last_nick,
+            (SELECT un.nickname FROM users un WHERE un.id=r.assignee) assignee_name
             FROM rooms r JOIN members m ON m.room_id=r.id WHERE m.user_id=?''',(u,))
         for r in joined:r['unread']=self._room_unread(u,r['id'],r['last_read_id'])
+        # 客服额外看到所有客服会话（待接入池），即使自己还不是成员。
+        # 这样新会话一进来所有客服都看得到，谁先认领归谁，不会没人接，
+        # 也不会两个客服同时回同一个用户。via_pool 标记「你尚未加入」，
+        # 前端点开时触发认领、认领成功才真正成为成员能读消息。
+        if self.is_staff(u):
+            have={r['id'] for r in joined}
+            pool=self.rows('''SELECT r.*,
+                (SELECT COUNT(*) FROM members z WHERE z.room_id=r.id) count,
+                (SELECT CASE WHEN x.removed=2 THEN '' ELSE x.body END FROM messages x WHERE x.room_id=r.id AND x.removed=0 ORDER BY x.id DESC LIMIT 1) last_body,
+                (SELECT x.created FROM messages x WHERE x.room_id=r.id ORDER BY x.id DESC LIMIT 1) last_at,
+                (SELECT un.nickname FROM messages x JOIN users un ON un.id=x.user_id WHERE x.room_id=r.id ORDER BY x.id DESC LIMIT 1) last_nick,
+                (SELECT un.nickname FROM users un WHERE un.id=r.assignee) assignee_name
+                FROM rooms r WHERE r.support=1 ORDER BY r.id''')
+            for r in pool:
+                if r['id'] not in have:
+                    r.update(role='member',muted=0,last_read_id=0,unread=0,via_pool=True)
+                    joined.append(r)
         return {'joined':joined,'general':self.row('SELECT *, (SELECT COUNT(*) FROM members WHERE room_id=1) count FROM rooms WHERE id=1'),'college':self.profile(u)['college']}
 
     # --- 聊天未读 ----------------------------------------------------------
@@ -91,12 +109,39 @@ class CommunityService(ValidationMixin):
         客服身份取「转角客服」昵称的平台账号（bootstrap_admin 与演示 seed
         都用这个昵称），不存在则退回任一客服/管理员。复用 private_room——
         聊天室已有的未读、禁言、审核、撤回全部免费继承，不必再造一套客服 IM。
+
+        房间额外打 support=1 标记：客服工作台据此区分「客服会话」和普通私聊，
+        认领机制（assignee）也只看这类房间，避免污染用户之间的私聊。
         """
         staff=self.row("SELECT id FROM users WHERE nickname='转角客服' AND role IN ('admin','support','developer') LIMIT 1")
         if not staff:
             staff=self.row("SELECT id FROM users WHERE role IN ('support','admin','developer') ORDER BY (role='support') DESC, id LIMIT 1")
         self.require(staff and staff['id']!=u,'当前没有可用的在线客服，请改用「提交工单」留言')
-        return self.private_room(u,staff['id'])
+        room=self.private_room(u,staff['id'])
+        with self.tx() as c:c.execute('UPDATE rooms SET support=1 WHERE id=?',(room['id'],))
+        return self.row('SELECT * FROM rooms WHERE id=?',(room['id'],))
+
+    def claim_support_room(self,u,rid,action='claim'):
+        """客服认领 / 释放一个客服会话（防止多客服撞车）。
+
+        assignee 同时只属于一个客服：未认领时谁先点就是谁的；已被别人
+        认领时不再改派，把持有人返回给前端提示「已由 XX 认领」。认领即
+        加入该会话（成为成员）——没有认领的客服在「客服池」里能看见
+        这个会话，但要回复必须先认领，天然形成「谁认领谁处理」。"""
+        self.staff(u)
+        room=self.row('SELECT * FROM rooms WHERE id=?',(int(rid),))
+        self.require(room and room['support'],'这不是客服会话',404)
+        if action=='release':
+            with self.tx() as c:c.execute('UPDATE rooms SET assignee=0 WHERE id=? AND assignee=?',(room['id'],u))
+            return {'ok':True,'assignee':0,'assignee_name':''}
+        if room['assignee'] and room['assignee']!=u:
+            name=self.row('SELECT nickname FROM users WHERE id=?',(room['assignee'],))
+            return {'ok':False,'assignee':room['assignee'],'assignee_name':name['nickname'] if name else ''}
+        with self.tx() as c:
+            if not room['assignee']:
+                c.execute('UPDATE rooms SET assignee=? WHERE id=?',(u,room['id']))
+            c.execute('INSERT OR IGNORE INTO members(room_id,user_id,role) VALUES(?,?,?)',(room['id'],u,'member'))
+        return {'ok':True,'assignee':u,'assignee_name':self.profile(u)['nickname']}
     def member(self,u,r):
         m=self.row('SELECT * FROM members WHERE room_id=? AND user_id=?',(r,u))
         self.require(m is not None,'请先加入该群或会话',403);return m

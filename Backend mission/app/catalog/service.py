@@ -77,23 +77,45 @@ class CatalogService(ValidationMixin):
         return r
 
     def products(self,u=None,filters=None):
-        f=filters or {};ids=self.rows('SELECT id FROM products ORDER BY id DESC');result=[]
-        for row in ids:
-            p=self.product(row['id'],u)
-            # 主页商品流只展示「在售」：已售出、已预订、已下架的一律不出现。
-            if p['status']!='available':continue
-            if f.get('seller') and p['seller_id']!=int(f['seller']):continue
-            if f.get('category') and p['category']!=f['category']:continue
-            if f.get('favorite') and not p['favorited']:continue
-            q=str(f.get('q') or '').lower().split()
-            if q:
-                hay=' '.join(str(p.get(k,'')) for k in ['title','description','isbn','publisher','major','edition']).lower()
-                if not all(word in hay for word in q):continue
-            result.append(p)
-        if f.get('sort')=='price':result.sort(key=lambda p:p['price']+(p['delivery_fee'] if p['delivery']=='delivery' else 0))
-        # 置顶商品提到最前（稳定排序：置顶的组内仍保持上面的价格/最新顺序）。
-        now=time.time();result.sort(key=lambda p:0 if (p.get('promoted_until') or 0)>now else 1)
-        return result[:100]
+        """商品流：SQL 一次取候选，Python 过滤排序后分页，富化只发生在当前页。
+
+        旧实现 `SELECT id FROM products` 全量 + 逐件 product()（每件 4 个子查询），
+        再 `[:100]` 硬截断——商品超过 100 件后，第 101 件起逛/搜/分类/求购匹配
+        永远看不到。这里改成：
+          - status/category/seller 过滤下推到 SQL，不再逐件 product()；
+          - 点赞/收藏富化延迟到「当前页」，N+1 从全量降到一页；
+          - limit 缺省 0 表示不分页（返回全部，供求购匹配 / 卖家主页等全量场景），
+            前端「逛逛」传 limit+page 分页加载。
+        """
+        f=filters or {}
+        page=max(1,int(f.get('page') or 1));limit=max(0,int(f.get('limit') or 0))
+        where=['p.status=?'];args=['available']
+        if f.get('seller'):where.append('p.seller_id=?');args.append(int(f['seller']))
+        if f.get('category'):where.append('p.category=?');args.append(f['category'])
+        rows=self.rows('SELECT p.*,u.nickname,u.college seller_college,u.score FROM products p JOIN users u ON u.id=p.seller_id WHERE '+(' AND '.join(where))+' ORDER BY p.id DESC',tuple(args))
+        base=[]
+        for r in rows:
+            d=json.loads(r['data'] or '{}');d.pop('proof',None)
+            mod=d.pop('moderation',None)
+            p=dict(r);p.pop('data',None);p.update(d)
+            p['seller_trusted']=is_trusted(p['score'])
+            # 审核标记只外露「是否在审」布尔值，不公开命中词（否则词表变成绕行指引）。
+            p['under_review']=bool(mod and not mod.get('reviewed'))
+            base.append(p)
+        if f.get('favorite'):
+            base=[p for p in base if self.row('SELECT 1 FROM reactions WHERE product_id=? AND user_id=? AND kind=?',(p['id'],u,'favorite'))]
+        q=str(f.get('q') or '').lower().split()
+        if q:
+            base=[p for p in base if all(w in ' '.join(str(p.get(k,'')) for k in ['title','description','isbn','publisher','major','edition']).lower() for w in q)]
+        if f.get('sort')=='price':base.sort(key=lambda p:p['price']+(p['delivery_fee'] if p['delivery']=='delivery' else 0))
+        # 置顶商品提到最前（稳定排序：置顶组内仍保持上面的价格/最新顺序）。
+        now=time.time();base.sort(key=lambda p:0 if (p.get('promoted_until') or 0)>now else 1)
+        page_items=base[(page-1)*limit:page*limit] if limit else base
+        for p in page_items:
+            p['likes']=self.row("SELECT COUNT(*) n FROM reactions WHERE product_id=? AND kind='like'",(p['id'],))['n']
+            p['liked']=bool(u and self.row("SELECT 1 FROM reactions WHERE product_id=? AND user_id=? AND kind='like'",(p['id'],u)))
+            p['favorited']=bool(u and self.row("SELECT 1 FROM reactions WHERE product_id=? AND user_id=? AND kind='favorite'",(p['id'],u)))
+        return page_items
 
     def my_products(self,u,status=None):
         """卖家自己的商品列表，含已下架。products() 会把 removed 过滤掉，

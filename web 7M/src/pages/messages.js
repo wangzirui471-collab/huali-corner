@@ -85,9 +85,21 @@ function roomPreview(r){
 }
 
 function roomItem(r, activeId){
+  const me = state.me;
+  const isStaff = me && ['support','admin','developer'].includes(me.role);
+  const isSupport = !!r.support;
+  // 客服视角：显示认领状态，避免两个客服同时回同一个用户。
+  let tag = '';
+  if (isSupport && isStaff){
+    if (!r.assignee) tag = '<i class="wx-role pending">待接入</i>';
+    else if (r.assignee === me.id) tag = '<i class="wx-role ok">我认领</i>';
+    else tag = `<i class="wx-role muted-t">已由 ${e(r.assignee_name||'')} 认领</i>`;
+  }
+  // 用户视角：客服会话在认领后显示具体客服昵称，而不是笼统的「转角客服」。
+  const title = isSupport && !isStaff && r.assignee_name ? '客服 · '+r.assignee_name : r.name;
   return `<button class="wx-room ${r.id===activeId?'sel':''}" data-go="messages/${r.id}" data-name="${e(r.name)}">`+
-    avatar(r.name, r.id)+
-    `<span class="wx-room-main"><span class="wx-room-top"><b>${e(r.name)}</b>`+
+    avatar(isSupport && !isStaff ? (r.assignee_name||'客服') : r.name, r.id, isSupport?'support':'')+
+    `<span class="wx-room-main"><span class="wx-room-top"><b>${e(title)}</b>${tag}`+
     `<small class="wx-room-time">${r.last_at?e(hhmm(r.last_at)):''}</small></span>`+
     `<span class="wx-room-preview">${e(roomPreview(r))}${r.muted?icon('bell','wx-mute-ic'):''}</span></span>`+
     (r.unread?`<i class="wx-badge">${r.unread>99?'99+':r.unread}</i>`:'')+
@@ -255,6 +267,16 @@ const NOTE_META = {
   });
 
   if (!room) return;
+
+  // 客服会话认领：进入时先认领（await），认领成功才成为成员、才能拉消息。
+  // 已被别人认领则只提示、不抢单——这是「两个客服不回同一个用户」的闸门。
+  if (room.support && ['support','admin','developer'].includes(state.me?.role)){
+    try{
+      const claim = await api('/support/claim', {room_id:room.id});
+      if (claim.ok) room.assignee = claim.assignee;
+      else if (claim.assignee_name) toast(`该会话已由 ${claim.assignee_name} 认领`);
+    }catch{ /* 认领失败不阻断查看，服务端仍会按成员校验放行与否 */ }
+  }
 
   // --- 表情面板 ----------------------------------------------------------
   const EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😜','🤔','😅','😭','😤','😡','🥺','😱','🤗','🤩','😴','🤝','👍','👎','👏','🙏','💪','🎉','🔥','❤️','💔','💯','⚡','🌹','🌈','☀️','🌙','⭐','📚','✏️','🎓','🏀','⚽','🍜','🍵','💰','🎁','📦','🛒','✅','❌'];

@@ -98,6 +98,11 @@ class Store:
             # 通知关联的帖子（帖子回复 / @提及）。订单与工单已有各自的列，
             # 社区通知复用它们会让前端跳转逻辑变糊，单独补一列。
             if 'post_id' not in [x[1] for x in c.execute('PRAGMA table_info(notifications)')]:c.execute('ALTER TABLE notifications ADD COLUMN post_id INTEGER')
+            # 在线客服会话：support=1 标记「这是用户与平台客服的会话」而非普通私聊；
+            # assignee=认领该会话的客服 id（0=待接入）。没有它俩，客服列表里分不清
+            # 哪些是客服会话、这单归谁，多客服值守就会撞车。老库自动补列。
+            if 'support' not in [x[1] for x in c.execute('PRAGMA table_info(rooms)')]:c.execute('ALTER TABLE rooms ADD COLUMN support INTEGER DEFAULT 0')
+            if 'assignee' not in [x[1] for x in c.execute('PRAGMA table_info(rooms)')]:c.execute('ALTER TABLE rooms ADD COLUMN assignee INTEGER DEFAULT 0')
             c.execute("INSERT OR IGNORE INTO rooms(id,kind,name) VALUES(1,'general','广州校区总聊')")
     def connect(self):
         c=sqlite3.connect(self.path,timeout=20)
