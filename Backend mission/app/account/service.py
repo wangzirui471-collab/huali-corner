@@ -175,7 +175,7 @@ class AccountService(ValidationMixin):
         但账号立即下线、在售商品全部下架、之后不可再登录。
         有未完结订单或未结案工单时禁止注销，堵住「货不对版就注销跑路」这条路。"""
         with self.tx() as c:
-            open_order=c.execute("SELECT 1 FROM orders WHERE (buyer_id=? OR seller_id=?) AND status NOT IN ('completed','cancelled','refunded') LIMIT 1",(u,u)).fetchone()
+            open_order=c.execute("SELECT 1 FROM orders WHERE (buyer_id=? OR seller_id=?) AND status NOT IN ('completed','cancelled','refunded','partial_refunded') LIMIT 1",(u,u)).fetchone()
             self.require(not open_order,'还有未完成的订单，请先处理或申请售后后再注销')
             open_ticket=c.execute("""SELECT 1 FROM tickets t LEFT JOIN orders o ON o.id=t.order_id
                 WHERE t.status NOT IN ('resolved','rejected')

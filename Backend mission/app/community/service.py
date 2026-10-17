@@ -217,8 +217,11 @@ class CommunityService(ValidationMixin):
             if enabled:c.execute('INSERT OR IGNORE INTO blocks VALUES(?,?)',(u,int(target)))
             else:c.execute('DELETE FROM blocks WHERE user_id=? AND target=?',(u,int(target)))
         return {'ok':True}
-    def posts(self,topic=''):
-        return self.rows('SELECT p.*,u.nickname,u.college,(SELECT COUNT(*) FROM comments c WHERE c.post_id=p.id) replies FROM posts p JOIN users u ON u.id=p.user_id WHERE p.removed=0 AND (?=\'\' OR topic=?) ORDER BY p.id DESC LIMIT 100',(topic,topic))
+    def posts(self,topic='',limit=20,offset=0):
+        # 分页：前端「加载更多」按 limit 递增 offset 取更早的帖子。
+        # 老实现 LIMIT 100 无分页，第 101 条帖子起永远翻不到。
+        limit=max(1,min(int(limit or 20),50));offset=max(0,int(offset or 0))
+        return self.rows('SELECT p.*,u.nickname,u.college,(SELECT COUNT(*) FROM comments c WHERE c.post_id=p.id) replies FROM posts p JOIN users u ON u.id=p.user_id WHERE p.removed=0 AND (?=\'\' OR topic=?) ORDER BY p.id DESC LIMIT ? OFFSET ?',(topic,topic,limit,offset))
     def add_post(self,u,d):
         body=self.text(d.get('body'),2000,'帖子内容');topic=d.get('topic','交流')
         self.require(topic in ['交流','求购','毕业季','互助'],'分区不正确')
@@ -232,7 +235,18 @@ class CommunityService(ValidationMixin):
             self._notify_mentions(c,u,self.profile(u)['nickname'],body,pid)
         return {'id':pid,'moderation':mark}
 
-    def comments(self,p):return self.rows('SELECT c.*,u.nickname FROM comments c JOIN users u ON u.id=c.user_id WHERE post_id=? ORDER BY c.id LIMIT 100',(p,))
+    def comments(self,p,before=None):
+        # 取「最新」评论：老实现 ORDER BY c.id LIMIT 100 是升序取最旧 100 条，
+        # 一条超过 100 条评论的帖子，最新回复（含用户刚发的）反而看不到。
+        # 这里 DESC 取最新 100 条再倒序返回，保证最新评论一定可见；
+        # before 游标用于「加载更早评论」。
+        limit=100
+        if before:
+            rows=self.rows('SELECT c.*,u.nickname FROM comments c JOIN users u ON u.id=c.user_id WHERE post_id=? AND c.id<? ORDER BY c.id DESC LIMIT ?',(p,int(before),limit))
+        else:
+            rows=self.rows('SELECT c.*,u.nickname FROM comments c JOIN users u ON u.id=c.user_id WHERE post_id=? ORDER BY c.id DESC LIMIT ?',(p,limit))
+        rows.reverse()
+        return rows
 
     def comment(self,u,p,body):
         post=self.row('SELECT p.*,u.nickname author FROM posts p JOIN users u ON u.id=p.user_id WHERE p.id=? AND p.removed=0',(p,))

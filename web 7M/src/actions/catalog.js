@@ -10,18 +10,20 @@ import { field } from '../components/forms.js';
 import { needLogin } from '../auth/login.js';
 
 export const clicks = {
-  'market-channel': b => { state.filter.category = b.dataset.value; state.filter.q = ''; state.freeShelf = false; go('home'); },
-  'market-shortcut': b => { state.filter.category = b.dataset.value; state.filter.q = b.dataset.q || ''; state.freeShelf = false; go('home'); },
-  'free-shelf': () => { state.filter.category = ''; state.filter.q = ''; state.freeShelf = true; go('home'); },
-  category: b => { state.filter.category = b.dataset.value; state.filter.q = ''; state.freeShelf = false; go('home'); },
+  'market-channel': b => { state.filter.category = b.dataset.value; state.filter.q = ''; state.freeShelf = false; state.homeLimit = 40; go('home'); },
+  'market-shortcut': b => { state.filter.category = b.dataset.value; state.filter.q = b.dataset.q || ''; state.freeShelf = false; state.homeLimit = 40; go('home'); },
+  'free-shelf': () => { state.filter.category = ''; state.filter.q = ''; state.freeShelf = true; state.homeLimit = 40; go('home'); },
+  category: b => { state.filter.category = b.dataset.value; state.filter.q = ''; state.freeShelf = false; state.homeLimit = 40; go('home'); },
   'feed-tab': b => {
     state.filter.sort = '';
     state.filter.q = '';
     state.freeShelf = b.dataset.free === '1';
     state.filter.category = state.freeShelf ? '' : b.dataset.value;
+    state.homeLimit = 40;
     go('home');
   },
   'feed-sort': b => { state.filter.sort = b.dataset.value; go('home'); },
+  'load-more': () => { state.homeLimit += 40; render(); },
 
   async favorite(b, id){
     if (!needLogin()) return;
@@ -112,11 +114,12 @@ export const submits = {
     go('product/'+r.id);
   },
 
-  'search-form': ({ d }) => { state.filter.q = d.q; state.freeShelf = false; go('home'); },
+  'search-form': ({ d }) => { state.filter.q = d.q; state.freeShelf = false; state.homeLimit = 40; go('home'); },
   'filter-form': ({ d }) => {
     state.filter.category = d.category;
     state.filter.sort = d.sort;
     state.freeShelf = false;
+    state.homeLimit = 40;
     closeModal();
     go('home');
   },

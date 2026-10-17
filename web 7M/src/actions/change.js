@@ -6,7 +6,7 @@ import { go } from '../core/nav.js';
 
 export function registerChangeHandlers(){
   document.addEventListener('change', ev => {
-    if (ev.target.id === 'sort-select'){ state.filter.sort = ev.target.value; go('home'); }
+    if (ev.target.id === 'sort-select'){ state.filter.sort = ev.target.value; state.homeLimit = 40; go('home'); }
     // 选好实拍图先在本地预览，真正上传要等发布表单提交。
     if (ev.target.type === 'file' && ['front','side','top'].includes(ev.target.name) && ev.target.files[0]){
       const preview = ev.target.closest('.upload-slot').querySelector('.upload-preview');

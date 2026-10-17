@@ -15,6 +15,11 @@ export const state = {
   cart: [],
   // 逛逛页的「免费送」货架开关与频道筛选并列存在。
   freeShelf: false,
+  // 逛逛商品流的分页：初始 40 件，「加载更多」累加；切换筛选时归位。
+  homeLimit: 40,
+  // 社区帖子流的分页：初始 20 条，「加载更多」累加。
+  // 社区帖子流：offset 分页累积，避免「增大 limit」撞上后端 50 条封顶。
+  postsFeed: [],
   // 消息页的增量拉取游标，提交消息后需要接着它继续追加。
   messageCursor: 0,
   // 求购撮合：买家点「我要这个」后暂存 {want, product}，结算时带上以记撮合服务费。
@@ -27,7 +32,7 @@ export const statusNames = {
   available:'在售', reserved:'已预留', sold:'已售出', removed:'已下架',
   awaiting_payment:'待付款', paid:'待交付', awaiting_handover:'待核对交接',
   awaiting_receipt:'待确认收货', completed:'已完成', cancelled:'已取消',
-  disputed:'售后处理中', refunded:'已退款',
+  disputed:'售后处理中', refunded:'已退款', partial_refunded:'部分退款',
   open:'待处理', processing:'处理中', review:'待复核', resolved:'已解决',
   pending:'待接受', accepted:'已接受', rejected:'已拒绝'
 };

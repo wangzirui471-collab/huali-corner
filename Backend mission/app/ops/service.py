@@ -12,7 +12,7 @@ class OpsService(ValidationMixin):
             amounts={r['kind']:r['amount'] for r in self.rows('SELECT kind,amount FROM ledger WHERE order_id=?',(o['id'],))}
             net=amounts.get('settlement',0)-amounts.get('settlement_reversal',0)
             held=amounts.get('payment',0)-amounts.get('refund',0)-net
-            result.append({**o,'payment':amounts.get('payment',0),'refund':amounts.get('refund',0),'net_settlement':net,'held':held,'consistent':held>=0 and (o['status'] not in ['completed','refunded','cancelled'] or held==0),'simulation':True})
+            result.append({**o,'payment':amounts.get('payment',0),'refund':amounts.get('refund',0),'net_settlement':net,'held':held,'consistent':held>=0 and (o['status'] not in ['completed','refunded','partial_refunded','cancelled'] or held==0),'simulation':True})
         return result
 
     def backup(self,u):

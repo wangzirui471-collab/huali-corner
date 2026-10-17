@@ -1,7 +1,7 @@
 'use strict';
 // 事件层 · 社区、私聊、群聊、群管理员
 
-import { e, toast } from '../core/dom.js';
+import { $, e, toast } from '../core/dom.js';
 import { money } from '../core/format.js';
 import { state, saveCart, clearPendingWant } from '../core/state.js';
 import { api } from '../core/http.js';
@@ -10,6 +10,9 @@ import { modal, closeModal } from '../core/shell.js';
 import { field } from '../components/forms.js';
 import { needLogin } from '../auth/login.js';
 import { chatClicks } from '../pages/messages.js';
+import { postCard } from '../pages/community.js';
+
+const commentRow = c => `<div><b>${e(c.nickname)}</b><p>${e(c.body)}</p></div>`;
 
 // 聊天室专属交互（撤回/移除/成员抽屉/表情面板）定义在 pages/messages.js，
 // 这里合并进全站事件表，页面保持零监听器风格。
@@ -28,9 +31,28 @@ export const clicks = {
     go('messages/'+r.id);
   },
 
+  // 帖子流按 offset 游标累积：后端 limit 封顶 50，若沿用「加大 limit」会在第 51 条处
+  // 卡死（按钮判断条件永不成立）。这里改为每页 20 条追加，翻到多少加载多少。
+  'load-more-posts': async () => {
+    const more = await api('/posts?limit=20&offset='+state.postsFeed.length);
+    if (!more.length) return;
+    state.postsFeed = state.postsFeed.concat(more);
+    $('#post-list').insertAdjacentHTML('beforeend', more.map(postCard).join(''));
+    if (more.length < 20) $('#post-more')?.remove();
+  },
+
   comments: async (b, id) => {
     const comments = await api('/comments?id='+id);
-    modal(`<h2>评论与回复</h2><div class="comments">${comments.map(c=>`<div><b>${e(c.nickname)}</b><p>${e(c.body)}</p></div>`).join('')||'<p class="muted">还没有评论</p>'}</div><form id="comment-form" data-id="${id}"><label class="field"><span>回复</span><textarea name="body" required maxlength="1000"></textarea></label><button class="btn primary">发布回复</button></form>`);
+    modal(`<h2>评论与回复</h2><div id="comment-list" class="comments">${comments.map(commentRow).join('')||'<p class="muted">还没有评论</p>'}</div>${comments.length>=100?`<button class="text-button" data-action="more-comments" data-id="${id}" data-before="${comments[0].id}">加载更早的评论</button>`:''}<form id="comment-form" data-id="${id}"><label class="field"><span>回复</span><textarea name="body" required maxlength="1000"></textarea></label><button class="btn primary">发布回复</button></form>`);
+  },
+
+  // 评论游标「加载更早」：后端每次最多回最新 100 条，用最早一条的 id 作 before 往前翻。
+  'more-comments': async (b, id) => {
+    const older = await api('/comments?id='+id+'&before='+b.dataset.before);
+    if (!older.length){ b.remove(); return; }
+    $('#comment-list').insertAdjacentHTML('afterbegin', older.map(commentRow).join(''));
+    b.dataset.before = older[0].id;
+    if (older.length < 100) b.remove();
   },
 
   nominate(b, id){

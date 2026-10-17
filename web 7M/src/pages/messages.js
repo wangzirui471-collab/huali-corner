@@ -7,6 +7,7 @@ import { date } from '../core/format.js';
 import { state, clearPoll } from '../core/state.js';
 import { api } from '../core/http.js';
 import { shell, empty } from '../core/shell.js';
+import { isAdmin } from '../core/roles.js';
 import { needLogin } from '../auth/login.js';
 import { refreshBadges } from '../core/badges.js';
 
@@ -49,7 +50,7 @@ export function renderMessage(m, room){
   const recallable = mine && (Date.now()/1000 - m.created) <= 120;
   // 移除按钮：群主/管理员在群里可移除任何人的消息；私聊不开放。
   const canModerate = room.kind !== 'private' &&
-    (['owner','moderator'].includes(room.myRole||'') || state.me.role === 'admin');
+    (['owner','moderator'].includes(room.myRole||'') || isAdmin(state.me));
   const acts = `<span class="wx-msg-acts">`+
     (recallable?`<button type="button" data-action="recall" data-id="${m.id}">撤回</button>`:'')+
     (canModerate?`<button type="button" data-action="remove-msg" data-id="${m.id}">移除</button>`:'')+
@@ -136,7 +137,7 @@ export async function toggleMembers(roomId){
   if (!drawer.hidden){ drawer.hidden = true; return; }
   const data = await api('/room/members?room_id='+roomId);
   const iAm = data.members.find(x => x.user_id === state.me.id);
-  const canMute = (iAm && ['owner','moderator'].includes(iAm.role)) || state.me.role === 'admin';
+  const canMute = (iAm && ['owner','moderator'].includes(iAm.role)) || isAdmin(state.me);
   const roleTag = r => r==='owner'?'<i class="wx-role">群主</i>':r==='moderator'?'<i class="wx-role mod">管理员</i>':'';
   drawer.innerHTML = `<div class="wx-members-head"><b>群成员</b><small>${data.members.length} 人</small>`+
     `<button class="wx-drawer-close" data-action="toggle-members" data-id="${roomId}">${icon('close')}</button></div>`+

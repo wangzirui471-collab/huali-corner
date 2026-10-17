@@ -148,7 +148,7 @@ class CatalogService(ValidationMixin):
         需求 §10.6：仅退款或部分退款时物品留在买家处，原卖家不再持有实物，
         不能自行恢复出售；退款直接置 removed 后卖家又能点「重新上架」，
         等于绕过了这条规则。凡是有争议或已退款订单引用过的商品，重新上架需客服复核。"""
-        for r in c.execute("SELECT items FROM orders WHERE status IN ('refunded','disputed')").fetchall():
+        for r in c.execute("SELECT items FROM orders WHERE status IN ('refunded','partial_refunded','disputed')").fetchall():
             if any(i['id']==pid for i in json.loads(r['items'])):return True
         return False
 
@@ -363,6 +363,9 @@ class CatalogService(ValidationMixin):
         item=self.product(p);amount=self.cents(amount,'出价')
         self.require(item['seller_id']!=u and item['status']=='available','当前商品不能出价')
         self.require(0<amount<item['price'],'出价需低于商品价且不能为0')
+        # 独占：该商品已有被接受的报价在等成交，暂不接受新报价——
+        # 否则卖家能一边接受 A 的报价、一边又收 B 的报价，回到「先结算者得」。
+        self.require(not self.row("SELECT 1 FROM offers WHERE product_id=? AND status='accepted' AND (accepted_at IS NULL OR accepted_at>?)",(p,time.time()-86400)),'该商品已有报价被接受，正在等待成交')
         with self.tx() as c:oid=c.execute('INSERT INTO offers(product_id,buyer_id,amount,created) VALUES(?,?,?,?)',(p,u,amount,time.time())).lastrowid
         return {'id':oid}
 
@@ -374,6 +377,12 @@ class CatalogService(ValidationMixin):
             r=c.execute('SELECT o.*,p.seller_id,p.status product_status FROM offers o JOIN products p ON p.id=o.product_id WHERE o.id=?',(oid,)).fetchone()
             self.require(r and r['seller_id']==u,'不能处理他人报价',403)
             self.require(r['status']=='pending','该报价已处理')
-            if accept:self.require(r['product_status']=='available','商品已下架或售出，不能接受报价')
-            c.execute('UPDATE offers SET status=? WHERE id=?',('accepted' if accept else 'rejected',oid))
+            if accept:
+                self.require(r['product_status']=='available','商品已下架或售出，不能接受报价')
+                # 独占：接受一个报价时，同商品其他 pending 报价一并作废——
+                # 卖家不能对多个买家同时接受同一商品的报价。
+                c.execute("UPDATE offers SET status='rejected' WHERE product_id=? AND status='pending' AND id<>?",(r['product_id'],oid))
+                c.execute('UPDATE offers SET status=?,accepted_at=? WHERE id=?',('accepted',time.time(),oid))
+            else:
+                c.execute('UPDATE offers SET status=? WHERE id=?',('rejected',oid))
         return {'ok':True}

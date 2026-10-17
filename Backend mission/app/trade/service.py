@@ -239,3 +239,6 @@ class TradeService(ValidationMixin):
             c.execute('DELETE FROM sessions WHERE expires<?',(now,))
             c.execute('DELETE FROM otp WHERE expires<?',(now-86400,))
             c.execute('DELETE FROM auth_attempts WHERE reset_at<?',(now-86400,))
+            # 被接受的报价 24 小时未成交即作废，商品重新可报价（否则商品被一个
+            # 永远不会结算的报价永久占住，其他人想买也买不了）。
+            c.execute("UPDATE offers SET status='rejected' WHERE status='accepted' AND accepted_at<?",(now-86400,))

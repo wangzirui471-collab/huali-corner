@@ -1,17 +1,26 @@
 'use strict';
 // 事件层 · 工单、信誉审核、资金对账、备份
 
-import { $, toast } from '../core/dom.js';
+import { $, toast, e } from '../core/dom.js';
 import { money } from '../core/format.js';
 import { api } from '../core/http.js';
 import { go, render } from '../core/nav.js';
 import { modal, closeModal } from '../core/shell.js';
+import { statusNames } from '../core/state.js';
 import { field } from '../components/forms.js';
 import { ticketModal } from '../pages/support.js';
 
 export const clicks = {
   'new-ticket': () => ticketModal('other'),
   appeal: () => ticketModal('appeal'),
+
+  // 给历史工单补交易凭证：只列当事人或涉事商品相关的订单，避免客服在
+  // 全平台订单里翻找，也避免把无关订单错绑进来。
+  'link-order': async (b, id) => {
+    const rows = await api('/ticket/candidates?id='+id);
+    if (!rows.length){ toast('该工单当事人没有可关联的订单，可让对方补充订单号'); return; }
+    modal(`<h2>关联订单</h2><p class="muted">只列出与工单当事人或涉事商品有关的订单。关联后金额、买卖双方与交付记录会出现在工单右侧，处理依据才能写实。</p><form id="link-order-form" data-id="${id}"><label class="field"><span>选择订单</span><select name="order_id" required>${rows.map(o=>`<option value="${o.id}">#${o.id} · ${e((o.titles||[]).join('、').slice(0,36))} · ¥${money(o.total)} · ${e(statusNames[o.status]||o.status)} · 买 ${e(o.buyer)} / 卖 ${e(o.seller)}${o.matched_product?' · 含涉事商品':''}</option>`).join('')}</select></label><button class="btn primary full">确认关联</button></form>`);
+  },
   report: (b, id) => ticketModal('report', null, id),
 
   // 在线客服：建好与「转角客服」的私聊后直接跳进聊天窗，用户在熟悉的消息
@@ -116,6 +125,13 @@ export const submits = {
 
   'ticket-reply-form': async ({ form, d, fd }) => {
     await api('/ticket/reply', {id:Number(form.dataset.id), body:d.body, internal:fd.has('internal')});
+    await render();
+  },
+
+  'link-order-form': async ({ form, d }) => {
+    await api('/ticket/link-order', {id:Number(form.dataset.id), order_id:Number(d.order_id)});
+    closeModal();
+    toast('已关联订单，处理依据可引用交易记录');
     await render();
   },
 

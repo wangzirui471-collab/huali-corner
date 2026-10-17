@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY,room_id INTEGER,user_
 CREATE TABLE IF NOT EXISTS blocks(user_id INTEGER,target INTEGER,PRIMARY KEY(user_id,target));
 CREATE TABLE IF NOT EXISTS posts(id INTEGER PRIMARY KEY,user_id INTEGER,topic TEXT,body TEXT,created REAL,moderation TEXT,removed INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS comments(id INTEGER PRIMARY KEY,post_id INTEGER,user_id INTEGER,body TEXT,created REAL);
-CREATE TABLE IF NOT EXISTS offers(id INTEGER PRIMARY KEY,product_id INTEGER,buyer_id INTEGER,amount INTEGER,status TEXT DEFAULT 'pending',created REAL);
+CREATE TABLE IF NOT EXISTS offers(id INTEGER PRIMARY KEY,product_id INTEGER,buyer_id INTEGER,amount INTEGER,status TEXT DEFAULT 'pending',created REAL,accepted_at REAL);
 CREATE TABLE IF NOT EXISTS nominations(id INTEGER PRIMARY KEY,user_id INTEGER,room_id INTEGER,reason TEXT,status TEXT DEFAULT 'pending',created REAL);
 CREATE TABLE IF NOT EXISTS wants(id INTEGER PRIMARY KEY,user_id INTEGER,keyword TEXT,budget INTEGER,description TEXT,status TEXT DEFAULT 'open',created REAL);
 CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY,user_id INTEGER,kind TEXT,order_id INTEGER,ticket_id INTEGER,body TEXT,read_at REAL,created REAL,post_id INTEGER);
@@ -98,6 +98,9 @@ class Store:
             # 通知关联的帖子（帖子回复 / @提及）。订单与工单已有各自的列，
             # 社区通知复用它们会让前端跳转逻辑变糊，单独补一列。
             if 'post_id' not in [x[1] for x in c.execute('PRAGMA table_info(notifications)')]:c.execute('ALTER TABLE notifications ADD COLUMN post_id INTEGER')
+            # 报价接受时间：接受后 24 小时内该买家未结算，报价自动作废、商品重新可报价。
+            # 没有它就无法给「被接受的报价」定一个独占的失效点。
+            if 'accepted_at' not in [x[1] for x in c.execute('PRAGMA table_info(offers)')]:c.execute('ALTER TABLE offers ADD COLUMN accepted_at REAL')
             # 在线客服会话：support=1 标记「这是用户与平台客服的会话」而非普通私聊；
             # assignee=认领该会话的客服 id（0=待接入）。没有它俩，客服列表里分不清
             # 哪些是客服会话、这单归谁，多客服值守就会撞车。老库自动补列。

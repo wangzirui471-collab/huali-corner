@@ -9,15 +9,28 @@ class SupportService(ValidationMixin):
         typ=d.get('type','other');self.require(typ in ['refund','report','appeal','reschedule','other'],'工单类型错误')
         subject=self.text(d.get('subject'),80,'问题标题');body=self.text(d.get('body'),3000,'问题说明');oid=d.get('order_id') or None;pid=d.get('product_id') or None
         with self.tx() as c:
+            if pid:
+                pid=int(pid);self.product(pid)
+            # 举报/申诉通常从商品页发起，用户不会主动再去翻订单号。
+            # 只有一句「假货」而没有订单，处理人看不到金额、买卖双方和交付记录，
+            # 这张工单实际上没法判。所以这里按「提交人 + 该商品」把最近一笔订单
+            # 自动补上；找不到（比如举报别人的商品、自己没交易过）就保持无订单，
+            # 不拦截提交，但页面上会明确提示该工单缺交易凭证。
+            if not oid and pid and typ in ('report','appeal'):
+                oid=self._match_order(c,u,pid)
             if oid:
-                r=c.execute('SELECT * FROM orders WHERE id=?',(int(oid),)).fetchone()
+                oid=int(oid)
+                r=c.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
                 self.require(r and u in [r['buyer_id'],r['seller_id']],'不能关联他人订单',403)
+                # 订单和商品同时给出时必须真的对得上，否则工单会挂着「订单 #x」
+                # 却指向另一件商品，比不关联更误导处理人。
+                if pid:
+                    self.require(any(int(p.get('id') or 0)==pid for p in json.loads(r['items'] or '[]')),'该订单不包含所选商品，请核对订单号')
                 if typ=='refund':
                     self.require(u==r['buyer_id'] and r['status'] in ['paid','awaiting_handover','awaiting_receipt','completed','disputed'],'订单当前不能申请退款')
                     self.require(not c.execute("SELECT 1 FROM tickets WHERE order_id=? AND type='refund' AND status NOT IN ('resolved','rejected')",(oid,)).fetchone(),'已有待处理退款')
                     c.execute("UPDATE orders SET status='disputed' WHERE id=?",(oid,))
             else:self.require(typ!='refund','退款必须关联订单')
-            if pid:self.product(int(pid))
             tid=c.execute('INSERT INTO tickets(user_id,order_id,product_id,type,subject,body,created) VALUES(?,?,?,?,?,?,?)',(u,oid,pid,typ,subject,body,time.time())).lastrowid
             if oid and typ=='refund':
                 self.notify(c,r['seller_id'],'ticket_refund', f'订单 #{oid} 买家已申请售后并暂停结算，请到客服中心查看进展。',oid,tid)
@@ -26,9 +39,72 @@ class SupportService(ValidationMixin):
                 self.notify(c,other,'ticket_filed',f'订单 #{oid} 的对方提交了工单 #{tid}（{subject}）。',oid,tid)
         return self.ticket(u,tid)
 
+    def _match_order(self,c,u,pid):
+        """找提交人与该商品最近的一笔订单。
+
+        按订单号倒序：同一件商品可能退货后重新上架、被第二个人买走，
+        处理人要核的是最近这一次。只匹配提交人本人参与的订单，
+        不会把别人的交易挂到这张工单上。
+        """
+        for r in c.execute('SELECT id,items FROM orders WHERE buyer_id=? OR seller_id=? ORDER BY id DESC',(u,u)):
+            if any(int(p.get('id') or 0)==pid for p in json.loads(r['items'] or '[]')):
+                return r['id']
+        return None
+
+    def link_ticket_order(self,u,tid,oid):
+        """给历史工单补关联订单（客服/管理员）。
+
+        早期工单允许不填订单，留了一批「只有一句描述、没有交易」的工单，
+        处理人看不到金额和双方记录，等于无法判断。让客服从当事人订单里
+        挑一笔补上，比要求用户删了重提现实。已有关联的允许改绑（纠正错绑），
+        每次操作都写审计，事后能回答「谁在什么时候把哪张工单改到了哪笔订单」。
+        """
+        self.staff(u);t=self.ticket(u,tid);oid=int(oid)
+        with self.tx() as c:
+            o=c.execute('SELECT * FROM orders WHERE id=?',(oid,)).fetchone()
+            self.require(o,'订单不存在',404)
+            parties={t['user_id']}
+            if t.get('product_id'):
+                p=c.execute('SELECT seller_id FROM products WHERE id=?',(t['product_id'],)).fetchone()
+                if p:parties.add(p['seller_id'])
+            self.require(parties & {o['buyer_id'],o['seller_id']},'该订单与工单当事人无关，不能关联')
+            if t.get('product_id'):
+                self.require(any(int(x.get('id') or 0)==t['product_id'] for x in json.loads(o['items'] or '[]')),'该订单不包含工单涉及的商品')
+            old=t['order_id']
+            c.execute('UPDATE tickets SET order_id=? WHERE id=?',(oid,tid))
+            reason=f'工单关联订单 #{oid}'+(f'（原关联 #{old}，已改绑）' if old else '')
+            c.execute('INSERT INTO audit(actor,type,reason,ticket_id,created) VALUES(?,?,?,?,?)',(u,'ticket_link_order',reason,tid,time.time()))
+        return self.ticket(u,tid)
+
+    def ticket_order_candidates(self,u,tid):
+        """补关联时的候选订单：只列与工单当事人或所涉商品有关的订单。
+
+        不做全量订单搜索——客服不需要翻整个平台，只需要在「这张工单可能
+        指的那几笔交易」里挑。涉及商品的排前面（matched_product），
+        因为它们最可能是用户真正想投诉的那笔。
+        """
+        self.staff(u);t=self.ticket(u,tid)
+        parties={t['user_id']}
+        if t.get('product_id'):
+            p=self.row('SELECT seller_id FROM products WHERE id=?',(t['product_id'],))
+            if p:parties.add(p['seller_id'])
+        hit,other=[],[]
+        for r in self.rows('SELECT id,buyer_id,seller_id,items,total,status,created FROM orders ORDER BY id DESC'):
+            items=json.loads(r['items'] or '[]')
+            matched=bool(t.get('product_id') and any(int(x.get('id') or 0)==t['product_id'] for x in items))
+            related=bool(parties & {r['buyer_id'],r['seller_id']})
+            if not (matched or related):continue
+            row={'id':r['id'],'total':r['total'],'status':r['status'],'created':r['created'],
+                 'buyer':self.profile(r['buyer_id'])['nickname'],
+                 'seller':self.profile(r['seller_id'])['nickname'],
+                 'titles':[x.get('title','') for x in items],'matched_product':matched}
+            (hit if matched else other).append(row)
+            if len(hit)+len(other)>=30:break
+        return hit+other
+
     def ticket(self,u,tid):
         r=self.row('SELECT t.*,u.nickname FROM tickets t JOIN users u ON u.id=t.user_id WHERE t.id=?',(tid,));self.require(r,'工单不存在',404)
-        staff=self.profile(u)['role'] in ['support','admin'];allowed=r['user_id']==u
+        staff=self.profile(u)['role'] in ['support','admin','developer'];allowed=r['user_id']==u
         if r['order_id']:
             o=self.row('SELECT buyer_id,seller_id FROM orders WHERE id=?',(r['order_id'],));allowed=allowed or u in [o['buyer_id'],o['seller_id']]
         self.require(allowed or staff,'不能查看他人工单',403)
@@ -58,7 +134,12 @@ class SupportService(ValidationMixin):
 
     def check_conflict(self,u,t):
         if t.get('product_id'):
-            pid=t['product_id'];self.require(self.product(pid)['seller_id']!=u,'不能审核自己发布商品的投诉',403)
+            pid=t['product_id']
+            # 用 row 而不是 product()：商品可能已被硬删除，product() 会抛 404，
+            # 让「审核这张工单」直接失败。商品没了不等于冲突消失，后面按
+            # 订单 items 的 pid 继续查利益冲突。
+            seller=self.row('SELECT seller_id FROM products WHERE id=?',(pid,))
+            self.require(not seller or seller['seller_id']!=u,'不能审核自己发布商品的投诉',403)
             for order in self.rows('SELECT items FROM orders WHERE buyer_id=? OR seller_id=?',(u,u)):
                 self.require(not any(p['id']==pid for p in json.loads(order['items'])),'该商品交易与你存在利益冲突，请交其他人员审核',403)
         if t.get('order_id'):
@@ -86,7 +167,9 @@ class SupportService(ValidationMixin):
                         settled=c.execute("SELECT amount FROM ledger WHERE order_id=? AND kind='settlement'",(r['id'],)).fetchone()
                         if settled:self.journal(c,r['id'],'settlement_reversal',min(amount,settled['amount']))
                         elif amount<r['total']:self.journal(c,r['id'],'settlement',r['total']-amount)
-                        c.execute("UPDATE orders SET status='refunded' WHERE id=?",(r['id'],))
+                        # 全额退款 = refunded；部分退款 = partial_refunded。老实现一律置 refunded，
+                        # 于是「已退款」的订单账本上又挂着一笔「结算」，客户读账本一头雾水。
+                        c.execute("UPDATE orders SET status=? WHERE id=?",('refunded' if amount>=r['total'] else 'partial_refunded',r['id']))
                         # Refunded physical items are NOT automatically offered again.
                         # 但求购撮合必须回滚，否则那条求购会永远停在「已成交」。
                         self.restore_want(c,r)
@@ -123,7 +206,11 @@ class SupportService(ValidationMixin):
         self.require(t['status']=='resolved','请先核实工单并记录处理结论')
         self.check_conflict(u,t)
         related=set()
-        if t['product_id']:related.add(self.product(t['product_id'])['seller_id'])
+        # 商品可能已下架甚至被删；不能因为查不到商品就让扣分整条失败。
+        # 工单的 order_id 与提交人仍然能定位到处置对象。
+        if t['product_id']:
+            p=self.row('SELECT seller_id FROM products WHERE id=?',(t['product_id'],))
+            if p:related.add(p['seller_id'])
         if t['order_id']:
             order=self.order(u,t['order_id']);related.update([order['buyer_id'],order['seller_id']])
             self.require(u not in related,'不能处理自己交易的信誉')

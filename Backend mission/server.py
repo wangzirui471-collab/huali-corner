@@ -70,8 +70,8 @@ class Handler(BaseHTTPRequestHandler):
                 public={k:profile[k] for k in ('id','nickname','college','major','education','bio','score')}
                 public['trusted']=is_trusted(profile['score'])
                 return self.respond({'user':public,'products':m.products(self.optional_user(),{'seller':str(who)})})
-            if p=='/api/posts' and method=='GET':return self.respond(m.posts(query.get('topic','')))
-            if p=='/api/comments' and method=='GET':return self.respond(m.comments(int(query['id'])))
+            if p=='/api/posts' and method=='GET':return self.respond(m.posts(query.get('topic',''),query.get('limit','20'),query.get('offset','0')))
+            if p=='/api/comments' and method=='GET':return self.respond(m.comments(int(query['id']),query.get('before')))
             if p=='/api/wants' and method=='GET':return self.respond(m.wants(self.optional_user()))
             if p=='/api/want' and method=='GET':return self.respond(m.want(self.optional_user(),int(query['id'])))
             if p.startswith('/media/'):
@@ -130,6 +130,10 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/ticket':return self.respond(m.ticket(u,int(query['id'])))
             if p=='/api/ticket/reply' and method=='POST':return self.respond(m.reply_ticket(u,int(data['id']),data))
             if p=='/api/ticket/resolve' and method=='POST':return self.respond(m.resolve_ticket(u,int(data['id']),data))
+            # 历史工单补交易凭证：候选订单只返回当事人/所涉商品相关的那些，
+            # 绑定后处理人才看得到金额、双方和交付记录，也才能据此扣信誉。
+            if p=='/api/ticket/candidates':return self.respond(m.ticket_order_candidates(u,int(query['id'])))
+            if p=='/api/ticket/link-order' and method=='POST':return self.respond(m.link_ticket_order(u,int(data['id']),int(data['order_id'])))
             if p=='/api/credit' and method=='POST':return self.respond(m.credit_action(u,int(data['target']),data.get('delta'),data['reason'],int(data['ticket_id']),data.get('violation'),bool(data.get('dry_run',False))))
             if p=='/api/credit/history':return self.respond(m.credit_history(u))
             if p=='/api/review' and method=='POST':return self.respond(m.review(u,int(data['order_id']),data['rating'],data['body']))

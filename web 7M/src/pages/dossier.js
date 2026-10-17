@@ -15,6 +15,7 @@ import { money, date } from '../core/format.js';
 import { state, statusNames } from '../core/state.js';
 import { api } from '../core/http.js';
 import { shell, heading } from '../core/shell.js';
+import { isStaff } from '../core/roles.js';
 import { needLogin } from '../auth/login.js';
 
 const ROLE_NAMES = { user: '普通用户', support: '客服', admin: '平台管理员', developer: '开发者' };
@@ -37,7 +38,7 @@ const sectionHead = (ic, title) =>
 
 export async function dossier(id) {
   if (!needLogin()) return;
-  if (!['admin', 'support'].includes(state.me.role)) throw new Error('仅客服或管理员可查看用户档案');
+  if (!isStaff(state.me)) throw new Error('仅客服或管理员可查看用户档案');
   const target = Number(id);
   if (!Number.isInteger(target) || target <= 0) throw new Error('用户编号无效');
 

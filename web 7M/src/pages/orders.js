@@ -22,7 +22,7 @@ const ORDER_GROUPS = {
   to_pay:    { label: '待付款',    statuses: ['awaiting_payment'] },
   receiving: { label: '待收货',    statuses: ['paid', 'awaiting_handover', 'awaiting_receipt'] },
   to_ship:   { label: '待发货',    statuses: ['paid', 'awaiting_handover'] },
-  aftersale: { label: '退款/售后', statuses: ['disputed', 'refunded'] },
+  aftersale: { label: '退款/售后', statuses: ['disputed', 'refunded', 'partial_refunded'] },
   completed: { label: '已完成',    statuses: ['completed'] }
 };
 
