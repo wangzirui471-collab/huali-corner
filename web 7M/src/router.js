@@ -33,6 +33,11 @@ function publicDemoFeature(route){
 }
 
 export async function render(){
+  // config 未就绪时放弃本次渲染：main.js 的初始化流程拿到 /api/config 之后
+  // 还会再渲染一次当前路由。若不放弃，登录框会在 auth_mode 还没到位时被画出
+  // ——弹的是早已废弃的「验证码 + 管理员一键登录」旧框，在试用版里那个按钮
+  // 点了必然 403。慢网络下首屏直接点「我的订单」即可稳定复现。
+  if (!state.config.name) return;
   const rid = bumpRenderId();
   clearPoll();
   window.scrollTo(0, 0);
