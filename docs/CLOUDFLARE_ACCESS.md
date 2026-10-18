@@ -38,10 +38,10 @@ wrangler whoami
 | R2 `HEAD` | 通过 | 真实远程，约 600ms |
 | R2 写入/读回/删除 | 通过 | 专用诊断键，22 字节，已清理；桶仍为 0 objects |
 | `hashlib.pbkdf2_hmac` | **不可用** | `AttributeError`；`hashlib.scrypt` 同样不可用 |
-| Web Crypto PBKDF2 600000 轮 | 通过 | ASCII 与中文/emoji 两个向量均匹配独立 Node 参考值 |
-| Pillow 图片处理 | 通过 | 12.2.0：JPEG/PNG/WebP 解码、EXIF 方向、去元数据、WebP 编码、坏图拒绝 |
+| Web Crypto PBKDF2 600000 轮 | 本地通过，**生产不可用** | 本地 workerd 正常；生产把迭代上限压在 100000，`NotSupportedError: iteration counts above 100000 are not supported (requested 600000)` |
+| Pillow 图片处理 | 通过 | 12.2.0（12.3.0 无 wasm32 轮子）：JPEG/PNG/WebP 解码、EXIF 方向、去元数据、WebP 编码、坏图拒绝 |
 
-D1 当前只有内部表 `_cf_KV`，**没有任何业务表**，原数据未迁移。
+D1 当前只有内部表 `_cf_KV`，**没有任何业务表**，原数据未迁移。（此条已被下文"数据迁移"覆盖）
 
 ## 新增异步适配层（已在真实运行时验证）
 
@@ -50,7 +50,7 @@ D1 当前只有内部表 `_cf_KV`，**没有任何业务表**，原数据未迁�
 | 模块 | 职责 |
 |---|---|
 | `d1.py` | 异步 D1 访问；`batch()` 是唯一事务原语；`expect()` 校验守卫是否命中 |
-| `crypto.py` | 异步 PBKDF2-HMAC-SHA256，600000 轮，输出格式与旧表完全兼容 |
+| `crypto.py` | 纯 Python PBKDF2-HMAC-SHA256（stdlib `hashlib`），600000 轮，输出格式与旧表完全兼容 |
 | `media.py` | R2 私有对象；复用 `account/avatars.py` 的图片校验与重编码 |
 
 在同一运行时、真实远程 D1/R2 上实测：
@@ -112,9 +112,58 @@ orders 1、settings 1、wants 1。
 **注意：远程 D1 已可被多人写入。** 迁移后出现了非本机来源的账号
 （`13900000001 / 测试同学`，含密码凭证与 2 个会话），说明已有其他入口在写这个库。
 
+## 密码派生：三个方案的生产实测（2026-10-18）
+
+要求是保住 PBKDF2-HMAC-SHA256、600000 轮、与旧表 `password_credentials` 完全兼容。
+三个方案全部在**生产环境**（非本地 workerd）实测过：
+
+| 方案 | 本地 | 生产 | 结论 |
+|---|---|---|---|
+| `hashlib.pbkdf2_hmac` | — | — | Pyodide 运行时就没有这个函数 |
+| Web Crypto `crypto.subtle.deriveBits` | 通过 | **失败** | 迭代上限 100000，600000 直接 `NotSupportedError` |
+| wasm 版 pycryptodome | 通过（385ms，结果正确） | **失败** | 整包在 Workers 内存里加载不起来，所有路由 1105 |
+| 纯 Python（stdlib `hashlib.sha256`） | 通过 | **结果正确，但 CPU 超限** | 见下 |
+
+最终采用纯 Python 实现（`app/cloudflare/crypto.py`）：预计算 HMAC 的 ipad/opad
+中间状态、整数异或累加，比 `hmac.new` 写法快约 4 倍。正确性已在两个层面验证：
+
+- 本机 CPython：600000 轮产出旧参考向量 `af9dd8ed…07adc6b`，与 `hashlib.pbkdf2_hmac` 一致；
+- 生产环境：1000 / 10000 轮的摘要头与独立 Node 参考值逐字符一致（`ff1173dd…` / `51c3c167…`）。
+
+### 阻塞：免费计划 CPU 上限
+
+生产环境发起注册（600000 轮）约 8.4s 后被 Cloudflare 以 **503 / error 1102**
+（Worker exceeded CPU time limit）终止。免费计划 CPU 预算是 10ms，而本机 CPython
+跑完 600000 轮需要约 657ms，Workers（Pyodide）会更慢——这不是代码可以优化的差距。
+
+结论：**注册、登录、恢复码验证都需要 Workers 付费计划**（CPU 上限 30s，$5/月起）。
+升级后现有代码无需改动即可工作；不要为了省 CPU 降低轮数或换算法。
+
+实测时的失败请求在 KDF 阶段就被终止，D1 无残留数据（users 总数仍为迁移后的 10，
+无 `13800001111` 测试行、无 auth_attempts 残留）。
+
+## 生产部署（2026-10-18）
+
+站点：https://zhuanjiao.wangzirui471.workers.dev （版本 `208ade13…`）
+
+| 路由 | 状态 |
+|---|---|
+| `GET /api/config` | 200 —— 校区、楼栋、学院配置与旧实现同形 |
+| `GET /api/products` | 200 —— 真实 D1 数据（分页/搜索/收藏/点赞/卖家信任标记） |
+| `GET /api/product?id=` | 200 |
+| `POST /api/auth/register` | 代码就绪，**需付费计划**（见上） |
+| `POST /api/auth/login` | 代码就绪，**需付费计划**（见上） |
+| `POST /api/auth/logout`、`GET /api/me` | 依赖会话，随登录一并可用 |
+| `GET /media/<id>` | 200 —— R2 私有对象读取，权限规则与原实现一致 |
+| 其余 `/api/*` | 501 显式标注"该接口尚未在试用版开放"，不静默返回空数据 |
+
+静态资源由 Workers Assets 托管，`run_worker_first` 保证 `/api` 与 `/media` 先进 Python。
+
 ## 未完成
 
-- 业务表未初始化，原数据未迁移
-- 后端异步改造未完成
-- 完整站点未部署，**没有公网地址**
+- ~~业务表未初始化，原数据未迁移~~（已完成，见上）
+- ~~后端异步改造未完成~~（首批接口已上线）
+- ~~完整站点未部署~~（已上线，读路径可用）
+- **注册/登录待 Workers 付费计划解锁**（代码已就绪并验证，唯一阻塞是 CPU 预算）
 - 定时触发未配置
+- 剩余业务域未移植（发布、订单、聊天、客服、管理端等，前端共引用约 70 个 `/api/*` 端点）

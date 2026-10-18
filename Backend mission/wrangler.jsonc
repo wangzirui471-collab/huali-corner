@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "zhuanjiao",
+  "main": "worker.py",
+  "account_id": "824c84ca5e382e2b4f8de6260d6b0017",
+  "compatibility_date": "2026-10-17",
+  "compatibility_flags": ["python_workers"],
+  "assets": {
+    "directory": "../web 7M",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "zhuanjiao-trial-db",
+    "database_id": "530fa313-3285-42b9-aebd-e65e9b4e86ed",
+    "remote": true
+  }],
+  "r2_buckets": [{
+    "binding": "MEDIA",
+    "bucket_name": "zhuanjiao-trial-images",
+    "remote": true
+  }]
+}
