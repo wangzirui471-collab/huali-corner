@@ -332,7 +332,8 @@ class DossierTests(unittest.TestCase):
 
     def test_dossier_returns_profile_and_collections(self):
         data = self.m.dossier(self.staff, self.seller)
-        for key in ('user', 'phone', 'orders', 'products', 'tickets', 'audit'):
+        for key in ('user', 'phone', 'orders', 'products', 'tickets', 'audit',
+                    'comments', 'posts', 'reviews', 'wants'):
             self.assertIn(key, data)
         self.assertEqual(data['user']['id'], self.seller)
         self.assertIn('role', data['user'])

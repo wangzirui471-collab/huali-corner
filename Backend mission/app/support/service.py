@@ -363,13 +363,19 @@ class SupportService(ValidationMixin):
         """用户档案：把「这个人是谁、有没有前科、现在什么状态」集中到一屏，
         不用在工单、商品、审计三处来回翻。
 
-        仅客服与管理员可查，且**每次查阅都写一条审计**——查档案本身就是高敏操作，
+        仅平台管理员与开发者可查（2026-10-18 由「客服及以上」收窄：档案聚合了
+        订单、评论、帖子、评价、求购等账号全部痕迹，属于最高敏的只读入口，
+        客服的日常工作只需要工单队列与商品处置，用不到全量档案）。
+        且**每次查阅都写一条审计**——查档案本身就是高敏操作，
         必须能回答「谁在什么时候看了谁」。
 
         与 /api/profile 的区别：那个是给所有人看的公开主页（已收敛掉 role/status），
         这个只在服务端开放，可以带 role、status、脱敏手机号和订单。
+
+        聊天正文不在档案里：私聊是双向私密内容，管理端走 flagged_content
+        的审核入口按需查看，不随档案整包带出。
         """
-        self.staff(u);target=int(target)
+        self.admin(u);target=int(target)
         user=self.profile(target)
         now=time.time()
         with self.tx() as c:
@@ -383,6 +389,12 @@ class SupportService(ValidationMixin):
             'orders':orders,
             'products':self.my_products(target),
             'tickets':self.rows('SELECT id,type,subject,status,order_id,product_id,created FROM tickets WHERE user_id=? ORDER BY id DESC LIMIT 50',(target,)),
+            # 账号的社区与交易痕迹：评论、帖子、发出的评价、发布的求购。
+            # 评论连帖子一起取，前端才能点回原帖；金额类字段保持整数分。
+            'comments':self.rows('SELECT c.id,c.post_id,c.body,c.created,p.topic FROM comments c JOIN posts p ON p.id=c.post_id WHERE c.user_id=? ORDER BY c.id DESC LIMIT 50',(target,)),
+            'posts':self.rows('SELECT id,topic,body,created,removed FROM posts WHERE user_id=? ORDER BY id DESC LIMIT 50',(target,)),
+            'reviews':self.rows('SELECT id,order_id,rating,body,created FROM reviews WHERE user_id=? ORDER BY id DESC LIMIT 50',(target,)),
+            'wants':self.rows('SELECT id,keyword,budget,status,created FROM wants WHERE user_id=? ORDER BY id DESC LIMIT 50',(target,)),
             'audit':self.rows('SELECT id,actor,target,type,delta,reason,ticket_id,created FROM audit WHERE target=? ORDER BY id DESC LIMIT 100',(target,)),
             'served_by':u,
         }

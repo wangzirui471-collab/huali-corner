@@ -290,7 +290,9 @@ function userRow(u) {
   const canBan = isAdmin() && u.id !== state.me.id && !['admin', 'developer'].includes(u.role);
   const tone = ROLE_TONE[u.role] || 'mute';
   const score = Math.max(0, Math.min(100, Number(u.score) || 0));
-  const acts = `<button class="btn secondary" data-go="dossier/${u.id}">用户档案</button>
+  // 档案页仅平台管理员与开发者可看（后端同样收窄）；客服端不再显示入口，
+  // 免得点了之后拿到 403 还以为系统坏了。
+  const acts = `${isAdmin() ? `<button class="btn secondary" data-go="dossier/${u.id}">用户档案</button>` : ''}
     ${isAdmin() && u.id !== state.me.id
       ? `<button class="text-button" data-action="credit" data-id="${u.id}">信誉调整</button>`
       : ''}

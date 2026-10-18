@@ -15,7 +15,7 @@ import { money, date } from '../core/format.js';
 import { state, statusNames } from '../core/state.js';
 import { api } from '../core/http.js';
 import { shell, heading } from '../core/shell.js';
-import { isStaff, isDeveloper } from '../core/roles.js';
+import { isAdmin, isDeveloper } from '../core/roles.js';
 import { needLogin } from '../auth/login.js';
 
 const ROLE_NAMES = { user: '普通用户', support: '客服', admin: '平台管理员', developer: '开发者' };
@@ -38,7 +38,9 @@ const sectionHead = (ic, title) =>
 
 export async function dossier(id) {
   if (!needLogin()) return;
-  if (!isStaff(state.me)) throw new Error('仅客服或管理员可查看用户档案');
+  // 档案聚合了一个账号的全部痕迹（订单、评论、帖子、评价、求购、处置记录），
+  // 2026-10-18 起仅平台管理员与开发者可看；客服的日常处置用不到全量档案。
+  if (!isAdmin(state.me)) throw new Error('仅平台管理员或开发者可查看用户档案');
   const target = Number(id);
   if (!Number.isInteger(target) || target <= 0) throw new Error('用户编号无效');
 
@@ -48,6 +50,10 @@ export async function dossier(id) {
   const orders = data.orders || [];
   const mine = data.tickets || [];
   const received = data.audit || [];
+  const comments = data.comments || [];
+  const posts = data.posts || [];
+  const reviews = data.reviews || [];
+  const wants = data.wants || [];
   const credits = received.filter(a => ['credit', 'ban', 'unban'].includes(a.type));
   const status = USER_STATUS[user.status] || user.status || '未知';
   const roleTone = ROLE_TONE[user.role] || 'mute';
@@ -112,6 +118,43 @@ export async function dossier(id) {
       </div>`).join('')}</div>`
     : '<p class="desk-empty">没有提交过工单</p>';
 
+  // --- 社区与交易痕迹：评论、帖子、评价、求购 -------------------------------
+  const commentList = comments.length
+    ? `<div class="desk-list">${comments.map(c => `<div class="desk-row">
+        <span class="row-glyph" data-tone="info">${icon('message')}</span>
+        <div class="desk-row-main"><b>${e(c.topic || '校园社区')}</b>
+          <small>${date(c.created)} · 帖子 #${c.post_id}</small>
+          <p>${e(c.body)}</p></div>
+      </div>`).join('')}</div>`
+    : '<p class="desk-empty">没有发表过评论</p>';
+
+  const postList = posts.length
+    ? `<div class="desk-list">${posts.map(p => `<div class="desk-row">
+        <span class="row-glyph" data-tone="violet">${icon('message')}</span>
+        <div class="desk-row-main"><b>${e(p.topic || '帖子')}</b>
+          <small>${date(p.created)}${p.removed ? ' · 已被处置' : ''}</small>
+          <p>${e(p.body)}</p></div>
+      </div>`).join('')}</div>`
+    : '<p class="desk-empty">没有发表过帖子</p>';
+
+  const reviewList = reviews.length
+    ? `<div class="desk-list">${reviews.map(r => `<div class="desk-row">
+        <span class="row-glyph" data-tone="${r.rating >= 4 ? 'ok' : 'warn'}">${icon('chart')}</span>
+        <div class="desk-row-main"><b>${'★'.repeat(Math.max(1, Math.min(5, Number(r.rating) || 1)))}</b>
+          <small>订单 #${r.order_id} · ${date(r.created)}</small>
+          <p>${e(r.body)}</p></div>
+      </div>`).join('')}</div>`
+    : '<p class="desk-empty">没有发出过评价</p>';
+
+  const wantList = wants.length
+    ? `<div class="desk-list">${wants.map(w => `<div class="desk-row">
+        <span class="row-glyph" data-tone="mute">${icon('search')}</span>
+        <div class="desk-row-main"><b>${e(w.keyword)}</b>
+          <small>预算 <span class="amount">¥${money(w.budget)}</span> · ${date(w.created)}</small></div>
+        ${statePill(statusNames[w.status] || w.status)}
+      </div>`).join('')}</div>`
+    : '<p class="desk-empty">没有发布过求购</p>';
+
   // 清除账号：仅开发者可见，且不能作用在管理员/开发者身上。
   // 放在页面最底部，避免误触——它不可撤销。
   const canPurge = isDeveloper(state.me) && user.id !== state.me.id && !['admin', 'developer'].includes(user.role);
@@ -122,14 +165,18 @@ export async function dossier(id) {
   </section>` : '';
 
   shell(`${heading('DOSSIER', '用户档案 · ' + (user.nickname || ''),
-    '仅客服与管理员可见；本次查阅已写入审计记录。')}
-    <button class="back" data-go="staff/users">← 返回工作台</button>
+    '仅平台管理员与开发者可见；本次查阅已写入审计记录。')}
+    <button class="back" data-go="admin/people?scope=all">← 返回用户列表</button>
     ${head}${stats}
     <div class="dossier-grid">
       <section class="panel">${sectionHead('chart', '信誉与处置记录')}${creditList}</section>
       <section class="panel">${sectionHead('bag', '参与订单')}${orderList}</section>
       <section class="panel">${sectionHead('tag', '商品')}${productList}</section>
       <section class="panel">${sectionHead('message', '提交的工单')}${ticketList}</section>
+      <section class="panel">${sectionHead('message', '发表的评论')}${commentList}</section>
+      <section class="panel">${sectionHead('message', '发表的帖子')}${postList}</section>
+      <section class="panel">${sectionHead('chart', '发出的评价')}${reviewList}</section>
+      <section class="panel">${sectionHead('search', '发布的求购')}${wantList}</section>
     </div>
     ${dangerZone}`, 'staff');
 }

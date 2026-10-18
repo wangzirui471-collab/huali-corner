@@ -201,7 +201,10 @@ function personRow(a) {
     : a.online ? statePill(`在线 ${a.sessions}`, 'ok') : statePill('离线', 'mute');
   const acts = self
     ? '<span class="tag">当前登录</span>'
-    : `<button class="btn secondary" data-action="change-role" data-id="${a.id}">改身份</button>`+
+    : // 档案页聚合了该账号的全部痕迹（商品/订单/评论/帖子/评价/求购/处置记录），
+      // 仅平台管理员与开发者可看；管理台本来就只有 admin 及以上能进。
+      `<button class="btn secondary" data-go="dossier/${a.id}">用户档案</button>`+
+      `<button class="btn secondary" data-action="change-role" data-id="${a.id}">改身份</button>`+
       // 停用 / 重置密码只对运营账号开放：普通用户的账号状态归封禁与注销管，
       // 密码也有恢复码自助找回。两套混用会让「停用」和「封禁」分不清。
       (isOps

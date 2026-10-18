@@ -4,9 +4,11 @@
 // 运行：node tests/frontend_modules.test.mjs
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..');
+// 手工 replace 的 pathname 不会解码 URL 编码——路径里带空格（如 `WorkBuddy AI`）
+// 会被留下 %20，readdirSync 直接 ENOENT。fileURLToPath 才是 Windows 下的正确做法。
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'web 7M', 'src');
 
 globalThis.window = {HUALI_STATIC_DEMO:false, addEventListener(){}, scrollTo(){}};

@@ -185,8 +185,8 @@ class SellerBulkTests(DeskTestCase):
 class AuditScopeTests(DeskTestCase):
 
     def test_support_sees_only_own_actions(self):
-        # 客服做一件会留痕的事：查档案。
-        self.m.dossier(self.support, self.user)
+        # 客服做一件会留痕的事：下架一件在售商品（客服有此权限）。
+        self.m.moderate_product(self.support, self.product(self.user, '导流卡'), 'delist', '整店导流')
         # 管理员再做一件。
         self.m.set_staff_status(self.admin, self.support, 'disabled')
         self.m.set_staff_status(self.admin, self.support, 'active')
@@ -196,7 +196,9 @@ class AuditScopeTests(DeskTestCase):
                          '客服不该看到同事或管理员的动作')
 
     def test_admin_sees_everyone_and_can_filter(self):
-        self.m.dossier(self.support, self.user)
+        # 两个角色各留一条痕：客服下架商品，管理员查档案（档案现已仅 admin/developer 可查）。
+        self.m.moderate_product(self.support, self.product(self.user, '导流卡'), 'delist', '整店导流')
+        self.m.dossier(self.admin, self.user)
         self.m.set_staff_status(self.admin, self.support, 'disabled')
         self.assertGreater(len({a['actor'] for a in self.m.audit_log(self.admin, limit=200)}), 1)
         only_admin = self.m.audit_log(self.admin, actor=self.admin, limit=200)
@@ -205,7 +207,7 @@ class AuditScopeTests(DeskTestCase):
         self.assertEqual({a['type'] for a in only_type}, {'dossier_view'})
 
     def test_csv_export_has_bom_and_rows(self):
-        self.m.dossier(self.support, self.user)
+        self.m.dossier(self.admin, self.user)
         blob = self.m.audit_csv(self.admin)
         self.assertTrue(blob.startswith('\ufeff'.encode('utf-8')), '没有 BOM 的话 Excel 打开是乱码')
         text = blob.decode('utf-8-sig')
@@ -296,6 +298,61 @@ class ChatPostModerationTests(DeskTestCase):
                          '移除后帖子不该继续出现在列表里')
         self.m.content_action(self.admin, 'post', pid, 'restore', '复核后确认是正常联系方式')
         self.assertTrue([p['id'] for p in self.m.posts('') if p['id'] == pid])
+
+
+class DossierScopeTests(DeskTestCase):
+    """用户档案的权限边界与内容聚合。
+
+    2026-10-18 起：档案聚合了账号的全部痕迹（商品、订单、评论、帖子、评价、
+    求购、处置记录），权限由「客服及以上」收窄为「平台管理员与开发者」。
+    """
+
+    def test_support_cannot_open_dossier(self):
+        with self.assertRaises(DomainError) as ctx:
+            self.m.dossier(self.support, self.user)
+        self.assertEqual(ctx.exception.status, 403)
+
+    def test_admin_opens_dossier_and_writes_audit(self):
+        data = self.m.dossier(self.admin, self.user)
+        for key in ('user', 'phone', 'orders', 'products', 'tickets',
+                    'comments', 'posts', 'reviews', 'wants', 'audit'):
+            self.assertIn(key, data)
+        self.assertIn('dossier_view',
+                      [a['type'] for a in self.m.audit_log(self.admin, limit=200)])
+
+    def test_dossier_lists_comments_and_posts(self):
+        # 发帖人和评论人都是 user：档案查的是「这个账号留下的痕迹」。
+        post = self.m.add_post(self.user, dict(topic='交流', body='出一本高数第七版'))
+        self.m.comment(self.user, post['id'], '楼下已出，谢谢关注', 0)
+
+        data = self.m.dossier(self.admin, self.user)
+
+        self.assertIn('出一本高数第七版', [p['body'] for p in data['posts']])
+        self.assertIn('楼下已出，谢谢关注', [c['body'] for c in data['comments']])
+        self.assertEqual(data['comments'][0]['post_id'], post['id'])
+
+    def test_dossier_lists_reviews_and_wants(self):
+        # 求购直接建；评价需要一笔已完成订单，走最短路径构造。
+        self.m.create_want(self.user, dict(keyword='台灯', budget=3000, description='宿舍用'))
+        pid = self.product(self.user, '高数第七版')
+        with self.m.tx() as c:
+            # checkout 要读商品快照里的首图，测试 helper 的最小 data 里没有，这里补上。
+            c.execute('UPDATE products SET data=? WHERE id=?',
+                      (json.dumps({'description': '测试', 'photos': [{'url': '/media/dossier-test.webp'}]}), pid))
+        buyer_order = self.m.checkout(self.peer, dict(
+            product_ids=[pid], delivery='pickup', address='',
+            appointment=time.time() + 7200, key='dossier-eval'))
+        self.m.order_action(self.peer, buyer_order['id'], 'pay', {})
+        self.m.order_action(self.user, buyer_order['id'], 'deliver', {})
+        self.m.order_action(self.peer, buyer_order['id'], 'handover', {})
+        self.m.order_action(self.peer, buyer_order['id'], 'receive', {})
+        self.m.review(self.peer, buyer_order['id'], 5, '书况很好')
+
+        data = self.m.dossier(self.admin, self.user)
+
+        self.assertIn('台灯', [w['keyword'] for w in data['wants']])
+        # 卖家自己不写评价，user 的 reviews 应为空；评价挂在买家档案里。
+        self.assertEqual(data['reviews'], [])
 
 
 if __name__ == '__main__':
