@@ -142,6 +142,26 @@ orders 1、settings 1、wants 1。
 实测时的失败请求在 KDF 阶段就被终止，D1 无残留数据（users 总数仍为迁移后的 10，
 无 `13800001111` 测试行、无 auth_attempts 残留）。
 
+**代码链路已在远程 D1 上端到端验证**（本地 `wrangler dev` + remote 绑定，workerd
+无 CPU 预算限制）：注册（600000 轮 KDF + 双语句 batch + 会话签发 + 完整 DTO 与
+恢复码）→ `GET /api/me`（会话）→ 登录（600000 轮校验 + 新会话）→ 错误密码 401
+→ 登出，全部通过。生产唯一缺的就是 CPU 预算。验证用的测试账号
+（`13900009999`）已从远程库删除（4 行，users/creds 均回到 10/10）。
+
+## 数据库容量上限（2026-10-18）
+
+- 平台硬限制（官方 Limits 文档，2026-04 更新）：单库 **10 GB（Workers Paid）/
+  500 MB（Free）**，10 GB 不可调高；账户总存储 1 TB（Paid）/ 5 GB（Free）。
+  即付费套餐下到 10 GB 时 Cloudflare 本身就会拒绝写入。
+- 应用层软守卫（`d1.py: DB_LIMIT_BYTES` + `api.py: require_capacity()`）：
+  写路径在写库前用 `SELECT 1` 响应的 `meta.size_after` 读当前库大小，到达
+  10 GiB 前返回 507 与可读提示，而不是平台的难懂 SQLite 错误。
+  `PRAGMA page_count` / `pragma_page_count()` 被 D1 的 SQLITE_AUTH 白名单
+  拒绝（实测 7500），不能用来算容量。
+- 当前库大小约 260 KB，上限极远。后续移植每个新增数据入口（发布、下单等）
+  时都要调用 `require_capacity()`。
+- 图片在 R2，不占 D1 配额，另有独立计费。
+
 ## 生产部署（2026-10-18）
 
 站点：https://zhuanjiao.wangzirui471.workers.dev （版本 `208ade13…`）
@@ -151,9 +171,9 @@ orders 1、settings 1、wants 1。
 | `GET /api/config` | 200 —— 校区、楼栋、学院配置与旧实现同形 |
 | `GET /api/products` | 200 —— 真实 D1 数据（分页/搜索/收藏/点赞/卖家信任标记） |
 | `GET /api/product?id=` | 200 |
-| `POST /api/auth/register` | 代码就绪，**需付费计划**（见上） |
-| `POST /api/auth/login` | 代码就绪，**需付费计划**（见上） |
-| `POST /api/auth/logout`、`GET /api/me` | 依赖会话，随登录一并可用 |
+| `POST /api/auth/register` | 代码就绪、链路已端到端验证，**需付费计划**（见上） |
+| `POST /api/auth/login` | 同上（含错误密码 401 与失败计数） |
+| `POST /api/auth/logout`、`GET /api/me` | 已随注册/登录一并端到端验证 |
 | `GET /media/<id>` | 200 —— R2 私有对象读取，权限规则与原实现一致 |
 | 其余 `/api/*` | 501 显式标注"该接口尚未在试用版开放"，不静默返回空数据 |
 

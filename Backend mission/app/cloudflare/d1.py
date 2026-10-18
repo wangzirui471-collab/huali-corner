@@ -42,7 +42,12 @@ D1 唯一的事务原语是 `batch()`：一批语句在同一个事务里执行�
 """
 from ..core.errors import DomainError
 
-__all__ = ['Database']
+# 容量守卫：10 GiB 是 Workers Paid 下 D1 单库的硬上限（免费计划只有 500 MB），
+# 且平台不允许调高。到达硬上限时 Cloudflare 会直接拒绝写入并抛出难懂的
+# SQLite 错误，所以应用层提前拦截，给出可读提示。
+DB_LIMIT_BYTES = 10 * 1024 ** 3
+
+__all__ = ['Database', 'DB_LIMIT_BYTES']
 
 
 def _as_dict(row):
@@ -89,6 +94,25 @@ class Database:
         if not row:
             raise DomainError('写入未返回结果', 409)
         return next(iter(row.values()))
+
+    # ---- 容量 --------------------------------------------------------------
+
+    async def used_bytes(self):
+        """当前库大小（字节）；取不到时返回 None（交由平台硬限制兜底）。
+
+        D1 每次查询响应的 `meta.size_after` 就是库的当前大小，用最便宜的
+        `SELECT 1` 顺带取回。`PRAGMA page_count` / `pragma_page_count()`
+        被 D1 的 SQLITE_AUTH 白名单拒绝（实测 7500），不能用。
+        """
+        result = await self._db.prepare('SELECT 1').run()
+        meta = getattr(result, 'meta', None)
+        if meta is None:
+            return None
+        if hasattr(meta, 'get'):
+            size = meta.get('size_after')
+        else:
+            size = getattr(meta, 'size_after', None)
+        return int(size) if size is not None else None
 
     # ---- 事务 --------------------------------------------------------------
 

@@ -18,7 +18,7 @@ from workers import Response
 
 from ..core.errors import DomainError
 from . import crypto, sessions
-from .d1 import Database
+from .d1 import DB_LIMIT_BYTES, Database
 from .http import (
     ApiError, error_response, guard, int_param, json_body, json_response,
     path_of, query_of, require,
@@ -52,6 +52,17 @@ class Api:
         self.assets = getattr(env, 'ASSETS', None)
 
     # ---- 账号辅助 --------------------------------------------------------
+
+    async def require_capacity(self):
+        """写路径统一前置检查：库到达 10GB 上限前给出可读错误。
+
+        每个新增数据的入口（注册、发布、下单……）在写库前调用一次；
+        查询本身是 `SELECT 1`，开销可忽略。取不到大小时不拦，由平台
+        硬限制兜底，宁可漏拦也不误拦。
+        """
+        used = await self.db.used_bytes()
+        if used is not None and used >= DB_LIMIT_BYTES:
+            raise ApiError('数据库已达容量上限，暂停新数据写入，请联系管理员', 507)
 
     @staticmethod
     def normalize_account(raw):
@@ -247,6 +258,7 @@ class Api:
     # ---- 认证 ------------------------------------------------------------
 
     async def register(self, request):
+        await self.require_capacity()
         data = await json_body(request)
         account = self.normalize_account(data.get('phone'))
         password = self.check_password(data.get('password'))
