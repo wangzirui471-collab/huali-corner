@@ -177,7 +177,25 @@ orders 1、settings 1、wants 1。
 | `GET /media/<id>` | 200 —— R2 私有对象读取，权限规则与原实现一致 |
 | 其余 `/api/*` | 501 显式标注"该接口尚未在试用版开放"，不静默返回空数据 |
 
-静态资源由 Workers Assets 托管，`run_worker_first` 保证 `/api` 与 `/media` 先进 Python。
+静态资源由 Workers Assets 托管。路由已按"静态直出"优化（2026-10-18，
+版本 `f486a8ee`）：`run_worker_first` 从 `true` 收窄为 `["/api/*", "/media/*"]`，
+并配置 `not_found_handling: "single-page-application"` 做 SPA 回退。
+此前所有请求（含每个 CSS/JS）都先进 Python Worker，要吃 Pyodide 冷启动；
+现在静态文件由边缘 CDN 直接输出，本地实测 CSS 12ms、首页 180ms。
+未匹配文件的路径回退 index.html，`/api` 未匹配仍返回 501 JSON。
+
+## 可达性：workers.dev 在大陆被墙（2026-10-18 确认）
+
+用户手机无法打开站点，挂 VPN 后正常——确认 `*.workers.dev` 在大陆网络
+（蜂窝/家庭宽带）被 DNS 污染，与站点本身无关。注意：本开发机的所有流量
+被本机代理软件（TUN 模式）接管（curl `remote_ip=127.0.0.1`），**在这台
+电脑上无法测出大陆真实直连体验**，此前"直连 200"的记录不可信。
+
+根治：绑定自定义域名。买域名后把 NS 交给 Cloudflare（免费计划即可），
+在 wrangler.jsonc 配 `routes: [{"pattern": "选定的域名", "custom_domain": true}]`
+再部署。自定义域名解析到 Cloudflare anycast IP，大陆可达性远好于
+workers.dev 整域污染；但不备案走国际节点，速度无保障。要"快"需要备案 +
+国内 CDN，那是另一个量级的方案。
 
 ## 未完成
 

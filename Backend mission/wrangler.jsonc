@@ -8,7 +8,12 @@
   "assets": {
     "directory": "../web 7M",
     "binding": "ASSETS",
-    "run_worker_first": true
+    // 只有 API 和图片进 Python（Pyodide 冷启动重，静态资源绝不能绕这一圈）。
+    // CSS/JS/HTML 直接由边缘 CDN 输出，毫秒级。
+    "run_worker_first": ["/api/*", "/media/*"],
+    // SPA 回退：没有对应文件的路径（如 /login）直接回 index.html，
+    // 不再依赖 Python 里的 assets.fetch。
+    "not_found_handling": "single-page-application"
   },
   "d1_databases": [{
     "binding": "DB",
