@@ -104,11 +104,30 @@ class Database:
         return list(await self._db.batch(prepared))
 
     @staticmethod
-    def expect(meta, message='操作未生效'):
+    def _changes(result):
+        """从 D1Result 里取受影响行数。
+
+        注意：`batch()` / `run()` 返回的是 D1Result，`changes` 在它的
+        `meta` 子对象里（`result.meta.changes`），不在顶层。早期把顶层
+        `changes` 当成行数，导致所有守卫都判成 0 行、误报冲突。
+        """
+        if result is None:
+            return 0
+        for holder in (getattr(result, 'meta', None), result):
+            if holder is None:
+                continue
+            if hasattr(holder, 'get'):
+                value = holder.get('changes')
+            else:
+                value = getattr(holder, 'changes', None)
+            if value is not None:
+                return int(value)
+        return 0
+
+    @classmethod
+    def expect(cls, result, message='操作未生效'):
         """断言一条语句确实影响了行。守卫条件没命中时 changes 为 0。"""
-        changes = 0
-        if meta is not None:
-            changes = meta.get('changes', 0) if hasattr(meta, 'get') else getattr(meta, 'changes', 0)
+        changes = cls._changes(result)
         if not changes:
             raise DomainError(message, 409)
         return changes
