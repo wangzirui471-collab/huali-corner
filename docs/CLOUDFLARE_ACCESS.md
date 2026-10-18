@@ -78,6 +78,40 @@ D1 当前只有内部表 `_cf_KV`，**没有任何业务表**，原数据未迁�
 - 本机存在系统代理变量（`127.0.0.1:55879`），Wrangler 会提示并使用；当前可用，不需要关闭证书校验。
 - 早期"被代理拦截"的阻塞已不再成立。
 
+## 数据迁移（2026-10-18 完成）
+
+来源：本机 `var-trial/market.sqlite3`（试用库）。导出前用 SQLite backup API 做了一致性快照，
+因为该库当时正被另一个 dev server 写入。
+
+| 项目 | 结果 |
+|---|---|
+| 表 | 29 张（含 `user_avatar_uploads`），索引 1 个 |
+| 行 | 238 行，21 张表有数据 |
+| 图片 | 27 个对象已进 R2，键为 `media/legacy/<user_id>/<upload_id>.webp` |
+
+逐表行数与源库完全一致：audit 40、messages 29、uploads 27、sessions 62、members 12、
+notifications 12、users 7、password_credentials 7、products 6、rooms 6、comments 4、
+ledger 4、reactions 4、tickets 4、ticket_messages 4、nominations 3、offers 2、posts 2、
+orders 1、settings 1、wants 1。
+
+处理过的两个坑：
+
+1. `core/database.py` 里的 `SQLITE_SCHEMA` 是旧版，缺 `users.last_login / degree_level /
+   study_status / profile_version / avatar_upload_id`、`rooms.support / assignee / ticket_id`，
+   也没有 `user_avatar_uploads` 表。这些是迁移脚本补出来的，必须以**本机实际结构**为准。
+   `schema.sql` 已按真实结构重新生成。
+2. `uploads.path` 存的是 Windows 绝对路径，云端无意义，已改写为 R2 键。
+
+校验：在 Workers 运行时按 D1 的 27 条 `uploads` 记录逐个 HEAD R2 对象，27/27 命中；
+抽查对象 SHA-256 与表内 `digest` 完全一致。`wrangler r2 bucket info` 的 `object_count`
+统计滞后，不能作为判断依据。
+
+未迁移：`var/`（演示库，39 行）未导入，避免与试用数据混用。本机 `var-trial/uploads/`
+另有 30 个无人引用的孤儿文件，未上传。
+
+**注意：远程 D1 已可被多人写入。** 迁移后出现了非本机来源的账号
+（`13900000001 / 测试同学`，含密码凭证与 2 个会话），说明已有其他入口在写这个库。
+
 ## 未完成
 
 - 业务表未初始化，原数据未迁移
