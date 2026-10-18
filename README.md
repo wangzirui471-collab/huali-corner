@@ -84,6 +84,10 @@ python server.py
 
 保持终端开启，在本机浏览器访问 `http://127.0.0.1:8080`。命令是 `python`，前面没有点号。PowerShell 的个人配置脚本被执行策略阻止，与 Python 网站启动是不同问题，不需要为此放宽执行策略。
 
+8081 学院试用版可从项目根目录双击 `start-trial-8081.bat`。启动器通过 `scripts/launch_trial.py` 选择依赖完整的 Python，不固定旧电脑的用户名或 Python38 路径。当前依赖需要 Python 3.10+，建议使用 64 位 Python 3.12 或 3.13；可运行 `start-trial-8081.bat --check` 只检查环境，不启动服务或创建数据。
+
+依赖缺失时，配套离线修复包的 `repair-wheels/` 可在校验 SHA-256 后为项目创建独立的 `.venv-trial/`，安装固定版本 Pillow 和 PyMySQL；离线包支持 Windows x64 Python 3.12/3.13。源码仓库不包含这些二进制包，也可自行在 `.venv-trial/` 安装 `Backend mission/requirements.txt`。启动仍沿用原试用数据位置、`HUALI_DATA_DIR` 和 `HC_DB`，不会强制结束占用 8081 的其他进程。Windows 启动和离线安装需要本机验证，不能用 Linux 测试代替。
+
 若旧下载包打开首页时报 `WindowsPath ... no attribute 'is_relative_to'`，是旧代码调用了 Python 3.9 才提供的方法。本次修复同时移除了登录使用的 `str.removeprefix`，并明确用 UTF-8 读取学院目录。先按 Ctrl+C 停止网站，用 GitHub 最新版 `server.py` 替换 `Backend mission/` 内的同名文件，再运行 `python server.py`；保留原有 `var/` 数据目录，无需为此重装依赖。推荐新环境使用 Python 3.12+；兼容回归在 Python 3.12 下模拟缺少新方法进行验证，未在旧版 Windows Python 上实机测试。
 
 若 pip 报 `Cannot connect to proxy`，应先检查本机代理及 pip 代理配置；连接失败后的 `No matching distribution` 不能单独证明依赖版本不存在。不要通过禁用 TLS 校验来解决代理问题。

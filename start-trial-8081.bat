@@ -1,59 +1,33 @@
 @echo off
-rem ---------------------------------------------------------------
-rem  Huali Corner - trial server launcher (port 8081)
-rem
-rem  Why is this file ASCII-only? cmd.exe parses .bat files with the
-rem  OEM codepage and splits multi-byte UTF-8 characters, which makes
-rem  it run half-characters as commands:
-rem      '了多个' is not recognized as an internal or external command
-rem  Keeping the batch file pure ASCII removes that class of noise.
-rem  Chinese user-facing text is printed by server.py itself.
-rem ---------------------------------------------------------------
+setlocal
+set "PYTHONUTF8=1"
 title Huali Corner - Trial 8081
-cd /d "%~dp0Backend mission"
-
-echo.
-echo   Huali Corner - Campus Trial (port 8081)
-echo   ----------------------------------------
-echo.
-
-rem Pillow is required: server.py imports PIL at startup.
-rem A bare "python" cannot be trusted (this machine has several
-rem interpreters on PATH and the first one may lack Pillow), so
-rem try the known 3.8 install first and fall back to PATH python.
-set "PY=C:\Users\Administrator\AppData\Local\Programs\Python\Python38\python.exe"
-if not exist "%PY%" set "PY=python"
-"%PY%" -c "import PIL" >nul 2>&1
-if errorlevel 1 (
-    echo   [ERROR] No Python with Pillow found, server not started.
-    echo   Tried interpreter: %PY%
-    echo   Install Pillow, or fix the PY path inside this script.
-    echo.
-    pause
-    exit /b 1
-)
-
-echo   Checking port 8081...
-set FOUND=0
-for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":8081" ^| findstr "LISTENING"') do (
-    echo   Found running instance PID %%p, closing it
-    taskkill /PID %%p /F >nul 2>&1
-    set FOUND=1
-)
-if "%FOUND%"=="1" timeout /t 2 /nobreak >nul
-
-echo   Starting, please wait...
-echo   Local:  http://127.0.0.1:8081
-echo   Phones/other PCs: use the LAN address printed below (same WiFi)
-echo   Stop:   press Ctrl+C in this window
-echo   ----------------------------------------
-echo.
-
-rem --lan: listen on 0.0.0.0 and derive the LAN origin automatically.
-rem Without it the server only listens on localhost and phones on the
-rem same WiFi cannot connect.
-"%PY%" server.py --trial --port 8081 --lan
-
-echo.
-echo   Server stopped.
+cd /d "%~dp0"
+if exist ".venv-trial\Scripts\python.exe" goto managed
+where py.exe >nul 2>&1
+if not errorlevel 1 goto launcher
+where python.exe >nul 2>&1
+if not errorlevel 1 goto python
+where python3.exe >nul 2>&1
+if not errorlevel 1 goto python3
+echo [ERROR] Python was not found. Install 64-bit Python 3.12 or 3.13.
 pause
+exit /b 1
+:managed
+".venv-trial\Scripts\python.exe" "scripts\launch_trial.py" %*
+set "LAUNCH_STATUS=%ERRORLEVEL%"
+goto done
+:launcher
+py.exe -3 "scripts\launch_trial.py" %*
+set "LAUNCH_STATUS=%ERRORLEVEL%"
+goto done
+:python
+python.exe "scripts\launch_trial.py" %*
+set "LAUNCH_STATUS=%ERRORLEVEL%"
+goto done
+:python3
+python3.exe "scripts\launch_trial.py" %*
+set "LAUNCH_STATUS=%ERRORLEVEL%"
+:done
+if not "%LAUNCH_STATUS%"=="0" pause
+exit /b %LAUNCH_STATUS%
