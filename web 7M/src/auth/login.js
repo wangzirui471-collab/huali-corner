@@ -56,7 +56,11 @@ export function trialLoginModal(mode='login'){
 
 export function loginModal(){
   if (window.HUALI_STATIC_DEMO){ publicDemoNotice(); return; }
-  if (state.config.auth_mode === 'password'){ trialLoginModal(); return; }
+  // trial（密码登录）走统一的试用登录框。client_kdf 也是密码，只是派生放在
+  // 浏览器里——表单长得一样，区别只在 actions/account.js 的 submit 处理器。
+  if (state.config.trial || state.config.auth_mode === 'password' || state.config.auth_mode === 'client_kdf'){
+    trialLoginModal(); return;
+  }
   modal(`<span class="eyebrow">WELCOME TO YOUR CORNER</span><h2>在转角，遇见好物</h2><p class="muted">手机号即可注册，毕业生也欢迎。当前是本地模拟验证码，不发送短信。</p><form id="login-form">${field('手机号','phone','tel','','required pattern="1[3-9][0-9]{9}" placeholder="请输入11位手机号"')}<div class="code-field">${field('验证码','code','text','','required maxlength="6"')}<button class="btn secondary" type="button" data-action="code">获取测试验证码</button></div><p id="code-hint" class="muted"></p><button class="btn primary full">登录 / 注册</button></form><div class="demo-logins"><small>快速体验（测试账号）</small><div><button class="btn secondary" data-action="demo-login" data-value="13800000001">卖家体验</button><button class="btn secondary" data-action="demo-login" data-value="13800000002">买家体验</button><button class="btn secondary" data-action="demo-login" data-value="19065322759">管理员登录</button></div></div>`);
 }
 

@@ -10,7 +10,10 @@
 DTO 字段一律对齐原实现（catalog/service.py、account/profiles.py），
 不新增、不改名，前端无需改动。
 """
+import hashlib
 import json
+import re
+import secrets
 import time
 from urllib.parse import urlsplit
 
@@ -67,8 +70,6 @@ class Api:
     @staticmethod
     def normalize_account(raw):
         """11 位手机号，或邮箱（统一小写）。与旧实现同规则。"""
-        import re
-
         require(isinstance(raw, str), '请输入11位手机号或邮箱')
         value = raw.strip()
         if '@' in value:
@@ -83,6 +84,27 @@ class Api:
         require(isinstance(password, str) and 6 <= len(password) <= 128,
                 '密码需为6至128个字符，不要使用其他网站的密码')
         return password
+
+    @staticmethod
+    def check_digest(digest):
+        """客户端 PBKDF2 上传的 32 字节十六进制摘要。"""
+        require(isinstance(digest, str) and re.fullmatch(r'[0-9a-f]{64}', digest or ''),
+                '提交的口令摘要格式不正确', 400)
+        return digest
+
+    @staticmethod
+    def check_salt(salt):
+        """16 字节十六进制盐。"""
+        require(isinstance(salt, str) and re.fullmatch(r'[0-9a-f]{32}', salt or ''),
+                '提交的盐格式不正确', 400)
+        return salt
+
+    @staticmethod
+    def check_rounds(rounds):
+        """允许在 [10000, ROUNDS] 之间；下限防止意外回退到弱口令，上限与本仓库规范一致。"""
+        require(isinstance(rounds, int) and crypto.MIN_ROUNDS <= rounds <= crypto.ROUNDS,
+                f'轮数需在 {crypto.MIN_ROUNDS}–{crypto.ROUNDS} 之间', 400)
+        return rounds
 
     async def profile_dto(self, user_id):
         row = await self.db.first(
@@ -163,10 +185,20 @@ class Api:
 
     async def config(self, request):
         # 字段与 server.py 的 /api/config 完全一致，前端不需要改。
+        # auth_mode:
+        #   'password'   — 后端用 hashlib.pbkdf2_hmac 派生，仅本地 8081 可用（CPython 快）；
+        #   'client_kdf' — 浏览器先 PBKDF2-HMAC-SHA256 算出 digest 再提交，
+        #                  让 Workers 免费计划 10ms CPU 也能扛 600000 轮；
+        #                  服务端不再算 digest，只做定长比较和会话签发。
+        #   'demo'       — 公开演示版，无登录态。
+        # 何时回退：
+        #   - 浏览器 SubtleCrypto 出错或不支持大迭代数时，前端兜底走本地静态演示；
+        #   - 部署者把 ROUNDS 调到 1 万以下时，前端拒绝继续派生并提示。
         return json_response({
             'simulation': True,
             'trial': True,
-            'auth_mode': 'password',
+            'auth_mode': 'client_kdf',
+            'pbkdf2_rounds': crypto.ROUNDS,
             'phone_verified': False,
             'name': '华立转角',
             'pilot': '计算机工程学院',
@@ -258,25 +290,44 @@ class Api:
     # ---- 认证 ------------------------------------------------------------
 
     async def register(self, request):
+        """注册。
+
+        在 Workers 试用版上客户端已经做完 600000 轮 PBKDF2，服务端只验
+        收 `{phone, nickname, salt, rounds, digest}`、把 digest 直接落库。
+        这避免了 Workers 免费计划 10ms CPU 上跑不动 600k 轮的问题（实
+        测 Python 派生 ~660ms，必然触发 1102/超时）。600k 轮的强度仍在
+        客户端保留；服务端不做任何派生。
+
+        安全权衡（重要）：digest 落库后，D1 一旦泄漏，攻击者拿到的是
+        已派生好的摘要，可以直接拿来做「pass-the-hash」登录，不再需要
+        爆破明文。600k 轮原本能让爆破时间从「秒级」抬到「数年」，但前
+        提是攻击者拿不到摘要。把摘要直接落库就是把这一前提让出去了——
+        这是为了不在付费计划之前下线试用而做的妥协，等切到 Workers
+        Paid 或自有 KDF 服务时要立刻改回服务端派生，并在提交中说明。
+        """
         await self.require_capacity()
         data = await json_body(request)
         account = self.normalize_account(data.get('phone'))
-        password = self.check_password(data.get('password'))
         nickname = (data.get('nickname') or '').strip()
         require(0 < len(nickname) <= 24, '昵称需填写且不超过24字')
+        salt = self.check_salt(data.get('salt'))
+        rounds = self.check_rounds(int(data.get('rounds') or 0))
+        digest = self.check_digest(data.get('digest'))
 
         exists = await self.db.first('SELECT 1 FROM users WHERE phone=?', (account,))
         require(not exists, '此账号已注册，请登录或使用恢复码', 409)
 
-        credential = crypto.new_credential(password)
+        # 服务端仍生成恢复码 + 摘要：恢复码不上 KDF，明文生成后存哈希。
+        recovery = secrets.token_urlsafe(32)
+        recovery_digest = hashlib.sha256(recovery.encode('utf-8')).hexdigest()
+
         # 用户与密码必须一次成事：第二条语句用子查询自取 id，不依赖交互式事务。
         results = await self.db.batch([
             ('INSERT INTO users(phone,nickname,college,role) VALUES(?,?,?,?)',
              (account, nickname, '计算机工程学院', 'user')),
             ('''INSERT INTO password_credentials(user_id,salt,digest,rounds,recovery_digest)
                 SELECT id,?,?,?,? FROM users WHERE phone=?''',
-             (credential['salt'], credential['digest'], credential['rounds'],
-              credential['recovery_digest'], account)),
+             (salt, digest, rounds, recovery_digest, account)),
         ])
         self.db.expect(results[0], '注册失败，请重试')
         self.db.expect(results[1], '注册失败，请重试')
@@ -289,29 +340,56 @@ class Api:
             'user': await self.profile_dto(user_id),
             'simulation': True,
             'phone_verified': False,
-            'recovery_code': credential['recovery'],
+            'recovery_code': recovery,
         })
 
+    async def auth_salt(self, request):
+        """返回某账号的 (salt, rounds) 供浏览器做客户端 PBKDF2。
+
+        为了不增加额外 D1 读（避免给攻击者「账号不存在」的强信号），
+        这里对未注册的账号也回 200，盐和轮数填一份固定占位，调用方
+        算出来的 digest 自然和服务端对不上 → 后续 `/api/auth/login`
+        仍然 401。这与原 `/api/auth/login` 在「账号不存在」时也走完
+        KDF 的策略一致。
+
+        但要承认的是：响应里的 salt 是真实盐还是占位，本身就泄露了
+        账号是否存在——这条路径比同步派生更难做到严格恒时。在校园试
+        用里这是可接受的；如果要严格无侧信道，需要把这份信息也下放
+        到 cookie 或预签发 token 里。
+        """
+        query = query_of(request)
+        raw = query.get('phone') or ''
+        require(isinstance(raw, str) and raw.strip(), '请输入11位手机号或邮箱', 400)
+        account = self.normalize_account(raw)
+        row = await self.db.first(
+            '''SELECT p.salt,p.rounds FROM password_credentials p
+               JOIN users u ON u.id=p.user_id WHERE u.phone=?''', (account,))
+        if row:
+            return json_response({'salt': row['salt'], 'rounds': int(row['rounds'])})
+        return json_response({'salt': '00' * 16, 'rounds': crypto.ROUNDS})
+
     async def login(self, request):
+        """登录：客户端已经用 `/api/auth/salt` 拿到的 salt+rounds 派生好 digest。
+
+        服务端只做：定长比较 digest、清尝试计数、签发会话 token。
+        """
         data = await json_body(request)
         account = self.normalize_account(data.get('phone'))
-        password = data.get('password')
-        require(isinstance(password, str) and len(password) <= 128, '账号、密码或恢复码不正确', 401)
+        digest = self.check_digest(data.get('digest'))
 
         attempt = await self.db.first('SELECT attempts,reset_at FROM auth_attempts WHERE phone=?', (account,))
         if attempt and float(attempt['reset_at']) > time.time() and attempt['attempts'] >= 5:
             raise ApiError('尝试次数过多，请15分钟后重试或使用恢复码', 429)
 
         row = await self.db.first(
-            '''SELECT p.salt,p.digest,p.rounds,u.id user_id,u.status
+            '''SELECT p.digest,p.recovery_digest,u.id user_id,u.status
                FROM password_credentials p JOIN users u ON u.id=p.user_id
                WHERE u.phone=?''', (account,))
-        # 账号不存在也走完 KDF，避免用耗时差异判断账号是否存在。
-        salt = row['salt'] if row else '00' * 16
-        rounds = row['rounds'] if row else crypto.ROUNDS
-        candidate = crypto.derive(password, salt, rounds)
+        # 账号不存在也要做一次定长比较，避免 digest 比较的耗时差异泄露账号是否存在。
+        stored = row['digest'] if row else '0' * 64
+        matched = row is not None and crypto.constant_time_equals(digest, stored)
 
-        if not row or not crypto.constant_time_equals(candidate, row['digest']):
+        if not matched:
             now = time.time()
             fresh = attempt and float(attempt['reset_at']) > now
             count = (attempt['attempts'] + 1) if fresh else 1
@@ -336,6 +414,61 @@ class Api:
             'simulation': True,
             'phone_verified': False,
         })
+
+    async def recover(self, request):
+        """用恢复码重置密码：客户端已经派生好新 digest，服务端验证恢复码后落库。"""
+        data = await json_body(request)
+        account = self.normalize_account(data.get('phone'))
+        recovery_code = data.get('recovery_code')
+        require(isinstance(recovery_code, str) and 0 < len(recovery_code) <= 128,
+                '账号、密码或恢复码不正确', 401)
+        salt = self.check_salt(data.get('salt'))
+        rounds = self.check_rounds(int(data.get('rounds') or 0))
+        digest = self.check_digest(data.get('digest'))
+
+        row = await self.db.first(
+            '''SELECT p.recovery_digest,u.id user_id
+               FROM password_credentials p JOIN users u ON u.id=p.user_id
+               WHERE u.phone=?''', (account,))
+        if not row or not crypto.constant_time_equals(
+                hashlib.sha256(recovery_code.encode('utf-8')).hexdigest(),
+                row['recovery_digest']):
+            raise ApiError('账号、密码或恢复码不正确', 401)
+
+        recovery = secrets.token_urlsafe(32)
+        recovery_digest = hashlib.sha256(recovery.encode('utf-8')).hexdigest()
+        results = await self.db.batch([
+            ('UPDATE password_credentials SET salt=?,digest=?,rounds=?,recovery_digest=? WHERE user_id=?',
+             (salt, digest, rounds, recovery_digest, row['user_id'])),
+            ('DELETE FROM sessions WHERE user_id=?', (row['user_id'],)),
+            ('DELETE FROM auth_attempts WHERE phone=?', (account,)),
+        ])
+        self.db.expect(results[0], '重置失败，请重试')
+        return json_response({'ok': True, 'recovery_code': recovery})
+
+    async def change_password(self, request):
+        """已登录用户改密码：客户端分别派生老 digest 与新 digest，服务端比对后落库。"""
+        uid = await sessions.require_user_id(self.db, request)
+        data = await json_body(request)
+        old_digest = self.check_digest(data.get('old_digest'))
+        salt = self.check_salt(data.get('salt'))
+        rounds = self.check_rounds(int(data.get('rounds') or 0))
+        digest = self.check_digest(data.get('digest'))
+
+        row = await self.db.first('SELECT digest FROM password_credentials WHERE user_id=?', (uid,))
+        if not row or not crypto.constant_time_equals(old_digest, row['digest']):
+            raise ApiError('原密码不正确', 401)
+
+        recovery = secrets.token_urlsafe(32)
+        recovery_digest = hashlib.sha256(recovery.encode('utf-8')).hexdigest()
+        results = await self.db.batch([
+            ('UPDATE password_credentials SET salt=?,digest=?,rounds=?,recovery_digest=? WHERE user_id=?',
+             (salt, digest, rounds, recovery_digest, uid)),
+            ('DELETE FROM sessions WHERE user_id=?', (uid,)),
+            ('DELETE FROM auth_attempts WHERE phone=(SELECT phone FROM users WHERE id=?)', (uid,)),
+        ])
+        self.db.expect(results[0], '修改失败，请重试')
+        return json_response({'ok': True, 'recovery_code': recovery})
 
     async def logout(self, request):
         await sessions.revoke_session(self.db, request)
@@ -406,8 +539,11 @@ ROUTES = {
     '/api/config': (('GET',), 'config'),
     '/api/products': (('GET',), 'products'),
     '/api/product': (('GET',), 'product'),
+    '/api/auth/salt': (('GET',), 'auth_salt'),
     '/api/auth/register': (('POST',), 'register'),
     '/api/auth/login': (('POST',), 'login'),
+    '/api/auth/recover': (('POST',), 'recover'),
     '/api/auth/logout': (('POST',), 'logout'),
+    '/api/auth/password': (('POST',), 'change_password'),
     '/api/me': (('GET',), 'me'),
 }

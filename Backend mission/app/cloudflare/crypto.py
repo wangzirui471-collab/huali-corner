@@ -35,12 +35,15 @@ import hashlib
 import secrets
 
 ROUNDS = 600000
+# 下限是允许前端「客户端派生」路径回退到本地 8081 时不会把规范写崩：
+# 当有人把 ROUNDS 调到 1 万以下时，PBKDF2 已经接近单次 SHA256，需要服务端显式拒绝。
+MIN_ROUNDS = 10000
 KEY_BYTES = 32
 BLOCK = 64
 SESSION_TTL = 86400 * 7
 
 __all__ = [
-    'ROUNDS', 'SESSION_TTL', 'new_salt', 'derive', 'new_credential',
+    'ROUNDS', 'MIN_ROUNDS', 'SESSION_TTL', 'new_salt', 'derive', 'new_credential',
     'verify', 'new_session_token', 'session_digest', 'constant_time_equals',
 ]
 
