@@ -6,6 +6,7 @@ import { state } from '../core/state.js';
 import { api } from '../core/http.js';
 import { shell, heading } from '../core/shell.js';
 import { selectField } from '../components/forms.js';
+import { isStaff } from '../core/roles.js';
 
 // 分区配色与图标：和工单的 type-chip 同一套 tone，
 // 「求购」偏橙（有交易意图）、「互助」偏绿（纯帮忙）、「毕业季」偏紫。
@@ -22,7 +23,10 @@ const TOPICS = {
 export function postCard(p) {
   const topic = TOPICS[p.topic] || { tone: 'mute', icon: 'message' };
   const replies = Number(p.replies) || 0;
-  return `<article class="panel post-card">
+  // 处置入口：客服/管理员/开发者能看到「删除」，但自己的帖子不出现
+  // （后端也拦「不能处置自己发布的内容」）。
+  const canRemove = isStaff(state.me) && p.user_id !== state.me?.id;
+  return `<article class="panel post-card" data-post="${p.id}">
     <header class="post-head">
       <button class="post-author" data-go="profile/${p.user_id}" aria-label="查看 ${e(p.nickname)} 的主页">
         <span class="avatar post-avatar">${e((p.nickname || '?')[0])}</span>
@@ -38,6 +42,9 @@ export function postCard(p) {
       <button class="post-action quiet" data-action="report-community" data-id="${p.id}">
         ${icon('alert')}举报
       </button>
+      ${canRemove ? `<button class="post-action danger" data-action="remove-post" data-id="${p.id}">
+        ${icon('trash')}删除帖子
+      </button>` : ''}
     </footer>
   </article>`;
 }

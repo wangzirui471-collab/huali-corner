@@ -32,3 +32,4 @@ repair-wheels/
 # Cloudflare Workers：依赖由 schema.sql + pylock 生成，不随仓库提交
 Backend mission/python_modules/
 Backend mission/.wrangler/
+.venv-trial-broken-*/

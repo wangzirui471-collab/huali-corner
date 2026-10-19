@@ -273,13 +273,15 @@ class CommunityService(ValidationMixin):
         # before 游标用于「加载更早评论」。
         # 每条评论带 parent 关系：parent_id=0 为直接评论帖子，>0 时把父评论作者
         # 一并带出（parent_user_id/parent_nickname），前端据此渲染「谁回复谁」。
+        # 被处置（违法/辱骂）的评论不进结果；帖子本身被删时也不给看评论区。
+        self.require(self.row('SELECT 1 FROM posts WHERE id=? AND removed=0',(p,)),'帖子不存在或已被删除',404)
         limit=100
         base='''SELECT c.*,u.nickname,
             pc.user_id AS parent_user_id, pu.nickname AS parent_nickname
             FROM comments c JOIN users u ON u.id=c.user_id
             LEFT JOIN comments pc ON pc.id=c.parent_id
             LEFT JOIN users pu ON pu.id=pc.user_id
-            WHERE c.post_id=?'''
+            WHERE c.post_id=? AND c.removed=0'''
         if before:
             rows=self.rows(base+' AND c.id<? ORDER BY c.id DESC LIMIT ?',(p,int(before),limit))
         else:
@@ -354,28 +356,36 @@ class CommunityService(ValidationMixin):
         return {'messages':messages,'posts':posts}
 
     def content_action(self,u,kind,cid,action,reason):
-        """移除 / 恢复一条被打标的聊天消息或帖子。
+        """移除 / 恢复一条聊天消息、社区帖子或评论。
 
-        移除以「软删除」实现（removed=1）：正文留着，用户侧显示「已被移除」，
-        这样当事人申诉、或后来发现判错时还能还原，而不是数据已经没了。
+        移除以「软删除」实现（removed=1）：正文留着，用户侧显示「已被移除」
+        （评论直接从列表里消失），这样当事人申诉、或后来发现判错时还能还原，
+        而不是数据已经没了。
+
+        三种内容的处置粒度不同，但入口统一在这里：
+          message —— 群聊/私聊里的消息；
+          post    —— 社区帖子，删了整张卡不再返回；
+          comment —— 社区评论，只从评论区消失，帖子本身不动。
         """
         self.staff(u)
-        self.require(kind in ('message','post'),'内容类型无效')
-        self.require(action in ('remove','restore'),'操作无效')
-        reason=self.text(reason,500,'处置理由')
-        table='messages' if kind=='message' else 'posts'
-        row=self.row(f'SELECT id,user_id FROM {table} WHERE id=?',(int(cid),))
-        self.require(row,f'{"消息" if kind=="message" else "帖子"}不存在',404)
-        self.require(row['user_id']!=u,'不能处置自己发布的内容')
-        label='聊天消息' if kind=='message' else '社区帖子'
+        tables = {'message': 'messages', 'post': 'posts', 'comment': 'comments'}
+        labels = {'message': '聊天消息', 'post': '社区帖子', 'comment': '社区评论'}
+        self.require(kind in tables, '内容类型无效')
+        self.require(action in ('remove', 'restore'), '操作无效')
+        reason = self.text(reason, 500, '处置理由')
+        table = tables[kind]
+        row = self.row(f'SELECT id,user_id FROM {table} WHERE id=?', (int(cid),))
+        self.require(row, labels[kind] + '不存在', 404)
+        self.require(row['user_id'] != u, '不能处置自己发布的内容')
+        label = labels[kind]
         with self.tx() as c:
-            c.execute(f'UPDATE {table} SET removed=? WHERE id=?',(1 if action=='remove' else 0,int(cid)))
+            c.execute(f'UPDATE {table} SET removed=? WHERE id=?', (1 if action == 'remove' else 0, int(cid)))
             c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',
-                      (u,row['user_id'],'content_'+action,f'{label} #{cid}：{reason}',time.time()))
-            if action=='remove':
-                self.notify(c,row['user_id'],'content_removed',
+                      (u, row['user_id'], 'content_' + action, f'{label} #{cid}：{reason}', time.time()))
+            if action == 'remove':
+                self.notify(c, row['user_id'], 'content_removed',
                             f'你发布的一条{label}因「{reason}」已被移除。如有异议可在客服中心申诉。')
-        return {'ok':True}
+        return {'ok': True}
 
     # --- 校园求购撮合 ---------------------------------------------------
     def create_want(self,u,d):

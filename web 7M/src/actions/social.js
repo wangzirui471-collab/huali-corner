@@ -9,11 +9,13 @@ import { go, render } from '../core/nav.js';
 import { modal, closeModal } from '../core/shell.js';
 import { field } from '../components/forms.js';
 import { needLogin } from '../auth/login.js';
+import { isStaff } from '../core/roles.js';
 import { chatClicks } from '../pages/messages.js';
 import { postCard } from '../pages/community.js';
 
 // 评论条目：抖音评论区风格。头像、昵称、时间，子回复明确标出「回复 @谁」。
-function commentItem(c, editable){
+// moderatable：当前用户能否处置这条内容（客服/管理员/开发者），且不能是作者自己。
+function commentItem(c, editable, moderatable){
   const at = c.parent_nickname
     ? `<span class="reply-at">回复 @${e(c.parent_nickname)}：</span>`
     : '';
@@ -23,13 +25,14 @@ function commentItem(c, editable){
       <div class="comment-meta"><b>${e(c.nickname)}</b><small>${date(c.created)}</small></div>
       <p class="comment-text">${at}${e(c.body)}</p>
       ${editable ? `<button type="button" class="comment-reply" data-action="reply-comment" data-id="${c.id}" data-nick="${e(c.nickname)}" data-post="${c.post_id}">回复</button>` : ''}
+      ${moderatable ? `<button type="button" class="comment-remove" data-action="remove-comment" data-id="${c.id}" data-post="${c.post_id}">删除</button>` : ''}
     </div>
   </div>`;
 }
 
 // 扁平评论组装成「主评论 + 缩进子回复」。父评论不在本次加载范围时，
 // 该回复按主评论展示，但「回复 @谁」标记保留，对话关系不会丢。
-function commentsHtml(comments, editable){
+function commentsHtml(comments, editable, moderatable){
   const ids = new Set(comments.map(c => c.id));
   const children = new Map(), tops = [];
   for (const c of comments){
@@ -40,17 +43,28 @@ function commentsHtml(comments, editable){
   }
   return tops.map(top => {
     const kids = children.get(top.id);
-    return `<div class="comment-block">${commentItem(top, editable)}${kids && kids.length ? `<div class="comment-children">${kids.map(k => commentItem(k, editable)).join('')}</div>` : ''}</div>`;
+    return `<div class="comment-block">${commentItem(top, editable, moderatable)}${kids && kids.length ? `<div class="comment-children">${kids.map(k => commentItem(k, editable, moderatable)).join('')}</div>` : ''}</div>`;
   }).join('') || '<p class="muted comments-empty">还没有评论，来说两句吧。</p>';
 }
 
+// 删除内容（帖子 / 评论）的确认框：必须写理由，理由会进审计并通知作者。
+// 用软删除，误删能在后台恢复；所以文案不说「永久删除」，避免吓退处置人。
+function contentRemoveForm(kind, id, label){
+  modal(`<h2>删除${label}</h2>
+    <p class="muted">删除后这条${label}不再对任何人展示，作者会收到通知并可在客服中心申诉。记录仍保留在后台，误删可以恢复。</p>
+    <form id="remove-content-form" data-kind="${kind}" data-id="${Number(id)}">
+      <label class="field"><span>处置理由（写入审计，作者可见）</span><textarea name="reason" required maxlength="500" placeholder="例如：含违法交易信息 / 人身攻击 / 泄露他人隐私"></textarea></label>
+      <button class="btn danger full">确认删除</button>
+    </form>`);
+}
+
 // 评论区面板：头部（评论数 + 收起）、加载更早、评论列表、底部「说点什么」。
-function commentsPanel(id, comments, editable){
+function commentsPanel(id, comments, editable, moderatable){
   const head = `<div class="comments-head"><b>评论 ${comments.length}</b><button type="button" class="comments-close" data-action="close-comments" aria-label="收起评论">${icon('close')}</button></div>`;
   const more = comments.length >= 100
     ? `<button class="text-button more-comments" data-action="more-comments" data-id="${id}" data-before="${comments[0].id}">加载更早的评论</button>`
     : '';
-  const list = `<div class="comments-body">${commentsHtml(comments, editable)}</div>`;
+  const list = `<div class="comments-body">${commentsHtml(comments, editable, moderatable)}</div>`;
   const form = editable
     ? `<form id="comment-form" data-post="${id}"><div class="comment-composer"><textarea name="body" required maxlength="1000" placeholder="说点什么…"></textarea><button class="btn primary">发布</button></div></form>`
     : '';
@@ -62,7 +76,7 @@ async function refreshComments(box){
   const id = Number(box.dataset.post);
   const comments = await api('/comments?id='+id);
   box._comments = comments;
-  box.innerHTML = commentsPanel(id, comments, true);
+  box.innerHTML = commentsPanel(id, comments, true, isStaff(state.me));
   const card = box.previousElementSibling;
   const btn = card && card.querySelector('.post-action[data-action="comments"]');
   if (!btn) return;
@@ -109,7 +123,7 @@ export const clicks = {
     box.className = 'post-comments';
     box.dataset.post = id;
     box._comments = comments;
-    box.innerHTML = commentsPanel(id, comments, true);
+    box.innerHTML = commentsPanel(id, comments, true, isStaff(state.me));
     card.insertAdjacentElement('afterend', box);
     box.scrollIntoView({ block:'nearest', behavior:'smooth' });
   },
@@ -146,6 +160,11 @@ export const clicks = {
 
   // 收起评论区
   'close-comments': b => { b.closest('.post-comments').remove(); },
+
+  // 删除违法/辱骂内容：只有客服及以上能看到按钮（页面渲染时判断），
+  // 后端同样校验权限，且不允许处置自己发布的内容。
+  'remove-post': (b, id) => contentRemoveForm('post', id, '帖子'),
+  'remove-comment': (b, id) => contentRemoveForm('comment', id, '评论'),
 
   nominate(b, id){
     modal(`<h2>申请群管理员</h2><form id="nominate-form" data-id="${id}"><label class="field"><span>申请理由</span><textarea name="reason" required></textarea></label><button class="btn primary">提交申请</button></form>`);
@@ -211,11 +230,32 @@ export async function demoComments(id){
   const box = document.createElement('div');
   box.className = 'post-comments demo';
   box.dataset.post = id;
-  box.innerHTML = commentsPanel(id, comments, false);
+  box.innerHTML = commentsPanel(id, comments, false, false);
   card.insertAdjacentElement('afterend', box);
 }
 
 export const submits = {
+  // 执行删除：评论删完就地刷新评论区，帖子删完把卡片和它的评论区一起摘掉，
+  // 都不整页重画——管理员巡视时往往连着删好几条，重画会把滚动位置顶回去。
+  'remove-content-form': async ({ form, d }) => {
+    const kind = form.dataset.kind;
+    const id = Number(form.dataset.id);
+    await api('/admin/content/action', { kind, id, action: 'remove', reason: d.reason });
+    closeModal();
+    toast(kind === 'post' ? '帖子已删除' : '评论已删除');
+    if (kind === 'comment'){
+      const box = document.querySelector('.post-comments');
+      if (box) await refreshComments(box);
+    } else if (kind === 'post'){
+      const card = document.querySelector(`.post-card[data-post="${id}"]`);
+      if (card){
+        const next = card.nextElementSibling;
+        if (next && next.classList.contains('post-comments')) next.remove();
+        card.remove();
+      }
+    }
+  },
+
   'post-form': async ({ d }) => {
     if (!needLogin()) return;
     await api('/posts', d);

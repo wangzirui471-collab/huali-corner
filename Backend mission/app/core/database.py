@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY,room_id INTEGER,user_
 CREATE TABLE IF NOT EXISTS message_hides(user_id INTEGER,message_id INTEGER,created REAL,PRIMARY KEY(user_id,message_id));
 CREATE TABLE IF NOT EXISTS blocks(user_id INTEGER,target INTEGER,PRIMARY KEY(user_id,target));
 CREATE TABLE IF NOT EXISTS posts(id INTEGER PRIMARY KEY,user_id INTEGER,topic TEXT,body TEXT,created REAL,moderation TEXT,removed INTEGER DEFAULT 0);
-CREATE TABLE IF NOT EXISTS comments(id INTEGER PRIMARY KEY,post_id INTEGER,user_id INTEGER,body TEXT,created REAL,parent_id INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS comments(id INTEGER PRIMARY KEY,post_id INTEGER,user_id INTEGER,body TEXT,created REAL,parent_id INTEGER DEFAULT 0,removed INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS offers(id INTEGER PRIMARY KEY,product_id INTEGER,buyer_id INTEGER,amount INTEGER,status TEXT DEFAULT 'pending',created REAL,accepted_at REAL);
 CREATE TABLE IF NOT EXISTS nominations(id INTEGER PRIMARY KEY,user_id INTEGER,room_id INTEGER,reason TEXT,status TEXT DEFAULT 'pending',created REAL);
 CREATE TABLE IF NOT EXISTS wants(id INTEGER PRIMARY KEY,user_id INTEGER,keyword TEXT,budget INTEGER,description TEXT,status TEXT DEFAULT 'open',created REAL);
@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS messages(id INT PRIMARY KEY AUTO_INCREMENT,room_id IN
 CREATE TABLE IF NOT EXISTS message_hides(user_id INT,message_id INT,created DOUBLE,PRIMARY KEY(user_id,message_id));
 CREATE TABLE IF NOT EXISTS blocks(user_id INT,target INT,PRIMARY KEY(user_id,target));
 CREATE TABLE IF NOT EXISTS posts(id INT PRIMARY KEY AUTO_INCREMENT,user_id INT,topic VARCHAR(128),body TEXT,created DOUBLE,moderation TEXT,removed INT DEFAULT 0);
-CREATE TABLE IF NOT EXISTS comments(id INT PRIMARY KEY AUTO_INCREMENT,post_id INT,user_id INT,body TEXT,created DOUBLE,parent_id INT DEFAULT 0);
+CREATE TABLE IF NOT EXISTS comments(id INT PRIMARY KEY AUTO_INCREMENT,post_id INT,user_id INT,body TEXT,created DOUBLE,parent_id INT DEFAULT 0,removed INT DEFAULT 0);
 CREATE TABLE IF NOT EXISTS offers(id INT PRIMARY KEY AUTO_INCREMENT,product_id INT,buyer_id INT,amount INT,status VARCHAR(48) DEFAULT 'pending',created DOUBLE,accepted_at DOUBLE);
 CREATE TABLE IF NOT EXISTS nominations(id INT PRIMARY KEY AUTO_INCREMENT,user_id INT,room_id INT,reason TEXT,status VARCHAR(32) DEFAULT 'pending',created DOUBLE);
 CREATE TABLE IF NOT EXISTS wants(id INT PRIMARY KEY AUTO_INCREMENT,user_id INT,keyword VARCHAR(128),budget INT,description TEXT,status VARCHAR(32) DEFAULT 'open',created DOUBLE);
@@ -372,6 +372,9 @@ class Store:
                     c.execute('ALTER TABLE posts ADD COLUMN removed INTEGER DEFAULT 0')
                 if 'parent_id' not in [x[1] for x in c.execute('PRAGMA table_info(comments)')]:
                     c.execute('ALTER TABLE comments ADD COLUMN parent_id INTEGER DEFAULT 0')
+                # 评论软删除：违法/辱骂评论要能下掉，但记录留着可回溯。
+                if 'removed' not in [x[1] for x in c.execute('PRAGMA table_info(comments)')]:
+                    c.execute('ALTER TABLE comments ADD COLUMN removed INTEGER DEFAULT 0')
                 if 'last_read_id' not in [x[1] for x in c.execute('PRAGMA table_info(members)')]:
                     c.execute('ALTER TABLE members ADD COLUMN last_read_id INTEGER DEFAULT 0')
                 if 'post_id' not in [x[1] for x in c.execute('PRAGMA table_info(notifications)')]:
@@ -395,6 +398,13 @@ class Store:
         else:
             with self.connect() as c:
                 c.executescript(MYSQL_SCHEMA)
+                # CREATE TABLE IF NOT EXISTS 不会给已存在的表补列，老 MySQL 库要单独 ALTER。
+                # MySQL 没有 ADD COLUMN IF NOT EXISTS，重复执行靠异常兜住（列已存在即视为完成）。
+                for ddl in ('ALTER TABLE comments ADD COLUMN removed INT DEFAULT 0',):
+                    try:
+                        c.execute(ddl)
+                    except Exception:
+                        pass
                 c.execute("INSERT IGNORE INTO rooms(id,kind,name) VALUES(1,'general','广州校区总聊')")
 
     @contextmanager
