@@ -19,6 +19,8 @@ class TradeService(ValidationMixin):
             self.require(all(products),'商品不存在')
             self.require(len({p['seller_id'] for p in products})==1,'只能合并同一卖家的商品')
             seller=products[0]['seller_id'];self.require(seller!=u,'不能购买自己的商品')
+            # 卖家状态校验（F-01）：被封禁 / 注销 / 停用的卖家，商品不再可下单。
+            self.require(c.execute("SELECT 1 FROM users WHERE id=? AND status='active'",(seller,)).fetchone(),'卖家当前不可交易',409)
             self.require(all(p['status']=='available' for p in products),'部分商品已被预留或售出',409)
             self.require(all(p['delivery'] in [delivery,'both'] for p in products),'商品不支持所选交付方式')
             want=None
@@ -94,7 +96,28 @@ class TradeService(ValidationMixin):
         if fee:self.journal(c,r['id'],'service_fee_reversal',fee['amount'])
 
     def release(self,c,r):
-        for p in json.loads(r['items']):c.execute("UPDATE products SET status='available' WHERE id=?",(p['id'],))
+        """订单作废时回收库存。
+
+        卖家状态正常才退回「在售」；卖家已被封禁 / 注销 / 停用时退回
+        「已下架」并清掉置顶，不重新进入公开列表（F-01：封禁后待付款
+        订单被取消，release() 曾无条件把商品设回 available，商品又暴露
+        给其他买家下单）。语义与 Cloudflare 侧 cf_trade_release 一致。
+        返回真正恢复在售的商品 id，调用方据此写通知文案。"""
+        restored=[]
+        for p in json.loads(r['items']):
+            pid=p['id']
+            # 事务内必须用事务连接 c 查：self.row() 另开连接，读不到本事务未提交数据。
+            active=c.execute("SELECT 1 FROM users WHERE id=(SELECT seller_id FROM products WHERE id=?) AND status='active'",(pid,)).fetchone()
+            if active:
+                c.execute("UPDATE products SET status='available' WHERE id=? AND status='reserved'",(pid,));restored.append(pid)
+            else:
+                c.execute("UPDATE products SET status='removed',promoted_until=0 WHERE id=? AND status='reserved'",(pid,))
+        return restored
+
+    @staticmethod
+    def stock_note(restored,total):
+        """通知文案：全部商品回到在售才说「释放回在售」，否则说明随卖家处置下架。"""
+        return '商品已释放回在售。' if len(restored)==total else '商品已随卖家账号处置下架，暂停公开展示。'
 
     def complete(self,c,r,now):
         c.execute("UPDATE orders SET status='completed',completed_at=? WHERE id=?",(now,r['id']))
@@ -119,9 +142,10 @@ class TradeService(ValidationMixin):
                 self.require(status in ['awaiting_payment','paid','cancelled'],'已交付或存在争议，请申请售后')
                 if status!='cancelled':
                     if status=='paid':self.journal(c,oid,'refund',r['total'])
-                    c.execute("UPDATE orders SET status='cancelled' WHERE id=?",(oid,));self.release(c,r);self.restore_want(c,r)
+                    c.execute("UPDATE orders SET status='cancelled' WHERE id=?",(oid,))
+                    restored=self.release(c,r);self.restore_want(c,r)
                     who='买家' if buyer else '卖家'
-                    self.notify(c,r['seller_id'] if buyer else r['buyer_id'],'order_cancelled',f'订单 #{oid} 已被{who}取消，商品已释放回在售。',oid)
+                    self.notify(c,r['seller_id'] if buyer else r['buyer_id'],'order_cancelled',f'订单 #{oid} 已被{who}取消，{self.stock_note(restored,len(json.loads(r["items"])))}',oid)
             elif action=='deliver':
                 self.require(not buyer and status=='paid','仅卖家可在付款后标记交付')
                 c.execute("UPDATE orders SET status='awaiting_handover',schedule_confirmed=1,delivered_at=? WHERE id=?",(now,oid))
@@ -167,7 +191,12 @@ class TradeService(ValidationMixin):
                 self.require(set(keep).issubset({i['id'] for i in items}),'包含不属于本订单的商品')
                 for i in items:
                     if i['id'] not in keep:
-                        c.execute("UPDATE products SET status='available' WHERE id=? AND status='reserved'",(i['id'],))
+                        # 与 release() 同一套卖家状态规则：卖家异常时商品不回到公开在售（F-01）。
+                        active=c.execute("SELECT 1 FROM users WHERE id=(SELECT seller_id FROM products WHERE id=?) AND status='active'",(i['id'],)).fetchone()
+                        if active:
+                            c.execute("UPDATE products SET status='available' WHERE id=? AND status='reserved'",(i['id'],))
+                        else:
+                            c.execute("UPDATE products SET status='removed',promoted_until=0 WHERE id=? AND status='reserved'",(i['id'],))
                         removed.append(i['title'])
                 items=[i for i in items if i['id'] in keep]
             if 'delivery' in d:
@@ -222,14 +251,17 @@ class TradeService(ValidationMixin):
         now=now or time.time()
         with self.tx() as c:
             for r in c.execute("SELECT * FROM orders WHERE status='awaiting_payment' AND created<?",(now-1800,)).fetchall():
-                c.execute("UPDATE orders SET status='cancelled' WHERE id=?",(r['id'],));self.release(c,r);self.restore_want(c,r)
-                self.notify(c,r['buyer_id'],'order_timeout',f'订单 #{r["id"]} 超过 30 分钟未付款，已自动关闭，商品释放回在售。',r['id'])
+                c.execute("UPDATE orders SET status='cancelled' WHERE id=?",(r['id'],))
+                restored=self.release(c,r);self.restore_want(c,r)
+                self.notify(c,r['buyer_id'],'order_timeout',f'订单 #{r["id"]} 超过 30 分钟未付款，已自动关闭，{self.stock_note(restored,len(json.loads(r["items"])))}',r['id'])
                 self.notify(c,r['seller_id'],'order_timeout',f'订单 #{r["id"]} 超过 30 分钟未付款，已自动关闭。',r['id'])
             # 计时从「付款时间」起算：原先用 created 计时，买家把付款拖到接近 30 分钟上限时，
             # 卖家几乎没有确认窗口就会被自动退款（付款 60 秒后订单变 cancelled）。
             for r in c.execute("SELECT * FROM orders WHERE status='paid' AND schedule_confirmed=0 AND COALESCE(paid_at,created)<?",(now-86400,)).fetchall():
-                self.journal(c,r['id'],'refund',r['total']);c.execute("UPDATE orders SET status='cancelled' WHERE id=?",(r['id'],));self.release(c,r);self.restore_want(c,r)
-                self.notify(c,r['buyer_id'],'order_timeout',f'订单 #{r["id"]} 卖家 24 小时未确认交付安排，已自动取消并模拟退款。',r['id'])
+                self.journal(c,r['id'],'refund',r['total'])
+                c.execute("UPDATE orders SET status='cancelled' WHERE id=?",(r['id'],))
+                restored=self.release(c,r);self.restore_want(c,r)
+                self.notify(c,r['buyer_id'],'order_timeout',f'订单 #{r["id"]} 卖家 24 小时未确认交付安排，已自动取消并模拟退款，{self.stock_note(restored,len(json.loads(r["items"])))}',r['id'])
                 self.notify(c,r['seller_id'],'order_timeout',f'订单 #{r["id"]} 超过 24 小时未确认交付安排，已自动取消并退款给买家。',r['id'])
             for r in c.execute("SELECT * FROM orders WHERE status='awaiting_receipt' AND handover_at<?",(now-86400,)).fetchall():
                 if not c.execute("SELECT 1 FROM tickets WHERE order_id=? AND type='refund' AND status NOT IN ('resolved','rejected')",(r['id'],)).fetchone():

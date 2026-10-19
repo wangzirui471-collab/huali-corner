@@ -88,7 +88,9 @@ class CatalogService(ValidationMixin):
         """
         f=filters or {}
         page=max(1,int(f.get('page') or 1));limit=max(0,int(f.get('limit') or 0))
-        where=['p.status=?'];args=['available']
+        # 公开商品流只展示状态正常卖家的在售商品（F-01）：被封禁 / 注销 / 停用的
+        # 卖家，其商品即使还挂在 available 也不再出现在列表，买家也就摸不到下单入口。
+        where=['p.status=?',"u.status='active'"];args=['available']
         if f.get('seller'):where.append('p.seller_id=?');args.append(int(f['seller']))
         if f.get('category'):where.append('p.category=?');args.append(f['category'])
         rows=self.rows('SELECT p.*,u.nickname,u.college seller_college,u.score FROM products p JOIN users u ON u.id=p.seller_id WHERE '+(' AND '.join(where))+' ORDER BY p.id DESC',tuple(args))

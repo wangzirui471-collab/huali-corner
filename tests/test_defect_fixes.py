@@ -139,7 +139,9 @@ class DefectFixTests(unittest.TestCase):
         o = self.checkout([p], want_id=w['id'])
         self.m.ban_user(self.admin, self.seller, True, '重复违规发布')
         self.assertEqual(self.m.order(self.buyer, o['id'])['status'], 'cancelled')
-        self.assertEqual(self.m.row('SELECT status FROM products WHERE id=?', (p,))['status'], 'available')
+        # F-01：卖家被封后释放库存不能把商品设回 available（否则又回到公开列表可被下单），
+        # 应与封禁时下架的在售商品一致落到 removed，解封后由卖家自行重新上架。
+        self.assertEqual(self.m.row('SELECT status FROM products WHERE id=?', (p,))['status'], 'removed')
         self.assertEqual(self.want_status(w['id']), 'open')
 
     def test_M4_unban_only_applies_to_banned_account(self):
@@ -148,6 +150,57 @@ class DefectFixTests(unittest.TestCase):
         self.m.ban_user(self.admin, self.seller, True, '封禁')
         self.m.ban_user(self.admin, self.seller, False, '核实后解封')
         self.assertEqual(self.m.profile(self.seller)['status'], 'active')
+
+    # ---- F-01：封禁卖家的商品不得经库存释放回到公开列表 ----------------------
+    def _force_user_status(self, uid, status):
+        # 测试辅助：直接改账号状态，构造「商品还在 available、卖家已异常」的残留场景。
+        self.m.rows('UPDATE users SET status=? WHERE id=?', (status, uid))
+
+    def test_F01_ban_seller_keeps_reserved_product_off_market(self):
+        p = self.listing()
+        o = self.checkout([p])
+        self.assertEqual(self.m.row('SELECT status FROM products WHERE id=?', (p,))['status'], 'reserved')
+        self.m.ban_user(self.admin, self.seller, True, '货不对版且失联')
+        self.assertEqual(self.m.order(self.buyer, o['id'])['status'], 'cancelled')
+        # 释放库存后商品必须落到 removed，不能回到 available。
+        self.assertEqual(self.m.row('SELECT status FROM products WHERE id=?', (p,))['status'], 'removed')
+        # 不再出现在公开商品流里。
+        self.assertNotIn(p, [x['id'] for x in self.m.products()])
+        # 给买家发的取消通知不能再说「释放回在售」。
+        body = [n for n in self.m.notifications(self.buyer)['items'] if n['kind'] == 'order_cancelled'][0]['body']
+        self.assertNotIn('释放回在售', body)
+
+    def test_F01_public_list_hides_non_active_seller_products(self):
+        p = self.listing()
+        self.assertIn(p, [x['id'] for x in self.m.products()])
+        self._force_user_status(self.seller, 'banned')
+        self.assertNotIn(p, [x['id'] for x in self.m.products()])
+        # 卖家自己的「我发布的」仍能看到自己的商品（下架态），不受公开列表过滤影响。
+        self.assertIn(p, [x['id'] for x in self.m.my_products(self.seller)])
+
+    def test_F01_checkout_rejects_non_active_seller(self):
+        self.listing()
+        self._force_user_status(self.seller, 'banned')
+        with self.assertRaises(DomainError) as ctx:
+            self.checkout([self.m.row('SELECT id FROM products ORDER BY id DESC')['id']])
+        self.assertIn('卖家当前不可交易', str(ctx.exception))
+
+    def test_F01_timeout_close_does_not_relist_banned_seller_product(self):
+        p = self.listing()
+        o = self.checkout([p])
+        self.m.rows('UPDATE orders SET created=? WHERE id=?', (time.time() - 2000, o['id']))
+        self._force_user_status(self.seller, 'banned')
+        self.m.tick()
+        self.assertEqual(self.m.order(self.buyer, o['id'])['status'], 'cancelled')
+        self.assertEqual(self.m.row('SELECT status FROM products WHERE id=?', (p,))['status'], 'removed')
+        self.assertNotIn(p, [x['id'] for x in self.m.products()])
+
+    def test_F01_active_seller_still_releases_to_available(self):
+        p = self.listing()
+        o = self.checkout([p])
+        self.m.order_action(self.buyer, o['id'], 'cancel', {})
+        self.assertEqual(self.m.row('SELECT status FROM products WHERE id=?', (p,))['status'], 'available')
+        self.assertIn(p, [x['id'] for x in self.m.products()])
 
     # ---- M5：站内通知 --------------------------------------------------------
     def test_M5_order_events_notify_counterpart(self):

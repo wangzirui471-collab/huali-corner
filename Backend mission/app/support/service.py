@@ -262,8 +262,10 @@ class SupportService(ValidationMixin):
     def _settle_banned_orders(self,c,target,now):
         """封禁账号的在途订单：未付款的直接关闭，已付款但无法交付的转争议并替买家开工单。"""
         for r in c.execute("SELECT * FROM orders WHERE (buyer_id=? OR seller_id=?) AND status='awaiting_payment'",(target,target)).fetchall():
-            c.execute("UPDATE orders SET status='cancelled' WHERE id=?",(r['id'],));self.release(c,r);self.restore_want(c,r)
-            self.notify(c,r['buyer_id'],'order_cancelled',f'订单 #{r["id"]} 因账号被处置已关闭，商品释放回在售。',r['id'])
+            c.execute("UPDATE orders SET status='cancelled' WHERE id=?",(r['id'],))
+            restored=self.release(c,r);self.restore_want(c,r)
+            # 被封禁的一方是卖家时商品不会再回在售，文案不能还说「释放回在售」（F-01）。
+            self.notify(c,r['buyer_id'],'order_cancelled',f'订单 #{r["id"]} 因账号被处置已关闭，{self.stock_note(restored,len(json.loads(r["items"])))}',r['id'])
         for r in c.execute("SELECT * FROM orders WHERE seller_id=? AND status IN ('paid','awaiting_handover','awaiting_receipt')",(target,)).fetchall():
             c.execute("UPDATE orders SET status='disputed' WHERE id=?",(r['id'],))
             if not c.execute("SELECT 1 FROM tickets WHERE order_id=? AND type='refund' AND status NOT IN ('resolved','rejected')",(r['id'],)).fetchone():
@@ -273,8 +275,8 @@ class SupportService(ValidationMixin):
             self.notify(c,r['buyer_id'],'ticket_refund',f'订单 #{r["id"]} 卖家账号已被处置，已自动转入争议处理，客服会联系你核实退款。',r['id'])
         for r in c.execute("SELECT * FROM orders WHERE buyer_id=? AND status IN ('paid','awaiting_handover')",(target,)).fetchall():
             c.execute("UPDATE orders SET status='cancelled' WHERE id=?",(r['id'],));self.journal(c,r['id'],'refund',r['total'])
-            self.release(c,r);self.restore_want(c,r)
-            self.notify(c,r['seller_id'],'order_cancelled',f'订单 #{r["id"]} 因买家账号被处置已取消，商品释放回在售。',r['id'])
+            restored=self.release(c,r);self.restore_want(c,r)
+            self.notify(c,r['seller_id'],'order_cancelled',f'订单 #{r["id"]} 因买家账号被处置已取消，{self.stock_note(restored,len(json.loads(r["items"])))}',r['id'])
 
     def credit_history(self,u):
         # kind 区分「分」与「星」：前端按单位展示，避免把 +1 星读成 +1 分。
