@@ -2224,3 +2224,71 @@ button.me-notice { width: 100%; text-align: left; cursor: pointer; border: 0; fo
    两个标签抢同一个 top/left 会直接叠在一起。 */
 .trusted-tag { display: inline-flex; align-items: center; flex: none; margin-left: 5px; padding: 1px 6px; border-radius: var(--r-pill); background: rgba(55,160,106,.14); color: #2e7d4f; font-size: 9px; font-weight: 700; line-height: 1.6; border: 1px solid rgba(55,160,106,.28); white-space: nowrap; }
 .trusted-pill { display: inline-block; vertical-align: 2px; margin-left: 8px; padding: 2px 9px; border-radius: var(--r-pill); background: rgba(55,160,106,.12); color: #2e7d4f; font-size: 11px; font-weight: 700; border: 1px solid rgba(55,160,106,.3); }
+
+/* ============================================================
+   2026-10-19 论坛 / 社区拆分
+   论坛：三板块 tab（求购 / 交换人生 / 代拿快递）
+   社区：好友（新的朋友 / 我的好友）+ 会话列表
+   ============================================================ */
+.forum-page { display: flex; flex-direction: column; gap: 18px; max-width: 980px; margin: 0 auto; }
+.forum-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.forum-tab { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 16px 18px; border-radius: 18px; border: 1px solid var(--line); background: #fff; cursor: pointer; text-align: left; transition: border-color .15s, box-shadow .15s, transform .15s; }
+.forum-tab:hover { transform: translateY(-1px); box-shadow: 0 8px 24px -16px rgba(20,22,30,.25); }
+.forum-tab.active { border-color: #f0c33c; background: linear-gradient(160deg,#fffdf3,#fff6d9); box-shadow: 0 10px 28px -20px rgba(180,120,0,.5); }
+.forum-tab-icon { display: inline-flex; width: 34px; height: 34px; align-items: center; justify-content: center; border-radius: 10px; background: #fff3d0; color: #8a6400; }
+.forum-tab b { font-size: 16px; }
+.forum-tab small { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.forum-panel { display: flex; flex-direction: column; gap: 14px; }
+.forum-panel[hidden] { display: none; }
+.forum-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.forum-panel-head h2 { margin: 0 0 4px; font-size: 20px; }
+.forum-panel-head p { margin: 0; }
+.forum-composer { display: flex; flex-direction: column; gap: 10px; }
+.forum-composer textarea { width: 100%; box-sizing: border-box; border: 1px solid #eef0f3; border-radius: 14px; padding: 12px 14px; font: inherit; font-size: 15px; resize: vertical; min-height: 76px; }
+.forum-composer textarea:focus { border-color: #f0c33c; outline: none; }
+.forum-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 44px 20px; background: #fff; border: 1px dashed #ece7d6; border-radius: 18px; text-align: center; }
+.forum-empty b { font-size: 15px; }
+.forum-empty p { margin: 0; color: var(--muted); font-size: 13px; }
+.forum-empty.small { padding: 24px 14px; }
+.want-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.want-desc { margin: 6px 0 0; color: var(--ink-2); font-size: 13px; line-height: 1.65; }
+.muted-tag { opacity: .7; }
+.want-list { display: flex; flex-direction: column; gap: 10px; }
+
+/* --- 社区：好友 + 会话 --- */
+.community-page { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 18px; max-width: 1080px; margin: 0 auto; align-items: start; }
+.friends-panel, .rooms-panel { display: flex; flex-direction: column; gap: 14px; }
+.friends-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.friends-head h2 { margin: 0 0 4px; font-size: 20px; }
+.friends-head p { margin: 0; }
+.friends-count { display: inline-flex; min-width: 40px; height: 40px; align-items: center; justify-content: center; border-radius: 14px; background: #fff3d0; color: #7a5c00; font-weight: 700; font-size: 18px; }
+.friends-block { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.friends-block h3 { margin: 0; font-size: 14px; color: var(--ink-2); display: flex; align-items: center; gap: 8px; }
+.me-badge.inline { position: static; display: inline-flex; }
+.friend-row, .friend-request-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; background: #fafbfc; }
+.friend-row:hover { background: #f6f7f9; }
+.friend-avatar { width: 42px; height: 42px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: #fff3d0; color: #8a6400; font-weight: 700; flex: 0 0 auto; }
+.friend-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.friend-main b { font-size: 15px; }
+.friend-main small { color: var(--muted); font-size: 12px; }
+.friend-note { margin: 4px 0 0; padding: 6px 10px; background: #fff; border: 1px solid #f0e8cf; border-radius: 10px; font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere; }
+.friend-want { color: #b45309 !important; }
+.friend-request-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+.room-list { display: flex; flex-direction: column; gap: 8px; }
+.room-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; border: 0; background: #fafbfc; cursor: pointer; text-align: left; width: 100%; }
+.room-row:hover { background: #f6f7f9; }
+.room-avatar { width: 40px; height: 40px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: #eef2ff; color: #3b4a8c; font-weight: 700; flex: 0 0 auto; }
+.room-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.room-main b { font-size: 15px; }
+.room-main small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 900px) {
+  .community-page { grid-template-columns: minmax(0, 1fr); }
+  .forum-tabs { grid-template-columns: minmax(0, 1fr); }
+  .forum-tab { flex-direction: row; align-items: center; gap: 10px; padding: 12px 14px; }
+  .forum-tab small { margin-left: auto; }
+}
+
+/* 聊天页好友门槛：非好友的私聊输入区换成说明，不发出去才报错 */
+.wx-gate { padding: 18px 20px; border-top: 1px solid var(--line); background: #fffdf4; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.wx-gate b { font-size: 15px; }
+.wx-gate p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }

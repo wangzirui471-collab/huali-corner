@@ -38,9 +38,18 @@ export async function profile(id){
   const sold=all.filter(p=>p.status==='sold');
   // tab：没有已售商品时只留在售一个 tab，空 tab 不如没有。
   const tabs=onSale.length+sold.length>sold.length?['onSale','sold']:['onSale'];
+  // 操作按钮按好友关系渲染：自己的主页是「编辑资料」，别人的按
+  // none→加好友 / pending_out→已申请 / pending_in→待处理 / accepted→发私信。
+  const fs=u.friend_state||'none';
   const editBtn=self
     ? `<button class="profile-btn ghost" type="button" data-action="profile-edit">编辑资料</button>`
-    : `<button class="profile-btn primary" data-action="chat" data-id="${u.id}">发私信</button>`;
+    : fs==='accepted'
+      ? `<button class="profile-btn primary" data-action="chat" data-id="${u.id}">发私信</button>`
+      : fs==='pending_out'
+        ? `<button class="profile-btn ghost" disabled>已申请</button>`
+        : fs==='pending_in'
+          ? `<button class="profile-btn primary" data-go="community">待你处理</button>`
+          : `<button class="profile-btn primary" data-action="add-friend" data-id="${u.id}" data-name="${e(u.nickname)}">加好友</button>`;
   shell(`${heading('NICE TO MEET YOU',own?'我的转角':'同学的转角','看看这位同学的公开信息和在售好物。')}
   <div class="profile-page user-center" data-user-center data-user-owner="${u.id}">
     <div data-user-summary>${self?userProfileSummary(self):userProfileSummary(u)}</div>

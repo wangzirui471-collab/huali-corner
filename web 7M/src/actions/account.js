@@ -57,7 +57,8 @@ export const submits = {
   'register-form': async ({ d, fd }) => {
     if (!fd.has('agree')) throw new Error('请先阅读并确认试用说明');
     if (d.password !== d.password_confirm) throw new Error('两次输入的密码不一致');
-    const r = await api('/auth/register', {phone:d.phone, password:d.password, nickname:d.nickname});
+    const r = await api('/auth/register', {phone:d.phone, password:d.password, nickname:d.nickname,
+      college:d.college, major:d.major, grade:d.grade});
     await setLogin(r);
     recoveryNotice(r.recovery_code);
   },

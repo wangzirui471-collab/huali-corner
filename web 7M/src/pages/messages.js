@@ -220,6 +220,19 @@ export async function chats(roomId){
   const room = noticeView ? null : rooms.joined.find(r => r.id === Number(roomId));
   // rooms 里的 role 是我在这群的群角色，补进 room 供「移除消息」判断。
   if (room) room.myRole = room.role;
+  // 好友门槛（2026-10）：普通私聊只有互为好友才能发消息，客服会话豁免。
+  // 历史会话保留可读，但输入区换成「还不是好友」的说明，避免发送后才报错。
+  let gate = null;
+  if (room && room.kind === 'private' && !room.support) {
+    try {
+      const mem = await api('/room/members?room_id=' + room.id);
+      const peer = (mem.members || []).find(m => m.user_id !== state.me.id);
+      if (peer) {
+        const st = await api('/friend/state?user_id=' + peer.user_id);
+        if (st.state !== 'accepted') gate = { peer, state: st.state };
+      }
+    } catch { /* 拿不到成员就不拦，交给服务端 */ }
+  }
   const activeId = noticeView ? 'notice' : (room?.id ?? null);
 
   const side = `<aside class="wx-side">`+
@@ -264,7 +277,13 @@ const NOTE_META = {
       <div class="wx-stream" id="chat-stream"></div>
       <aside class="wx-members" id="wx-members" hidden></aside>
     </div>
-    <footer class="wx-input">
+    ${gate ? `<footer class="wx-gate">
+      <b>还不是好友，暂时不能发消息</b>
+      <p>对方同意好友申请后才能聊天；申请附言最多 15 个字，不能发图片。</p>
+      ${gate.state === 'pending_out'
+        ? '<span class="tag">已发送申请，等对方处理</span>'
+        : `<button class="btn primary sm" data-action="add-friend" data-id="${gate.peer.user_id}" data-name="${e(gate.peer.nickname || '')}">加好友</button>`}
+    </footer>` : `<footer class="wx-input">
       <div class="wx-toolbar">
         <button type="button" class="wx-tool" data-action="wx-emoji" title="表情">😊</button>
         <span class="wx-count" id="wx-count"></span>
@@ -274,7 +293,7 @@ const NOTE_META = {
         <div class="wx-send-row"><span class="muted">消息会经过平台自动审核</span><button class="btn primary sm" type="submit">发送</button></div>
       </form>
       <div class="wx-emoji-panel" id="wx-emoji" hidden></div>
-    </footer>` : (noticeView ? noticePanel : empty('选择一个会话','可以在商品页联系卖家，或去社区加入群聊。'));
+    </footer>`}` : (noticeView ? noticePanel : empty('选择一个会话','可以在商品页联系卖家，或去社区加入群聊。'));
 
   shell(`<div class="wx-app">${side}<section class="wx-chat">${chatPanel}</section></div>`, 'messages');
 
@@ -313,22 +332,26 @@ const NOTE_META = {
   // --- 表情面板 ----------------------------------------------------------
   const EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😜','🤔','😅','😭','😤','😡','🥺','😱','🤗','🤩','😴','🤝','👍','👎','👏','🙏','💪','🎉','🔥','❤️','💔','💯','⚡','🌹','🌈','☀️','🌙','⭐','📚','✏️','🎓','🏀','⚽','🍜','🍵','💰','🎁','📦','🛒','✅','❌'];
   const emojiPanel = $('#wx-emoji');
-  emojiPanel.innerHTML = EMOJIS.map(x => `<button type="button" data-emoji="${x}">${x}</button>`).join('');
-  emojiPanel.addEventListener('click', ev => {
-    const b = ev.target.closest('[data-emoji]');
-    if (!b) return;
-    const editor = $('#wx-editor');
-    // 插到光标处，没有选区时也能正常工作；插完收起面板、焦点回输入框。
-    editor.setRangeText(b.dataset.emoji, editor.selectionStart, editor.selectionEnd, 'end');
-    editor.focus();
-    emojiPanel.hidden = true;
-  });
+  // 非好友（gate）分支没有输入区，表情面板也不存在——存在才初始化。
+  if (emojiPanel){
+    emojiPanel.innerHTML = EMOJIS.map(x => `<button type="button" data-emoji="${x}">${x}</button>`).join('');
+    emojiPanel.addEventListener('click', ev => {
+      const b = ev.target.closest('[data-emoji]');
+      if (!b) return;
+      const editor = $('#wx-editor');
+      // 插到光标处，没有选区时也能正常工作；插完收起面板、焦点回输入框。
+      editor.setRangeText(b.dataset.emoji, editor.selectionStart, editor.selectionEnd, 'end');
+      editor.focus();
+      emojiPanel.hidden = true;
+    });
+  }
 
   // --- 发送与输入 --------------------------------------------------------
   // 表单不走全站 submits 委托（避免双发）：发送后立即增量拉取，输入框清空。
   const form = $('#wx-form');
   const editor = $('#wx-editor');
-  form.addEventListener('submit', async ev => {
+  // gate 分支（还不是好友）只有说明，没有表单；历史消息仍可读。
+  form?.addEventListener('submit', async ev => {
     ev.preventDefault();
     const body = editor.value.trim();
     if (!body) return;
@@ -341,15 +364,15 @@ const NOTE_META = {
     await pullNew();
   });
   // Enter 发送、Shift+Enter 换行、输入时自动加高。
-  editor.addEventListener('keydown', ev => {
+  editor?.addEventListener('keydown', ev => {
     if (ev.key === 'Enter' && !ev.shiftKey){ ev.preventDefault(); form.requestSubmit(); }
   });
-  editor.addEventListener('input', () => {
+  editor?.addEventListener('input', () => {
     editor.style.height = 'auto';
     editor.style.height = Math.min(editor.scrollHeight, 140)+'px';
     updateCount();
   });
-  function updateCount(){ $('#wx-count').textContent = editor.value.length ? editor.value.length+'/2000' : ''; }
+  function updateCount(){ const c=$('#wx-count'); if (c && editor) c.textContent = editor.value.length ? editor.value.length+'/2000' : ''; }
 
   // --- 消息拉取（首次全量最近 200 条，之后增量轮询） ----------------------
   const stream = $('#chat-stream');

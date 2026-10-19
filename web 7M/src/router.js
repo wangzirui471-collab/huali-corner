@@ -15,6 +15,7 @@ import { cartPage } from './pages/cart.js';
 import { orders } from './pages/orders.js';
 import { myProducts } from './pages/listings.js';
 import { community } from './pages/community.js';
+import { forum } from './pages/forum.js';
 import { chats } from './pages/messages.js';
 import { profile, mine } from './pages/me.js';
 import { support, ticketPage } from './pages/support.js';
@@ -26,7 +27,7 @@ import { credit } from './pages/credit.js';
 // 公开演示版只开放这四条只读路由。
 const DEMO_ROUTES = ['home', 'product', 'profile', 'community'];
 // 其余路由必须登录，未登录时先给一页说明再弹登录框。
-const AUTH_ROUTES = ['favorites', 'publish', 'cart', 'orders', 'listings', 'messages', 'me', 'support', 'staff', 'admin', 'dossier', 'ticket', 'credit'];
+const AUTH_ROUTES = ['favorites', 'publish', 'cart', 'orders', 'listings', 'messages', 'me', 'support', 'staff', 'admin', 'dossier', 'ticket', 'credit', 'forum'];
 
 function publicDemoFeature(route){
   const [title, description] = demoFeatures[route] || ['功能预览', '该操作只在本地模拟版中提供。'];
@@ -67,6 +68,7 @@ export async function render(){
       orders,
       listings: myProducts,
       community,
+      forum: () => forum(),
       messages: () => chats(id),
       profile: () => profile(id),
       me: mine,
