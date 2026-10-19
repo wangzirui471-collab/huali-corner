@@ -1,4 +1,14 @@
 'use strict';
+// 用户中心 · 个人资料与头像表单
+//
+// 2026-10-19 视觉重做（对齐主流二手 App 的个人主页：封面 + 完成度 + 列表行）。
+// **契约不可破坏**（actions/user-profile.js 与 tests/user_center.test.mjs 依赖）：
+//   · userProfileForm：id=user-profile-form、name=nickname/profile_version/major/
+//     degree_level/study_status/bio、id=user-college 且 readonly、version 域在
+//     nickname 之前、data-user-profile-feedback、所有控件带 data-user-control
+//   · userAvatarForm：id=user-avatar-form、name=upload_id、accept 三类型、
+//     confirm 按钮初始 hidden、data-user-avatar-remove/preview/confirm/cancel
+//   · userProfileSummary：保存后局部刷新 [data-user-summary]，输出即新封面头部
 
 import { e } from '../core/dom.js';
 import { userAvatar } from './user-avatar.js';
@@ -21,6 +31,19 @@ export function userProfileValues(user={}){
   };
 }
 
+// 资料完成度：昵称/专业/简介/学历/在读状态各 20%。头像走独立表单不计入，
+// 避免同一件事在两处催促进度。写 0 也行——完成度只鼓励，不拦截。
+function profileProgress(user, values){
+  const parts = [
+    Boolean((user.nickname||'').trim()),
+    Boolean((user.major||'').trim()),
+    Boolean((user.bio||'').trim()),
+    values.degree_level !== 'unspecified',
+    values.study_status !== 'unspecified'
+  ];
+  return Math.round(parts.filter(Boolean).length / parts.length * 100);
+}
+
 function versionField(user){
   const version = Number.isSafeInteger(user.profile_version) && user.profile_version >= 0
     ? String(user.profile_version) : '';
@@ -31,21 +54,75 @@ function optionField(label,name,options,value){
   return `<label class="field" for="user-${name}"><span>${label}</span><select data-user-control id="user-${name}" name="${name}">${options.map(([key,text])=>`<option value="${key}"${value===key?' selected':''}>${text}</option>`).join('')}</select></label>`;
 }
 
+// 资料列表行：标签在左、控件在右（窄屏堆叠）。select 也要 data-user-control。
+function rowField(label,name,value,extra=''){
+  return `<label class="up-row" for="user-${name}"><span class="up-row-label">${label}</span><input data-user-control id="user-${name}" name="${name}" value="${e(value||'')}" ${extra}></label>`;
+}
+
+// 封面头部：公开页（别人的主页）与保存后局部刷新共用这一套 markup。
+// 参考图要素：大头像、昵称、学院/在线状态、星级、简介、诚信徽章。
 export function userProfileSummary(user={}){
   const values = userProfileValues(user);
-  const degree = degreeOptions.find(([key])=>key===values.degree_level)[1];
-  const status = studyOptions.find(([key])=>key===values.study_status)[1];
-  const score = Number.isFinite(user.score) ? user.score : '—';
-  return `<div class="user-profile-heading">${userAvatar(user)}<div class="user-profile-identity"><h2>${e(user.nickname || '同学')}</h2><p>${e(user.college || '学院暂未填写')} · ${e(user.major || '专业暂未填写')}</p><div class="user-profile-options"><span>学历：${degree}</span><span>状态：${status}</span></div><p class="user-profile-bio">${e(user.bio || '简介暂未填写')}</p><span class="tag">信誉 ${e(score)}/100 · 不是交易担保</span></div></div>`;
+  const score = Number.isFinite(user.score) ? user.score : null;
+  const stars = score===null ? '' : `<span class="ph-stars" aria-label="信誉 ${score} 分">${'★'.repeat(Math.max(1,Math.round(score/20)))}${'☆'.repeat(5-Math.max(1,Math.round(score/20)))}</span>`;
+  return `<div class="profile-hero">
+  <div class="profile-cover" aria-hidden="true"></div>
+  <div class="profile-hero-body">
+    ${userAvatar(user,'large')}
+    <div class="profile-hero-main">
+      <div class="profile-hero-name"><h2>${e(user.nickname || '同学')}</h2>${user.trusted?'<span class="profile-pill trusted">诚信客户</span>':''}</div>
+      <p class="profile-hero-sub">${e(user.college || '学院暂未填写')} · ${e(user.major || '专业暂未填写')} · ${values.degree_level==='unspecified'?'':degreeOptions.find(([k])=>k===values.degree_level)[1]}</p>
+      <div class="profile-hero-meta">${stars?`<span class="profile-hero-score">${score} 分 ${stars}</span>`:'<span class="profile-hero-score muted">暂无信誉分</span>'}<span class="profile-hero-online">当前在线</span></div>
+      <p class="profile-hero-bio">${e(user.bio || '这位同学还没有写简介。')}</p>
+    </div>
+  </div>
+</div>`;
 }
 
 export function userProfileForm(user){
   const values = userProfileValues(user);
-  return `<form id="user-profile-form" class="panel user-profile-form" aria-labelledby="user-profile-title">${versionField(user)}<h2 id="user-profile-title">个人资料</h2><p class="muted">学历与在读状态可以分别填写，也可以暂不填写；这些信息均为自填。</p><div class="user-profile-fields"><label class="field" for="user-nickname"><span>昵称 *</span><input data-user-control id="user-nickname" name="nickname" value="${e(user.nickname)}" required maxlength="24" autocomplete="nickname"></label><label class="field" for="user-major"><span>专业（可选）</span><input data-user-control id="user-major" name="major" value="${e(user.major)}" maxlength="80"></label>${optionField('学历层次','degree_level',degreeOptions,values.degree_level)}${optionField('在读 / 毕业状态','study_status',studyOptions,values.study_status)}<label class="field user-profile-wide" for="user-college"><span>学院</span><input id="user-college" value="${e(user.college || '暂未填写')}" readonly aria-describedby="user-college-note"><small id="user-college-note">${user.college==='计算机工程学院'?'计算机工程学院试点，不代表学校或学籍认证。':'学院沿用现有账号资料，本页不开放校区变更。'}</small></label><label class="field user-profile-wide" for="user-bio"><span>简介（可选）</span><textarea data-user-control id="user-bio" name="bio" maxlength="300" rows="4">${e(user.bio)}</textarea></label></div><div class="user-profile-buttons"><button data-user-control class="btn primary" type="submit">保存资料</button><button data-user-control class="btn secondary" type="button" data-action="user-profile-reset">重新载入资料</button></div><div data-user-profile-feedback class="user-feedback" role="status" aria-live="polite" tabindex="-1"></div><section data-user-comparison class="user-comparison" aria-label="服务器资料对照" hidden></section></form>`;
+  const progress = profileProgress(user, values);
+  return `<form id="user-profile-form" class="panel user-profile-form" aria-labelledby="user-profile-title">
+  ${versionField(user)}
+  <header class="up-head">
+    <div><h2 id="user-profile-title">个人资料</h2><p class="muted">学历与在读状态可以分别填写，也可以暂不填写；这些信息均为自填。</p></div>
+    <div class="up-progress" aria-label="资料完成度">
+      <div class="up-progress-bar"><span style="width:${progress}%"></span></div>
+      <small>完成 ${progress}%${progress<100?' · 填得越全，同学越敢直接下单':' · 已经很完整了'}</small>
+    </div>
+  </header>
+  <div class="up-rows">
+    ${rowField('昵称 *','nickname',user.nickname,'required maxlength="24" autocomplete="nickname"')}
+    ${rowField('专业（可选）','major',user.major,'maxlength="80"')}
+    <label class="up-row" for="user-degree_level"><span class="up-row-label">学历层次</span><select data-user-control id="user-degree_level" name="degree_level">${degreeOptions.map(([key,text])=>`<option value="${key}"${values.degree_level===key?' selected':''}>${text}</option>`).join('')}</select></label>
+    <label class="up-row" for="user-study_status"><span class="up-row-label">在读状态</span><select data-user-control id="user-study_status" name="study_status">${studyOptions.map(([key,text])=>`<option value="${key}"${values.study_status===key?' selected':''}>${text}</option>`).join('')}</select></label>
+    <div class="up-row up-row-readonly"><span class="up-row-label">学院</span><input class="up-row-static" id="user-college" value="${e(user.college || '暂未填写')}" readonly aria-describedby="user-college-note"><small id="user-college-note">${user.college==='计算机工程学院'?'计算机工程学院试点，不代表学校或学籍认证。':'学院沿用现有账号资料，本页不开放校区变更。'}</small></div>
+    <label class="up-row up-row-block" for="user-bio"><span class="up-row-label">个人简介（可选）</span><textarea data-user-control id="user-bio" name="bio" rows="3" maxlength="300" placeholder="比如：只出专业书，支持校内自提。">${e(user.bio)}</textarea></label>
+  </div>
+  <div class="user-profile-buttons"><button data-user-control class="btn primary" type="submit">保存资料</button><button data-user-control class="btn secondary" type="button" data-action="user-profile-reset">重新载入资料</button></div>
+  <div data-user-profile-feedback class="user-feedback" role="status" aria-live="polite" tabindex="-1"></div>
+  <section data-user-comparison class="user-comparison" aria-label="服务器资料对照" hidden></section>
+</form>`;
 }
 
 export function userAvatarForm(user){
-  return `<form id="user-avatar-form" class="panel user-avatar-form" aria-labelledby="user-avatar-title">${versionField(user)}<input type="hidden" name="upload_id" value=""><h2 id="user-avatar-title">我的头像</h2><p class="muted">上传后先由你预览，确认设为头像才会公开。</p><div data-user-avatar-preview class="user-avatar-preview">${userAvatar(user)}</div><label class="field" for="user-avatar-file"><span>选择图片</span><input data-user-control id="user-avatar-file" name="avatarfile" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="user-avatar-note"></label><p id="user-avatar-note" class="muted">支持 JPEG、PNG、WebP，原文件不超过 2 MiB；不支持动画。</p><div class="user-profile-buttons"><button data-user-control class="btn secondary" type="button" data-action="user-avatar-preview">本地预览</button><button data-user-control class="btn primary" type="submit">上传并预览</button><button data-user-control class="btn primary" type="button" data-action="user-avatar-confirm" hidden>确认设为头像</button><button data-user-control class="btn secondary" type="button" data-action="user-avatar-cancel">取消本次选择</button><button data-user-control class="text-button" type="button" data-action="user-avatar-remove">移除当前头像</button></div><div data-user-avatar-feedback class="user-feedback" role="status" aria-live="polite" tabindex="-1"></div></form>`;
+  return `<form id="user-avatar-form" class="panel user-avatar-form" aria-labelledby="user-avatar-title">
+  ${versionField(user)}<input type="hidden" name="upload_id" value="">
+  <header class="up-head"><h2 id="user-avatar-title">我的头像</h2><p class="muted">上传后先由你预览，确认设为头像才会公开。</p></header>
+  <div class="avatar-stage">
+    <div data-user-avatar-preview class="user-avatar-preview">${userAvatar(user)}</div>
+    <label class="avatar-picker" for="user-avatar-file"><span class="avatar-picker-icon" aria-hidden="true">＋</span><b>选择图片</b><small>JPEG / PNG / WebP，不超过 2 MiB</small><input data-user-control id="user-avatar-file" name="avatarfile" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="user-avatar-note"></label>
+  </div>
+  <p id="user-avatar-note" class="muted">原图仅在预览时存在于本页面；确认前任何人看不到。不支持动画。</p>
+  <div class="user-profile-buttons">
+    <button data-user-control class="btn secondary" type="button" data-action="user-avatar-preview">本地预览</button>
+    <button data-user-control class="btn primary" type="submit">上传并预览</button>
+    <button data-user-control class="btn primary" type="button" data-action="user-avatar-confirm" hidden>确认设为头像</button>
+    <button data-user-control class="btn secondary" type="button" data-action="user-avatar-cancel">取消本次选择</button>
+    <button data-user-control class="text-button" type="button" data-action="user-avatar-remove">移除当前头像</button>
+  </div>
+  <div data-user-avatar-feedback class="user-feedback" role="status" aria-live="polite" tabindex="-1"></div>
+</form>`;
 }
 
 export function userProfileComparison(user){

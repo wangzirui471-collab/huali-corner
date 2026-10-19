@@ -55,3 +55,108 @@
   .user-center .user-comparison { padding: 14px; }
   .user-center .mine-stats, .user-center .mine-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ============================================================
+   2026-10-19 个人主页重做（对齐主流二手 App 的视觉语言）
+   仅追加新类：profile-*（封面头部/统计/tab/空状态）、
+   up-*（资料列表行/完成度）、avatar-*（头像卡）。
+   旧规则保持不动，协作者迭代时两类样式互不影响。
+   ============================================================ */
+.profile-page{max-width:880px;margin:0 auto;display:flex;flex-direction:column;gap:16px;padding-bottom:48px}
+
+/* --- 封面头部 --- */
+.profile-hero{position:relative;border-radius:24px;overflow:hidden;background:#fff;box-shadow:0 1px 2px rgba(20,22,30,.04),0 12px 32px -18px rgba(20,22,30,.14)}
+.profile-cover{height:140px;background:linear-gradient(128deg,#ffd851 0%,#ffbe2e 48%,#ff9f1f 100%);position:relative;overflow:hidden}
+.profile-cover::before{content:"";position:absolute;right:-40px;top:-60px;width:220px;height:220px;border-radius:50%;background:rgba(255,255,255,.16)}
+.profile-cover::after{content:"";position:absolute;left:12%;bottom:-70px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.12)}
+.profile-hero-body{position:relative;display:flex;gap:22px;padding:0 30px 24px;margin-top:-48px}
+.profile-hero-body .user-avatar{width:104px;height:104px;border:4px solid #fff;border-radius:50%;box-shadow:0 10px 24px -12px rgba(120,80,0,.35);flex:0 0 auto;position:relative;background:#fff6d8}
+.profile-hero-body .user-avatar .user-avatar-fallback{font-size:38px;color:#a97b12}
+.profile-hero-main{flex:1;min-width:0;padding-top:52px}
+.profile-hero-name{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.profile-hero-name h2{margin:0;font-size:26px;letter-spacing:.5px}
+.profile-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.profile-pill.trusted{background:#e8f6ee;color:#15803d;border:1px solid #bbe6cd}
+.profile-hero-sub{margin:8px 0 0;color:#6b6f77;font-size:14px}
+.profile-hero-meta{display:flex;align-items:center;gap:14px;margin-top:10px;font-size:13px}
+.profile-hero-score{display:inline-flex;align-items:center;gap:6px;color:#b45309;font-weight:600}
+.profile-hero-score.muted{color:#8b8f98;font-weight:400}
+.ph-stars{color:#f5a623;letter-spacing:2px;font-size:14px}
+.profile-hero-online{display:inline-flex;align-items:center;gap:5px;color:#16a34a}
+.profile-hero-online::before{content:"";width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.16)}
+.profile-hero-bio{margin:12px 0 0;color:#44474e;font-size:14px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* --- 分享 / 编辑操作 --- */
+.profile-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:-34px;padding-right:6px;position:relative;z-index:2}
+.profile-btn{display:inline-flex;align-items:center;gap:6px;min-height:38px;padding:0 18px;border-radius:999px;border:1px solid transparent;font-size:14px;font-weight:600;cursor:pointer;background:#fff;box-shadow:0 6px 18px -10px rgba(20,22,30,.25)}
+.profile-btn.ghost{border-color:#e6e2d2;color:#7a5c00;background:#fffdf4}
+.profile-btn.ghost:hover{background:#fff7dd}
+.profile-btn.primary{background:linear-gradient(135deg,#ffd851,#ffb636);color:#5c3d00;border-color:#f0c33c}
+.profile-btn.primary:hover{filter:brightness(1.04)}
+.profile-btn .icon{width:16px;height:16px}
+
+/* --- 统计条 --- */
+.profile-stats{display:grid;grid-template-columns:repeat(3,1fr);background:#fff;border-radius:18px;padding:16px 8px;box-shadow:0 1px 2px rgba(20,22,30,.04)}
+.profile-stat{display:flex;flex-direction:column;align-items:center;gap:4px;border:0;background:none;cursor:pointer;border-radius:12px;padding:6px 0}
+.profile-stat.static{cursor:default}
+.profile-stat:not(.static):hover{background:#fffaf0}
+.profile-stat b{font-size:22px;color:#1c1d21}
+.profile-stat small{font-size:12px;color:#8b8f98}
+
+/* --- tab --- */
+.profile-tabs{display:flex;gap:6px;border-bottom:2px solid #f1efe6;padding:0 4px}
+.profile-tab{position:relative;border:0;background:none;padding:12px 18px;font-size:15px;font-weight:600;color:#8b8f98;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.profile-tab i{font-style:normal;font-size:12px;color:#7d7666;background:#f4f2ea;border-radius:999px;padding:1px 8px}
+.profile-tab.active i{background:#fff3d6;color:#7a5c00}
+.profile-tab.active{color:#1c1d21}
+.profile-tab.active::after{content:"";position:absolute;left:14px;right:14px;bottom:-2px;height:3px;border-radius:3px;background:linear-gradient(90deg,#ffd851,#ff9f1f)}
+.profile-tab-body{margin-top:16px}
+
+/* --- 空状态插画 --- */
+.profile-empty{display:flex;flex-direction:column;align-items:center;gap:10px;padding:52px 20px;background:#fff;border-radius:20px;text-align:center;box-shadow:0 1px 2px rgba(20,22,30,.04)}
+.profile-empty b{font-size:16px;color:#44474e}
+.profile-empty p{margin:0;color:#8b8f98;font-size:13px}
+
+/* --- 个人资料：完成度 + 列表行 --- */
+.user-profile-form .up-head{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;margin-bottom:10px}
+.user-profile-form .up-head h2{margin:0 0 4px;font-size:20px}
+.up-progress{min-width:180px}
+.up-progress small{display:block;margin-top:6px;color:#8b8f98;font-size:12px}
+.up-progress-bar{height:8px;border-radius:99px;background:#f1efe4;overflow:hidden}
+.up-progress-bar span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#ffd851,#ff9f1f);transition:width .4s ease}
+.up-rows{display:flex;flex-direction:column}
+.up-row{display:grid;grid-template-columns:96px minmax(0,1fr);align-items:center;gap:14px;padding:13px 4px;border-bottom:1px solid #f3f1e8;position:relative}
+.up-row:last-child{border-bottom:0}
+.up-row-label{color:#6b6f77;font-size:14px}
+.up-row input,.up-row select{width:100%;min-width:0;box-sizing:border-box;border:1px solid transparent;background:#f7f6f1;border-radius:10px;padding:9px 12px;font-size:15px;color:#1c1d21;transition:border-color .15s,background .15s}
+.up-row input:focus,.up-row select:focus{border-color:#f0c33c;background:#fff;outline:none}
+.up-row input[readonly]{background:#fafbfc;color:#6b6f77}
+.up-row-static{width:100%;box-sizing:border-box;border:1px solid transparent;background:#f7f6f1;border-radius:10px;padding:9px 12px;font-size:15px;color:#6b6f77}
+.up-row small{grid-column:2;font-size:12px;color:#8b8f98;margin-top:-6px}
+.up-row-block{grid-template-columns:1fr;gap:8px}
+.up-row-block textarea{width:100%;box-sizing:border-box;border:1px solid #eef0f3;border-radius:12px;padding:12px;font-size:15px;font-family:inherit;resize:vertical;min-height:88px}
+.up-row-block textarea:focus{border-color:#f0c33c;outline:none}
+
+/* --- 头像卡 --- */
+.avatar-stage{display:flex;align-items:center;gap:28px;flex-wrap:wrap;margin:14px 0 10px}
+.user-avatar-preview .user-avatar{width:112px;height:112px;box-shadow:0 12px 28px -14px rgba(120,80,0,.4);background:#fff6d8}
+.avatar-picker{flex:1;min-width:240px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:26px 18px;border:2px dashed #e8dfc3;border-radius:16px;background:#fffdf4;cursor:pointer;text-align:center;color:#7a5c00}
+.avatar-picker:hover{border-color:#f0c33c;background:#fff9e0}
+.avatar-picker input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.avatar-picker-icon{font-size:26px;font-weight:300;line-height:1}
+.avatar-picker b{font-size:15px}
+.avatar-picker small{color:#a4935f;font-size:12px}
+
+@media (max-width:640px){
+  .profile-hero-body{padding:0 18px 18px;gap:16px}
+  .profile-hero-main{padding-top:44px}
+  .profile-hero-body .user-avatar{width:84px;height:84px}
+  .profile-hero-body .user-avatar .user-avatar-fallback{font-size:30px}
+  .profile-hero-name h2{font-size:22px}
+  .profile-actions{margin-top:10px;justify-content:center}
+  .profile-stats{grid-template-columns:repeat(3,1fr)}
+  .up-row{grid-template-columns:1fr;gap:6px}
+  .up-row small{grid-column:1}
+  .user-profile-form .up-head{flex-direction:column}
+  .up-progress{width:100%}
+}

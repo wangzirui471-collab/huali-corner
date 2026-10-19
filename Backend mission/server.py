@@ -92,7 +92,9 @@ class Handler(BaseHTTPRequestHandler):
                 # 公开出去等于对外暴露某人是否被封禁或已注销。
                 public={k:profile[k] for k in ('id','nickname','college','major','education','bio','score','avatar_url')}
                 public['trusted']=m.trusted_map([who]).get(who,False)
-                return self.respond({'user':public,'products':m.products(self.optional_user(),{'seller':str(who)})})
+                # status=all：卖家主页要展示已售出（成交记录是信任的一部分）；
+                # products() 内部仍排除 reserved 与 removed，不会泄漏挂单/下架商品。
+                return self.respond({'user':public,'products':m.products(self.optional_user(),{'seller':str(who),'status':'all'})})
             if p=='/api/posts' and method=='GET':return self.respond(m.posts(query.get('topic',''),query.get('limit','20'),query.get('offset','0')))
             if p=='/api/comments' and method=='GET':return self.respond(m.comments(int(query['id']),query.get('before')))
             if p=='/api/wants' and method=='GET':return self.respond(m.wants(self.optional_user()))

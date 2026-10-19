@@ -9,7 +9,7 @@
 // 分工提示：本文件属协作者领地（见 docs/前端协作规范.md），
 // 本轮由平台端侧代为重构，协作者后续在此文件内继续迭代即可。
 
-import { e, icon } from '../core/dom.js';
+import { e, icon, toast } from '../core/dom.js';
 import { date, money } from '../core/format.js';
 import { state, statusNames } from '../core/state.js';
 import { api } from '../core/http.js';
@@ -21,22 +21,84 @@ import { needLogin } from '../auth/login.js';
 
 // 公开主页。看别人的时候是只读的；看自己的时候，资料与头像表单就在这里——
 // 「我的」页改版后不再放表单，编辑资料回到它归属的地方：主页。
+//
+// 2026-10-19 视觉重做（对齐主流二手 App 的个人主页）：
+//   封面大头像 → 昵称/徽章/星级 → 统计条（在售/已售/收藏/信誉/加入天数）→
+//   宝贝 tab（在售/已售）→ 空状态插画。分享/编辑入口在封面右下。
+// 交互钩子不可破坏：data-user-summary / [data-user-control] / 表单 id 等，
+// 见 components/user-profile.js 头部说明；此处只改外壳。
 export async function profile(id){
   const r=await api('/profile?id='+id),u=r.user;
   const own=state.me&&state.me.id===u.id;
   // 自己的主页读 /user/profile：只有它带 profile_version，改昵称、换头像都靠
   // 这个版本号发现「另一个标签页已经改过」。别人的主页走公开接口，不带版本。
   const self=own&&!window.HUALI_STATIC_DEMO?await api('/user/profile'):null;
-  shell(`${heading('NICE TO MEET YOU','同学的转角','看看这位同学的公开信息和在售好物。')}
-  ${self
-    ? `<div class="user-center" data-user-center data-user-owner="${u.id}"><div data-user-summary>${userProfileSummary(self)}</div>${userProfileForm(self)}${userAvatarForm(self)}</div>`
-    : `<section class="panel profile-card">
-    ${userAvatar(u,'large')}
-    <div><h2>${e(u.nickname)}${u.trusted?'<span class="trusted-pill">诚信客户</span>':''}</h2><p>${e(u.college)} · ${e(u.major)} · ${e(u.education)}</p><p>${e(u.bio||'让闲置遇到真正需要它的人。')}</p><span class="tag">信誉 ${u.score}/100 · 不是交易担保</span></div>
-    <button class="btn primary" data-action="chat" data-id="${u.id}">发私信</button>
-  </section>`}
-  <h2>在售商品</h2>
-  <div class="product-grid">${r.products.filter(p=>p.status==='available').map(card).join('')}</div>`,'me');
+  const all=r.products||[];
+  const onSale=all.filter(p=>p.status==='available');
+  const sold=all.filter(p=>p.status==='sold');
+  // tab：没有已售商品时只留在售一个 tab，空 tab 不如没有。
+  const tabs=onSale.length+sold.length>sold.length?['onSale','sold']:['onSale'];
+  const editBtn=self
+    ? `<button class="profile-btn ghost" type="button" data-action="profile-edit">编辑资料</button>`
+    : `<button class="profile-btn primary" data-action="chat" data-id="${u.id}">发私信</button>`;
+  shell(`${heading('NICE TO MEET YOU',own?'我的转角':'同学的转角','看看这位同学的公开信息和在售好物。')}
+  <div class="profile-page user-center" data-user-center data-user-owner="${u.id}">
+    <div data-user-summary>${self?userProfileSummary(self):userProfileSummary(u)}</div>
+    <div class="profile-actions">
+      <button class="profile-btn ghost" type="button" data-action="profile-share">${icon('share')}分享主页</button>
+      ${editBtn}
+    </div>
+    <section class="profile-stats">
+      <button data-go="listings" class="profile-stat"><b>${onSale.length}</b><small>在售</small></button>
+      <button data-go="orders" class="profile-stat"><b>${sold.length}</b><small>已售</small></button>
+      <span class="profile-stat static"><b>${u.score}</b><small>信誉分</small></span>
+    </section>
+    <div class="profile-tabs" role="tablist">
+      ${tabs.map((t,i)=>`<button class="profile-tab${i===0?' active':''}" role="tab" data-profile-tab="${t}" aria-selected="${i===0}">${t==='onSale'?`在售宝贝 <i>${onSale.length}</i>`:`已售出 <i>${sold.length}</i>`}</button>`).join('')}
+    </div>
+    <div class="profile-tab-body" data-profile-tab-body="onSale">
+      ${onSale.length?`<div class="product-grid">${onSale.map(card).join('')}</div>`:profileEmpty('在售空空如也','看看别的同学的转角，或者去发布第一件闲置。')}
+    </div>
+    <div class="profile-tab-body" data-profile-tab-body="sold" hidden>
+      ${sold.length?`<div class="product-grid">${sold.map(card).join('')}</div>`:profileEmpty('暂无已售宝贝','成交后会出现在这里。')}
+    </div>
+    ${self?`${userProfileForm(self)}${userAvatarForm(self)}`:''}
+  </div>`,'me');
+  bindProfilePage();
+}
+
+// 空状态插画：内联 SVG（盒子 + 星星 + 地面），比纯文字温和，也不依赖外部图。
+function profileEmpty(title,text){
+  return `<div class="profile-empty"><svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+    <ellipse cx="60" cy="84" rx="34" ry="6" fill="#f3e7bf"/>
+    <rect x="34" y="44" width="52" height="38" rx="5" fill="#ffe9b0" stroke="#eec54f" stroke-width="2"/>
+    <rect x="34" y="44" width="52" height="12" rx="5" fill="#f8d67a"/>
+    <line x1="60" y1="56" x2="60" y2="82" stroke="#eec54f" stroke-width="2"/>
+    <circle cx="97" cy="24" r="3" fill="#eec54f"/><circle cx="22" cy="34" r="2.4" fill="#f2cf6b"/><circle cx="103" cy="46" r="2" fill="#f2cf6b"/>
+    <path d="M60 12 l3.6 7.6 8.4 1.1-6.2 5.8 1.6 8.3L60 30.8 52.6 34.8l1.6-8.3-6.2-5.8 8.4-1.1z" fill="#f6c945"/>
+  </svg><b>${e(title)}</b><p>${e(text)}</p></div>`;
+}
+
+// tab 切换 + 编辑资料滚动 + 分享。渲染后统一挂，委托在 document 上一次注册。
+export function bindProfilePage(){
+  document.querySelectorAll('[data-profile-tab]').forEach(tab=>{
+    tab.onclick=()=>{
+      document.querySelectorAll('[data-profile-tab]').forEach(t=>{t.classList.toggle('active',t===tab);t.setAttribute('aria-selected',String(t===tab));});
+      document.querySelectorAll('[data-profile-tab-body]').forEach(body=>{body.hidden=body.dataset.profileTabBody!==tab.dataset.profileTab;});
+    };
+  });
+  document.querySelectorAll('[data-action="profile-edit"]').forEach(btn=>{
+    btn.onclick=()=>{const form=document.querySelector('#user-profile-form');if(form){form.scrollIntoView({behavior:'smooth',block:'start'});form.querySelector('input[name=nickname]')?.focus({preventScroll:true});}};
+  });
+  document.querySelectorAll('[data-action="profile-share"]').forEach(btn=>{
+    btn.onclick=async()=>{
+      const url=location.href;
+      try{
+        if(navigator.share)await navigator.share({title:'华立转角 · 同学的主页',url});
+        else{await navigator.clipboard.writeText(url);toast('主页链接已复制');}
+      }catch(_){/* 用户取消分享不提示 */}
+    };
+  });
 }
 
 // --- 「我的」页 ------------------------------------------------------------

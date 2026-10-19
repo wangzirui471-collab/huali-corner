@@ -91,7 +91,13 @@ class CatalogService(ValidationMixin):
         """
         f=filters or {}
         page=max(1,int(f.get('page') or 1));limit=max(0,int(f.get('limit') or 0))
-        where=['p.status=?',"u.status='active'"];args=['available']
+        # status 缺省只给在售（公开浏览的语义不变）；status=all 是
+        # 「卖家主页」专用：已售出也要展示（成交记录是信任的一部分）。
+        # reserved（挂单中）与 removed（下架）在任何视图都不返回。
+        where=['u.status=\'active\''];args=[]
+        if f.get('status')=='all':where.append("p.status IN ('available','sold')")
+        elif f.get('status'):where.append('p.status=?');args.append(f['status'])
+        else:where.append('p.status=?');args.append('available')
         if f.get('seller'):where.append('p.seller_id=?');args.append(int(f['seller']))
         if f.get('category'):where.append('p.category=?');args.append(f['category'])
         rows=self.rows('SELECT p.*,u.nickname,u.college seller_college,u.score FROM products p JOIN users u ON u.id=p.seller_id WHERE '+(' AND '.join(where))+' ORDER BY p.id DESC',tuple(args))
