@@ -1,14 +1,7 @@
-"""Workers 侧 API 路由与领域适配。
+"""Async Cloudflare adapters for the existing trial application.
 
-范围说明（重要）
-----------------
-这里实现的是**首个可上线闭环**：配置、商品流、商品详情、注册、登录、登出、
-当前用户、图片读取。其余接口（发布、订单、聊天、客服、管理端等）仍走原
-同步实现，尚未移植；调用它们会得到 501，而不是静默返回空数据——
-静默返回空数据会让前端以为"没有数据"，比明确报错更难排查。
-
-DTO 字段一律对齐原实现（catalog/service.py、account/profiles.py），
-不新增、不改名，前端无需改动。
+Routes retain local domain contracts, role checks and simulated trade rules.
+D1/R2 are accessed through bindings; no production fixture writes occur here.
 """
 import hashlib
 import json
@@ -47,7 +40,16 @@ STATUS_MESSAGES = {
 }
 
 
-class Api:
+from .read_pages import ReadPages
+from .rules_adapter import CloudRules
+from .trade_api import TradeApi, TRADE_ROUTES
+from .catalog_api import CatalogApi, CATALOG_ROUTES
+from .community_api import CommunityApi, COMMUNITY_ROUTES
+from .staff_api import StaffApi, STAFF_ROUTES
+from .auth_api import AuthApi, AUTH_ROUTES
+
+
+class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, CloudRules, ReadPages):
     def __init__(self, env):
         self.env = env
         self.db = Database(env.DB)
@@ -101,9 +103,9 @@ class Api:
 
     @staticmethod
     def check_rounds(rounds):
-        """允许在 [10000, ROUNDS] 之间；下限防止意外回退到弱口令，上限与本仓库规范一致。"""
-        require(isinstance(rounds, int) and crypto.MIN_ROUNDS <= rounds <= crypto.ROUNDS,
-                f'轮数需在 {crypto.MIN_ROUNDS}–{crypto.ROUNDS} 之间', 400)
+        """New credentials always use the configured 600000-round KDF."""
+        require(type(rounds) is int and rounds == crypto.ROUNDS,
+                f'新凭据轮数须为 {crypto.ROUNDS}', 400)
         return rounds
 
     async def profile_dto(self, user_id):
@@ -481,35 +483,46 @@ class Api:
     # ---- 媒体 ------------------------------------------------------------
 
     async def media(self, request, key):
-        """图片读取。权限规则与原实现一致：私密图只有本人或管理角色可读。"""
+        """Private history is owner-only; selected active avatars are public."""
         uid, status = await sessions.current_user_id(self.db, request)
-
+        active = uid is not None and status == 'active'
+        cache = 'private, no-store'
         if key.startswith('ua_'):
+            # Avatars use a separate registry; staff have no preview bypass.
+            from ..account.avatars import AVATAR_ID
+            require(AVATAR_ID.fullmatch(key), '图片不存在', 404)
             row = await self.db.first(
-                'SELECT upload_id,path FROM user_avatar_uploads WHERE upload_id=?', (key,))
+                'SELECT a.*,u.status owner_status,u.avatar_upload_id FROM user_avatar_uploads a '
+                'JOIN users u ON u.id=a.user_id WHERE a.upload_id=?', (key,))
             require(row is not None, '图片不存在', 404)
-            body, content_type = await self.media_store.read(row['path'])
-            return Response(body, headers={'Content-Type': content_type,
-                                           'Cache-Control': 'private, max-age=300'})
-
-        upload = await self.db.first('SELECT * FROM uploads WHERE id=?', (key,))
-        require(upload is not None, '图片不存在', 404)
-        if upload['private']:
-            role = None
-            if uid is not None:
-                role = await self.db.scalar('SELECT role FROM users WHERE id=?', (uid,))
-            require(uid == upload['user_id'] or role in ('admin', 'support'), '无权读取私密图片', 403)
+            selected = row['owner_status'] == 'active' and row['avatar_upload_id'] == key
+            owner = active and uid == row['user_id']
+            require(selected or owner, '无权读取此头像', 403)
+            path = row['path']
         else:
-            needle = '%/media/' + key + '%'
-            listed = await self.db.first(
-                "SELECT 1 FROM products WHERE status<>'removed' AND data LIKE ?", (needle,))
-            if not listed:
-                listed = await self.db.first('SELECT 1 FROM orders WHERE items LIKE ?', (needle,))
-            require(listed or uid == upload['user_id'], '图片尚未发布', 403)
-
-        body, content_type = await self.media_store.read(upload['path'])
+            upload = await self.db.first('SELECT * FROM uploads WHERE id=?', (key,))
+            require(upload is not None, '图片不存在', 404)
+            if upload['private']:
+                role = None
+                if active:
+                    role = await self.db.scalar('SELECT role FROM users WHERE id=?', (uid,))
+                require(active and (uid == upload['user_id'] or role in ('admin', 'support', 'developer')),
+                        '无权读取私密图片', 403)
+            else:
+                needle = '%/media/' + key + '%'
+                listed = await self.db.first(
+                    "SELECT 1 FROM products WHERE status<>'removed' AND data LIKE ?", (needle,))
+                if not listed:
+                    listed = await self.db.first('SELECT 1 FROM orders WHERE items LIKE ?', (needle,))
+                require(listed or (active and uid == upload['user_id']), '图片尚未发布', 403)
+                if listed:
+                    cache = 'public, max-age=3600'
+            path = upload['path']
+        body, content_type = await self.media_store.read(path)
         return Response(body, headers={'Content-Type': content_type,
-                                       'Cache-Control': 'public, max-age=3600'})
+                                       'Cache-Control': cache,
+                                       'X-Content-Type-Options': 'nosniff',
+                                       'Vary': 'Authorization'})
 
     # ---- 分发 ------------------------------------------------------------
 
@@ -536,6 +549,20 @@ class Api:
 
 
 ROUTES = {
+    '/api/health': (('GET',), 'health'),
+    '/api/my-products': (('GET',), 'my_products'),
+    '/api/orders': (('GET',), 'orders'),
+    '/api/offers': (('GET',), 'offers'),
+    '/api/notifications': (('GET', 'POST'), 'notifications'),
+    '/api/badges': (('GET',), 'badges'),
+    '/api/profile': (('GET',), 'public_profile'),
+    '/api/user/profile': (('GET',), 'user_profile'),
+    '/api/tickets': (('GET',), 'tickets'),
+    '/api/admin': (('GET',), 'admin_overview'),
+    '/api/audit': (('GET',), 'audit'),
+    '/api/product/removed': (('GET',), 'removed_products'),
+    '/api/admin/content': (('GET',), 'flagged_content'),
+    '/api/reconcile': (('GET',), 'reconcile'),
     '/api/config': (('GET',), 'config'),
     '/api/products': (('GET',), 'products'),
     '/api/product': (('GET',), 'product'),
@@ -547,3 +574,9 @@ ROUTES = {
     '/api/auth/password': (('POST',), 'change_password'),
     '/api/me': (('GET',), 'me'),
 }
+
+ROUTES.update(TRADE_ROUTES)
+ROUTES.update(CATALOG_ROUTES)
+ROUTES.update(COMMUNITY_ROUTES)
+ROUTES.update(STAFF_ROUTES)
+ROUTES.update(AUTH_ROUTES)

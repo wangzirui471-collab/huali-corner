@@ -14,3 +14,8 @@ class Default(WorkerEntrypoint):
         api = Api(self.env)
         # guard 负责把 DomainError 翻成状态码、把未知异常兜成 500（不外泄堆栈）。
         return await guard(lambda: api.dispatch(request))
+
+    async def scheduled(self, controller, env, ctx):
+        # D1 guarded batches make retries and overlapping invocations safe.
+        # Use wall time; controller.scheduledTime may describe a delayed event.
+        await Api(self.env).cf_trade_tick()

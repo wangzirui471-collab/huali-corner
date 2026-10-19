@@ -127,6 +127,21 @@ class Database:
             return []
         return list(await self._db.batch(prepared))
 
+    async def guarded_batch(self, guard_sql, guard_params, statements, message='状态已变化，请重试'):
+        '''Check a trusted SELECT inside the write transaction; false rolls back.
+
+        The failure-only insert violates the existing NOT NULL constraint.
+        A successful guard inserts no row and needs no schema migration.
+        '''
+        guard = ('INSERT INTO settings(key,value) SELECT \'__cloud_batch_guard__\',NULL WHERE NOT EXISTS (' + guard_sql + ')', tuple(guard_params))
+        try:
+            results = await self.batch([guard] + list(statements))
+        except Exception as exc:
+            if 'NOT NULL constraint failed: settings.value' in str(exc):
+                raise DomainError(message, 409) from None
+            raise
+        return results[1:]
+
     @staticmethod
     def _changes(result):
         """从 D1Result 里取受影响行数。

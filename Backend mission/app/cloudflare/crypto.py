@@ -33,6 +33,7 @@ CPU 说明：600000 轮在免费计划（10ms CPU）下必然超限，需要 Wor
 """
 import hashlib
 import secrets
+from ..core.session_policy import SESSION_TTL
 
 ROUNDS = 600000
 # 下限是允许前端「客户端派生」路径回退到本地 8081 时不会把规范写崩：
@@ -40,7 +41,6 @@ ROUNDS = 600000
 MIN_ROUNDS = 10000
 KEY_BYTES = 32
 BLOCK = 64
-SESSION_TTL = 86400 * 7
 
 __all__ = [
     'ROUNDS', 'MIN_ROUNDS', 'SESSION_TTL', 'new_salt', 'derive', 'new_credential',
