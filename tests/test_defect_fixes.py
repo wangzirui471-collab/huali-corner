@@ -139,7 +139,9 @@ class DefectFixTests(unittest.TestCase):
         o = self.checkout([p], want_id=w['id'])
         self.m.ban_user(self.admin, self.seller, True, '重复违规发布')
         self.assertEqual(self.m.order(self.buyer, o['id'])['status'], 'cancelled')
-        self.assertEqual(self.m.row('SELECT status FROM products WHERE id=?', (p,))['status'], 'available')
+        # F-01：商品必须保持 removed —— 旧实现在这里复活成 available，被封卖家
+        # 的商品重新进入公开列表，其他买家仍可下单（QA 复现）。
+        self.assertEqual(self.m.row('SELECT status FROM products WHERE id=?', (p,))['status'], 'removed')
         self.assertEqual(self.want_status(w['id']), 'open')
 
     def test_M4_unban_only_applies_to_banned_account(self):
@@ -261,6 +263,93 @@ class MediaSnapshotTests(unittest.TestCase):
         self.assertEqual(self.req(photo, token=self.buyer)[0], 200)          # 订单快照仍要能显示
         stranger = self.market.add_upload(self.market.user(self.seller), png('yellow'), 'extra')['id']
         self.assertEqual(self.req('/media/' + stranger, token=self.buyer)[0], 403)  # 未发布的图继续拦截
+
+
+class F01BannedSellerReleaseTests(unittest.TestCase):
+    """F-01：卖家被封禁后，取消其待付款订单时 release() 又把商品设为
+    available，商品重新进入公开列表，其他买家仍可下单。
+
+    修复口径：
+      · release() 只解锁 reserved 商品，卖家 banned/deleted 时置 removed；
+      · 公开商品流只展示 active 卖家的商品；
+      · checkout() 校验卖家 status='active'（数据库中残留的 available 脏数据也拦得住）。
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.m = Market(self.tmp.name, trial=True)
+        self.admin = self.m.bootstrap_admin('19065322759', 'adminpass1')['id']
+        self.seller = self.m.register_password('13800000041', 'seller123', '卖家')['user']['id']
+        self.buyer = self.m.register_password('13800000042', 'buyer123', '买家')['user']['id']
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def listing(self, u=None, **extra):
+        u = u or self.seller
+        data = dict(title='高等数学 第七版', category='books', price=1500, delivery_fee=300,
+                    delivery='both', region='A1楼下', description='实拍教材', photos=self.photos(u),
+                    college='计算机工程学院', edition='第七版', publisher='高等教育出版社',
+                    condition='有少量笔记', notes='少量', missing='无缺页', accessories='无附件',
+                    bought='2024-09', original_price=4500)
+        data.update(extra)
+        return self.m.publish(u, data)['id']
+
+    def photos(self, u):
+        return [self.m.add_upload(u, png(c), angle)['id']
+                for angle, c in zip(['front', 'side', 'top'], ['red', 'green', 'blue'])]
+
+    def checkout(self, ids, want=None, **extra):
+        payload = dict(product_ids=ids, delivery='pickup', appointment=time.time() + 7200,
+                       key='k-' + str(time.time_ns()))
+        if want is not None:
+            payload['want_id'] = want
+        payload.update(extra)
+        return self.m.checkout(self.buyer, payload)
+
+    def test_banned_seller_product_stays_out_of_public_feed(self):
+        p = self.listing()
+        self.assertEqual(len(self.m.products()), 1)
+        self.checkout([p])                                    # 商品进入 reserved，挂在待付款订单上
+        self.m.ban_user(self.admin, self.seller, True, '引流违规')
+        self.assertEqual(self.m.row('SELECT status FROM products WHERE id=?', (p,))['status'], 'removed')
+        self.assertEqual(self.m.products(), [])               # 公开列表不得出现被封卖家的商品
+
+    def test_banned_seller_product_cannot_be_checked_out(self):
+        """数据库里残留的 available 脏数据（历史 bug 造成或手工改的）也要被拦住。"""
+        p = self.listing()
+        self.m.ban_user(self.admin, self.seller, True, '引流违规')
+        with self.m.tx() as c:                                # 模拟历史脏数据：商品还是 available
+            c.execute("UPDATE products SET status='available' WHERE id=?", (p,))
+        with self.assertRaises(DomainError) as ctx:
+            self.checkout([p])
+        self.assertEqual(ctx.exception.status, 409)
+        self.assertIn('卖家', str(ctx.exception))
+
+    def test_buyer_banned_own_unpaid_order_keeps_seller_product_selling(self):
+        """买家被封只应取消自己的订单；卖家的正常商品继续在售（不能被误伤）。"""
+        p = self.listing()
+        self.checkout([p])
+        self.m.ban_user(self.admin, self.buyer, True, '恶意占单')
+        self.assertEqual(self.m.row('SELECT status FROM products WHERE id=?', (p,))['status'], 'available')
+        self.assertEqual(len(self.m.products()), 1)
+
+    def test_timeout_cancel_still_returns_product_to_feed(self):
+        """正常路径不回归：无人认领的待付款订单 30 分钟超时关闭后商品回到在售。"""
+        p = self.listing()
+        o = self.checkout([p])
+        self.m.tick(time.time() + 1801)
+        self.assertEqual(self.m.order(self.buyer, o['id'])['status'], 'cancelled')
+        self.assertEqual(self.m.row('SELECT status FROM products WHERE id=?', (p,))['status'], 'available')
+
+    def test_unban_does_not_silently_relist(self):
+        """解封只恢复登录能力；商品恢复上架是卖家/客服的显式动作，且 delisted_by 归属不变。"""
+        p = self.listing()
+        self.m.ban_user(self.admin, self.seller, True, '误封')
+        self.m.ban_user(self.admin, self.seller, False, '核实后解封')
+        self.assertEqual(self.m.profile(self.seller)['status'], 'active')
+        self.assertEqual(self.m.row('SELECT status FROM products WHERE id=?', (p,))['status'], 'removed')
+        self.assertEqual(self.m.products(), [])
 
 
 if __name__ == '__main__':

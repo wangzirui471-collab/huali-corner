@@ -244,7 +244,7 @@ class AccountService(ValidationMixin):
             # 在途订单先按封禁口径处置：该退的退、该关的关。否则人一删，
             # 对方那笔订单就永远卡在「待交付」，连申诉对象都没有。
             self._settle_banned_orders(c,target,now)
-            c.execute("UPDATE products SET status='removed' WHERE seller_id=? AND status='available'",(target,))
+            c.execute("UPDATE products SET status='removed' WHERE seller_id=? AND status IN ('available','reserved')",(target,))
             c.execute('DELETE FROM sessions WHERE user_id=?',(target,))
             # 密码凭据一并删除：手机号虽然改了，留着旧哈希没有意义，
             # 也避免占位号被人拿去撞库。

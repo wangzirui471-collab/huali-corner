@@ -19,6 +19,8 @@ class TradeService(ValidationMixin):
             self.require(all(products),'商品不存在')
             self.require(len({p['seller_id'] for p in products})==1,'只能合并同一卖家的商品')
             seller=products[0]['seller_id'];self.require(seller!=u,'不能购买自己的商品')
+            seller_row=c.execute("SELECT status FROM users WHERE id=?",(seller,)).fetchone()
+            self.require(seller_row and seller_row['status']=='active','该卖家账号当前不可交易',409)
             self.require(all(p['status']=='available' for p in products),'部分商品已被预留或售出',409)
             self.require(all(p['delivery'] in [delivery,'both'] for p in products),'商品不支持所选交付方式')
             want=None
@@ -94,7 +96,22 @@ class TradeService(ValidationMixin):
         if fee:self.journal(c,r['id'],'service_fee_reversal',fee['amount'])
 
     def release(self,c,r):
-        for p in json.loads(r['items']):c.execute("UPDATE products SET status='available' WHERE id=?",(p['id'],))
+        """订单作废时把商品放回市场。
+
+        规则（F-01）：
+          · 只解锁下单时锁定的 reserved 商品，恢复为 available；
+          · 卖家被封禁/注销的商品不返回公开列表，直接置 removed；
+          · 已售出(sold)、平台或卖家下架(removed)等状态一律不碰——
+            旧实现无条件 UPDATE products SET status='available'，会把管理
+            下架或封禁连带下架的商品又放回公开列表，其他买家仍可下单。
+        """
+        for p in json.loads(r['items']):
+            pid=p['id'] if isinstance(p,dict) else p
+            row=c.execute("SELECT p.status AS status,COALESCE(u.status,'active') AS seller_status "
+                          "FROM products p LEFT JOIN users u ON u.id=p.seller_id WHERE p.id=?",(pid,)).fetchone()
+            if not row or row['status']!='reserved':continue
+            active='removed' if row['seller_status'] in ('banned','deleted') else 'available'
+            c.execute("UPDATE products SET status=? WHERE id=?",(active,pid))
 
     def complete(self,c,r,now):
         c.execute("UPDATE orders SET status='completed',completed_at=? WHERE id=?",(now,r['id']))

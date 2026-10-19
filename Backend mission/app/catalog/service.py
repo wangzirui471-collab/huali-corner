@@ -37,7 +37,10 @@ class CatalogService(ValidationMixin):
         self.require(len({p['digest'] for p in photos})==len(photos),'重复图片不能凑数')
         if d['category']=='books':
             for k,label in [('edition','版次'),('publisher','出版社'),('notes','笔记情况'),('missing','缺页情况'),('accessories','附件情况')]:self.text(d.get(k),100,label)
-        clean={k:d.get(k,'') for k in ['edition','publisher','notes','missing','accessories','bought','condition','author','isbn','course','major','college']}
+        # F-04：非书分类（电子/运动/生活）也有自己的参数字段（品牌、型号、
+        # 保修、尺码、材质、使用频次），随白名单落库，供详情页展示。
+        # 书籍字段仍只对 books 做强校验，其余分类按需填写。
+        clean={k:d.get(k,'') for k in ['edition','publisher','notes','missing','accessories','bought','condition','author','isbn','course','major','college','brand','model','warranty','size','material','frequency']}
         clean['description']=description;clean['photos']=[{'id':p['id'],'url':'/media/'+p['id'],'angle':p['angle']} for p in photos]
         proof=d.get('proof')
         if proof:
@@ -88,7 +91,7 @@ class CatalogService(ValidationMixin):
         """
         f=filters or {}
         page=max(1,int(f.get('page') or 1));limit=max(0,int(f.get('limit') or 0))
-        where=['p.status=?'];args=['available']
+        where=['p.status=?',"u.status='active'"];args=['available']
         if f.get('seller'):where.append('p.seller_id=?');args.append(int(f['seller']))
         if f.get('category'):where.append('p.category=?');args.append(f['category'])
         rows=self.rows('SELECT p.*,u.nickname,u.college seller_college,u.score FROM products p JOIN users u ON u.id=p.seller_id WHERE '+(' AND '.join(where))+' ORDER BY p.id DESC',tuple(args))

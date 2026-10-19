@@ -254,7 +254,7 @@ class SupportService(ValidationMixin):
             else:
                 c.execute("UPDATE users SET status='banned' WHERE id=?",(target,))
                 c.execute('DELETE FROM sessions WHERE user_id=?',(target,))
-                c.execute("UPDATE products SET status='removed' WHERE seller_id=? AND status='available'",(target,))
+                c.execute("UPDATE products SET status='removed' WHERE seller_id=? AND status IN ('available','reserved')",(target,))
                 self._settle_banned_orders(c,target,now)
             c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',(u,target,'ban' if banned else 'unban',reason,now))
         return self.profile(target)
