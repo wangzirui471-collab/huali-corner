@@ -5,7 +5,7 @@ from urllib.parse import urlsplit,parse_qs,unquote
 from app.market import Market,DomainError
 from app.account.avatars import MAX_AVATAR_BYTES
 from app.seed import seed as seed_data
-from app.core.config import WEB,COLLEGES_JSON,data_dir
+from app.core.config import WEB,COLLEGES_JSON,data_dir,COLLEGES,GRADES
 # 头像走 JSON base64 上传：编码后体积是原文件的 4/3，再留一点 JSON 外壳余量。
 # 这个上限只用在头像路由上；其余 POST 仍是下面那个 8 MiB，不扩大既有面。
 AVATAR_JSON_LIMIT=4*((MAX_AVATAR_BYTES+2)//3)+65536
@@ -78,11 +78,11 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/config':
                 directory=COLLEGES_JSON
                 colleges=json.loads(directory.read_text(encoding='utf-8'))['colleges'] if directory.exists() else []
-                if m.trial:colleges=[{'source_name':'计算机工程学院'}]
-                return self.respond({'simulation':True,'trial':m.trial,'auth_mode':'password' if m.trial else 'demo','phone_verified':False,'name':'华立转角','pilot':'计算机工程学院','campus':'广州校区','support_hours':'08:00–20:00','colleges':colleges,'buildings':['本科综合楼','行政楼','7号楼仓库','A1','A2','A3','A4','B1','B2','B3','B4','B9','C1','C2','C3','C4','C5','C6','C7','C8','D1','D2','D5','D6','G1主楼','G1副楼','G2','G3','G4主楼','G4副楼','L1','L2','L3','L4','L5','L6','L7','L8','L9','L10','L11','L12','L13','L15','L16','L17','L18']})
+                if m.trial:colleges=[{'source_name':name} for name in COLLEGES]
+                return self.respond({'simulation':True,'trial':m.trial,'auth_mode':'password' if m.trial else 'demo','phone_verified':False,'name':'华立转角','pilot':'计算机工程学院','campus':'广州校区','support_hours':'08:00–20:00','colleges':colleges,'grades':GRADES,'buildings':['本科综合楼','行政楼','7号楼仓库','A1','A2','A3','A4','B1','B2','B3','B4','B9','C1','C2','C3','C4','C5','C6','C7','C8','D1','D2','D5','D6','G1主楼','G1副楼','G2','G3','G4主楼','G4副楼','L1','L2','L3','L4','L5','L6','L7','L8','L9','L10','L11','L12','L13','L15','L16','L17','L18']})
             if p=='/api/auth/code' and method=='POST':return self.respond(m.request_code(data.get('phone')))
             if p=='/api/auth/login' and method=='POST':return self.respond(m.login_password(data.get('phone'),data.get('password')) if m.trial else m.login(data.get('phone'),data.get('code')))
-            if p=='/api/auth/register' and method=='POST':return self.respond(m.register_password(data.get('phone'),data.get('password'),data.get('nickname')))
+            if p=='/api/auth/register' and method=='POST':return self.respond(m.register_password(data.get('phone'),data.get('password'),data.get('nickname'),data.get('college',''),data.get('major',''),data.get('grade','')))
             if p=='/api/auth/recover' and method=='POST':return self.respond(m.recover_password(data.get('phone'),data.get('recovery_code'),data.get('new_password')))
             if p=='/api/products' and method=='GET':return self.respond(m.products(self.optional_user(),query))
             if p=='/api/product' and method=='GET':return self.respond(m.product(int(query['id']),self.optional_user()))
@@ -92,6 +92,9 @@ class Handler(BaseHTTPRequestHandler):
                 # 公开出去等于对外暴露某人是否被封禁或已注销。
                 public={k:profile[k] for k in ('id','nickname','college','major','education','bio','score','avatar_url')}
                 public['trusted']=m.trusted_map([who]).get(who,False)
+                # 主页按钮要按关系渲染：加好友 / 已申请 / 待处理 / 发私信。
+                viewer=self.optional_user()
+                public['friend_state']=m.friend_state(viewer,who) if viewer else 'none'
                 # status=all：卖家主页要展示已售出（成交记录是信任的一部分）；
                 # products() 内部仍排除 reserved 与 removed，不会泄漏挂单/下架商品。
                 return self.respond({'user':public,'products':m.products(self.optional_user(),{'seller':str(who),'status':'all'})})
@@ -200,6 +203,11 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/messages/hide' and method=='POST':return self.respond(m.hide_message(u,int(data['message_id'])))
             if p=='/api/room/members':return self.respond(m.room_members(u,int(query['room_id'])))
             if p=='/api/block' and method=='POST':return self.respond(m.block(u,int(data['target']),bool(data.get('enabled',True))))
+            # 好友：申请（可附 ≤15 字留言、可关联求购）／处理／列表／关系状态。
+            if p=='/api/friends':return self.respond(m.friends(u))
+            if p=='/api/friend/state':return self.respond({'state':m.friend_state(u,int(query['user_id']))})
+            if p=='/api/friend/request' and method=='POST':return self.respond(m.friend_request(u,int(data['target']),data.get('message',''),data.get('want_id',0)))
+            if p=='/api/friend/decide' and method=='POST':return self.respond(m.friend_decide(u,int(data['id']),bool(data.get('accept',True))))
             if p=='/api/posts' and method=='POST':return self.respond(m.add_post(u,data))
             if p=='/api/comments' and method=='POST':return self.respond(m.comment(u,int(data['post_id']),data['body'],int(data.get('parent_id') or 0)))
             if p=='/api/moderate' and method=='POST':return self.respond(m.moderate(u,data))

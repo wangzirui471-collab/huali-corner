@@ -271,6 +271,10 @@ class ChatPostModerationTests(DeskTestCase):
         self.assertTrue(self.m.send_message(self.user, 1, '这本书还在吗', 'g2')['ok'])
 
     def test_private_chat_allows_contact_but_blocks_offsite_payment(self):
+        # 2026-10 起私聊需互为好友；直接落库建关系，避免申请通知干扰本组断言。
+        with self.m.tx() as c:
+            c.execute("INSERT INTO friendships(requester,target,status,created,decided) VALUES(?,?,'accepted',?,?)",
+                      (self.user, self.peer, 1, 1))
         room = self.m.private_room(self.user, self.peer)['id']
         # 约交付时间互留微信是正常沟通，私聊不该拦。
         self.assertTrue(self.m.send_message(self.user, room, '加微信约个时间', 'p1')['ok'])

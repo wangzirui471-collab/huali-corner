@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS members(room_id INTEGER,user_id INTEGER,muted INTEGER
 CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY,room_id INTEGER,user_id INTEGER,body TEXT,created REAL,request_key TEXT,removed INTEGER DEFAULT 0,moderation TEXT,UNIQUE(user_id,room_id,request_key));
 CREATE TABLE IF NOT EXISTS message_hides(user_id INTEGER,message_id INTEGER,created REAL,PRIMARY KEY(user_id,message_id));
 CREATE TABLE IF NOT EXISTS blocks(user_id INTEGER,target INTEGER,PRIMARY KEY(user_id,target));
+CREATE TABLE IF NOT EXISTS friendships(id INTEGER PRIMARY KEY,requester INTEGER NOT NULL,target INTEGER NOT NULL,message TEXT DEFAULT '',want_id INTEGER DEFAULT 0,status TEXT DEFAULT 'pending',created REAL,decided REAL,UNIQUE(requester,target));
 CREATE TABLE IF NOT EXISTS posts(id INTEGER PRIMARY KEY,user_id INTEGER,topic TEXT,body TEXT,created REAL,moderation TEXT,removed INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS comments(id INTEGER PRIMARY KEY,post_id INTEGER,user_id INTEGER,body TEXT,created REAL,parent_id INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS offers(id INTEGER PRIMARY KEY,product_id INTEGER,buyer_id INTEGER,amount INTEGER,status TEXT DEFAULT 'pending',created REAL,accepted_at REAL);
@@ -80,7 +81,7 @@ CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY,user_id INTEGER,
 #   · 保留字 key / type 用反引号引用
 #   · 带 UNIQUE/PRIMARY KEY 的文本列用 VARCHAR（MySQL 对 TEXT 建唯一索引在严格模式下受限）
 MYSQL_SCHEMA = '''
-CREATE TABLE IF NOT EXISTS users(id INT PRIMARY KEY AUTO_INCREMENT,phone VARCHAR(32) NOT NULL UNIQUE,nickname VARCHAR(64) NOT NULL,college VARCHAR(64) DEFAULT '计算机工程学院',major VARCHAR(64) DEFAULT '',education VARCHAR(32) DEFAULT '本科',bio TEXT,role VARCHAR(32) DEFAULT 'user',score INT DEFAULT 100 CHECK (score BETWEEN 0 AND 100),status VARCHAR(32) DEFAULT 'active',last_login DOUBLE DEFAULT 0,degree_level VARCHAR(16) NOT NULL DEFAULT 'unspecified',study_status VARCHAR(16) NOT NULL DEFAULT 'unspecified',profile_version INT NOT NULL DEFAULT 0,avatar_upload_id VARCHAR(64) NULL);
+CREATE TABLE IF NOT EXISTS users(id INT PRIMARY KEY AUTO_INCREMENT,phone VARCHAR(32) NOT NULL UNIQUE,nickname VARCHAR(64) NOT NULL,college VARCHAR(64) DEFAULT '计算机工程学院',major VARCHAR(64) DEFAULT '',education VARCHAR(32) DEFAULT '本科',bio TEXT,role VARCHAR(32) DEFAULT 'user',score INT DEFAULT 100 CHECK (score BETWEEN 0 AND 100),status VARCHAR(32) DEFAULT 'active',last_login DOUBLE DEFAULT 0,degree_level VARCHAR(16) NOT NULL DEFAULT 'unspecified',study_status VARCHAR(16) NOT NULL DEFAULT 'unspecified',profile_version INT NOT NULL DEFAULT 0,avatar_upload_id VARCHAR(64) NULL,grade VARCHAR(16) NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS otp(phone VARCHAR(32) NOT NULL PRIMARY KEY,digest TEXT,expires DOUBLE,attempts INT DEFAULT 0);
 CREATE TABLE IF NOT EXISTS sessions(token VARCHAR(128) NOT NULL PRIMARY KEY,user_id INT,expires DOUBLE);
 CREATE TABLE IF NOT EXISTS settings(`key` VARCHAR(64) NOT NULL PRIMARY KEY,value TEXT NOT NULL);
@@ -103,6 +104,7 @@ CREATE TABLE IF NOT EXISTS members(room_id INT,user_id INT,muted INT DEFAULT 0,r
 CREATE TABLE IF NOT EXISTS messages(id INT PRIMARY KEY AUTO_INCREMENT,room_id INT,user_id INT,body TEXT,created DOUBLE,request_key VARCHAR(64),removed INT DEFAULT 0,moderation TEXT,UNIQUE(user_id,room_id,request_key));
 CREATE TABLE IF NOT EXISTS message_hides(user_id INT,message_id INT,created DOUBLE,PRIMARY KEY(user_id,message_id));
 CREATE TABLE IF NOT EXISTS blocks(user_id INT,target INT,PRIMARY KEY(user_id,target));
+CREATE TABLE IF NOT EXISTS friendships(id INT PRIMARY KEY AUTO_INCREMENT,requester INT NOT NULL,target INT NOT NULL,message VARCHAR(64) DEFAULT '',want_id INT DEFAULT 0,status VARCHAR(32) DEFAULT 'pending',created DOUBLE,decided DOUBLE,UNIQUE(requester,target));
 CREATE TABLE IF NOT EXISTS posts(id INT PRIMARY KEY AUTO_INCREMENT,user_id INT,topic VARCHAR(128),body TEXT,created DOUBLE,moderation TEXT,removed INT DEFAULT 0);
 CREATE TABLE IF NOT EXISTS comments(id INT PRIMARY KEY AUTO_INCREMENT,post_id INT,user_id INT,body TEXT,created DOUBLE,parent_id INT DEFAULT 0);
 CREATE TABLE IF NOT EXISTS offers(id INT PRIMARY KEY AUTO_INCREMENT,product_id INT,buyer_id INT,amount INT,status VARCHAR(48) DEFAULT 'pending',created DOUBLE,accepted_at DOUBLE);

@@ -124,7 +124,14 @@ class MarketTests(unittest.TestCase):
         p=self.listing();self.m.react(self.b,p,'favorite',True);self.m.react(self.b,p,'favorite',True)
         self.assertEqual(len(self.m.products(self.b,{'favorite':'1'})),1)
         with self.assertRaises(DomainError):self.m.review(self.b,999,5,'好')
+    def befriend(self,x,y):
+        """2026-10 起私聊必须先互为好友；这里走完申请→同意。"""
+        self.m.friend_request(x,y,'测试好友')
+        row=self.m.row("SELECT id FROM friendships WHERE requester=? AND target=?",(x,y))
+        self.m.friend_decide(y,row['id'],True)
+
     def test_private_chat_membership_and_blocks(self):
+        self.befriend(self.a,self.b)
         r=self.m.private_room(self.a,self.b)
         self.m.send_message(self.a,r['id'],'你好','message1')
         self.m.send_message(self.a,r['id'],'你好','message1')
@@ -354,6 +361,12 @@ class ChatRoomTests(unittest.TestCase):
         code=self.m.request_code(phone)['demo_code']
         return self.m.login(phone,code)['user']['id']
 
+    def befriend(self,x,y):
+        """2026-10 起私聊必须先互为好友；这里走完申请→同意。"""
+        self.m.friend_request(x,y,'测试好友')
+        row=self.m.row("SELECT id FROM friendships WHERE requester=? AND target=?",(x,y))
+        self.m.friend_decide(y,row['id'],True)
+
     def test_room_list_preview_and_unread(self):
         r=self.m.join_room(self.a,'general'); self.m.join_room(self.b,'general')
         self.m.send_message(self.a,r['id'],'大家好啊','k1')
@@ -374,6 +387,7 @@ class ChatRoomTests(unittest.TestCase):
         with self.assertRaises(DomainError):self.m.room_members(stranger,r['id'])
 
     def test_recall_window_and_permission(self):
+        self.befriend(self.a,self.b)
         r=self.m.private_room(self.a,self.b)
         self.m.send_message(self.a,r['id'],'说错话了','k1')
         mid=self.m.messages(self.a,r['id'])[0]['id']

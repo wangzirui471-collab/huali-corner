@@ -24,6 +24,11 @@ class MessageActionTests(unittest.TestCase):
         self.m = Market(self.tmp.name)
         self.a = self.login('13800000011')
         self.b = self.login('13800000012')
+        # 2026-10 起用户私聊必须先互为好友（客服会话除外）；本组用例测的是
+        # 撤回/删除本身，所以先走一遍申请→同意把好友关系建好。
+        self.m.friend_request(self.a, self.b, '测试好友')
+        row = self.m.row('SELECT id FROM friendships WHERE requester=? AND target=?', (self.a, self.b))
+        self.m.friend_decide(self.b, row['id'], True)
         self.room = self.m.private_room(self.a, self.b)['id']
 
     def tearDown(self):

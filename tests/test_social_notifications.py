@@ -21,6 +21,11 @@ class SocialNotificationTests(unittest.TestCase):
         self.alice = self.m.register_password('13800000021', 'Passw0rd!123', '阿甲')['user']['id']
         self.bob = self.m.register_password('13800000022', 'Passw0rd!123', '阿乙')['user']['id']
         self.carol = self.m.register_password('13800000023', 'Passw0rd!123', '阿丙')['user']['id']
+        # 2026-10 起私聊必须先互为好友；本组测的是未读/角标，先把好友关系建好。
+        # 直接落库而不是走申请/同意：那两步会发站内通知，把未读断言全部带偏。
+        with self.m.tx() as c:
+            c.execute("INSERT INTO friendships(requester,target,status,created,decided) VALUES(?,?,'accepted',?,?)",
+                      (self.alice, self.bob, 1, 1))
 
     def tearDown(self):
         self.tmp.cleanup()

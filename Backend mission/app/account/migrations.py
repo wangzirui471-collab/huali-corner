@@ -25,6 +25,8 @@ _NEW_COLUMNS = (
     ('profile_version', 'INTEGER NOT NULL DEFAULT 0'),
     # 当前选中的头像 upload_id（ua_<32位hex>）。为空表示用默认头像。
     ('avatar_upload_id', 'TEXT'),
+    # 年级（如「2023级」）。注册时选择，空串表示未填——老账号不回填猜测值。
+    ('grade', "TEXT NOT NULL DEFAULT ''"),
 )
 
 # 旧 education 到新列的投影。「已毕业」只表示状态，不猜学历；

@@ -10,6 +10,7 @@ import time
 ROUNDS=600000
 import hashlib, re, secrets, time
 from ..core.errors import ValidationMixin, DomainError
+from ..core.config import COLLEGES, GRADES
 from .credit import is_trusted, star_badge
 
 
@@ -101,12 +102,20 @@ class AccountService(ValidationMixin):
         # Failed-attempt accounting must survive the domain error/transaction rollback.
         c.commit()
         self.require(False,'账号、密码或恢复码不正确',401)
-    def register_password(self,phone,password,nickname):
+    def register_password(self,phone,password,nickname,college='',major='',grade=''):
         self._trial_only();phone=self._phone(phone);self._password(password)
-        nickname=self.text(nickname,24,'昵称');salt,digest,rounds,recovery_digest,recovery=self._new_credential(password)
+        nickname=self.text(nickname,24,'昵称')
+        # 学院：允许列表由 server.py 的 COLLEGES 提供（学校在校生表的学院列去重）。
+        # 空值回落试点学院，保证老客户端不传也能注册。
+        college=str(college or '').strip() or '计算机工程学院'
+        self.require(len(college)<=64 and college in COLLEGES,'学院选项不正确')
+        major=self.text(major,80,'专业') if str(major or '').strip() else ''
+        grade=str(grade or '').strip()
+        if grade:self.require(grade in GRADES,'年级选项不正确')
+        salt,digest,rounds,recovery_digest,recovery=self._new_credential(password)
         with self.tx() as c:
             self.require(not c.execute('SELECT 1 FROM users WHERE phone=?',(phone,)).fetchone(),'此账号已注册，请登录或使用恢复码',409)
-            uid=c.execute("INSERT INTO users(phone,nickname,college,role) VALUES(?,?,'计算机工程学院','user')",(phone,nickname)).lastrowid
+            uid=c.execute("INSERT INTO users(phone,nickname,college,major,grade,role) VALUES(?,?,?,?,?,'user')",(phone,nickname,college,major,grade)).lastrowid
             c.execute('INSERT INTO password_credentials VALUES(?,?,?,?,?)',(uid,salt,digest,rounds,recovery_digest))
             token=self._session(c,uid)
         return self._trial_result(uid,token,recovery)

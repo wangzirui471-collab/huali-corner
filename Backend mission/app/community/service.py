@@ -232,6 +232,11 @@ class CommunityService(ValidationMixin):
         if private:
             peer=self.row('SELECT user_id FROM members WHERE room_id=? AND user_id<>?',(r,u))['user_id']
             self.require(not self.row('SELECT 1 FROM blocks WHERE (user_id=? AND target=?) OR (user_id=? AND target=?)',(u,peer,peer,u)),'该会话已被屏蔽',403)
+            # 好友规则（2026-10 用户确认）：用户之间必须互为好友才能聊天。
+            # 客服会话（rooms.support=1）豁免——找平台求助不该先加好友。
+            # 历史会话保留可读，但发新消息会被这里拦住并给出明确提示。
+            if not room['support']:
+                self.require(self.is_friend(u,peer),'先加对方为好友才能聊天',403)
         # 聊天是反引流的主战场之一：群里一句「加微信」能带走一整群的人。
         # 私聊用另一套尺度——联系方式放行，站外平台/站外收款/违禁品照拦，
         # 理由见 moderation.scan_private() 的注释。
@@ -248,6 +253,80 @@ class CommunityService(ValidationMixin):
             if enabled:c.execute('INSERT OR IGNORE INTO blocks VALUES(?,?)',(u,int(target)))
             else:c.execute('DELETE FROM blocks WHERE user_id=? AND target=?',(u,int(target)))
         return {'ok':True}
+
+    # --- 好友系统 ----------------------------------------------------------
+    # 规则（用户确认）：加好友要先申请；同意前只能附带一条 ≤15 字的文字
+    # 附言（无图片、无文件）；同意后才能自由聊天。客服会话不受此限。
+    FRIEND_MESSAGE_LIMIT=15
+
+    def _friend_row(self,u,peer):
+        return self.row("SELECT * FROM friendships WHERE (requester=? AND target=?) OR (requester=? AND target=?) ORDER BY id DESC LIMIT 1",(u,peer,peer,u))
+
+    def is_friend(self,u,peer):
+        return bool(self.row("SELECT 1 FROM friendships WHERE status='accepted' AND ((requester=? AND target=?) OR (requester=? AND target=?))",(u,peer,peer,u)))
+
+    def friend_state(self,u,target):
+        """给前端决定按钮文案：self/accepted/pending_out/pending_in/none。
+        被拒绝（rejected）视作 none，允许过一段时间重新申请。"""
+        target=int(target)
+        if target==u:return 'self'
+        row=self._friend_row(u,target)
+        if not row or row['status']=='rejected':return 'none'
+        if row['status']=='accepted':return 'accepted'
+        return 'pending_out' if row['requester']==u else 'pending_in'
+
+    def friend_request(self,u,target,message='',want_id=0):
+        """发起好友申请。want_id>0 表示这条申请是在回应某条求购。"""
+        target=int(target);self.require(target!=u,'不能加自己为好友')
+        self.profile(target)
+        message=str(message or '').strip()
+        self.require(len(message)<=self.FRIEND_MESSAGE_LIMIT,f'申请附言最多 {self.FRIEND_MESSAGE_LIMIT} 个字')
+        if message:self.require(not scan_private(message)['blocked'],'申请附言包含不能发送的内容',422)
+        want_id=int(want_id or 0)
+        if want_id:self.require(self.row('SELECT 1 FROM wants WHERE id=?',(want_id,)),'求购不存在',404)
+        now=time.time()
+        with self.tx() as c:
+            row=c.execute("SELECT * FROM friendships WHERE (requester=? AND target=?) OR (requester=? AND target=?) ORDER BY id DESC LIMIT 1",(u,target,target,u)).fetchone()
+            if row and row['status']=='accepted':return {'ok':True,'state':'accepted','message':'你们已经是好友'}
+            if row and row['status']=='pending':
+                if row['requester']==u:return {'ok':True,'state':'pending_out','message':'申请已发送，等对方处理'}
+                return {'ok':True,'state':'pending_in','message':'对方已向你发出申请，去「社区 · 新的朋友」处理'}
+            if row:
+                c.execute("UPDATE friendships SET requester=?,target=?,message=?,want_id=?,status='pending',created=?,decided=NULL WHERE id=?",(u,target,message,want_id,now,row['id']))
+            else:
+                c.execute("INSERT INTO friendships(requester,target,message,want_id,status,created) VALUES(?,?,?,?,'pending',?)",(u,target,message,want_id,now))
+            body=self.profile(u)['nickname']+' 想加你为好友'+(f'：{message}' if message else '')
+            self.notify(c,target,'friend_request',body)
+        return {'ok':True,'state':'pending_out','message':'申请已发送'}
+
+    def friend_decide(self,u,fid,accept=True):
+        row=self.row('SELECT * FROM friendships WHERE id=?',(int(fid),))
+        self.require(row,'申请不存在',404)
+        self.require(row['target']==u,'只能处理发给你的申请',403)
+        self.require(row['status']=='pending','该申请已处理')
+        with self.tx() as c:
+            c.execute("UPDATE friendships SET status=?,decided=? WHERE id=?",('accepted' if accept else 'rejected',time.time(),row['id']))
+            if accept:
+                self.notify(c,row['requester'],'friend_accepted',self.profile(u)['nickname']+' 同意了你的好友申请，现在可以聊天了')
+            else:
+                self.notify(c,row['requester'],'friend_rejected','对方拒绝了你的好友申请')
+        return {'ok':True,'status':'accepted' if accept else 'rejected'}
+
+    def friends(self,u):
+        """好友列表 + 收到/发出的申请。资料字段只给公开部分。"""
+        rows=self.rows("""SELECT f.*,u.nickname,u.college,u.major,u.grade,u.score
+            FROM friendships f JOIN users u ON u.id=CASE WHEN f.requester=? THEN f.target ELSE f.requester END
+            WHERE f.requester=? OR f.target=? ORDER BY COALESCE(f.decided,f.created) DESC""",(u,u,u))
+        out={'friends':[],'incoming':[],'outgoing':[]}
+        for r in rows:
+            peer=r['target'] if r['requester']==u else r['requester']
+            item={'id':r['id'],'user_id':peer,'nickname':r['nickname'],'college':r['college'],
+                  'major':r['major'],'grade':r['grade'],'score':r['score'],'message':r['message'],
+                  'want_id':r['want_id'],'status':r['status'],'created':r['created'],'decided':r['decided']}
+            if r['status']=='accepted':out['friends'].append(item)
+            elif r['status']=='pending':
+                (out['incoming'] if r['target']==u else out['outgoing']).append(item)
+        return out
     def posts(self,topic='',limit=20,offset=0):
         # 分页：前端「加载更多」按 limit 递增 offset 取更早的帖子。
         # 老实现 LIMIT 100 无分页，第 101 条帖子起永远翻不到。
@@ -255,7 +334,10 @@ class CommunityService(ValidationMixin):
         return self.rows('SELECT p.*,u.nickname,u.college,(SELECT COUNT(*) FROM comments c WHERE c.post_id=p.id) replies FROM posts p JOIN users u ON u.id=p.user_id WHERE p.removed=0 AND (?=\'\' OR topic=?) ORDER BY p.id DESC LIMIT ? OFFSET ?',(topic,topic,limit,offset))
     def add_post(self,u,d):
         body=self.text(d.get('body'),2000,'帖子内容');topic=d.get('topic','交流')
-        self.require(topic in ['交流','求购','毕业季','互助'],'分区不正确')
+        # 论坛三板块：求购 / 交换人生（技能与时间互换）/ 代拿快递；
+        # 另保留「交流」「毕业季」两个通用分区。代考代课签到一类违反学术
+        # 诚信的内容不设分区，且会被 scan_text 词库直接拦下。
+        self.require(topic in ['交流','求购','毕业季','互助','交换人生','代拿快递'],'分区不正确')
         # 帖子是公开的引流入口，尺度按最严的来：联系方式也算高危。
         report=scan_text(body)
         self.require(not report['blocked'],'帖子不能发布：'+message_for(report),422)
