@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS tickets(id INTEGER PRIMARY KEY,user_id INTEGER,order_
 CREATE TABLE IF NOT EXISTS ticket_messages(id INTEGER PRIMARY KEY,ticket_id INTEGER,user_id INTEGER,body TEXT,internal INTEGER DEFAULT 0,created REAL);
 CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,actor INTEGER,target INTEGER,type TEXT,delta INTEGER,reason TEXT,ticket_id INTEGER,created REAL);
 CREATE TABLE IF NOT EXISTS reviews(id INTEGER PRIMARY KEY,order_id INTEGER,user_id INTEGER,rating INTEGER,body TEXT,created REAL,UNIQUE(order_id,user_id));
-CREATE TABLE IF NOT EXISTS rooms(id INTEGER PRIMARY KEY,kind TEXT,name TEXT,college TEXT DEFAULT '',sequence INTEGER DEFAULT 1,pair TEXT UNIQUE);
+CREATE TABLE IF NOT EXISTS rooms(id INTEGER PRIMARY KEY,kind TEXT,name TEXT,college TEXT DEFAULT '',sequence INTEGER DEFAULT 1,pair TEXT UNIQUE,support INTEGER DEFAULT 0,assignee INTEGER DEFAULT 0,ticket_id INTEGER DEFAULT 0,support_status TEXT DEFAULT 'open',support_closed_at REAL DEFAULT 0,support_closed_by TEXT DEFAULT '');
 CREATE TABLE IF NOT EXISTS members(room_id INTEGER,user_id INTEGER,muted INTEGER DEFAULT 0,role TEXT DEFAULT 'member',last_read_id INTEGER DEFAULT 0,PRIMARY KEY(room_id,user_id));
 CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY,room_id INTEGER,user_id INTEGER,body TEXT,created REAL,request_key TEXT,removed INTEGER DEFAULT 0,moderation TEXT,UNIQUE(user_id,room_id,request_key));
 CREATE TABLE IF NOT EXISTS message_hides(user_id INTEGER,message_id INTEGER,created REAL,PRIMARY KEY(user_id,message_id));
@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS tickets(id INT PRIMARY KEY AUTO_INCREMENT,user_id INT
 CREATE TABLE IF NOT EXISTS ticket_messages(id INT PRIMARY KEY AUTO_INCREMENT,ticket_id INT,user_id INT,body TEXT,internal INT DEFAULT 0,created DOUBLE);
 CREATE TABLE IF NOT EXISTS audit(id INT PRIMARY KEY AUTO_INCREMENT,actor INT,target INT,`type` VARCHAR(48),delta INT,reason TEXT,ticket_id INT,created DOUBLE);
 CREATE TABLE IF NOT EXISTS reviews(id INT PRIMARY KEY AUTO_INCREMENT,order_id INT,user_id INT,rating INT,body TEXT,created DOUBLE,UNIQUE(order_id,user_id));
-CREATE TABLE IF NOT EXISTS rooms(id INT PRIMARY KEY AUTO_INCREMENT,kind VARCHAR(32),name VARCHAR(128),college VARCHAR(64) DEFAULT '',sequence INT DEFAULT 1,pair VARCHAR(128) UNIQUE);
+CREATE TABLE IF NOT EXISTS rooms(id INT PRIMARY KEY AUTO_INCREMENT,kind VARCHAR(32),name VARCHAR(128),college VARCHAR(64) DEFAULT '',sequence INT DEFAULT 1,pair VARCHAR(128) UNIQUE,support INT DEFAULT 0,assignee INT DEFAULT 0,ticket_id INT DEFAULT 0,support_status VARCHAR(16) DEFAULT 'open',support_closed_at DOUBLE DEFAULT 0,support_closed_by VARCHAR(16) DEFAULT '');
 CREATE TABLE IF NOT EXISTS members(room_id INT,user_id INT,muted INT DEFAULT 0,role VARCHAR(32) DEFAULT 'member',last_read_id INT DEFAULT 0,PRIMARY KEY(room_id,user_id));
 CREATE TABLE IF NOT EXISTS messages(id INT PRIMARY KEY AUTO_INCREMENT,room_id INT,user_id INT,body TEXT,created DOUBLE,request_key VARCHAR(64),removed INT DEFAULT 0,moderation TEXT,UNIQUE(user_id,room_id,request_key));
 CREATE TABLE IF NOT EXISTS message_hides(user_id INT,message_id INT,created DOUBLE,PRIMARY KEY(user_id,message_id));
@@ -390,6 +390,14 @@ class Store:
                     c.execute('ALTER TABLE rooms ADD COLUMN assignee INTEGER DEFAULT 0')
                 if 'ticket_id' not in [x[1] for x in c.execute('PRAGMA table_info(rooms)')]:
                     c.execute('ALTER TABLE rooms ADD COLUMN ticket_id INTEGER DEFAULT 0')
+                # 客服会话生命周期：open / closed。关闭时消息归档（removed=3），
+                # 双方会话列表不再显示；重新咨询重新开启并清空上一轮。
+                if 'support_status' not in [x[1] for x in c.execute('PRAGMA table_info(rooms)')]:
+                    c.execute("ALTER TABLE rooms ADD COLUMN support_status TEXT DEFAULT 'open'")
+                if 'support_closed_at' not in [x[1] for x in c.execute('PRAGMA table_info(rooms)')]:
+                    c.execute('ALTER TABLE rooms ADD COLUMN support_closed_at REAL DEFAULT 0')
+                if 'support_closed_by' not in [x[1] for x in c.execute('PRAGMA table_info(rooms)')]:
+                    c.execute("ALTER TABLE rooms ADD COLUMN support_closed_by TEXT DEFAULT ''")
                 c.execute("INSERT OR IGNORE INTO rooms(id,kind,name) VALUES(1,'general','广州校区总聊')")
                 # 账号领域的增量迁移（degree_level / study_status / profile_version /
                 # avatar_upload_id 四个列 + user_avatar_uploads 表）。放在这里而不是

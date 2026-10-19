@@ -184,6 +184,10 @@ class SupportService(ValidationMixin):
                 c.execute("UPDATE tickets SET status='resolved',assignee=?,outcome=?,reason=? WHERE id=?",(u,outcome,reason,tid))
             c.execute('INSERT INTO audit(actor,type,reason,ticket_id,created) VALUES(?,?,?,?,?)',(u,'ticket_'+outcome,reason,tid,time.time()))
             if outcome not in ('claim','review'):
+                # 工单结案/驳回后，绑定的在线客服会话一并结束：事情已有结论，
+                # 会话继续挂着只会让用户在已处理完的事项上反复追问。
+                room=c.execute("SELECT * FROM rooms WHERE support=1 AND ticket_id=? AND COALESCE(support_status,'open')='open'",(tid,)).fetchone()
+                if room:self._close_support(c,dict(room),'ticket')
                 self.notify(c,t['user_id'],'ticket_resolved',f'工单 #{tid} 已处理完成（{"退款" if outcome=="refund" else "结案" if outcome=="resolved" else "驳回"}），可到客服中心查看处理依据并申请复核。',t['order_id'],tid)
         return {'ok':True}
 

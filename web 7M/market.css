@@ -9,8 +9,8 @@
   --ink: #1c1d21;
   --ink-2: #44474e;
   --ink-3: #6b6f77;
-  --muted: #8b8f98;
-  --faint: #abaeb6;
+  --muted: #6f737c;
+  --faint: #7d818b;
 
   --surface: #ffffff;
   --surface-2: #fafbfc;
@@ -279,9 +279,9 @@ button { -webkit-tap-highlight-color: transparent; }
 /* --- 5. 模拟交易提示条 ---------------------------------------------------- */
 .simulation-bar {
   background: linear-gradient(90deg, #fffaea, #fff5d2 50%, #fffaea);
-  color: #a08c46;
-  padding: 7px 15px;
-  font-size: 10.5px;
+  color: #7a6528;
+  padding: 8px 15px;
+  font-size: 12px;
   letter-spacing: .2px;
   text-align: center;
 }
@@ -687,6 +687,10 @@ button { -webkit-tap-highlight-color: transparent; }
 .notice.review { background: #fff5da; color: #7f6116; border-left: 3px solid #e0a92c; flex-direction: column; gap: 4px; }
 .notice.review b { font-size: 12px; }
 .notice.review p { margin: 0; line-height: 1.7; }
+/* 卖家介绍与成色自选字段可能矛盾：不做裁决，只提醒当面核对。 */
+.notice.warn { background: #fff2ef; color: #a04a33; border-left: 3px solid var(--danger); flex-direction: column; gap: 4px; }
+.notice.warn b { font-size: 12px; }
+.notice.warn p { margin: 0; line-height: 1.7; }
 .estimate { background: #f2f6fb; color: #6f88a3; border-radius: var(--r-sm); }
 .muted { color: var(--muted); }
 
@@ -701,8 +705,10 @@ button { -webkit-tap-highlight-color: transparent; }
 .seller-box:hover { border-color: var(--line-3); background: var(--surface-2); }
 .facts > div { border-radius: var(--r-sm); background: var(--surface-2); }
 .description { color: var(--ink-2); line-height: 1.85; }
-.thumbnails button { border-radius: var(--r-sm); border: 1.5px solid var(--line-2); overflow: hidden; transition: border-color .2s var(--ease); }
+.thumbnails button { border-radius: var(--r-sm); border: 1.5px solid var(--line-2); overflow: hidden; transition: border-color .2s var(--ease); background: var(--surface-2); }
 .thumbnails button:hover { border-color: var(--brand-lo); }
+/* 主成交动作独占一行，和收藏/点赞这类轻交互分开。 */
+.buy-now { margin-top: 2px; }
 
 /* --- 17. 订单 / 清单 / 工单 --------------------------------------------- */
 .order-summary .sum b, .order-details b { color: var(--price); }
@@ -840,14 +846,61 @@ button { -webkit-tap-highlight-color: transparent; }
 .modal h2 { color: var(--ink); font-weight: 800; letter-spacing: -.4px; }
 .modal-close { border-radius: var(--r-pill); }
 .modal-close:hover { background: var(--surface-2); }
+/* 登录/注册切换：分段 tab，明确「这是在选模式」而不是又一个提交按钮。 */
+.auth-tabs {
+  display: flex; gap: 4px; padding: 4px;
+  background: var(--surface-2); border: 1px solid var(--line-2);
+  border-radius: var(--r-pill);
+}
+.auth-tabs .auth-tab {
+  flex: 1; padding: 9px 0; border-radius: var(--r-pill);
+  font-size: 13px; font-weight: 650; color: var(--ink-3);
+  transition: background .15s var(--ease), color .15s var(--ease);
+}
+.auth-tabs .auth-tab.active { background: var(--surface); color: var(--ink); box-shadow: var(--sh-1); }
+.auth-tabs .auth-tab:hover:not(.active) { color: var(--ink-2); }
 #toast { background: rgba(28, 29, 33, .95); border-radius: var(--r-pill); box-shadow: var(--sh-3); }
 .demo-logins { border-top: 1px dashed var(--line-2); }
 
-/* --- 20. 移动端底部导航 -------------------------------------------------- */
-.mobile-nav { border-top: 1px solid var(--line); background: rgba(255, 255, 255, .96); }
-.mobile-nav .nav-item { color: var(--muted); font-weight: 600; }
+/* --- 20. 移动端底部导航 --------------------------------------------------
+   旧版被 styles.css 的 .mobile-nav{display:none} 整个隐藏，从未真正显示过。
+   这里在窄屏内重新打开，并固定在视口底部；桌面（>850px）保持隐藏。
+   五个等宽槽位：逛逛 | 社区 | ＋发布(正圆凸起) | 消息 | 我的。
+   样式完全自包含，不依赖旧 styles.css 的 .nav-item（那是侧栏的横向布局）。 */
+.mobile-nav {
+  align-items: stretch; min-height: 62px;
+  border-top: 1px solid var(--line);
+  background: rgba(255, 255, 255, .97);
+}
+.mobile-nav .nav-item {
+  flex: 1; min-width: 0; position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; padding: 7px 0 6px;
+  color: var(--muted); font-weight: 600; background: none;
+}
 .mobile-nav .nav-item.active { color: var(--ink); }
 .mobile-nav .nav-item.active .icon { stroke: var(--brand-lo); fill: none; }
+.mobile-nav .nav-badge { top: 3px; right: calc(50% - 24px); }
+/* 中央发布：正圆骑在导航条上沿，槽位仍等宽，不再出现大槽位和悬空方块。 */
+.mobile-nav .mobile-publish {
+  flex: 1; min-width: 0; position: relative; background: none;
+}
+.mobile-nav .mobile-publish .icon {
+  position: absolute; left: 50%; top: -20px; transform: translateX(-50%);
+  width: 50px; height: 50px; padding: 13px;
+  border-radius: 50%;
+  background: linear-gradient(140deg, var(--brand-hi), var(--brand) 72%);
+  color: var(--brand-ink); stroke-width: 2.4;
+  border: 3px solid var(--surface);
+  box-shadow: 0 5px 12px rgba(240, 180, 19, .35);
+  transition: transform .18s var(--ease), box-shadow .18s var(--ease);
+}
+.mobile-nav .mobile-publish:active .icon { transform: translateX(-50%) scale(.94); box-shadow: 0 3px 8px rgba(240, 180, 19, .3); }
+.mobile-nav .mobile-publish span {
+  position: absolute; left: 0; right: 0; bottom: 5px;
+  font-size: 10px; font-weight: 700; color: var(--brand-ink); text-align: center;
+}
+.mobile-nav .mobile-publish.active span { color: var(--brand-lo); }
 
 /* --- 21. 演示图拼图 ----------------------------------------------------- */
 /* 原始 4x4 图片只作为演示商品的裁切来源，不用于真实商品列表。 */
@@ -917,26 +970,22 @@ button { -webkit-tap-highlight-color: transparent; }
   .campus-promo { padding: 18px; min-height: 148px; align-items: flex-start; }
   .campus-promo h2 { font-size: 20px; }
   .promo-books, .promo-home { transform: scale(.6); bottom: 7px; right: 4px; }
-  .campus-promo p { font-size: 10px; }
+  .campus-promo p { font-size: 12px; }
   .promo-link { margin-top: 9px; }
   .feed-location { font-size: 10px; }
   .price-line { font-size: 17px; }
-  .mobile-nav { padding: 9px 9px calc(10px + env(safe-area-inset-bottom)); backdrop-filter: blur(15px); box-shadow: 0 -4px 18px rgba(28, 39, 48, .05); }
-  .mobile-nav .nav-item { font-size: 10px; gap: 5px; }
+  .mobile-nav {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    padding: 8px 8px calc(9px + env(safe-area-inset-bottom));
+    backdrop-filter: blur(15px);
+    box-shadow: 0 -4px 18px rgba(28, 39, 48, .05);
+  }
+  /* 底栏固定后，页面尾部要留出高度，免得页脚被盖住。 */
+  .site-footer { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  .mobile-nav .nav-item { font-size: 10px; gap: 4px; }
   .mobile-nav .nav-item .icon { width: 24px; height: 24px; stroke-width: 1.9; }
   .mobile-nav .nav-item.active { background: none; }
-  .mobile-publish { margin-top: -19px; font-size: 10px; font-weight: 700; gap: 4px; color: #6a5315; }
-  .mobile-publish .icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 17px 17px 17px 7px;
-    color: #2c2408;
-    background: var(--brand);
-    stroke-width: 2.5;
-    padding: 11px;
-    box-shadow: 0 5px 12px rgba(240, 180, 19, .32);
-    border: 3px solid #fff;
-  }
+  .mobile-nav .nav-badge { top: 2px; right: calc(50% - 22px); }
   .site-footer { padding-bottom: 100px; }
 }
 
@@ -953,52 +1002,56 @@ button { -webkit-tap-highlight-color: transparent; }
   .market-search > .icon { width: 18px; height: 18px; }
   .market-search input { font-size: 12.5px; }
   .market-search button { padding: 8px 20px; font-size: 12px; }
-  .simulation-bar { font-size: 9px; padding: 6px 10px; }
+  .simulation-bar { font-size: 12px; padding: 7px 10px; }
   .market-main { padding: 18px 12px 26px; }
   .market-main-home { padding-top: 0; }
   .market-channels { margin: 0 -12px; padding: 10px 8px 0; }
   .channel { gap: 0; font-size: 12.5px; padding-bottom: 13px; }
   .channel .category-art { width: 46px; height: 46px; }
   .category-grid { gap: 15px 0; padding: 16px 4px 14px; margin: 10px 0; border-radius: var(--r-md); }
-  .category-grid button { font-size: 10px; gap: 7px; }
+  .category-grid button { font-size: 11.5px; gap: 7px; }
   .category-chip { width: 38px; height: 38px; border-radius: 12px; }
   .category-chip .icon { width: 22px; height: 22px; }
   .campus-promos { margin: 10px 0 17px; gap: 8px; }
   .campus-promo { padding: 14px 12px; min-height: 124px; border-radius: var(--r-md); }
-  .promo-eyebrow { font-size: 8px; }
+  .promo-eyebrow { font-size: 10px; }
   .campus-promo h2 { font-size: 17px; margin: 6px 0; letter-spacing: -.4px; }
-  .campus-promo p { font-size: 8px; max-width: 112px; line-height: 1.6; margin-bottom: 4px; }
-  .promo-link { font-size: 8px; margin-top: 10px; }
+  .campus-promo p { font-size: 12px; max-width: 150px; line-height: 1.6; margin-bottom: 4px; }
+  .promo-link { font-size: 11px; margin-top: 10px; }
   .promo-link .icon { width: 10px; height: 10px; }
   .promo-books { transform: scale(.36); right: 3px; bottom: 7px; }
   .promo-home { transform: scale(.38); right: 0; bottom: 5px; }
   .feed-tabs { gap: 20px; }
   .feed-tabs button { font-size: 13px; padding-bottom: 8px; }
   .feed-tabs button.active { font-size: 18px; }
-  .feed-location { font-size: 9px; gap: 1px; }
+  .feed-location { font-size: 11px; gap: 1px; }
   .feed-location .icon { width: 11px; height: 11px; }
-  .feed-context { font-size: 8px; margin: 3px 0 11px; gap: 5px; }
-  .feed-context small { font-size: 7px; white-space: nowrap; }
+  .feed-context { font-size: 12px; margin: 3px 0 11px; gap: 5px; }
+  .feed-context small { font-size: 11px; white-space: nowrap; }
   .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 9px; }
   .product-card { border-radius: var(--r-sm); }
   .card-photo { aspect-ratio: .96; }
   .card-content { padding: 10px 10px 11px; }
   .card-title { font-size: 13px; line-height: 1.6; font-weight: 600; min-height: 22px; }
-  .pickup-label { font-size: 9px; padding: 1px 3px; margin-right: 4px; }
-  .book-meta { font-size: 9px; margin-top: 5px; }
+  .pickup-label { font-size: 10px; padding: 1px 3px; margin-right: 4px; }
+  .book-meta { font-size: 11px; margin-top: 5px; }
   .price-line { font-size: 16px; margin: 8px 0 5px; letter-spacing: -.4px; line-height: 1.6; }
   .price-line span { display: block; font-size: 9px; }
-  .card-place { font-size: 9px; }
+  .card-place { font-size: 11px; }
   .card-place .icon { width: 11px; height: 11px; }
   .card-user { margin-top: 9px; padding: 0; }
-  .card-user > button:first-child { font-size: 9px; gap: 5px; }
+  .card-user > button:first-child { font-size: 11px; gap: 5px; }
   .avatar { width: 21px; height: 21px; font-size: 9px; }
   .favorite-button .icon { width: 15px; height: 15px; }
-  .photo-tag { font-size: 8px; bottom: 7px; left: 7px; padding: 3px 6px; }
-  .demo-tag { font-size: 7px; padding: 3px 5px; top: 6px; right: 6px; }
-  .review-tag { font-size: 7px; padding: 3px 6px; bottom: 6px; left: 6px; }
-  .site-footer { margin: 0 12px; padding: 22px 0 100px; font-size: 9px; gap: 8px; }
-  .site-footer button { font-size: 9px; text-align: left; padding: 0; }
+  .photo-tag { font-size: 10px; bottom: 7px; left: 7px; padding: 3px 6px; }
+  .demo-tag { font-size: 10px; padding: 3px 5px; top: 6px; right: 6px; }
+  .review-tag { font-size: 10px; padding: 3px 6px; bottom: 6px; left: 6px; }
+  .site-footer { margin: 0 12px; padding: 22px 0 100px; font-size: 12px; gap: 8px; }
+  .site-footer button { font-size: 12px; text-align: left; padding: 0; }
+  /* 旧 styles.css 在这里用了 column-reverse，把「加群说明」顶到发帖框前面；
+     发帖/逛帖才是社区的主任务，恢复自然顺序，加群卡放在最后。 */
+  .community-layout { display: flex; flex-direction: column; gap: 16px; }
+  .post-author small { font-size: 11px; }
   .page-heading h1 { font-size: 26px; }
   .page-heading p { font-size: 11px; }
   .panel { border-radius: var(--r-md); }
@@ -2140,6 +2193,26 @@ button.me-notice { width: 100%; text-align: left; cursor: pointer; border: 0; fo
 .wx-tool { border: none; background: none; cursor: pointer; font-size: 19px; padding: 4px 6px; border-radius: 6px; line-height: 1; }
 .wx-tool:hover { background: var(--surface-2); }
 .wx-count { margin-left: auto; font-size: 11px; color: var(--faint); }
+/* 客服快捷回复 / 猜你想问：点一下填进输入框，不直接发出去。
+   横向可滚动，避免五六条短语把输入框挤到看不见。 */
+.wx-quick {
+  display: flex; align-items: center; gap: 6px; margin-left: 4px;
+  overflow-x: auto; max-width: 100%; padding: 2px 0;
+  scrollbar-width: none;
+}
+.wx-quick::-webkit-scrollbar { display: none; }
+.wx-quick-label { flex: none; font-size: 11px; color: var(--faint); }
+.wx-quick-chip {
+  flex: none; padding: 5px 10px; border-radius: var(--r-pill);
+  border: 1px solid var(--line); background: var(--surface-2);
+  font-size: 11.5px; color: var(--ink-2); white-space: nowrap;
+}
+.wx-quick-chip:hover { border-color: var(--brand-lo); color: var(--brand-ink); background: var(--brand-soft); }
+/* 客服在线状态：绿灯=值守中，灰灯=已下班（仍可留言）。 */
+.wx-online { display: inline-flex; align-items: center; gap: 5px; }
+.wx-online::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--tone-ok, #2f8f5b); }
+.wx-online.off { color: var(--faint); }
+.wx-online.off::before { background: var(--line-3, #c9cbc4); }
 .wx-input textarea {
   width: 100%; border: none; background: transparent; resize: none;
   font-size: 14px; line-height: 1.6; padding: 6px 2px; color: var(--ink); min-height: 34px;
@@ -2147,6 +2220,14 @@ button.me-notice { width: 100%; text-align: left; cursor: pointer; border: 0; fo
 .wx-input textarea:focus { outline: none; box-shadow: none; background: transparent; }
 .wx-send-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .wx-send-row .muted { font-size: 11px; }
+
+/* 已读回执：挂在自己气泡右下角，弱化处理，不抢正文。群聊显示 n/总人数，
+   私聊只显示已读/未读；发送中的乐观气泡用同一位置写「发送中…」。 */
+.wx-receipt { display: block; margin-top: 3px; font-size: 10.5px; line-height: 1.4; color: var(--faint, var(--muted)); text-align: right; }
+.wx-pending { opacity: .7; }
+.wx-pending.failed { opacity: 1; }
+.wx-pending.failed .wx-receipt { color: var(--danger); }
+.wx-pending.failed .wx-bubble { border: 1px dashed var(--danger); }
 
 .wx-emoji-panel {
   position: absolute; left: 12px; bottom: calc(100% - 4px); z-index: 30;
@@ -2216,6 +2297,13 @@ button.me-notice { width: 100%; text-align: left; cursor: pointer; border: 0; fo
 
 /* 通知条目左侧的类型图标：一眼分清是订单、售后还是社区的回复/@ */
 .notice-item { display: flex; gap: 11px; align-items: flex-start; }
+/* 带目标的通知整行可点：悬停给反馈，右侧箭头提示「可进入」。
+   没有引用的通知（纯文本类）不加 can-jump，保持不可点。 */
+.notice-item.can-jump { cursor: pointer; transition: border-color .16s ease, background .16s ease; }
+.notice-item.can-jump:hover { border-color: var(--brand-lo); background: var(--brand-soft); }
+.notice-item.can-jump:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.notice-jump { flex: none; align-self: center; color: var(--muted); display: grid; place-items: center; }
+.notice-jump .icon { width: 14px; height: 14px; }
 .notice-ic {
   flex: none; width: 34px; height: 34px; border-radius: 10px;
   display: grid; place-items: center;
@@ -2231,3 +2319,47 @@ button.me-notice { width: 100%; text-align: left; cursor: pointer; border: 0; fo
    两个标签抢同一个 top/left 会直接叠在一起。 */
 .trusted-tag { display: inline-flex; align-items: center; flex: none; margin-left: 5px; padding: 1px 6px; border-radius: var(--r-pill); background: rgba(55,160,106,.14); color: #2e7d4f; font-size: 9px; font-weight: 700; line-height: 1.6; border: 1px solid rgba(55,160,106,.28); white-space: nowrap; }
 .trusted-pill { display: inline-block; vertical-align: 2px; margin-left: 8px; padding: 2px 9px; border-radius: var(--r-pill); background: rgba(55,160,106,.12); color: #2e7d4f; font-size: 11px; font-weight: 700; border: 1px solid rgba(55,160,106,.3); }
+
+/* 管理端 · 用户列表整行可点（点击进入用户档案）。
+   行内仍可能有「改身份 / 停用 / 重置密码」按钮：事件层保证按钮优先。 */
+.desk-row.is-clickable { cursor: pointer; border-radius: var(--r-sm); padding-left: 10px; padding-right: 10px; transition: background .16s ease; }
+.desk-row.is-clickable:hover { background: rgba(43,44,48,.045); }
+.desk-row.is-clickable:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* 用户档案 · 会话记录（只读弹窗）。200 条消息要能滚，别把弹窗撑出屏幕。 */
+.chat-log { max-height: 54vh; overflow-y: auto; margin: 12px 0; padding-right: 4px; border-top: 1px solid var(--line); }
+.chat-log-row { padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.chat-log-row:last-child { border-bottom: 0; }
+.chat-log-who { font-weight: 700; color: var(--ink-2); }
+.chat-log-time { float: right; font-size: 11px; color: var(--muted); }
+.chat-log-row p { margin: 6px 0 0; line-height: 1.65; word-break: break-word; }
+.chat-log-row.is-target { background: rgba(255,204,56,.12); padding: 10px; border-radius: 8px; }
+
+/* ==========================================================================
+   路由切换进度条
+   页面要等接口回来才画，慢网络下点击后屏幕上没有任何变化。这条 2px 的
+   细条在点击/路由变化时立刻出现，页面画完收起（core/progress.js）。
+   ========================================================================== */
+.route-progress {
+  position: fixed; left: 0; right: 0; top: 0; height: 2px; z-index: 400;
+  pointer-events: none; opacity: 0; transition: opacity .18s ease;
+}
+.route-progress[data-on="1"] { opacity: 1; }
+.route-progress i {
+  display: block; height: 100%; width: 38%; border-radius: 0 2px 2px 0;
+  background: linear-gradient(90deg, var(--brand), var(--brand-lo));
+  animation: route-progress-run 1.15s ease-in-out infinite;
+}
+@keyframes route-progress-run {
+  0% { transform: translateX(-45%); }
+  100% { transform: translateX(280%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .route-progress i { animation: none; width: 100%; opacity: .5; }
+}
+
+/* 30. 发送失败的重发钮（微信语义）
+   自己的消息是 row-reverse，DOM 里排在气泡之后的按钮会显示在气泡左侧。 */
+.wx-retry { align-self: center; flex: none; width: 20px; height: 20px; border-radius: 50%; border: 0; padding: 0; background: var(--danger); color: #fff; font-size: 12px; font-weight: 800; line-height: 1; display: grid; place-items: center; cursor: pointer; }
+.wx-retry[hidden] { display: none; }
+.wx-retry:hover { filter: brightness(1.08); }

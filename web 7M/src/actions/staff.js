@@ -10,7 +10,9 @@
 // 筛选刻意不走 render()：工作台的痛点是「点一下就整页重画」，
 // 过滤只是显隐行，直接改 hidden 更快，也不会丢滚动位置。
 
-import { toast } from '../core/dom.js';
+import { e, toast } from '../core/dom.js';
+import { date } from '../core/format.js';
+import { state } from '../core/state.js';
 import { api } from '../core/http.js';
 import { render } from '../core/nav.js';
 import { modal, closeModal } from '../core/shell.js';
@@ -41,6 +43,36 @@ function applySearch(group, q) {
 }
 
 export const clicks = {
+  // 接待台手动刷新：客服盯着队列时不想整页重载（会丢筛选与滚动位置）。
+  'desk-refresh': () => render(),
+
+  // 管理端查看某个用户的会话正文：只读，且每次读取都会写 chat_view 审计。
+  // 弹窗里如实标出「档案对象」是谁，避免把对方的发言看混。
+  'chat-view': async b => {
+    const userId = Number(b.dataset.id), roomId = Number(b.dataset.room);
+    const name = b.dataset.name || ('会话 #' + roomId);
+    modal(`<h2>${e(name)}</h2><p class="muted">正在读取会话…</p>`);
+    let data;
+    try { data = await api(`/admin/chat?user_id=${userId}&room_id=${roomId}`); }
+    catch (err) {
+      modal(`<h2>${e(name)}</h2><p class="muted">读取失败：${e(err.message)}</p>
+        <button class="btn secondary full" data-action="close">关闭</button>`);
+      return;
+    }
+    const rows = data.messages || [];
+    const log = rows.length
+      ? `<div class="chat-log">${rows.map(m => `<div class="chat-log-row${m.user_id === userId ? ' is-target' : ''}">
+          <span class="chat-log-who">${e(m.nickname || ('#' + m.user_id))}${m.user_id === userId ? ' · 档案对象' : ''}</span>
+          <span class="chat-log-time">${date(m.created)}</span>
+          <p>${m.removed === 2 ? '<em class="muted">（已撤回）</em>' : e(m.body)}</p>
+        </div>`).join('')}</div>`
+      : '<p class="desk-empty">该会话还没有消息</p>';
+    modal(`<h2>${e(name)}</h2>
+      <p class="muted">只读查看；本次读取已写入审计（操作人 #${state.me.id} → 用户 #${userId} · 会话 #${roomId}）。</p>
+      ${log}
+      <button class="btn secondary full" data-action="close">关闭</button>`);
+  },
+
   'desk-filter': (b, _id) => {
     const group = b.dataset.group;
     document.querySelectorAll(`[data-chips="${group}"] .chip`).forEach(c => c.classList.toggle('active', c === b));

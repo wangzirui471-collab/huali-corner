@@ -10,6 +10,26 @@ import { shell, empty } from '../core/shell.js';
 import { isAdmin } from '../core/roles.js';
 import { needLogin } from '../auth/login.js';
 import { refreshBadges } from '../core/badges.js';
+import { go } from '../core/nav.js';
+
+// 客服会话的常用语：客服同时接几个用户时，八成问题都是同一批答案，
+// 点一下就能发，不必每次手打。借鉴淘宝/京东客服的快捷短语。
+const QUICK_REPLIES = [
+  '你好，我在的，请说～',
+  '稍等，我核对一下订单',
+  '这个问题需要提交工单处理，我帮你转过去',
+  '已为你处理，请留意站内通知',
+  '还有别的可以帮你吗？'
+];
+
+// 用户侧的「猜你想问」：新会话还没有消息时先给几条常见问题，
+// 用户点一下就能把问题发出来，比对着空白输入框发呆强。
+const SUPPORT_FAQS = [
+  '怎么申请退款？',
+  '订单多久能交付？',
+  '卖家一直不回复怎么办？',
+  '怎么取消订单？'
+];
 
 // 头像底色：按用户/房间 id 取模轮换 6 组配色，稳定且不刺眼。
 const AVATAR_TONES = 6;
@@ -61,7 +81,12 @@ export function renderMessage(m, room){
   return `<div class="wx-msg ${mine?'mine':''}" data-mid="${m.id}" data-mine="${mine?1:0}" data-created="${m.created}">`+
     `<span class="wx-avatar-link" data-go="profile/${m.user_id}">${avatar(m.nickname, m.user_id)}</span>`+
     `<div class="wx-bubble-wrap">${showNick?`<span class="wx-nick">${e(m.nickname)}</span>`:''}`+
-    `<p class="wx-bubble">${e(m.body)}</p></div></div>`;
+    `<p class="wx-bubble">${e(m.body)}</p>`+
+    // 已读回执只挂在自己的消息上：群聊显示「n/总人数」，私聊只有对方一人。
+    // 具体数字由 applyReceipts() 依据 /messages/receipts 的位点计算后填入，
+    // 这样轮询到别人读了消息时，旧气泡上的回执也会跟着更新。
+    (mine?`<span class="wx-receipt" data-receipt-for="${m.id}"></span>`:'')+
+    `</div></div>`;
 }
 
 // 把一批消息追加进消息流（自动补时间分隔），返回这批里最大的 id。
@@ -82,6 +107,19 @@ export function appendMessages(stream, msgs, room){
 // --- 左侧会话列表 --------------------------------------------------------
 // 搜索词存模块变量：轮询刷新列表时保留过滤状态，不把输入框清掉。
 let searchWord = '';
+
+// 客服在线状态：按 config.support_hours（如 08:00–20:00）判断，
+// 下班后仍然可以留言，只是告诉用户「现在没人守着」，别让用户对着
+// 「客服在线」干等。时间解析失败时按在线处理，宁可不吓人。
+function supportOnDuty(){
+  try{
+    const raw = String(state.config.support_hours || '08:00–20:00').replace('—','–').replace('-','–');
+    const [a, b] = raw.split('–').map(s => s.trim());
+    const toMin = s => { const [h, m] = s.split(':').map(Number); return h * 60 + (m || 0); };
+    const now = new Date(); const cur = now.getHours() * 60 + now.getMinutes();
+    return cur >= toMin(a) && cur < toMin(b);
+  }catch{ return true; }
+}
 
 function roomPreview(r){
   if (r.last_body) return (r.last_nick && r.kind!=='private' ? r.last_nick+'：' : '') + r.last_body;
@@ -193,6 +231,17 @@ export const chatClicks = {
     if (p) p.hidden = !p.hidden;
   },
 
+  // 结束客服会话：用户聊完就走，客服下班前收尾。结束即归档消息，
+  // 双方会话列表都不再显示这条记录，下次咨询开新会话。
+  'close-support': async (b, id) => {
+    if (!confirm('结束本次客服会话？\n\n结束后这段聊天记录会从会话列表消失，下次咨询会开启新的会话。')) return;
+    try{
+      await api('/support/close', {room_id:Number(id)});
+      toast('会话已结束');
+      go('messages');
+    }catch(err){ toast(err.message || '结束失败'); }
+  },
+
   // 撤回后的「重新编辑」：把当时缓存的原文填回输入框，光标放末尾。
   reedit: (b, id) => {
     const text = recalledDrafts.get(id);
@@ -234,30 +283,77 @@ const NOTE_META = {
   order_completed: ['check', 'ok'], order_cancelled: ['close', 'mute'],
   order_delivered: ['truck', 'info'], refund: ['refresh', 'warn'],
   refund_approved: ['check', 'ok'], refund_rejected: ['close', 'danger'],
-  ticket: ['shield', 'warn'], content_removed: ['alert', 'danger']
+  ticket: ['shield', 'warn'], content_removed: ['alert', 'danger'],
+  ticket_filed: ['shield', 'warn'], ticket_refund: ['shield', 'warn'],
+  ticket_reply: ['shield', 'warn'], ticket_resolved: ['shield', 'ok'],
+  refund_done: ['refresh', 'ok'], credit: ['chart', 'warn'],
+  order_updated: ['bag', 'info'], order_change_result: ['refresh', 'info'],
+  order_reschedule: ['refresh', 'info'], order_handover: ['check', 'info'],
+  order_timeout: ['close', 'mute'],
+  product_moderate: ['alert', 'danger'], product_review: ['check', 'ok']
 };
+
+// 每条通知点进去该落到哪。按「引用越精确越优先」：
+// 工单 → 工单详情；商品 → 商品详情；帖子 → 社区并展开该帖评论；
+// 订单 → 订单列表；其余按类型给最相关页面（信誉变动去诚信页，
+// 售后结论去客服中心，整店下架这类没有单件引用的去在售管理）。
+// 没有任何引用的（如纯文本信誉通报）返回 null，条目就保持不可点。
+function noticeTarget(n){
+  if (n.ticket_id) return { go: 'ticket/' + n.ticket_id };
+  if (n.product_id) return { go: 'product/' + n.product_id };
+  if (n.post_id) return { post: n.post_id, go: 'community' };
+  if (n.order_id) return { go: 'orders' };
+  if (n.kind === 'credit') return { go: 'credit' };
+  if (['product_moderate', 'product_review'].includes(n.kind)) return { go: 'listings' };
+  if (['refund', 'refund_approved', 'refund_rejected', 'refund_done',
+       'ticket_filed', 'ticket_refund', 'ticket_resolved'].includes(n.kind)) return { go: 'support' };
+  return null;
+}
+
+// 等社区页把帖子卡渲染出来。列表一页只有 20 条，旧帖子可能不在首屏，
+// 轮询到超时为止（约 3 秒），由调用方决定给什么提示。
+function waitForPostCard(id, timeout = 3000){
+  return new Promise(resolve => {
+    const t0 = Date.now();
+    (function poll(){
+      const card = document.querySelector('.post-card[data-post="' + id + '"]');
+      if (card) return resolve(card);
+      if (Date.now() - t0 > timeout) return resolve(null);
+      setTimeout(poll, 100);
+    })();
+  });
+}
 
 // 通知中心：沿用原来的数据，套微信聊天窗的壳。
   const noticePanel = noticeView ? `
     <header class="wx-chat-head"><div class="wx-head-title"><h3>订单与售后通知</h3><small>打开本页即视为已读；下单、付款、交付、售后、社区的回复与@都会提醒你</small></div></header>
     <div class="wx-stream notice-stream">${notices.items.map(n => {
       const [ic, tone] = NOTE_META[n.kind] || ['bell', 'mute'];
-      const link = n.order_id ? `订单 #${n.order_id}` : n.ticket_id ? `工单 #${n.ticket_id}` : n.post_id ? `帖子 #${n.post_id}` : '';
+      const link = n.order_id ? `订单 #${n.order_id}` : n.ticket_id ? `工单 #${n.ticket_id}` : n.post_id ? `帖子 #${n.post_id}` : n.product_id ? `商品 #${n.product_id}` : '';
       // 打开通知页即视为已读（下方会自动标记并清角标），所以这里一律渲染成
       // 已读样式——不再保留黄色高亮。之前「保留高亮到下次打开」的设计
       // 被用户反馈为困惑：点开看到了黄色，点它又没反应，像坏了。
-      return `<div class="notice-item"><span class="notice-ic" data-tone="${tone}">${icon(ic)}</span><div><p>${e(n.body)}</p><small>${date(n.created)}${link?' · '+e(link):''}</small></div></div>`;
+      // 现在每条带目标的通知都是可点的整行：有 data-go 的走路由（工单/商品/
+      // 订单/客服/诚信页），帖子类留 data-post 由本页监听转社区并展开评论。
+      const t = noticeTarget(n);
+      const jump = t ? (t.post ? ` data-post="${t.post}"` : ` data-go="${t.go}"`) : '';
+      return `<div class="notice-item${t?' can-jump':''}"${jump}${t?' role="link" tabindex="0"':''}><span class="notice-ic" data-tone="${tone}">${icon(ic)}</span><div><p>${e(n.body)}</p><small>${date(n.created)}${link?' · '+e(link):''}</small></div>${t?`<span class="notice-jump">${icon('arrow')}</span>`:''}</div>`;
     }).join('')
       || '<div class="wx-sys">暂无通知</div>'}</div>` : '';
 
   const chatPanel = room ? `
     <header class="wx-chat-head">
       <button class="wx-back" data-go="messages">${icon('arrow')}</button>
-      <div class="wx-head-title"><h3>${e(room.name)}</h3><small>${room.support?`客服会话${room.ticket_id?` · <span class="wx-ticket-link" data-go="ticket/${room.ticket_id}">工单 #${room.ticket_id}</span>`:''}`:(room.kind==='private'?'私聊':room.count+' 位成员')}</small></div>
+      <div class="wx-head-title"><h3>${e(room.name)}</h3><small>${room.support
+        ? `<span class="wx-online ${supportOnDuty()?'on':'off'}">${supportOnDuty()?'客服在线':'客服已下班'}</span>${room.ticket_id?` · <span class="wx-ticket-link" data-go="ticket/${room.ticket_id}">工单 #${room.ticket_id}</span>`:''}`
+        : (room.kind==='private'?'私聊':room.count+' 位成员')}</small></div>
       <div class="wx-head-actions">
-        ${room.kind!=='private'?`<button class="text-button" data-action="toggle-members" data-id="${room.id}">成员</button>
+        ${room.support
+          ? `<button class="text-button" data-action="close-support" data-id="${room.id}">${['support','admin','developer'].includes(state.me?.role)?'结束会话':'结束咨询'}</button>`
+          : room.kind!=='private'
+            ? `<button class="text-button" data-action="toggle-members" data-id="${room.id}">成员</button>
         <button class="text-button" data-action="nominate" data-id="${room.id}">申请管理员</button>`
-        :`<button class="text-button" data-action="block-room" data-id="${room.id}">屏蔽对方</button>`}
+            : `<button class="text-button" data-action="block-room" data-id="${room.id}">屏蔽对方</button>`}
       </div>
     </header>
     <div class="wx-chat-body">
@@ -267,12 +363,17 @@ const NOTE_META = {
     <footer class="wx-input">
       <div class="wx-toolbar">
         <button type="button" class="wx-tool" data-action="wx-emoji" title="表情">😊</button>
+        ${room.support
+          ? (['support','admin','developer'].includes(state.me?.role)
+              ? `<div class="wx-quick" id="wx-quick">${QUICK_REPLIES.map(t=>`<button type="button" class="wx-quick-chip" data-quick="${e(t)}">${e(t)}</button>`).join('')}</div>`
+              : `<div class="wx-quick" id="wx-quick" hidden><span class="wx-quick-label">猜你想问</span>${SUPPORT_FAQS.map(t=>`<button type="button" class="wx-quick-chip" data-quick="${e(t)}">${e(t)}</button>`).join('')}</div>`)
+          : ''}
         <span class="wx-count" id="wx-count"></span>
       </div>
-      <form id="wx-form" data-room="${room.id}">
-        <textarea id="wx-editor" name="message" maxlength="2000" rows="1" placeholder="输入消息，Enter 发送，Shift+Enter 换行"></textarea>
-        <div class="wx-send-row"><span class="muted">消息会经过平台自动审核</span><button class="btn primary sm" type="submit">发送</button></div>
-      </form>
+      <div class="wx-composer" id="wx-composer" data-room="${room.id}">
+        <textarea id="wx-editor" name="message" maxlength="2000" rows="1" placeholder="${room.support?(['support','admin','developer'].includes(state.me?.role)?'输入回复，Enter 发送':'描述你的问题，客服会尽快回复'):'输入消息，Enter 发送，Shift+Enter 换行'}"></textarea>
+        <div class="wx-send-row"><span class="muted">${room.support?'客服在线时间 08:00–20:00 · 30 分钟无新消息会话自动结束':'消息会经过平台自动审核'}</span><button class="btn primary sm" type="button" id="wx-send">发送</button></div>
+      </div>
       <div class="wx-emoji-panel" id="wx-emoji" hidden></div>
     </footer>` : (noticeView ? noticePanel : empty('选择一个会话','可以在商品页联系卖家，或去社区加入群聊。'));
 
@@ -290,6 +391,19 @@ const NOTE_META = {
       renderRoomList(rooms, notices, activeId);
       refreshBadges(true);
     }).catch(() => {});
+  }
+
+  // 帖子类通知：跳到社区页并就地展开那条帖子的评论区（手风琴逻辑复用
+  // actions/social 的 comments 处理器）。帖子不在最新 20 条时列表里找不到卡，
+  // 给一句提示，别让用户以为点了没反应。
+  if (noticeView){
+    document.querySelectorAll('.notice-item[data-post]').forEach(el => el.addEventListener('click', async () => {
+      const pid = Number(el.dataset.post);
+      go('community');
+      const card = await waitForPostCard(pid);
+      if (!card){ toast('该帖子不在最新列表，请到社区页查看'); return; }
+      card.querySelector('.post-action[data-action="comments"]')?.click();
+    }));
   }
 
   // 搜索会话（客户端过滤，不整页重绘）。
@@ -310,6 +424,23 @@ const NOTE_META = {
     }catch{ /* 认领失败不阻断查看，服务端仍会按成员校验放行与否 */ }
   }
 
+  // --- 快捷回复 / 猜你想问 ------------------------------------------------
+  // 点一下把话填进输入框（不直接发）：客服可以改两个字再发，
+  // 用户也能先看一眼再确认，避免「点错就发出去」。
+  $('#wx-quick')?.addEventListener('click', ev => {
+    const b = ev.target.closest('[data-quick]');
+    if (!b) return;
+    const editor = $('#wx-editor');
+    const text = b.dataset.quick;
+    const glue = editor.value && !editor.value.endsWith('\n') ? '\n' : '';
+    editor.value = editor.value ? editor.value + glue + text : text;
+    editor.focus();
+    editor.setSelectionRange(editor.value.length, editor.value.length);
+    editor.dispatchEvent(new Event('input'));
+    const q = $('#wx-quick');
+    if (q) q.hidden = q.hidden; // 保持原状，不在这里折叠
+  });
+
   // --- 表情面板 ----------------------------------------------------------
   const EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😜','🤔','😅','😭','😤','😡','🥺','😱','🤗','🤩','😴','🤝','👍','👎','👏','🙏','💪','🎉','🔥','❤️','💔','💯','⚡','🌹','🌈','☀️','🌙','⭐','📚','✏️','🎓','🏀','⚽','🍜','🍵','💰','🎁','📦','🛒','✅','❌'];
   const emojiPanel = $('#wx-emoji');
@@ -325,24 +456,94 @@ const NOTE_META = {
   });
 
   // --- 发送与输入 --------------------------------------------------------
-  // 表单不走全站 submits 委托（避免双发）：发送后立即增量拉取，输入框清空。
-  const form = $('#wx-form');
+  // 输入区刻意不用 <form>：没有 form 就不会出现「原生提交 → 整页跳到 /?message=…」，
+  // 发送只走下面的显式调用。发送中锁住按钮、复用同一个幂等键，
+  // 连点/连按回车只会产生一条消息（服务端 request_key 唯一约束兜底）。
+  const stream = $('#chat-stream');
   const editor = $('#wx-editor');
-  form.addEventListener('submit', async ev => {
-    ev.preventDefault();
+  const sendBtn = $('#wx-send');
+  let sending = false;
+
+  // 乐观气泡：真实消息回来后由 pullNew 摘掉，网络再慢也先看到自己的消息。
+  const appendPending = (body, key) => {
+    const el = document.createElement('div');
+    el.className = 'wx-msg mine wx-pending';
+    el.dataset.tmp = key;
+    el.dataset.body = body;
+    el.innerHTML = `<span class="wx-avatar-link">${avatar(state.me.nickname, state.me.id)}</span>`+
+      `<div class="wx-bubble-wrap"><p class="wx-bubble">${e(body)}</p><span class="wx-receipt">发送中…</span></div>`+
+      // 失败才显示的红色感叹号。.mine 是 row-reverse，所以它在气泡左侧——
+      // 与微信一致：自己的消息发送失败时，感叹号挂在气泡左边。
+      `<button class="wx-retry" type="button" aria-label="重新发送" hidden>!</button>`;
+    stream.appendChild(el);
+    stream.scrollTop = stream.scrollHeight;
+    return el;
+  };
+
+  const send = async () => {
+    if (sending) return;
     const body = editor.value.trim();
     if (!body) return;
-    try{
-      await api('/messages', {room_id:room.id, body, key:uid()});
-    }catch(err){ toast(err.message); return; }
+    sending = true;
+    sendBtn.disabled = true;
+    const key = uid();
+    const pending = appendPending(body, key);
     editor.value = '';
     editor.style.height = 'auto';
     updateCount();
-    await pullNew();
+    try{
+      await api('/messages', {room_id: room.id, body, key});
+      // 请求成功了但真实消息可能还在路上（慢网络下轮询可能先返回旧批次），
+      // 先标「已发送」，等真实消息到达时整个乐观气泡会被替换掉。
+      pending.querySelector('.wx-receipt').textContent = '已发送';
+      await pullNew();
+    }catch(err){
+      // 失败：气泡标红并挂红色感叹号，点它重发**同一条**。
+      // 关键：绝不把正文塞回输入框——那会让「按回车重试」变成「再发一条新消息」，
+      // 用户连按几次回车就会看到一串重复气泡（真实踩过的 bug）。
+      pending.classList.add('failed');
+      pending.querySelector('.wx-receipt').textContent = '发送失败';
+      pending.querySelector('.wx-retry').hidden = false;
+      toast(err.message);
+    }finally{
+      sending = false;
+      sendBtn.disabled = false;
+      editor.focus();
+    }
+  };
+
+  // 重发失败的那条：复用原幂等键——上一次可能已经到达服务端、只是响应丢了，
+  // 同一个 key 重发不会在库里产生第二条。
+  const resend = async el => {
+    if (!el || sending) return;
+    sending = true;
+    sendBtn.disabled = true;
+    el.classList.remove('failed');
+    el.querySelector('.wx-receipt').textContent = '重新发送…';
+    el.querySelector('.wx-retry').hidden = true;
+    try{
+      await api('/messages', {room_id: room.id, body: el.dataset.body, key: el.dataset.tmp});
+      el.querySelector('.wx-receipt').textContent = '已发送';
+      await pullNew();
+    }catch(err){
+      el.classList.add('failed');
+      el.querySelector('.wx-receipt').textContent = '发送失败';
+      el.querySelector('.wx-retry').hidden = false;
+      toast(err.message);
+    }finally{
+      sending = false;
+      sendBtn.disabled = false;
+      editor.focus();
+    }
+  };
+  stream.addEventListener('click', ev => {
+    const btn = ev.target.closest('.wx-retry');
+    if (btn) resend(btn.closest('.wx-pending'));
   });
+  sendBtn.addEventListener('click', send);
   // Enter 发送、Shift+Enter 换行、输入时自动加高。
   editor.addEventListener('keydown', ev => {
-    if (ev.key === 'Enter' && !ev.shiftKey){ ev.preventDefault(); form.requestSubmit(); }
+    if (ev.key === 'Enter' && !ev.shiftKey){ ev.preventDefault(); send(); }
   });
   editor.addEventListener('input', () => {
     editor.style.height = 'auto';
@@ -352,19 +553,68 @@ const NOTE_META = {
   function updateCount(){ $('#wx-count').textContent = editor.value.length ? editor.value.length+'/2000' : ''; }
 
   // --- 消息拉取（首次全量最近 200 条，之后增量轮询） ----------------------
-  const stream = $('#chat-stream');
   state.messageCursor = 0;
-  const pullNew = async () => {
-    const msgs = await api('/messages?room_id='+room.id+'&after='+state.messageCursor);
-    if (!msgs.length) return;
-    const atBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 80;
-    const id = appendMessages(stream, msgs, room);
-    if (id && id > state.messageCursor) state.messageCursor = id;
-    // 用户本来就在底部、或消息是自己发的：自动滚到底；否则保持位置并提示有新消息。
-    if (atBottom || msgs[msgs.length-1].user_id === state.me.id) stream.scrollTop = stream.scrollHeight;
+  const seen = new Set();
+  let pulling = null;
+  const pullNew = () => {
+    // 并发合并：3 秒轮询在慢网络下会和上一次请求重叠，两批相同消息各自追加
+    // 一次，界面上就会「发一条变三条」。同一时刻只允许一个拉取在跑，
+    // 再加 seen 按消息 id 去重兜底。
+    if (pulling) return pulling;
+    pulling = (async () => {
+      const msgs = await api('/messages?room_id='+room.id+'&after='+state.messageCursor);
+      const fresh = msgs.filter(m => !seen.has(m.id));
+      if (!fresh.length) return;
+      fresh.forEach(m => seen.add(m.id));
+      const atBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 80;
+      appendMessages(stream, fresh, room);
+      state.messageCursor = Math.max(state.messageCursor, ...fresh.map(m => m.id));
+      // 真实消息到了：把对应的乐观气泡摘掉，避免同一句出现两次。
+      for (const m of fresh){
+        if (m.user_id !== state.me.id) continue;
+        const el = [...stream.querySelectorAll('.wx-pending')]
+          .find(x => x.dataset.body === m.body);
+        if (el) el.remove();
+      }
+      // 用户本来就在底部、或消息是自己发的：自动滚到底；否则保持位置。
+      if (atBottom || fresh[fresh.length-1].user_id === state.me.id) stream.scrollTop = stream.scrollHeight;
+    })().finally(() => { pulling = null; });
+    return pulling;
   };
+
+  // --- 已读回执 ----------------------------------------------------------
+  // 服务端只给「其他成员各自的已读位点」，这里按位点给自己每条消息算读数：
+  // 群聊「n/总人数」「全部已读」，私聊「已读/未读」。轮询时一起刷新，
+  // 所以别人刚读，旧气泡上的回执也会跟着变。
+  let receipts = { total: 0, readers: [] };
+  const applyReceipts = () => {
+    document.querySelectorAll('.wx-receipt[data-receipt-for]').forEach(el => {
+      const mid = Number(el.dataset.receiptFor);
+      if (!mid) return;
+      if (receipts.total <= 0){ el.textContent = ''; return; }
+      const read = receipts.readers.filter(x => x.last_read_id >= mid).length;
+      el.textContent = room.kind === 'private'
+        ? (read ? '已读' : '未读')
+        : (read >= receipts.total ? '全部已读' : `${read}/${receipts.total} 已读`);
+    });
+  };
+  const pullReceipts = async () => {
+    try{
+      receipts = await api('/messages/receipts?room_id='+room.id);
+      applyReceipts();
+    }catch{ /* 回执拿不到不影响聊天 */ }
+  };
+
   try{ await pullNew(); }catch(err){ toast(err.message); return; }
   stream.scrollTop = stream.scrollHeight;
+  pullReceipts();
+
+  // 用户侧的「猜你想问」只在新会话（还没有任何消息）时展示；
+  // 一旦聊起来就收起，把输入区还给正常对话。
+  const quick = $('#wx-quick');
+  if (quick && room.support && !['support','admin','developer'].includes(state.me?.role)){
+    quick.hidden = state.messageCursor > 0;
+  }
 
   // --- 右键 / 长按菜单：复制、撤回、删除、移除 --------------------------
   // 三个操作的语义必须分清：
@@ -425,11 +675,17 @@ const NOTE_META = {
   stream.addEventListener('touchmove', cancelPress);
   stream.addEventListener('touchcancel', cancelPress);
 
+  // 轮询：页面在后台时不发请求（省流量，也不和其它页面的接口抢带宽）；
+  // 回执比消息低频——消息 3 秒一次，回执 9 秒一次就够，别人刚读的延迟可以接受。
+  let tick = 0;
   state.poll = setInterval(async () => {
+    if (document.hidden) return;
     try{ await pullNew(); }catch{ /* 轮询失败静默，下个周期再试 */ }
+    if (tick++ % 3 === 0) pullReceipts();
   }, 3000);
   // 会话列表的摘要与角标低频刷新（不重绘页面，搜索词不丢）。
   state.poll2 = setInterval(async () => {
+    if (document.hidden) return;
     try{
       Object.assign(rooms, await api('/rooms'));
       renderRoomList(rooms, notices, activeId);

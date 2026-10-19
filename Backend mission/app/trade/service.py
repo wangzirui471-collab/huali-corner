@@ -274,3 +274,8 @@ class TradeService(ValidationMixin):
             # 被接受的报价 24 小时未成交即作废，商品重新可报价（否则商品被一个
             # 永远不会结算的报价永久占住，其他人想买也买不了）。
             c.execute("UPDATE offers SET status='rejected' WHERE status='accepted' AND accepted_at<?",(now-86400,))
+            # 客服会话 30 分钟没有新消息自动结束：用户关掉页面、客服下班、
+            # 双方都不再说话时，会话不该永远挂在列表里。归档后重新咨询开新一轮。
+            for r in c.execute("SELECT * FROM rooms WHERE support=1 AND COALESCE(support_status,'open')='open'").fetchall():
+                last=c.execute('SELECT MAX(created) t FROM messages WHERE room_id=? AND removed<>3',(r['id'],)).fetchone()['t'] or r['created'] or now
+                if now-last>1800:self._close_support(c,dict(r),'timeout')

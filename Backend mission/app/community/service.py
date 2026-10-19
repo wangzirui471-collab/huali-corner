@@ -22,12 +22,14 @@ class CommunityService(ValidationMixin):
             (SELECT x.created FROM messages x WHERE x.room_id=r.id ORDER BY x.id DESC LIMIT 1) last_at,
             (SELECT un.nickname FROM messages x JOIN users un ON un.id=x.user_id WHERE x.room_id=r.id ORDER BY x.id DESC LIMIT 1) last_nick,
             (SELECT un.nickname FROM users un WHERE un.id=r.assignee) assignee_name
-            FROM rooms r JOIN members m ON m.room_id=r.id WHERE m.user_id=?''',(u,))
+            FROM rooms r JOIN members m ON m.room_id=r.id
+            WHERE m.user_id=? AND NOT (r.support=1 AND COALESCE(r.support_status,'open')='closed')''',(u,))
         for r in joined:r['unread']=self._room_unread(u,r['id'],r['last_read_id'])
-        # 客服额外看到所有客服会话（待接入池），即使自己还不是成员。
+        # 客服额外看到所有「进行中」的客服会话（待接入池），即使自己还不是成员。
         # 这样新会话一进来所有客服都看得到，谁先认领归谁，不会没人接，
         # 也不会两个客服同时回同一个用户。via_pool 标记「你尚未加入」，
         # 前端点开时触发认领、认领成功才真正成为成员能读消息。
+        # 已结束（closed）的会话不进池：消息已归档，接进来只会是一张白纸。
         if self.is_staff(u):
             have={r['id'] for r in joined}
             pool=self.rows('''SELECT r.*,
@@ -36,7 +38,7 @@ class CommunityService(ValidationMixin):
                 (SELECT x.created FROM messages x WHERE x.room_id=r.id ORDER BY x.id DESC LIMIT 1) last_at,
                 (SELECT un.nickname FROM messages x JOIN users un ON un.id=x.user_id WHERE x.room_id=r.id ORDER BY x.id DESC LIMIT 1) last_nick,
                 (SELECT un.nickname FROM users un WHERE un.id=r.assignee) assignee_name
-                FROM rooms r WHERE r.support=1 ORDER BY r.id''')
+                FROM rooms r WHERE r.support=1 AND COALESCE(r.support_status,'open')='open' ORDER BY r.id''')
             for r in pool:
                 if r['id'] not in have:
                     r.update(role='member',muted=0,last_read_id=0,unread=0,via_pool=True)
@@ -132,8 +134,88 @@ class CommunityService(ValidationMixin):
             staff=self.row("SELECT id FROM users WHERE role IN ('support','admin','developer') ORDER BY (role='support') DESC, id LIMIT 1")
         self.require(staff and staff['id']!=u,'当前没有可用的在线客服，请改用「提交工单」留言')
         room=self.private_room(u,staff['id'])
-        with self.tx() as c:c.execute('UPDATE rooms SET support=1,ticket_id=? WHERE id=?',(tid,room['id']))
+        with self.tx() as c:
+            r=c.execute('SELECT * FROM rooms WHERE id=?',(room['id'],)).fetchone()
+            # 上一轮会话已结束：重新咨询开一轮新的——归档旧消息、清空认领与已读位点。
+            # 否则用户会看到「上次聊完的旧记录」，而客服接手时也要先翻一遍无关历史。
+            if r['support'] and (r['support_status'] or 'open')=='closed':
+                self._archive_support_session(c,r)
+                c.execute("UPDATE rooms SET support_status='open',support_closed_at=0,support_closed_by='' WHERE id=?",(r['id'],))
+            c.execute('UPDATE rooms SET support=1,ticket_id=? WHERE id=?',(tid,room['id']))
         return self.row('SELECT * FROM rooms WHERE id=?',(room['id'],))
+
+    # --- 客服会话生命周期 ---------------------------------------------------
+    # 客服会话不是普通私聊：用户咨询完、客服下班、工单结案之后，它就该「消失」，
+    # 而不是像微信好友一样永久留在会话列表里。做法：
+    #   收到结束信号 → support_status='closed' + 归档消息（removed=3）；
+    #   双方会话列表不再显示（消息归档后拉不到），重新咨询时开新一轮、历史清空。
+    # 数据 physically 仍留在库里（removed=3），审计与纠纷复核查得到。
+
+    SUPPORT_IDLE_SECONDS = 30*60
+
+    def _archive_support_session(self,c,room):
+        """归档一轮客服会话：消息标 removed=3，对双方都不可见；清空认领。"""
+        c.execute("UPDATE messages SET removed=3 WHERE room_id=? AND removed IN (0,1)",(room['id'],))
+        c.execute('UPDATE rooms SET assignee=0 WHERE id=?',(room['id'],))
+
+    def _close_support(self,c,room,by):
+        """结束客服会话（幂等）。by: customer / agent / timeout / ticket。"""
+        if (room['support_status'] or 'open')=='closed':return False
+        now=time.time()
+        c.execute("UPDATE rooms SET support_status='closed',support_closed_at=?,support_closed_by=? WHERE id=?",
+                  (now,by,room['id']))
+        self._archive_support_session(c,room)
+        return True
+
+    def close_support_room(self,u,rid):
+        """用户或客服结束当前咨询。双方任一人都可以结束——用户聊完了就走，
+        客服下班前把自己的会话收尾，都不该留给对方一个永远在线的窗口。"""
+        room=self.row('SELECT * FROM rooms WHERE id=?',(int(rid),))
+        self.require(room and room['support'],'这不是客服会话',404)
+        party=self.row('SELECT 1 FROM members WHERE room_id=? AND user_id=?',(room['id'],u))
+        self.require(party or self.is_staff(u),'无权结束该会话',403)
+        with self.tx() as c:
+            r=c.execute('SELECT * FROM rooms WHERE id=?',(room['id'],)).fetchone()
+            changed=self._close_support(c,r,'agent' if self.is_staff(u) else 'customer')
+        return {'ok':True,'closed':changed}
+
+    def support_sessions(self,u):
+        """客服接待台：所有进行中的客服会话。
+
+        客服同时接多个用户时需要一眼看出「谁在等、等了多久、有没有人接」，
+        所以按「未认领优先 + 最后一条消息时间」排序，并带上排队时长与
+        最后一条消息摘要。waiting 从未回复的用户消息算起，客服已回过则归零。
+        """
+        self.staff(u)
+        now=time.time()
+        rows=self.rows('''SELECT r.id,r.ticket_id,r.assignee,
+            t.subject,t.type,t.status ticket_status,
+            a.nickname assignee_name,
+            (SELECT cu.id FROM members rm JOIN users cu ON cu.id=rm.user_id
+              WHERE rm.room_id=r.id AND cu.role='user' LIMIT 1) customer_id,
+            (SELECT cu.nickname FROM members rm JOIN users cu ON cu.id=rm.user_id
+              WHERE rm.room_id=r.id AND cu.role='user' LIMIT 1) customer_name,
+            (SELECT COUNT(*) FROM messages m WHERE m.room_id=r.id AND m.removed=0) total_messages,
+            (SELECT CASE WHEN x.removed=2 THEN '' ELSE x.body END FROM messages x
+              WHERE x.room_id=r.id AND x.removed=0 ORDER BY x.id DESC LIMIT 1) last_body,
+            (SELECT x.created FROM messages x WHERE x.room_id=r.id ORDER BY x.id DESC LIMIT 1) last_at,
+            (SELECT MAX(x.created) FROM messages x JOIN users xu ON xu.id=x.user_id
+              WHERE x.room_id=r.id AND x.removed=0 AND xu.role='user') last_customer_at,
+            (SELECT xu.nickname FROM messages x JOIN users xu ON xu.id=x.user_id
+              WHERE x.room_id=r.id ORDER BY x.id DESC LIMIT 1) last_nick
+            FROM rooms r
+            LEFT JOIN tickets t ON t.id=r.ticket_id
+            LEFT JOIN users a ON a.id=r.assignee
+            WHERE r.support=1 AND COALESCE(r.support_status,'open')='open'
+            ORDER BY (r.assignee=0) DESC, COALESCE((SELECT MAX(x.created) FROM messages x WHERE x.room_id=r.id), 0) ASC''')
+        for r in rows:
+            # 排队时长：最后一条是用户发的，就从那一刻开始算「等客服」；
+            # 客服已经回过，等待归零。
+            last_customer=r['last_customer_at'] or 0; last_any=r['last_at'] or 0
+            r['waiting']=max(0,int(now-last_customer)) if last_customer and last_customer>=last_any else 0
+            r['online_hint']='等待接入' if not r['assignee'] else ('由 '+(r['assignee_name'] or '客服')+' 接待')
+        return rows
+
 
     def claim_support_room(self,u,rid,action='claim'):
         """客服认领 / 释放一个客服会话（防止多客服撞车）。
@@ -176,12 +258,12 @@ class CommunityService(ValidationMixin):
         # 否则删掉的消息会在下一次轮询或刷新时又冒出来。
         hidden='AND NOT EXISTS(SELECT 1 FROM message_hides h WHERE h.message_id=m.id AND h.user_id=?)'
         if after>0:
-            rows=self.rows(sql.replace('{{cond}}','m.room_id=? AND m.id>? '+hidden).replace('{{order}}','ASC').replace('{{limit}}','200'),(r,int(after),u))
+            rows=self.rows(sql.replace('{{cond}}','m.room_id=? AND m.id>? AND m.removed<>3 '+hidden).replace('{{order}}','ASC').replace('{{limit}}','200'),(r,int(after),u))
         else:
             rows=self.rows('''SELECT * FROM (SELECT m.id,m.room_id,m.user_id,m.removed,
                 CASE WHEN m.removed=1 THEN '消息已被移除' WHEN m.removed=2 THEN '' ELSE m.body END body,
                 m.created,u.nickname FROM messages m JOIN users u ON u.id=m.user_id
-                WHERE m.room_id=? '''+hidden+''' ORDER BY m.id DESC LIMIT 200) ORDER BY id ASC''',(r,u))
+                WHERE m.room_id=? AND m.removed<>3 '''+hidden+''' ORDER BY m.id DESC LIMIT 200) ORDER BY id ASC''',(r,u))
         # 拉取即视为读到：把已读位点拨到这批消息的最大 id。轮询每 3 秒一次，
         # 但只有真的拉到新消息才会产生一次写事务，量可以忽略。
         if rows:
@@ -301,6 +383,13 @@ class CommunityService(ValidationMixin):
         self.require(not report['blocked'],'消息不能发送：'+message_for(report),422)
         mark=flag_of(report)
         with self.tx() as c:
+            # 已结束的客服会话又被发消息：先开新一轮（归档旧消息、清空认领），
+            # 再把这条消息写进新会话。用户不必自己去找「重新咨询」按钮，
+            # 客服也不会在一条已关闭的会话里对着空白输入。
+            if room['support'] and (room['support_status'] or 'open')=='closed':
+                self._archive_support_session(c,room)
+                c.execute("UPDATE rooms SET support_status='open',support_closed_at=0,support_closed_by='',assignee=0 WHERE id=?",(room['id'],))
+                c.execute('UPDATE members SET last_read_id=0 WHERE room_id=?',(room['id'],))
             c.execute('INSERT OR IGNORE INTO messages(room_id,user_id,body,created,request_key,moderation) VALUES(?,?,?,?,?,?)',
                       (r,u,body,time.time(),key,json.dumps(mark,ensure_ascii=False) if mark else None))
         return {'ok':True,'moderation':mark}

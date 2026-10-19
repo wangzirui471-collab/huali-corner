@@ -30,6 +30,7 @@ import { needLogin } from '../auth/login.js';
 
 const SECTIONS = [
   ['overview', '概览', 'home'],
+  ['support', '接待', 'message'],
   ['tickets', '工单', 'message'],
   ['products', '商品治理', 'tag'],
   ['content', '内容治理', 'alert'],
@@ -169,7 +170,9 @@ function row(tags, search, inner, opts = {}) {
   const glyph = opts.glyph
     ? `<span class="row-glyph" data-tone="${opts.tone || 'mute'}">${icon(opts.glyph)}</span>`
     : '';
-  return `<div class="desk-row" data-group="${e(search.group)}" data-tags="${e(tags.join(' '))}" data-search="${e(search.text)}">${glyph}${inner}</div>`;
+  // opts.go：整行可点（进用户档案）。行内按钮由事件层优先处理。
+  const go = opts.go ? ` data-go="${e(opts.go)}" role="link" tabindex="0"` : '';
+  return `<div class="desk-row${opts.go ? ' is-clickable' : ''}"${go} data-group="${e(search.group)}" data-tags="${e(tags.join(' '))}" data-search="${e(search.text)}">${glyph}${inner}</div>`;
 }
 
 // --- 各分区 ---------------------------------------------------------------
@@ -313,7 +316,8 @@ function userRow(u) {
        <span class="score-num"><b>${score}</b><small>/100</small></span>
        <span class="meter" aria-hidden="true"><span style="width:${score}%"></span></span>
      </div>
-     ${acts}`
+     ${acts}`,
+    { go: isAdmin() ? `dossier/${u.id}` : '' }
   );
 }
 
@@ -457,6 +461,45 @@ function contentSection({ messages, posts }) {
   </section>`;
 }
 
+// --- 客服接待 -------------------------------------------------------------
+// 同时来很多咨询时，客服需要的不是「聊天列表」，而是一个按「谁在等」
+// 排序的接待台：待接入的排前面、等得久的排前面，接入即认领。
+function sessionRow(s) {
+  const waiting = s.waiting > 60 ? `${Math.floor(s.waiting / 60)} 分钟前` : s.waiting > 0 ? '刚刚' : '';
+  return row(
+    [String(s.id), s.assignee ? 'claimed' : 'waiting'],
+    { group: 'support', text: `#${s.id} ${s.customer_name || ''} ${s.subject || ''}` },
+    `<span class="avatar role-avatar" data-tone="${s.assignee ? 'info' : 'warn'}">${e((s.customer_name || '?')[0])}</span>
+     <div class="desk-row-main">
+       <b>${e(s.customer_name || '用户')}</b>
+       <small><span class="mono">#${s.id}</span>${sepDot}${e(s.subject || '未关联工单')}${sepDot}${e(s.last_body || '暂无消息')}</small>
+     </div>
+     ${waiting ? `<span class="tag danger">${e(waiting)}未回</span>` : ''}
+     ${s.assignee ? `<span class="tag">${e(s.assignee_name || '客服')} 接待中</span>` : '<span class="tag warn">待接入</span>'}
+     <button class="btn primary" data-go="messages/${s.id}">${s.assignee ? '查看会话' : '接入会话'}</button>`,
+    { glyph: 'message', tone: s.assignee ? 'info' : 'warn' }
+  );
+}
+
+function supportSection({ sessions }) {
+  const unclaimed = sessions.filter(s => !s.assignee).length;
+  const waiting = sessions.filter(s => s.waiting > 0).length;
+  return `<section class="panel desk-panel">
+    ${panelHead('客服接待', '<button class="text-button" data-action="desk-refresh">刷新</button>')}
+    <p class="desk-lead">进行中的在线客服会话。用户提交问题并点「联系在线客服」后进入这里；
+    点「接入会话」即认领，其他客服会看到已由你接待，避免两个人回同一个用户。
+    30 分钟没有新消息、或关联工单结案后，会话自动结束并归档。</p>
+    <div class="desk-summary">
+      <span>进行中 <b>${sessions.length}</b> 个会话</span>
+      <span><b>${unclaimed}</b> 个待接入</span>
+      <span><b>${waiting}</b> 个在等回复</span>
+    </div>
+    ${sessions.length
+      ? `<div class="desk-list">${sessions.map(sessionRow).join('')}</div>`
+      : deskEmpty('当前没有进行中的客服会话', '用户提交工单后点「联系在线客服」即可发起会话。')}
+  </section>`;
+}
+
 export async function staffDesk(section = 'overview') {
   if (!needLogin()) return;
   if (!['admin', 'support', 'developer'].includes(state.me.role)) throw new Error('没有客服权限');
@@ -466,6 +509,8 @@ export async function staffDesk(section = 'overview') {
   if (key === 'overview') {
     const [tickets, admin, products] = await Promise.all([api('/tickets'), api('/admin'), api('/products')]);
     body = overviewSection({ tickets, admin, products });
+  } else if (key === 'support') {
+    body = supportSection({ sessions: await api('/support/sessions') });
   } else if (key === 'tickets') {
     body = ticketsSection({ tickets: await api('/tickets') });
   } else if (key === 'products') {
@@ -484,6 +529,7 @@ export async function staffDesk(section = 'overview') {
   const [, title] = SECTIONS.find(([k]) => k === key);
   const blurb = {
     overview: '待办优先：先看还有多少工单没认领、多少商品在等人工复核。',
+    support: '进行中的客服会话：谁在等、等了多久、由谁接待，一眼看清再接。',
     tickets: '认领、核实、处理、结案，每一步都留记录。',
     products: '违禁品与交易外流的处置入口，全部留痕并通知卖家。',
     content: '自动审核送审的聊天与帖子，移除可回滚。',
