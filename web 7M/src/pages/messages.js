@@ -121,11 +121,6 @@ function supportOnDuty(){
   }catch{ return true; }
 }
 
-function roomPreview(r){
-  if (r.last_body) return (r.last_nick && r.kind!=='private' ? r.last_nick+'：' : '') + r.last_body;
-  return '暂无消息';
-}
-
 function roomItem(r, activeId){
   const me = state.me;
   const isStaff = me && ['support','admin','developer'].includes(me.role);
@@ -139,22 +134,36 @@ function roomItem(r, activeId){
   }
   // 用户视角：客服会话在认领后显示具体客服昵称，而不是笼统的「转角客服」。
   const title = isSupport && !isStaff && r.assignee_name ? '客服 · '+r.assignee_name : r.name;
-  return `<button class="wx-room ${r.id===activeId?'sel':''}" data-go="messages/${r.id}" data-name="${e(r.name)}">`+
+  // 置顶视觉提示：标题前一个细钉子图标，跟微信一致。已置顶时列表里要明显。
+  const pinIc = r.pinned ? `<i class="wx-room-pin" title="已置顶" aria-label="已置顶">${icon('pin')}</i>` : '';
+  // 屏蔽提示：私聊里我屏蔽了对方时，标题后面加一个小红点提示。
+  const blockBadge = r.blocked ? `<i class="wx-room-blocked" title="已屏蔽对方" aria-label="已屏蔽对方">🚫</i>` : '';
+  // 行内的「…」按钮：点击会弹一个上下文菜单（置顶、删除聊天记录、屏蔽切换）。
+  // 桌面 hover 才显示，手机常显——触屏没有 hover。
+  return `<button class="wx-room ${r.id===activeId?'sel':''} ${r.pinned?'pinned':''}" data-go="messages/${r.id}" data-name="${e(r.name)}" data-room-id="${r.id}" data-room-kind="${r.kind}">`+
     avatar(isSupport && !isStaff ? (r.assignee_name||'客服') : r.name, r.id, isSupport?'support':'')+
-    `<span class="wx-room-main"><span class="wx-room-top"><b>${e(title)}</b>${tag}`+
+    `<span class="wx-room-main"><span class="wx-room-top"><b>${pinIc}${e(title)}${blockBadge}</b>${tag}`+
     `<small class="wx-room-time">${r.last_at?e(hhmm(r.last_at)):''}</small></span>`+
     `<span class="wx-room-preview">${e(roomPreview(r))}${r.muted?icon('bell','wx-mute-ic'):''}</span></span>`+
     (r.unread?`<i class="wx-badge">${r.unread>99?'99+':r.unread}</i>`:'')+
+    // 阻止冒泡到 wx-room，否则点「…」也会跳进会话。
+    `<span class="wx-room-more" data-action="room-menu" data-id="${r.id}" data-room-kind="${r.kind}" data-blocked="${r.blocked?1:0}" data-pinned="${r.pinned?1:0}" data-peer-id="${r.peer_id||0}" role="button" tabindex="0" aria-label="更多">${icon('more')}</span>`+
     `</button>`;
+}
+
+// 三点图标的 SVG 路径在 core/dom.js 的 icons 字典里，名字叫 'more'。这里不再重复。
+function roomPreview(r){
+  if (r.last_body) return (r.last_nick && r.kind!=='private' ? r.last_nick+'：' : '') + r.last_body;
+  return '暂无消息';
 }
 
 function renderRoomList(rooms, notices, activeId){
   const list = $('#wx-list');
   if (!list) return;
   const kw = searchWord.trim().toLowerCase();
-  const joined = rooms.joined
-    .filter(r => !kw || String(r.name).toLowerCase().includes(kw))
-    .sort((a,b) => (b.last_at||0) - (a.last_at||0));
+  // 后端 rooms() 已经按 pinned desc, last_at desc 排过序；这里只做搜索过滤。
+  // 重新排序会把置顶的甩回原位，所以不要二次排。
+  const joined = rooms.joined.filter(r => !kw || String(r.name).toLowerCase().includes(kw));
   list.innerHTML =
     `<button class="wx-room ${String(activeId)==='notice'?'sel':''}" data-go="messages/notice" data-name="订单与售后通知">`+
     `<span class="wx-avatar notice" data-tone="notice">${icon('bell')}</span>`+
@@ -222,6 +231,67 @@ function openMessageMenu(x, y, items){
   menuEl = el;
 }
 
+// 会话列表项的上下文菜单：复用 wx-menu 视觉，按钮/位置和消息右键一致。
+// 入口的 dataset：
+//   data-id        会话 id
+//   data-room-kind 'private' / 'general' / 'college' / 'support'
+//   data-blocked   '1' / '0'：当前是否已屏蔽（仅私聊有意义）
+//   data-pinned    '1' / '0'：当前是否已置顶
+//   data-peer-id   私聊对方的 user_id
+// 菜单项按 room.kind 过滤：群聊/总聊/客服都没有「屏蔽」入口；通知是「通知」而不是会话，不进这个菜单。
+function openRoomMenu(anchor, ev){
+  const id = Number(anchor.dataset.id);
+  const kind = anchor.dataset.roomKind;
+  const blocked = anchor.dataset.blocked === '1';
+  const pinned = anchor.dataset.pinned === '1';
+  const peer = Number(anchor.dataset.peerId || 0);
+  const items = [];
+  items.push({ label: pinned ? '取消置顶' : '置顶会话', run: () => roomAction('pin', id, !pinned) });
+  items.push({ label: '删除聊天记录', danger: true, run: () => roomAction('clear', id) });
+  if (kind === 'private' && peer){
+    items.push({ label: blocked ? '取消屏蔽' : '屏蔽对方', run: () => roomAction('block', id, peer, !blocked) });
+  }
+  // 弹在按钮下方，右侧对齐——与微信长按会话一致。
+  const rect = anchor.getBoundingClientRect();
+  openMessageMenu(rect.right - 132, rect.bottom + 4, items);
+  if (ev) ev.preventDefault();
+}
+
+// 把会话级操作的请求集中在一处：成功后再调 render() 把列表/会话本身刷新。
+// 用 try/catch 兜住网络错误，失败提示但不破坏当前页面。
+async function roomAction(kind, id, ...args){
+  try{
+    if (kind === 'pin'){
+      await api('/rooms/pin', {room_id: id, pinned: args[0]});
+      toast(args[0] ? '已置顶' : '已取消置顶');
+    }else if (kind === 'clear'){
+      if (!confirm('删除与该会话的全部聊天记录？\n\n仅自己这边看不见，对方不受影响。')) return;
+      await api('/rooms/clear', {room_id: id});
+      toast('已清空聊天记录');
+    }else if (kind === 'block'){
+      const peer = args[0]; const enabled = args[1];
+      await api('/block', {target: peer, enabled});
+      toast(enabled ? '已屏蔽，对方不能继续发消息' : '已取消屏蔽');
+    }
+    // 主动刷新一次会话列表，让置顶顺序、屏蔽标记立刻生效（不靠 8s 轮询）。
+    const rooms = await api('/rooms');
+    state.rooms = rooms;
+    const list = $('#wx-list');
+    if (list){
+      // 复用 chats() 里的渲染路径：
+      const activeId = Number(location.hash.split('/').pop()) || null;
+      const notices = state.notices || {unread: 0, items: []};
+      renderRoomList(rooms, notices, activeId);
+    }
+    // 屏蔽 toggle 后可能影响当前聊天窗的头部按钮与底部提示条——
+    // 如果当前打开的就是这个房间，整页重画一次。
+    const cur = Number(location.hash.split('/').pop());
+    if (cur === id) go('messages/' + id);
+  }catch(err){
+    toast(err.message || '操作失败');
+  }
+}
+
 // --- 聊天页事件（经 actions 委托分派，见 actions/social.js 的合并） -------
 export const chatClicks = {
   'toggle-members': (b, id) => toggleMembers(id),
@@ -258,6 +328,25 @@ export const chatClicks = {
     toast(Number(b.dataset.muted) ? '已禁言' : '已解除禁言');
     await toggleMembers(Number(b.dataset.room)); // 关闭
     await toggleMembers(Number(b.dataset.room)); // 再打开，重拉数据
+  },
+
+  // 会话列表项上的「…」：弹上下文菜单（置顶/取消置顶、删除聊天记录、屏蔽切换）。
+  // 真正的处理器在 actions/social.js 里（合并进 clicks 之前先铺开 chatClicks），
+  // 这里也兜一份防止 social.js 哪天把名字改了。
+  'room-menu': (b, ev) => {
+    openRoomMenu(b, ev);
+  },
+
+  // 底部「已屏蔽，对方不能继续发消息」行内的「取消屏蔽」按钮。
+  'unblock-here': async () => {
+    if (!state._chatRoom) return;
+    const r = state._chatRoom;
+    if (!r.peer_id) return;
+    try{
+      await api('/block', {target: r.peer_id, enabled: false});
+      toast('已取消屏蔽');
+      go('messages/' + r.id);
+    }catch(err){ toast(err.message || '操作失败'); }
   }
 };
 
@@ -265,10 +354,19 @@ export const chatClicks = {
 export async function chats(roomId){
   if (!needLogin()) return;
   const [rooms, notices] = await Promise.all([api('/rooms'), api('/notifications')]);
+  // 把 rooms/notices 暂存到 state，下面的「room-menu / block-room / unblock-here」
+  // 三个处理器需要拿当前房间 / 最新列表来刷新。
+  state.rooms = rooms; state.notices = notices;
   const noticeView = String(roomId) === 'notice';
   const room = noticeView ? null : rooms.joined.find(r => r.id === Number(roomId));
   // rooms 里的 role 是我在这群的群角色，补进 room 供「移除消息」判断。
-  if (room) room.myRole = room.role;
+  if (room){
+    room.myRole = room.role;
+    // 聊天窗 head / 底部条幅 / 屏蔽按钮都靠这个值判断，避免重复查 /api/rooms。
+    state._chatRoom = { id: room.id, kind: room.kind, peer_id: room.peer_id || 0, blocked: !!room.blocked, name: room.name };
+  }else{
+    state._chatRoom = null;
+  }
   const activeId = noticeView ? 'notice' : (room?.id ?? null);
 
   const side = `<aside class="wx-side">`+
@@ -353,13 +451,16 @@ function waitForPostCard(id, timeout = 3000){
           : room.kind!=='private'
             ? `<button class="text-button" data-action="toggle-members" data-id="${room.id}">成员</button>
         <button class="text-button" data-action="nominate" data-id="${room.id}">申请管理员</button>`
-            : `<button class="text-button" data-action="block-room" data-id="${room.id}">屏蔽对方</button>`}
+            : `<button class="text-button" data-action="block-room" data-id="${room.id}">${room.blocked?'取消屏蔽':'屏蔽对方'}</button>`}
       </div>
     </header>
     <div class="wx-chat-body">
       <div class="wx-stream" id="chat-stream"></div>
       <aside class="wx-members" id="wx-members" hidden></aside>
     </div>
+    ${room.kind==='private' && room.blocked
+      ? `<div class="wx-blocked-banner" role="status"><span>已屏蔽对方，对方不能继续发消息</span><button type="button" class="text-button" data-action="unblock-here">取消屏蔽</button></div>`
+      : ''}
     <footer class="wx-input">
       <div class="wx-toolbar">
         <button type="button" class="wx-tool" data-action="wx-emoji" title="表情">😊</button>
@@ -411,6 +512,38 @@ function waitForPostCard(id, timeout = 3000){
     searchWord = ev.target.value;
     renderRoomList(rooms, notices, activeId);
   });
+
+  // 长按 / 右键会话列表项：弹出同样的上下文菜单（手机没 hover 看不到「…」）。
+  // 触发后 preventDefault 阻止长按选中文字。
+  const list = $('#wx-list');
+  if (list){
+    let pressTimer = null, pressRow = null;
+    const start = (el, clientX, clientY) => {
+      if (!el) return;
+      clearTimeout(pressTimer);
+      pressRow = el;
+      pressTimer = setTimeout(() => {
+        if (pressRow) openRoomMenu(pressRow);
+        pressRow = null;
+      }, 500);
+    };
+    const cancel = () => { clearTimeout(pressTimer); pressRow = null; };
+    list.addEventListener('contextmenu', ev => {
+      const row = ev.target.closest('.wx-room');
+      if (!row) return;
+      ev.preventDefault();
+      openRoomMenu(row);
+    });
+    list.addEventListener('touchstart', ev => {
+      const row = ev.target.closest('.wx-room');
+      if (!row) return;
+      const t = ev.touches[0];
+      start(row, t.clientX, t.clientY);
+    }, {passive:true});
+    list.addEventListener('touchend', cancel);
+    list.addEventListener('touchmove', cancel);
+    list.addEventListener('touchcancel', cancel);
+  }
 
   if (!room) return;
 

@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS members(room_id INTEGER,user_id INTEGER,muted INTEGER
 CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY,room_id INTEGER,user_id INTEGER,body TEXT,created REAL,request_key TEXT,removed INTEGER DEFAULT 0,moderation TEXT,UNIQUE(user_id,room_id,request_key));
 CREATE TABLE IF NOT EXISTS message_hides(user_id INTEGER,message_id INTEGER,created REAL,PRIMARY KEY(user_id,message_id));
 CREATE TABLE IF NOT EXISTS blocks(user_id INTEGER,target INTEGER,PRIMARY KEY(user_id,target));
+CREATE TABLE IF NOT EXISTS room_pins(user_id INTEGER,room_id INTEGER,pinned_at REAL,PRIMARY KEY(user_id,room_id));
 CREATE TABLE IF NOT EXISTS posts(id INTEGER PRIMARY KEY,user_id INTEGER,topic TEXT,body TEXT,created REAL,moderation TEXT,removed INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS comments(id INTEGER PRIMARY KEY,post_id INTEGER,user_id INTEGER,body TEXT,created REAL,parent_id INTEGER DEFAULT 0,removed INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS offers(id INTEGER PRIMARY KEY,product_id INTEGER,buyer_id INTEGER,amount INTEGER,status TEXT DEFAULT 'pending',created REAL,accepted_at REAL);
@@ -103,6 +104,7 @@ CREATE TABLE IF NOT EXISTS members(room_id INT,user_id INT,muted INT DEFAULT 0,r
 CREATE TABLE IF NOT EXISTS messages(id INT PRIMARY KEY AUTO_INCREMENT,room_id INT,user_id INT,body TEXT,created DOUBLE,request_key VARCHAR(64),removed INT DEFAULT 0,moderation TEXT,UNIQUE(user_id,room_id,request_key));
 CREATE TABLE IF NOT EXISTS message_hides(user_id INT,message_id INT,created DOUBLE,PRIMARY KEY(user_id,message_id));
 CREATE TABLE IF NOT EXISTS blocks(user_id INT,target INT,PRIMARY KEY(user_id,target));
+CREATE TABLE IF NOT EXISTS room_pins(user_id INT,room_id INT,pinned_at DOUBLE,PRIMARY KEY(user_id,room_id));
 CREATE TABLE IF NOT EXISTS posts(id INT PRIMARY KEY AUTO_INCREMENT,user_id INT,topic VARCHAR(128),body TEXT,created DOUBLE,moderation TEXT,removed INT DEFAULT 0);
 CREATE TABLE IF NOT EXISTS comments(id INT PRIMARY KEY AUTO_INCREMENT,post_id INT,user_id INT,body TEXT,created DOUBLE,parent_id INT DEFAULT 0,removed INT DEFAULT 0);
 CREATE TABLE IF NOT EXISTS offers(id INT PRIMARY KEY AUTO_INCREMENT,product_id INT,buyer_id INT,amount INT,status VARCHAR(48) DEFAULT 'pending',created DOUBLE,accepted_at DOUBLE);

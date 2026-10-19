@@ -192,6 +192,10 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/rooms':return self.respond(m.rooms(u))
             if p=='/api/rooms/join' and method=='POST':return self.respond(m.join_room(u,data['kind']))
             if p=='/api/rooms/private' and method=='POST':return self.respond(m.private_room(u,int(data['peer'])))
+            # 置顶 / 取消置顶：只动当前用户的视图，不影响其他成员。
+            if p=='/api/rooms/pin' and method=='POST':return self.respond(m.pin_room(u,int(data['room_id']),bool(data.get('pinned',True))))
+            # 删除聊天记录：只清自己这边的 message_hides，对方不受影响。
+            if p=='/api/rooms/clear' and method=='POST':return self.respond(m.clear_room(u,int(data['room_id'])))
             if p=='/api/support/room' and method=='POST':return self.respond(m.support_room(u,data.get('ticket_id')))
             if p=='/api/support/claim' and method=='POST':return self.respond(m.claim_support_room(u,int(data['room_id']),data.get('action','claim')))
             if p=='/api/support/close' and method=='POST':return self.respond(m.close_support_room(u,int(data['room_id'])))

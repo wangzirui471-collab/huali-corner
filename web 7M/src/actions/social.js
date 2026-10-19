@@ -177,12 +177,22 @@ export const clicks = {
   },
 
   'block-room': async (b, id) => {
-    const r = await api('/rooms');
-    const room = r.joined.find(x => x.id === id);
-    if (!room || !room.pair) throw new Error('会话不存在或已失效');
-    const peer = room.pair.split(':').map(Number).find(x => x !== state.me.id);
-    await api('/block', {target:peer, enabled:true});
-    toast('已屏蔽，对方不能继续发消息');
+    // 复用聊天窗里 state._chatRoom 的状态做 toggle（head 按钮按 room.blocked 渲染），
+    // 没有 state 时回退到重新查 /rooms。点击会触发整页重画刷新头部和底部条幅。
+    const cur = state._chatRoom;
+    const peer = cur && cur.id === Number(id) ? cur.peer_id : null;
+    let enabled = !(cur && cur.id === Number(id) && cur.blocked);
+    let target = peer;
+    if (!target){
+      const r = await api('/rooms');
+      const room = r.joined.find(x => x.id === Number(id));
+      if (!room || !room.pair) throw new Error('会话不存在或已失效');
+      target = room.pair.split(':').map(Number).find(x => x !== state.me.id);
+      enabled = !room.blocked;
+    }
+    await api('/block', {target, enabled});
+    toast(enabled ? '已屏蔽，对方不能继续发消息' : '已取消屏蔽');
+    go('messages/' + id);
   },
 
   // 买家在取货清单上可以主动放弃求购关联，避免下一笔无关订单被记服务费。

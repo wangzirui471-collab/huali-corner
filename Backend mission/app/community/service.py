@@ -24,7 +24,24 @@ class CommunityService(ValidationMixin):
             (SELECT un.nickname FROM users un WHERE un.id=r.assignee) assignee_name
             FROM rooms r JOIN members m ON m.room_id=r.id
             WHERE m.user_id=? AND NOT (r.support=1 AND COALESCE(r.support_status,'open')='closed')''',(u,))
-        for r in joined:r['unread']=self._room_unread(u,r['id'],r['last_read_id'])
+        for r in joined:
+            r['unread']=self._room_unread(u,r['id'],r['last_read_id'])
+            # pinned / blocked 用单独子查询，比 JOIN 在 SQLite/MySQL 之间更省心——
+            # 表很小，且 (user_id, room_id) 已经有主键索引，N+1 也无感。
+            pin=self.row('SELECT pinned_at FROM room_pins WHERE user_id=? AND room_id=?',(u,r['id']))
+            r['pinned']=bool(pin)
+            r['pinned_at']=pin['pinned_at'] if pin else 0
+            # 屏蔽只对单条私聊生效：群聊/总聊都按未屏蔽处理。
+            if r['kind']=='private' and r['pair']:
+                a,b=r['pair'].split(':')
+                peer=int(a) if int(a)!=u else int(b)
+                r['blocked']=bool(self.row('SELECT 1 FROM blocks WHERE user_id=? AND target=?',(u,peer)))
+                r['peer_id']=peer
+            else:
+                r['blocked']=False
+                r['peer_id']=0
+        # 列表排序：置顶的永远在前面（同置顶里再按最近消息倒序；同未置顶里按最近消息倒序）。
+        joined.sort(key=lambda r:(0 if r['pinned'] else 1, -(r['pinned_at'] or 0), -(r['last_at'] or 0), -r['id']))
         # 客服额外看到所有「进行中」的客服会话（待接入池），即使自己还不是成员。
         # 这样新会话一进来所有客服都看得到，谁先认领归谁，不会没人接，
         # 也不会两个客服同时回同一个用户。via_pool 标记「你尚未加入」，
@@ -41,7 +58,7 @@ class CommunityService(ValidationMixin):
                 FROM rooms r WHERE r.support=1 AND COALESCE(r.support_status,'open')='open' ORDER BY r.id''')
             for r in pool:
                 if r['id'] not in have:
-                    r.update(role='member',muted=0,last_read_id=0,unread=0,via_pool=True)
+                    r.update(role='member',muted=0,last_read_id=0,unread=0,via_pool=True,pinned=False,pinned_at=0,blocked=False,peer_id=0)
                     joined.append(r)
         return {'joined':joined,'general':self.row('SELECT *, (SELECT COUNT(*) FROM members WHERE room_id=1) count FROM rooms WHERE id=1'),'college':self.profile(u)['college']}
 
@@ -398,6 +415,31 @@ class CommunityService(ValidationMixin):
         with self.tx() as c:
             if enabled:c.execute('INSERT OR IGNORE INTO blocks VALUES(?,?)',(u,int(target)))
             else:c.execute('DELETE FROM blocks WHERE user_id=? AND target=?',(u,int(target)))
+        return {'ok':True}
+
+    # 置顶 / 取消置顶：写到 room_pins 私表，仅自己可见。群聊和私聊都能置顶。
+    # 列表接口 rooms() 把这个字段一并返回，前端按 pinned desc, last_at desc 排序。
+    def pin_room(self,u,rid,pinned):
+        self.member(u,int(rid))
+        with self.tx() as c:
+            if pinned:c.execute('INSERT OR REPLACE INTO room_pins(user_id,room_id,pinned_at) VALUES(?,?,?)',(u,int(rid),time.time()))
+            else:c.execute('DELETE FROM room_pins WHERE user_id=? AND room_id=?',(u,int(rid)))
+        return {'ok':True,'pinned':bool(pinned)}
+
+    # 删除聊天记录：只把当前用户的消息隐藏行批量写进 message_hides，
+    # 不动 messages.removed（动那个对方也会看到空缺），也不动 room 状态。
+    # 客户问「我能不能把跟某人的聊天记录全删了」——可以，而且只删自己这半边。
+    def clear_room(self,u,rid):
+        self.member(u,int(rid))
+        now=time.time()
+        with self.tx() as c:
+            # 一次 INSERT 把这个 room 内当前用户没隐藏过、又没被服务端归档的消息全部抹掉。
+            # 子查询用 SELECT 而非直接 VALUES，绕过 SQLite 不支持带子查询的 INSERT VALUES 限制。
+            c.execute('INSERT OR IGNORE INTO message_hides(user_id,message_id,created) '+
+                      "SELECT ?,m.id,? FROM messages m WHERE m.room_id=? AND m.removed<>3 AND NOT EXISTS(SELECT 1 FROM message_hides h WHERE h.user_id=? AND h.message_id=m.id)",
+                      (u,now,int(rid),u))
+            # 清完顺手把已读位点也拨到当下，避免「记录没了，角标还在」的怪相。
+            c.execute('UPDATE members SET last_read_id=COALESCE((SELECT MAX(id) FROM messages WHERE room_id=?),0) WHERE room_id=? AND user_id=?',(int(rid),int(rid),u))
         return {'ok':True}
     def posts(self,topic='',limit=20,offset=0):
         # 分页：前端「加载更多」按 limit 递增 offset 取更早的帖子。
