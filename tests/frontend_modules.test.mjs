@@ -4,9 +4,11 @@
 // 运行：node tests/frontend_modules.test.mjs
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..');
+// fileURLToPath 会正确解码 %20 等转义：项目路径含空格（如 "WorkBuddy AI"）时，
+// 手工用 .pathname 拼路径会得到 "WorkBuddy%20AI"，readdirSync 直接 ENOENT。
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'web 7M', 'src');
 
 globalThis.window = {HUALI_STATIC_DEMO:false, addEventListener(){}, scrollTo(){}};

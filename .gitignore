@@ -1,5 +1,8 @@
 var/
 var-trial/
+# var-* 覆盖全部数据目录变体：var-diagnostic/、var-smoke-test/ 等
+# 诊断/冒烟目录也可能含真实账号与图片，一律不进仓库。
+var-*
 __pycache__/
 *.pyc
 .venv/

@@ -152,7 +152,10 @@ def main(argv=None):
     parser.add_argument('--port', type=int, default=8081)
     parser.add_argument('--data', help='Optional existing or isolated trial data directory')
     args = parser.parse_args(argv)
-    server = ROOT/'Backend mission/server.py'
+    # 统一解析为长路径：Windows 8.3 短名（如 ADMINI~1）下，若 command 用短名而
+    # 子进程把 __file__ resolve 成长名，server.py 的 cwd 自检断言会失败、
+    # 启动器表现为"启动即退出"。command 与 cwd 必须同构。
+    server = (ROOT/'Backend mission/server.py').resolve()
     if not server.is_file():
         print('[ERROR] Put this launcher and scripts folder in the project root.')
         return 1

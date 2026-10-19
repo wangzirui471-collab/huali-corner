@@ -8,6 +8,7 @@ import { go, render } from '../core/nav.js';
 import { modal, closeModal } from '../core/shell.js';
 import { field } from '../components/forms.js';
 import { needLogin } from '../auth/login.js';
+import { clearDraft } from '../core/drafts.js';
 
 export const clicks = {
   'market-channel': b => { state.filter.category = b.dataset.value; state.filter.q = ''; state.freeShelf = false; state.homeLimit = 40; go('home'); },
@@ -110,6 +111,7 @@ export const submits = {
       college:state.me.college
     };
     const r = await api('/publish', payload);
+    clearDraft(state.me.id);                      // F-02：发布成功后草稿不再需要
     toast(r.moderation ? r.moderation.message : '发布成功');
     go('product/'+r.id);
   },

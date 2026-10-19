@@ -6,9 +6,11 @@
 //
 // 运行：node tests/user_center.test.mjs
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..');
+// fileURLToPath 会正确解码 %20：含空格的项目路径（如 "WorkBuddy AI"）下
+// 手工 .pathname 拼路径会 ENOENT。
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'web 7M', 'src');
 
 globalThis.window = {HUALI_STATIC_DEMO:false, addEventListener(){}, scrollTo(){}};
