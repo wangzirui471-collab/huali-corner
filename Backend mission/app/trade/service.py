@@ -60,12 +60,12 @@ class TradeService(ValidationMixin):
     # 消息页承诺了「订单通知 / 售后通知」，但之前只有聊天消息表，订单事件没有任何出口。
     # 这里用一张独立的 notifications 表承载系统事件，前端在「消息 → 订单通知」里读。
     # post_id 供社区通知（帖子回复 / @提及）跳转；三类 id 互斥，谁有值跳谁。
-    def notify(self,c,user_id,kind,body,order_id=None,ticket_id=None,post_id=None):
-        c.execute('INSERT INTO notifications(user_id,kind,order_id,ticket_id,post_id,body,created) VALUES(?,?,?,?,?,?,?)',
-                  (user_id,kind,order_id,ticket_id,post_id,body,time.time()))
+    def notify(self,c,user_id,kind,body,order_id=None,ticket_id=None,post_id=None,product_id=None):
+        c.execute('INSERT INTO notifications(user_id,kind,order_id,ticket_id,post_id,body,created,product_id) VALUES(?,?,?,?,?,?,?,?)',
+                  (user_id,kind,order_id,ticket_id,post_id,body,time.time(),product_id))
 
     def notifications(self,u,limit=100):
-        rows=self.rows('SELECT id,kind,order_id,ticket_id,post_id,body,read_at,created FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT ?',(u,int(limit)))
+        rows=self.rows('SELECT id,kind,order_id,ticket_id,post_id,product_id,body,read_at,created FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT ?',(u,int(limit)))
         unread=self.row('SELECT COUNT(*) n FROM notifications WHERE user_id=? AND read_at IS NULL',(u,))['n']
         return {'unread':unread,'items':rows}
 

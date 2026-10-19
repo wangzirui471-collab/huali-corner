@@ -239,7 +239,7 @@ class CatalogService(ValidationMixin):
             body=(f'你的商品「{p["title"]}」（#{pid}）已被平台下架。理由：{reason}。'
                   f'如有异议，可在客服中心提交申诉。') if action=='delist' else \
                  f'你的商品「{p["title"]}」（#{pid}）已恢复上架。'
-            self.notify(c,p['seller_id'],'product_moderate',body)
+            self.notify(c,p['seller_id'],'product_moderate',body,product_id=pid)
         return self.product(pid,u)
 
     def review_product(self,u,pid,decision,reason=None):
@@ -268,7 +268,7 @@ class CatalogService(ValidationMixin):
         with self.tx() as c:
             c.execute('UPDATE products SET data=? WHERE id=?',(json.dumps(data,ensure_ascii=False),pid))
             c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',(u,p['seller_id'],'product_review',note or '复核通过，未记录说明',time.time()))
-            self.notify(c,p['seller_id'],'product_review',f'你的商品「{p["title"]}」（#{pid}）已通过人工复核，恢复正常展示。')
+            self.notify(c,p['seller_id'],'product_review',f'你的商品「{p["title"]}」（#{pid}）已通过人工复核，恢复正常展示。',product_id=pid)
         return self.product(pid,u)
 
     def removed_products(self,u):

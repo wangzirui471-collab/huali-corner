@@ -188,6 +188,68 @@ class CommunityService(ValidationMixin):
             with self.tx() as c:self._mark_room_read(c,r,u,rows[-1]['id'])
         return rows
 
+    def message_receipts(self,u,r):
+        """本会话的已读位点：给自己发的消息算「几人已读」。
+
+        members.last_read_id 在拉取消息时前移（见 messages()），所以这里只读不写：
+        返回除自己以外的成员及其已读到的最大消息 id，由前端按
+        「readers.last_read_id >= 消息 id」判断这条消息有没有被读到。
+        群聊就是「n/总人数」，私聊只有对方一个人，等于「已读/未读」。
+        """
+        self.member(u,r)
+        rows=self.rows('''SELECT m.user_id,m.last_read_id,u.nickname FROM members m
+                          JOIN users u ON u.id=m.user_id
+                          WHERE m.room_id=? AND m.user_id<>? ORDER BY m.user_id''',(r,u))
+        return {'total':len(rows),'readers':[{'user_id':x['user_id'],'last_read_id':x['last_read_id'] or 0,
+                                              'nickname':x['nickname']} for x in rows]}
+
+    # --- 管理端：查看某人的会话与聊天记录（仅 admin/developer） -------------
+    # 与 dossier 的分工：档案聚合商品/订单/帖子等公开痕迹，**不整包带聊天正文**；
+    # 这里先给会话清单 + 最后一条摘要，真正读正文要再调 admin_chat，
+    # 而且每次读正文都会写一条 chat_view 审计——查私聊是最高敏操作，必须留痕。
+    def admin_chats(self,u,target):
+        """列出目标用户参与的全部会话，附最后一条消息摘要。"""
+        self.admin(u);target=int(target)
+        rooms=self.rows('''SELECT r.id,r.kind,r.name,r.college,r.support,r.ticket_id,
+                m.role member_role,m.muted,
+                (SELECT COUNT(*) FROM messages x WHERE x.room_id=r.id) message_count,
+                (SELECT MAX(x.id) FROM messages x WHERE x.room_id=r.id) last_id
+            FROM members m JOIN rooms r ON r.id=m.room_id
+            WHERE m.user_id=? ORDER BY COALESCE(last_id,0) DESC, r.id DESC''',(target,))
+        for r in rooms:
+            r['ticket_id']=r.get('ticket_id') or 0
+            r['last']=self.row('''SELECT x.id,x.user_id,x.removed,x.created,
+                    CASE WHEN x.removed=1 THEN '消息已被移除' WHEN x.removed=2 THEN '' ELSE x.body END body,
+                    un.nickname
+                FROM messages x JOIN users un ON un.id=x.user_id
+                WHERE x.room_id=? ORDER BY x.id DESC LIMIT 1''',(r['id'],))
+            if r['kind']=='private':
+                # 私聊的 rooms.name 是「建会话时对方」的昵称，对管理员没意义；
+                # 改成「这个用户在这间屋里对着谁」。
+                peer=self.row('''SELECT us.id,us.nickname FROM members mm JOIN users us ON us.id=mm.user_id
+                    WHERE mm.room_id=? AND mm.user_id<>? LIMIT 1''',(r['id'],target))
+                r['peer']=peer
+                if peer:r['name']=peer['nickname']
+        return {'user_id':target,'rooms':rooms}
+
+    def admin_chat(self,u,target,room_id):
+        """只读读取目标用户在指定会话里的最近 200 条消息。"""
+        self.admin(u);target=int(target);room_id=int(room_id)
+        room=self.row('SELECT * FROM rooms WHERE id=?',(room_id,))
+        self.require(room,'会话不存在',404)
+        self.require(self.row('SELECT 1 FROM members WHERE room_id=? AND user_id=?',(room_id,target)),
+                     '该用户不在此会话中',404)
+        rows=self.rows('''SELECT x.id,x.room_id,x.user_id,x.removed,
+                CASE WHEN x.removed=1 THEN '消息已被移除' WHEN x.removed=2 THEN '' ELSE x.body END body,
+                x.created,un.nickname
+            FROM messages x JOIN users un ON un.id=x.user_id
+            WHERE x.room_id=? ORDER BY x.id DESC LIMIT 200''',(room_id,))
+        rows.reverse()
+        with self.tx() as c:
+            c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',
+                      (u,target,'chat_view','查阅聊天记录 · 会话#%d'%room_id,time.time()))
+        return {'room':room,'messages':rows}
+
     # --- 消息撤回 ----------------------------------------------------------
     # 只允许撤回自己 2 分钟内的消息，且没被移除过。撤回是软删（removed=2）：
     # 正文清掉，但记录保留——审核和工作台还需要知道「这里曾经有一条消息」。
@@ -383,8 +445,11 @@ class CommunityService(ValidationMixin):
             c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',
                       (u, row['user_id'], 'content_' + action, f'{label} #{cid}：{reason}', time.time()))
             if action == 'remove':
+                # 帖子被移除时带上 post_id：通知中心点进去能直接定位到那张卡
+                # （评论不带——评论没有独立页面，跳帖子列表意义不大）。
                 self.notify(c, row['user_id'], 'content_removed',
-                            f'你发布的一条{label}因「{reason}」已被移除。如有异议可在客服中心申诉。')
+                            f'你发布的一条{label}因「{reason}」已被移除。如有异议可在客服中心申诉。',
+                            post_id=int(cid) if kind == 'post' else None)
         return {'ok': True}
 
     # --- 校园求购撮合 ---------------------------------------------------

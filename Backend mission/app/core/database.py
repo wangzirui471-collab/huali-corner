@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS comments(id INTEGER PRIMARY KEY,post_id INTEGER,user_
 CREATE TABLE IF NOT EXISTS offers(id INTEGER PRIMARY KEY,product_id INTEGER,buyer_id INTEGER,amount INTEGER,status TEXT DEFAULT 'pending',created REAL,accepted_at REAL);
 CREATE TABLE IF NOT EXISTS nominations(id INTEGER PRIMARY KEY,user_id INTEGER,room_id INTEGER,reason TEXT,status TEXT DEFAULT 'pending',created REAL);
 CREATE TABLE IF NOT EXISTS wants(id INTEGER PRIMARY KEY,user_id INTEGER,keyword TEXT,budget INTEGER,description TEXT,status TEXT DEFAULT 'open',created REAL);
-CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY,user_id INTEGER,kind TEXT,order_id INTEGER,ticket_id INTEGER,body TEXT,read_at REAL,created REAL,post_id INTEGER);
+CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY,user_id INTEGER,kind TEXT,order_id INTEGER,ticket_id INTEGER,body TEXT,read_at REAL,created REAL,post_id INTEGER,product_id INTEGER);
 '''
 
 # MySQL 等价表结构。与 SQLITE_SCHEMA 字段一一对应，差异点：
@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS comments(id INT PRIMARY KEY AUTO_INCREMENT,post_id IN
 CREATE TABLE IF NOT EXISTS offers(id INT PRIMARY KEY AUTO_INCREMENT,product_id INT,buyer_id INT,amount INT,status VARCHAR(48) DEFAULT 'pending',created DOUBLE,accepted_at DOUBLE);
 CREATE TABLE IF NOT EXISTS nominations(id INT PRIMARY KEY AUTO_INCREMENT,user_id INT,room_id INT,reason TEXT,status VARCHAR(32) DEFAULT 'pending',created DOUBLE);
 CREATE TABLE IF NOT EXISTS wants(id INT PRIMARY KEY AUTO_INCREMENT,user_id INT,keyword VARCHAR(128),budget INT,description TEXT,status VARCHAR(32) DEFAULT 'open',created DOUBLE);
-CREATE TABLE IF NOT EXISTS notifications(id INT PRIMARY KEY AUTO_INCREMENT,user_id INT,kind VARCHAR(48),order_id INT,ticket_id INT,body TEXT,read_at DOUBLE,created DOUBLE,post_id INT);
+CREATE TABLE IF NOT EXISTS notifications(id INT PRIMARY KEY AUTO_INCREMENT,user_id INT,kind VARCHAR(48),order_id INT,ticket_id INT,body TEXT,read_at DOUBLE,created DOUBLE,post_id INT,product_id INT);
 '''
 
 # MySQL 模式下的 SQL 方言改写（仅作用于进来的 SQL 文本）。
@@ -379,6 +379,9 @@ class Store:
                     c.execute('ALTER TABLE members ADD COLUMN last_read_id INTEGER DEFAULT 0')
                 if 'post_id' not in [x[1] for x in c.execute('PRAGMA table_info(notifications)')]:
                     c.execute('ALTER TABLE notifications ADD COLUMN post_id INTEGER')
+                # 商品处置（下架/恢复/复核）通知要能点进商品详情，补 product_id 引用列。
+                if 'product_id' not in [x[1] for x in c.execute('PRAGMA table_info(notifications)')]:
+                    c.execute('ALTER TABLE notifications ADD COLUMN product_id INTEGER')
                 if 'accepted_at' not in [x[1] for x in c.execute('PRAGMA table_info(offers)')]:
                     c.execute('ALTER TABLE offers ADD COLUMN accepted_at REAL')
                 if 'support' not in [x[1] for x in c.execute('PRAGMA table_info(rooms)')]:

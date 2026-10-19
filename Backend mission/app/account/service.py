@@ -10,6 +10,7 @@ import time
 ROUNDS=600000
 import hashlib, re, secrets, time
 from ..core.errors import ValidationMixin, DomainError
+from ..core.session_policy import SESSION_TTL
 from .credit import is_trusted, star_badge
 
 
@@ -84,7 +85,7 @@ class AccountService(ValidationMixin):
         return salt,self._derive(password,salt),ROUNDS,hashlib.sha256(recovery.encode()).hexdigest(),recovery
     def _session(self,c,uid):
         token=secrets.token_urlsafe(32)
-        c.execute('INSERT INTO sessions VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),uid,time.time()+86400*7))
+        c.execute('INSERT INTO sessions VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),uid,time.time()+SESSION_TTL))
         return token
     def _trial_result(self,uid,token,recovery=None):
         result={'token':token,'user':self.profile(uid),'simulation':True,'phone_verified':False}
@@ -188,7 +189,7 @@ class AccountService(ValidationMixin):
             c.execute('INSERT OR IGNORE INTO users(phone,nickname) VALUES(?,?)',(phone,'同学'+phone[-4:]))
             uid=c.execute('SELECT id FROM users WHERE phone=?',(phone,)).fetchone()[0]
             token=secrets.token_urlsafe(32)
-            c.execute('INSERT INTO sessions VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),uid,time.time()+86400*7))
+            c.execute('INSERT INTO sessions VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),uid,time.time()+SESSION_TTL))
             c.execute('UPDATE users SET last_login=? WHERE id=?',(time.time(),uid))
         return {'token':token,'user':self.profile(uid),'simulation':True}
 
@@ -231,15 +232,22 @@ class AccountService(ValidationMixin):
         账号「匿名化」——手机号换成占位、昵称改成「已注销用户」，其余记录
         原样保留，客服仍能按 id 追溯。
 
-        权限只给 developer：清除不可逆，admin 有封禁就够了，不需要这把刀。
+        权限按等级分层（2026-10-19 调整）：
+          - 开发者：可清除管理员 / 客服 / 普通用户（不含其他开发者）；
+          - 管理员：可清除客服 / 普通用户（不含管理员、开发者）；
+          - 任何情况下都不能清除自己，也不能清除同级或更高等级账号。
         """
-        self.require(self.role_of(u)=='developer','仅开发者可清除账号',403)
+        actor_role=self.role_of(u)
+        self.require(actor_role in ('admin','developer'),'仅管理员或开发者可清除账号',403)
         self.require(u!=target,'不能清除自己的账号')
         self.text(reason,500,'清除理由')
         with self.tx() as c:
             user=c.execute('SELECT id,phone,nickname,role FROM users WHERE id=?',(target,)).fetchone()
             self.require(user,'用户不存在',404)
-            self.require(user['role'] not in ('admin','developer'),'不能清除管理员或开发者账号',403)
+            # 同级不能互删（admin 不能删 admin，developer 不能删 developer）；
+            # 未知角色按最高等级处理，宁可不删。
+            self.require(self.ROLE_RANK.get(actor_role,-1)>self.ROLE_RANK.get(user['role'],99),
+                         '不能清除同级或更高等级的账号',403)
             now=time.time()
             # 在途订单先按封禁口径处置：该退的退、该关的关。否则人一删，
             # 对方那笔订单就永远卡在「待交付」，连申诉对象都没有。

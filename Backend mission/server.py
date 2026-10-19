@@ -162,6 +162,8 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/product/review' and method=='POST':return self.respond(m.review_product(u,int(data['id']),data.get('decision'),data.get('reason')))
             if p=='/api/product/removed' and method=='GET':return self.respond(m.removed_products(u))
             if p=='/api/user/dossier' and method=='GET':return self.respond(m.dossier(u,int(query['id'])))
+            if p=='/api/admin/chats' and method=='GET':return self.respond(m.admin_chats(u,int(query['user_id'])))
+            if p=='/api/admin/chat' and method=='GET':return self.respond(m.admin_chat(u,int(query['user_id']),int(query['room_id'])))
             if p=='/api/upload' and method=='POST':
                 try:content=base64.b64decode(data.get('content',''),validate=True)
                 except ValueError:raise DomainError('无效图片编码')
@@ -194,6 +196,8 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/support/claim' and method=='POST':return self.respond(m.claim_support_room(u,int(data['room_id']),data.get('action','claim')))
             if p=='/api/messages':return self.respond(m.send_message(u,int(data['room_id']),data['body'],data['key']) if method=='POST' else m.messages(u,int(query['room_id']),int(query.get('after',0))))
             if p=='/api/messages/recall' and method=='POST':return self.respond(m.recall_message(u,int(data['message_id'])))
+            # 已读回执：返回本会话其他成员的已读位点，前端据此给自己的消息算「几人已读」。
+            if p=='/api/messages/receipts':return self.respond(m.message_receipts(u,int(query['room_id'])))
             # 仅自己删除：只从我的聊天记录里移除，对方仍可见。
             if p=='/api/messages/hide' and method=='POST':return self.respond(m.hide_message(u,int(data['message_id'])))
             if p=='/api/room/members':return self.respond(m.room_members(u,int(query['room_id'])))
@@ -290,6 +294,23 @@ def make_server(root,port=8080,seed=False,trial=False,host='127.0.0.1',public_or
     if seed:seed_data(server.market)
     return server
 
+def mirror_server(primary,port):
+    """在同一个进程里再监听一个端口，共用同一个 Market 与限流表。
+
+    使用者的习惯地址可能是 3080，而项目文档、脚本、局域网分享都用 8081。
+    与其另起一个进程（两份数据目录、两套写锁，容易「一改就打不开」），
+    不如让同一个进程多监听一个端口：数据、限流、会话完全一致，
+    少一个会死掉的进程，也就少一种「莫名其妙打不开」。
+    """
+    twin=Server((primary.server_address[0],port),Handler)
+    twin.market=primary.market
+    twin.public_origin=primary.public_origin
+    twin.trust_proxy=primary.trust_proxy
+    twin.rates=primary.rates
+    twin.rate_lock=primary.rate_lock
+    twin.web=primary.web
+    return twin
+
 def lan_ip():
     """取本机局域网 IPv4，供 --lan 自动推导 public-origin 与打印访问地址。
 
@@ -336,6 +357,8 @@ def main():
     # 这行原本和上面挤在一起、超过 512 字节，Python 3.8 在 Windows 上按块
     # 读源码时会把中文 help 文本切成半个字符，直接报 Non-UTF-8 起不来。
     ap.add_argument('--lan',action='store_true',help='开放局域网访问（仅 --trial）：自动绑定 0.0.0.0 并推导 public-origin')
+    # 额外端口：同一个进程、同一份数据再监听一个地址（如习惯用 3080 的入口）。
+    ap.add_argument('--extra-port',type=int,default=int(os.environ.get('HUALI_EXTRA_PORT') or 0))
     args=ap.parse_args()
     # --lan：学院试用想让同学用自己的电脑/手机访问时用。
     # 只放开监听与 Origin 校验，不改任何业务规则；演示模式仍只允许本机。
@@ -385,6 +408,14 @@ def main():
     threading.Thread(target=timer,daemon=True).start()
     mode='计算机学院试用版 · 手机号密码登录 · 模拟交易' if args.trial else '本地模拟版'
     print(f'华立转角 · {mode} · port {server.server_port} · Ctrl+C停止',flush=True)
+    # 额外端口：端口被占或地址不合法时只提示，不影响主端口启动。
+    if args.extra_port and args.extra_port!=args.port:
+        try:
+            twin=mirror_server(server,args.extra_port)
+            threading.Thread(target=twin.serve_forever,daemon=True).start()
+            print(f'同一进程额外监听：http://{args.host}:{args.extra_port}',flush=True)
+        except OSError as error:
+            print(f'额外端口 {args.extra_port} 未启用：{error}',flush=True)
     if args.lan:
         print(f'局域网访问：http://{lan_ip()}:{server.server_port}',flush=True)
         print('同一 WiFi 的手机/其他电脑可直接打开；连不上先检查 Windows 防火墙是否放行该端口。',flush=True)

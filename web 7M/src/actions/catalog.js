@@ -47,6 +47,16 @@ export const clicks = {
     toast('已加入取货清单，可合并同卖家商品');
     await render();
   },
+  // 「立即下单」= 加入清单后直达结算页；不新增后端接口，与 add-cart 同一套数据。
+  // 求购关联（pendingWant）不在这里动，交给 state.js 的既有清理规则判断。
+  'buy-now': async (b, id) => {
+    if (!needLogin()) return;
+    const p = await api('/product?id='+id);
+    if (p.seller_id === state.me.id) throw new Error('不能购买自己的商品');
+    if (!state.cart.includes(id)) state.cart.push(id);
+    saveCart();
+    go('cart');
+  },
   'remove-cart': async (b, id) => {
     state.cart = state.cart.filter(x => x !== id);
     saveCart();

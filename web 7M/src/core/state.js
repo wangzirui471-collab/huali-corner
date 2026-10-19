@@ -1,10 +1,11 @@
 'use strict';
 // 基础设施层 · 会话与全局状态
 // 这是唯一持有可变全局状态的地方。其他模块只读写 state，不自己另建副本。
+import { readSessionToken } from './session.js';
 
 export const state = {
   // 公开演示版没有登录态，token 恒为空。
-  token: window.HUALI_STATIC_DEMO ? '' : sessionStorage.getItem('hc-token') || '',
+  token: window.HUALI_STATIC_DEMO ? '' : readSessionToken(),
   me: null,
   config: {},
   filter: {category:'', q:'', sort:''},
