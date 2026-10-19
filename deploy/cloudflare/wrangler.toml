@@ -1,0 +1,12 @@
+# 华立转角 — Cloudflare Worker 配置
+# 部署前需要：① Cloudflare 账号（wangzirui471）的 Workers 部署权限；
+#            ② 一份已托管、公网可达的 Python 后端地址（见 README）。
+
+name = "zhuanjiao"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+
+# Python 后端的公网基地址，例如 https://huali-corner.onrender.com
+# 建议用 secret 存放（wrangler secret put BACKEND_URL），此处仅占位。
+[vars]
+BACKEND_URL = "https://REPLACE_WITH_YOUR_PYTHON_BACKEND_URL"
