@@ -11,6 +11,12 @@ ROUNDS=600000
 import hashlib, re, secrets, time
 from ..core.errors import ValidationMixin, DomainError
 from ..core.config import COLLEGES, GRADES
+
+# 会话有效期（2026-10 用户确认「电脑上登录过就不用再登录」）：
+#   首次签发 30 天；每次带 token 访问时，若剩余不足 7 天就续满 30 天。
+#   常用设备不会掉线，闲置 30 天自动失效——不是永久 token。
+SESSION_TTL = 86400 * 30
+SESSION_RENEW = 86400 * 23   # 剩余低于 7 天时续期
 from .credit import is_trusted, star_badge
 
 
@@ -85,7 +91,7 @@ class AccountService(ValidationMixin):
         return salt,self._derive(password,salt),ROUNDS,hashlib.sha256(recovery.encode()).hexdigest(),recovery
     def _session(self,c,uid):
         token=secrets.token_urlsafe(32)
-        c.execute('INSERT INTO sessions VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),uid,time.time()+86400*7))
+        c.execute('INSERT INTO sessions VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),uid,time.time()+SESSION_TTL))
         return token
     def _trial_result(self,uid,token,recovery=None):
         result={'token':token,'user':self.profile(uid),'simulation':True,'phone_verified':False}
@@ -197,14 +203,19 @@ class AccountService(ValidationMixin):
             c.execute('INSERT OR IGNORE INTO users(phone,nickname) VALUES(?,?)',(phone,'同学'+phone[-4:]))
             uid=c.execute('SELECT id FROM users WHERE phone=?',(phone,)).fetchone()[0]
             token=secrets.token_urlsafe(32)
-            c.execute('INSERT INTO sessions VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),uid,time.time()+86400*7))
+            c.execute('INSERT INTO sessions VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),uid,time.time()+SESSION_TTL))
             c.execute('UPDATE users SET last_login=? WHERE id=?',(time.time(),uid))
         return {'token':token,'user':self.profile(uid),'simulation':True}
 
     def user(self,token):
-        r=self.row('SELECT s.user_id,u.status FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires>?',(hashlib.sha256(token.encode()).hexdigest(),time.time()))
+        digest=hashlib.sha256(token.encode()).hexdigest();now=time.time()
+        r=self.row('SELECT s.user_id,u.status,s.expires FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.expires>?',(digest,now))
         self.require(r,'请先登录',401)
         self.require(r['status']=='active',self.status_message(r['status']),403)
+        # 滑动续期：剩余不足 7 天就续满 30 天。常用设备永不掉线，
+        # 但闲置超过 30 天仍会失效，不会变成永久 token。
+        if r['expires']-now < SESSION_RENEW:
+            with self.tx() as c:c.execute('UPDATE sessions SET expires=? WHERE token=?',(now+SESSION_TTL,digest))
         return r['user_id']
 
     def logout(self,token):

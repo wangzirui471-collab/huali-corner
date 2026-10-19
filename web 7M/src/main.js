@@ -4,6 +4,7 @@
 
 import { $ } from './core/dom.js';
 import { state, loadCart } from './core/state.js';
+import { clearToken } from './core/session.js';
 import { api } from './core/http.js';
 import { render } from './router.js';
 import { closeModal } from './core/shell.js';
@@ -31,7 +32,7 @@ window.addEventListener('resize', () => {
       }catch{
         // token 过期或被服务端作废：清掉本地会话，以游客身份继续逛。
         state.token = '';
-        sessionStorage.removeItem('hc-token');
+        clearToken();
       }
     }
     await render();

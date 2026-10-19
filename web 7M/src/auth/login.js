@@ -7,6 +7,7 @@ import { state, clearPoll } from '../core/state.js';
 import { render } from '../core/nav.js';
 import { modal, closeModal } from '../core/shell.js';
 import { field } from '../components/forms.js';
+import { saveToken, clearToken } from '../core/session.js';
 
 export function publicDemoNotice(){
   modal(`<span class="eyebrow">HUALI CORNER PREVIEW</span><h2>先逛逛，看看转角</h2><p>这是公开演示版，不收集手机号、收货地址、照片或聊天内容，也不进行真实交易。</p><p class="muted">可以体验搜索、分类、商品详情、卖家主页和社区样例。其余功能可在本地模拟版体验。</p><button class="btn primary full" data-action="close">继续逛逛</button>`);
@@ -21,13 +22,13 @@ export function needLogin(){
 export function clearAccount(){
   state.token = ''; state.me = null; state.cart = [];
   clearPoll();
-  sessionStorage.removeItem('hc-token');
+  clearToken();
 }
 
 export async function setLogin(r){
   state.token = r.token;
   state.me = r.user;
-  sessionStorage.setItem('hc-token', state.token);
+  saveToken(state.token);   // localStorage：这台电脑下次打开免登录
   state.cart = JSON.parse(sessionStorage.getItem('hc-cart-'+state.me.id) || '[]');
   closeModal();
   toast('欢迎，'+state.me.nickname+(state.config.trial?' · 订单和付款均为模拟':' · 当前为模拟登录'));

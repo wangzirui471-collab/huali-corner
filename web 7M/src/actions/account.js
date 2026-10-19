@@ -6,6 +6,7 @@ import { state } from '../core/state.js';
 import { api } from '../core/http.js';
 import { go, render } from '../core/nav.js';
 import { loginModal, trialLoginModal, changePasswordModal, recoveryNotice, setLogin, clearAccount } from '../auth/login.js';
+import { clearToken } from '../core/session.js';
 
 export const clicks = {
   login: () => loginModal(),
@@ -32,7 +33,7 @@ export const clicks = {
   logout: async () => {
     await api('/auth/logout', {});
     state.token = ''; state.me = null; state.cart = [];
-    sessionStorage.removeItem('hc-token');
+    clearToken();
     go('home');
   },
 
@@ -40,7 +41,7 @@ export const clicks = {
     if (!confirm('注销后账号立即下线、在售商品全部下架、无法再登录；订单、工单与信誉记录会保留以便追溯。有未完成订单或未结案工单时无法注销。确认注销账号？')) return;
     await api('/auth/deactivate', {});
     state.token = ''; state.me = null; state.cart = [];
-    sessionStorage.removeItem('hc-token');
+    clearToken();
     toast('账号已注销');
     go('home');
   },

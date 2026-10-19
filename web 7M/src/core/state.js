@@ -2,9 +2,12 @@
 // 基础设施层 · 会话与全局状态
 // 这是唯一持有可变全局状态的地方。其他模块只读写 state，不自己另建副本。
 
+import { readToken } from './session.js';
+
 export const state = {
   // 公开演示版没有登录态，token 恒为空。
-  token: window.HUALI_STATIC_DEMO ? '' : sessionStorage.getItem('hc-token') || '',
+  // 普通版从 localStorage 恢复（关浏览器不掉线），见 core/session.js。
+  token: window.HUALI_STATIC_DEMO ? '' : readToken(),
   me: null,
   config: {},
   filter: {category:'', q:'', sort:''},
