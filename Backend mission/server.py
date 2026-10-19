@@ -1,4 +1,4 @@
-import argparse,base64,ipaddress,json,mimetypes,os,secrets,socket,time,threading,traceback
+import argparse,base64,ipaddress,json,mimetypes,os,secrets,socket,sys,time,threading,traceback
 from pathlib import Path
 from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
 from urllib.parse import urlsplit,parse_qs,unquote
@@ -22,6 +22,16 @@ class Handler(BaseHTTPRequestHandler):
     def setup(self):
         super().setup();self.connection.settimeout(20)
     def log_message(self,*args):pass
+    def handle_one_request(self):
+        # 浏览器刷新页面、关掉标签页、keep-alive 空闲超时，都会让客户端直接
+        # 掐断连接。Python 的 http.server 在 readline() 处抛出
+        # ConnectionResetError(WinError 10054)，默认会打印一整屏 traceback，
+        # 用户看到会以为服务崩了。连接已经断了，读不到请求是正常结果：
+        # 静默结束本次请求，服务本身继续跑。
+        try:
+            super().handle_one_request()
+        except (ConnectionResetError,ConnectionAbortedError,BrokenPipeError):
+            self.close_connection=True
     def respond(self,data,status=200,kind='application/json; charset=utf-8'):
         body=json.dumps(data,ensure_ascii=False).encode() if kind.startswith('application/json') else data
         self.send_response(status);self.send_header('Content-Type',kind);self.send_header('Content-Length',str(len(body)))
@@ -257,11 +267,22 @@ class Handler(BaseHTTPRequestHandler):
             raise DomainError('接口不存在',404)
         except DomainError as e:self.respond({'error':str(e)},e.status)
         except (ValueError,TypeError,KeyError) as e:self.respond({'error':'输入格式或字段不完整'},400)
+        except (ConnectionResetError,ConnectionAbortedError,BrokenPipeError):
+            # 客户端先断开了（刷新页面/关标签/keep-alive 超时），写响应时
+            # 才失败。这不是服务异常，不打印 traceback，也没必要再 respond。
+            self.close_connection=True
         except Exception:
             traceback.print_exc();self.respond({'error':'服务暂时异常，请重试'},500)
 
 class Server(ThreadingHTTPServer):
     daemon_threads=True
+    def handle_error(self,request,client_address):
+        # 兜底：请求线程里未捕获的断连异常同样不打印 traceback。
+        # 其余异常照常走默认处理，不能把真正的 bug 一起吞掉。
+        exc=sys.exc_info()[1]
+        if isinstance(exc,(ConnectionResetError,ConnectionAbortedError,BrokenPipeError)):
+            return
+        super().handle_error(request,client_address)
     def __init__(self,*args,**kwargs):
         # 并发上限。原先是 32，超了直接 shutdown_request —— 本机够用，但走公网隧道时
         # 首页冷启动会同时打开三四十条连接（每个 ES 模块一条），被拒的连接在
