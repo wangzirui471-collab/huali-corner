@@ -2292,3 +2292,14 @@ button.me-notice { width: 100%; text-align: left; cursor: pointer; border: 0; fo
 .wx-gate { padding: 18px 20px; border-top: 1px solid var(--line); background: #fffdf4; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .wx-gate b { font-size: 15px; }
 .wx-gate p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+
+/* --- 发送失败重发（微信语义） ---------------------------------------------
+   自己的消息是 row-reverse，DOM 里排在气泡之后的按钮会显示在气泡左侧。 */
+.wx-pending { opacity: .75; }
+.wx-pending.failed { opacity: 1; }
+.wx-pending.failed .wx-bubble { border: 1px dashed var(--danger); }
+.wx-receipt { display: block; margin-top: 3px; font-size: 10.5px; line-height: 1.4; color: var(--muted); text-align: right; }
+.wx-pending.failed .wx-receipt { color: var(--danger); }
+.wx-retry { align-self: center; flex: none; width: 20px; height: 20px; border-radius: 50%; border: 0; padding: 0; background: var(--danger); color: #fff; font-size: 12px; font-weight: 800; line-height: 1; display: grid; place-items: center; cursor: pointer; }
+.wx-retry[hidden] { display: none; }
+.wx-retry:hover { filter: brightness(1.08); }

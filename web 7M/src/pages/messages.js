@@ -350,18 +350,69 @@ const NOTE_META = {
   // 表单不走全站 submits 委托（避免双发）：发送后立即增量拉取，输入框清空。
   const form = $('#wx-form');
   const editor = $('#wx-editor');
+  const stream = $('#chat-stream');
+  let sending = false;
+
+  // 乐观气泡：先把自己的消息显示出来，失败时挂红色感叹号（微信语义）。
+  // 失败后**不会**把正文塞回输入框——那会让「按回车重试」变成「再发一条」，
+  // 连按几次就是满屏重复（真实踩过的 bug）。
+  const appendPending = (body, key) => {
+    const el = document.createElement('div');
+    el.className = 'wx-msg mine wx-pending';
+    el.dataset.tmp = key;
+    el.dataset.body = body;
+    el.innerHTML = `<span class="wx-avatar-link">${avatar(state.me.nickname, state.me.id)}</span>`+
+      `<div class="wx-bubble-wrap"><p class="wx-bubble">${e(body)}</p><span class="wx-receipt">发送中…</span></div>`+
+      // .mine 是 row-reverse，所以这个按钮会显示在气泡左侧。
+      `<button class="wx-retry" type="button" aria-label="重新发送" hidden>!</button>`;
+    stream.appendChild(el);
+    stream.scrollTop = stream.scrollHeight;
+    return el;
+  };
+
+  // 发送 / 重发共用。重发复用原幂等键：上一次可能已到达服务端、只是响应丢了，
+  // 同一个 key 不会再产生第二条（服务端 request_key 唯一约束）。
+  const deliver = async (el, body, key) => {
+    if (!el || sending) return;
+    sending = true;
+    el.classList.remove('failed');
+    el.querySelector('.wx-retry').hidden = true;
+    el.querySelector('.wx-receipt').textContent = '发送中…';
+    try{
+      await api('/messages', {room_id:room.id, body, key});
+      el.querySelector('.wx-receipt').textContent = '已发送';
+      await pullNew();
+    }catch(err){
+      el.classList.add('failed');
+      el.querySelector('.wx-receipt').textContent = '发送失败';
+      el.querySelector('.wx-retry').hidden = false;
+      toast(err.message);
+    }finally{
+      sending = false;
+      editor?.focus();
+    }
+  };
+
   // gate 分支（还不是好友）只有说明，没有表单；历史消息仍可读。
   form?.addEventListener('submit', async ev => {
     ev.preventDefault();
+    if (sending) return;
     const body = editor.value.trim();
     if (!body) return;
-    try{
-      await api('/messages', {room_id:room.id, body, key:uid()});
-    }catch(err){ toast(err.message); return; }
+    const key = uid();
+    const pending = appendPending(body, key);
+    // 立刻清空：连按回车不会再发第二条。
     editor.value = '';
     editor.style.height = 'auto';
     updateCount();
-    await pullNew();
+    await deliver(pending, body, key);
+  });
+
+  stream?.addEventListener('click', ev => {
+    const btn = ev.target.closest('.wx-retry');
+    if (!btn) return;
+    const el = btn.closest('.wx-pending');
+    if (el) deliver(el, el.dataset.body, el.dataset.tmp);
   });
   // Enter 发送、Shift+Enter 换行、输入时自动加高。
   editor?.addEventListener('keydown', ev => {
@@ -375,16 +426,33 @@ const NOTE_META = {
   function updateCount(){ const c=$('#wx-count'); if (c && editor) c.textContent = editor.value.length ? editor.value.length+'/2000' : ''; }
 
   // --- 消息拉取（首次全量最近 200 条，之后增量轮询） ----------------------
-  const stream = $('#chat-stream');
+  // stream 在上面「发送与输入」段已声明（重发按钮要挂监听），这里不再重复声明。
   state.messageCursor = 0;
-  const pullNew = async () => {
-    const msgs = await api('/messages?room_id='+room.id+'&after='+state.messageCursor);
-    if (!msgs.length) return;
-    const atBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 80;
-    const id = appendMessages(stream, msgs, room);
-    if (id && id > state.messageCursor) state.messageCursor = id;
-    // 用户本来就在底部、或消息是自己发的：自动滚到底；否则保持位置并提示有新消息。
-    if (atBottom || msgs[msgs.length-1].user_id === state.me.id) stream.scrollTop = stream.scrollHeight;
+  // 并发合并 + id 去重：3 秒轮询和「发送后立即拉取」会重叠，两批相同消息
+  // 各自追加一次，界面上就是「发一条变两条」。同一时刻只允许一个拉取在跑，
+  // 再加 seen 按消息 id 兜底——这两个缺一不可。
+  const seen = new Set();
+  let pulling = null;
+  const pullNew = () => {
+    if (pulling) return pulling;
+    pulling = (async () => {
+      const msgs = await api('/messages?room_id='+room.id+'&after='+state.messageCursor);
+      const fresh = msgs.filter(m => !seen.has(m.id));
+      if (!fresh.length) return;
+      fresh.forEach(m => seen.add(m.id));
+      const atBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 80;
+      const id = appendMessages(stream, fresh, room);
+      if (id && id > state.messageCursor) state.messageCursor = id;
+      // 真实消息到了：把对应的乐观气泡摘掉，避免同一句出现两次。
+      for (const m of fresh){
+        if (m.user_id !== state.me.id) continue;
+        const el = [...stream.querySelectorAll('.wx-pending')].find(x => x.dataset.body === m.body);
+        if (el) el.remove();
+      }
+      // 用户本来就在底部、或消息是自己发的：自动滚到底；否则保持位置并提示有新消息。
+      if (atBottom || fresh[fresh.length-1].user_id === state.me.id) stream.scrollTop = stream.scrollHeight;
+    })().finally(() => { pulling = null; });
+    return pulling;
   };
   try{ await pullNew(); }catch(err){ toast(err.message); return; }
   stream.scrollTop = stream.scrollHeight;
