@@ -97,7 +97,11 @@ export function userAvatarForm(user){
         <small class="uc-note">当前头像</small>
       </div>
       <div class="uc-avatar-right">
-        <input data-user-control id="uc-avatar-file" name="avatarfile" type="file" class="uc-file-input" accept="image/jpeg,image/png,image/webp" aria-describedby="uc-avatar-note">
+        <input data-user-control id="uc-avatar-file" name="avatarfile" type="file" class="uc-file-native" accept="image/jpeg,image/png,image/webp" aria-describedby="uc-avatar-note">
+        <div class="uc-file-row">
+          <label class="uc-btn uc-file-btn" for="uc-avatar-file">选择图片</label>
+          <span class="uc-file-name" data-user-file-name>未选择任何文件</span>
+        </div>
         <p id="uc-avatar-note" class="uc-note">支持 JPEG、PNG、WebP，原文件不超过 2 MiB；不支持动画与多帧图片。</p>
         <div class="uc-ops">
           <button data-user-control class="uc-btn is-primary" type="submit">上传并预览</button>

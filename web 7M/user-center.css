@@ -157,6 +157,15 @@
   font:inherit; font-size:13px; cursor:pointer; transition:background-color .14s ease-out; }
 .uc-file-input::file-selector-button:hover{ background:#fafafa; }
 
+/* 自定义文件选择：原生 input 视觉隐藏但仍可聚焦，按钮是 label（点它等于点 input） */
+.uc-file-native{ position:absolute; width:1px; height:1px; margin:-1px; padding:0; border:0;
+  overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.uc-file-native:focus-visible + .uc-file-row .uc-file-btn{ outline:2px solid var(--brand-ink,#7d5c07); outline-offset:3px; }
+.uc-file-row{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.uc-file-btn{ cursor:pointer; }
+.uc-file-name{ font-size:13px; color:var(--uc-muted); overflow-wrap:anywhere; min-width:0; }
+.uc-file-name.is-picked{ color:var(--uc-ink-2); }
+
 /* 按钮：主按钮品牌黄 + 深字，次按钮白底描边 */
 .uc-ops{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
 .uc-btn{ display:inline-flex; align-items:center; justify-content:center; height:36px; padding:0 16px;

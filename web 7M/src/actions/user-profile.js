@@ -195,10 +195,21 @@ function clearSelection(scope){
   const form = avatarForm(scope.root);
   field(form,'upload_id').value = '';
   field(form,'avatarfile').value = '';
+  showFileName(scope.root,'');
   const preview = scope.root.querySelector('[data-user-avatar-preview]');
   releasePreview(preview);
   preview.innerHTML = userAvatar(state.me);
   scope.root.querySelector('[data-action="user-avatar-confirm"]').hidden = true;
+}
+
+// 文件名回显：自定义按钮替代了原生 input 的「未选择任何文件」文案，
+// 选了没选、选的是哪张，用户得能一眼看到，否则会重复点「选择图片」。
+function showFileName(root, name){
+  const target = root.querySelector('[data-user-file-name]');
+  if (!target) return;
+  const picked = typeof name === 'string' && name.trim();
+  target.textContent = picked ? name : '未选择任何文件';
+  target.classList.toggle('is-picked', Boolean(picked));
 }
 
 function localPreview(button){
@@ -211,6 +222,7 @@ function localPreview(button){
     field(form,'upload_id').value = '';
     scope.root.querySelector('[data-action="user-avatar-confirm"]').hidden = true;
     const file = selectedFile(form);
+    showFileName(scope.root,file.name);
     putPreview(scope,file);
     feedback(scope,'avatar','这是本地预览，尚未上传。点击“上传并预览”后再确认公开。');
   } catch (error) { failure(scope,'avatar',error); }
@@ -230,7 +242,9 @@ function fileContent(file){
 
 export function avatarFileChange(event){
   const input = event.target;
-  if (!input?.matches?.('#user-avatar-file')) return;
+  // 两个 id 都认：改版把输入框 id 改成了 uc-avatar-file，旧标记（user-avatar-file）
+  // 仍可能在未刷新的页面里存在。这里不做严格单 id 匹配，否则「选了文件没反应」。
+  if (!input?.matches?.('#uc-avatar-file, #user-avatar-file')) return;
   const root = input.closest('[data-user-center]');
   if (!root?.isConnected || root.dataset.userOwner !== String(state.me?.id) || !state.token) return;
   localPreview(input);
