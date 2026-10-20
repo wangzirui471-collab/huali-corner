@@ -18,6 +18,31 @@ class OpsService(ValidationMixin):
     def backup(self,u):
         self.staff(u);return self._backup()
 
+    def tick(self,now=None):
+        """定时任务入口：订单超时 + 全站清理。
+
+        两部分保持在同一个事务里执行，避免订单超时与库存释放出现中间态。
+        订单超时在 ``trade/orders.py``，非订单清理在本模块。
+        """
+        now=now or time.time()
+        with self.tx() as c:
+            self.tick_orders(c,now)
+            self.tick_housekeeping(c,now)
+
+    def tick_housekeeping(self,c,now):
+        """非订单类的定期清理：会话、验证码、过期报价、超时客服会话。"""
+        c.execute('DELETE FROM sessions WHERE expires<?',(now,))
+        c.execute('DELETE FROM otp WHERE expires<?',(now-86400,))
+        c.execute('DELETE FROM auth_attempts WHERE reset_at<?',(now-86400,))
+        # 被接受的报价 24 小时未成交即作废，商品重新可报价（否则商品被一个
+        # 永远不会结算的报价永久占住，其他人想买也买不了）。
+        c.execute("UPDATE offers SET status='rejected' WHERE status='accepted' AND accepted_at<?",(now-86400,))
+        # 客服会话 30 分钟没有新消息自动结束：用户关掉页面、客服下班、
+        # 双方都不再说话时，会话不该永远挂在列表里。归档后重新咨询开新一轮。
+        for r in c.execute("SELECT * FROM rooms WHERE support=1 AND COALESCE(support_status,'open')='open'").fetchall():
+            last=c.execute('SELECT MAX(created) t FROM messages WHERE room_id=? AND removed<>3',(r['id'],)).fetchone()['t'] or r['created'] or now
+            if now-last>1800:self._close_support(c,dict(r),'timeout')
+
     def _backup(self):
         directory=self.root/'backups';directory.mkdir(exist_ok=True);path=directory/f'market-{time.time_ns()}.zip'
         with tempfile.TemporaryDirectory() as tmp:

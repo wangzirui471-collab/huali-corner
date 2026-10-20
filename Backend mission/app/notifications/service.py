@@ -65,3 +65,14 @@ class NotificationService(ValidationMixin):
                     (time.time(), u),
                 )
         return {'ok': True}
+
+    def badges(self, u: int) -> dict:
+        """顶栏角标的一次性数据源：通知未读 + 聊天未读。
+
+        前端每次路由切换都会拉一次，所以这里必须是两个 COUNT，
+        不能把通知列表和会话列表整个捞出来。
+        """
+        return {
+            'notifications': self.notifications(u, 1)['unread'],
+            'chat': self.chat_unread(u),
+        }

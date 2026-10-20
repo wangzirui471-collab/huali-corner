@@ -16,14 +16,14 @@ huali-corner-trial/
 │       ├── core/              路径、连接、事务、异常
 │       ├── account/           登录、资料、头像、信誉辅助逻辑
 │       ├── catalog/           商品、图片、上下架、审核入口、报价
-│       ├── trade/             订单、账本、定时业务
+│       ├── trade/             订单与账本（orders.py / ledger.py）
 │       ├── community/         帖子、私聊、群聊、客服会话
 │       ├── support/           工单、退款处理、信誉处置
 │       ├── notifications/     站内通知：写入、列表、已读
 │       ├── reviews/           订单评价与好评加分
 │       ├── staff/             人员账号与角色层级
 │       ├── moderation/        内容规则与审核
-│       └── ops/               对账与一致性备份
+│       └── ops/               对账、备份、定时清理
 ├── web 7M/
 │   ├── index.html             正式网页入口，加载 src/main.js
 │   ├── src/                   core、components、pages、actions、auth
@@ -72,5 +72,13 @@ SQL schema 与数据库适配仍在 `core/database.py`；迁移模块或独立�
 
 - 只搬运 `review` / `_award_good_review`，`/api/review` 合同、评价覆盖规则、好评加分日／月上限与事务边界不变；
 - 评价不再依赖客服工单模块，后续修改评价规则只需改 `reviews/`。
+
+2026-10-20 第三批把 `trade/service.py` 拆成订单、账本与定时清理：
+
+- `trade/orders.py`（`OrderService`）：下单、状态机、改单、订单超时；
+- `trade/ledger.py`（`LedgerService`）：账本流水与撮合服务费重算；
+- `ops/service.py`：接管 `tick()` 与 `tick_housekeeping()`（会话、验证码、过期报价、客服会话清理）；
+- `notifications/service.py`：接管 `badges()`；
+- `trade/service.py` 仅保留 `TradeService(OrderService, LedgerService)` 组合入口，`Market` 与调用方无需改动。
 
 整理期间另外检测到 `app/cloudflare/` 新增及 `docs/CLOUDFLARE_ACCESS.md` 更新，属于并行部署工作，已原样保留；上方目录列出已检查的既有主线模块，不代表该适配已完成验收。
