@@ -6,7 +6,7 @@ import { money } from '../core/format.js';
 import { api } from '../core/http.js';
 import { go, render } from '../core/nav.js';
 import { modal, closeModal } from '../core/shell.js';
-import { statusNames } from '../core/state.js';
+import { state, statusNames } from '../core/state.js';
 import { field } from '../components/forms.js';
 import { ticketModal } from '../pages/support.js';
 
@@ -56,6 +56,20 @@ export const clicks = {
   },
 
   backup: async () => {
+    if (state.config.auth_mode === 'client_kdf') {
+      const response = await fetch('/api/backup', { method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + state.token }, body: '{}' });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || '备份下载失败');
+      }
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(await response.blob());
+      link.download = `转角私密备份-${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(link.href);
+      toast('私密备份已下载，请妥善保管');
+      return;
+    }
     await api('/backup', {});
     toast('数据库一致性备份已保存到本地数据目录');
   },

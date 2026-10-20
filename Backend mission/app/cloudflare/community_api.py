@@ -38,10 +38,14 @@ class CommunityApi:
 
     async def cf_community_posts(self,r):
         if r.method=='GET':
-            q=query_of(r);topic=q.get('topic','');limit=max(1,min(int_param(q,'limit',False) or 20,50));offset=max(0,int_param(q,'offset',False) or 0)
-            return json_response(await self.db.all("SELECT p.*,u.nickname,u.college,(SELECT COUNT(*) FROM comments WHERE post_id=p.id) replies FROM posts p JOIN users u ON u.id=p.user_id WHERE removed=0 AND (?='' OR topic=?) ORDER BY p.id DESC LIMIT ? OFFSET ?",(topic,topic,limit,offset)))
+            from ..community.forum_read import posts_query
+            q=query_of(r)
+            for key in ('id','author','limit','offset'):
+                if key in q:int_param(q,key)
+            sql,args=posts_query(q.get('topic',''),q.get('limit',20),q.get('offset',0),q)
+            return json_response(await self.db.all(sql,args))
         uid=await self.page_user(r);await self.require_capacity();d=await json_body(r)
-        body=ValidationMixin.text(d.get('body'),2000,'帖子内容');topic=d.get('topic','交流');require(topic in ('交流','求购','毕业季','互助'),'分区不正确')
+        body=ValidationMixin.text(d.get('body'),2000,'帖子内容');topic=d.get('topic','交流');require(topic in ('交流','求购','毕业季','互助','交换人生','代拿快递'),'分区不正确')
         mark,stored=await self.cf_community_scan(body)
         for attempt in range(4):
             pid=await self.db.scalar('SELECT COALESCE(MAX(id),0)+1 FROM posts')
@@ -55,9 +59,14 @@ class CommunityApi:
     async def cf_community_comments(self,r):
         if r.method=='GET':
             q=query_of(r);pid=int_param(q,'id');before=int_param(q,'before',False)
+            require(await self.db.first('SELECT 1 FROM posts WHERE id=? AND removed=0',(pid,)),'帖子不存在或已被删除',404)
+            limit=max(1,min(int_param(q,'limit',False) or 100,100))
             sql='SELECT c.*,u.nickname,pc.user_id parent_user_id,pu.nickname parent_nickname FROM comments c JOIN users u ON u.id=c.user_id LEFT JOIN comments pc ON pc.id=c.parent_id LEFT JOIN users pu ON pu.id=pc.user_id WHERE c.post_id=?';args=(pid,)
+            if q.get('order')=='asc':
+                after=int_param(q,'after',False) or 0
+                return json_response(await self.db.all(sql+' AND c.id>? ORDER BY c.id ASC LIMIT ?',args+(after,limit)))
             if before:sql+=' AND c.id<?';args+=(before,)
-            rows=await self.db.all(sql+' ORDER BY c.id DESC LIMIT 100',args);rows.reverse();return json_response(rows)
+            rows=await self.db.all(sql+' ORDER BY c.id DESC LIMIT ?',args+(limit,));rows.reverse();return json_response(rows)
         uid=await self.page_user(r);d=await json_body(r);pid=int_param(d,'post_id');parent_id=int_param(d,'parent_id',False) or 0
         post=await self.db.first('SELECT * FROM posts WHERE id=? AND removed=0',(pid,));require(post,'帖子不存在',404)
         parent=await self.db.first('SELECT * FROM comments WHERE id=? AND post_id=?',(parent_id,pid)) if parent_id else None
@@ -74,38 +83,50 @@ class CommunityApi:
         await self.db.guarded_batch('SELECT 1 FROM posts WHERE id=? AND removed=0 AND (?=0 OR EXISTS(SELECT 1 FROM comments WHERE id=? AND post_id=?))',(pid,parent_id,parent_id,pid),statements)
         return json_response({'ok':True})
 
+    async def _decorate_room(self,row,uid):
+        """补 unread / pinned / peer_id / blocked，私聊和客服房都要算。"""
+        row['unread']=min(99,await self.db.scalar('SELECT COUNT(*) FROM messages m WHERE room_id=? AND id>? AND user_id<>? AND removed=0 AND NOT EXISTS(SELECT 1 FROM message_hides WHERE message_id=m.id AND user_id=?)',(row['id'],row['last_read_id'] or 0,uid,uid)))
+        row['pinned']=bool(row.get('pinned_at'))
+        if row['kind']=='private':
+            name=await self.db.scalar('SELECT u.nickname FROM members m JOIN users u ON u.id=m.user_id WHERE room_id=? AND user_id<>? LIMIT 1',(row['id'],uid))
+            if name:row['name']=name
+            # 私聊才计算 peer_id / blocked；群聊固定 false。
+            pair=row.get('pair') or ''
+            a,b=pair.split(':') if ':' in pair else ('','')
+            try:peer=int(a) if int(a)!=uid else int(b)
+            except ValueError:peer=0
+            row['peer_id']=peer
+            row['blocked']=bool(peer and await self.db.first('SELECT 1 FROM blocks WHERE user_id=? AND target=?',(uid,peer)))
+        else:
+            row['peer_id']=0
+            row['blocked']=False
+
     async def cf_community_rooms(self,r):
         uid=await self.page_user(r)
+        role=await self.db.scalar('SELECT role FROM users WHERE id=?',(uid,))
+        is_staff=role in STAFF
         columns='''r.*,(SELECT COUNT(*) FROM members WHERE room_id=r.id) count,
         (SELECT body FROM messages x WHERE room_id=r.id AND removed=0 AND NOT EXISTS(SELECT 1 FROM message_hides WHERE user_id=? AND message_id=x.id) ORDER BY id DESC LIMIT 1) last_body,
         (SELECT created FROM messages WHERE room_id=r.id ORDER BY id DESC LIMIT 1) last_at,
         (SELECT u.nickname FROM messages x JOIN users u ON u.id=x.user_id WHERE room_id=r.id ORDER BY x.id DESC LIMIT 1) last_nick,
         (SELECT nickname FROM users WHERE id=r.assignee) assignee_name,
         (SELECT pinned_at FROM room_pins WHERE user_id=? AND room_id=r.id) pinned_at'''
-        rows=await self.db.all("SELECT "+columns+",m.role,m.muted,m.last_read_id FROM rooms r JOIN members m ON m.room_id=r.id WHERE m.user_id=? AND NOT (r.support=1 AND COALESCE(r.support_status,'open')='closed')",(uid,uid,uid))
+        # 普通用户：客服会话不进聊天列表（避免「发完问题还在聊天框」），
+        # 改走「在线客服 / 我的客服」入口；客服/管理员仍需在接待台看，保留。
+        support_clause="AND r.support=0" if not is_staff else "AND NOT (r.support=1 AND COALESCE(r.support_status,'open')='closed')"
+        rows=await self.db.all("SELECT "+columns+",m.role,m.muted,m.last_read_id FROM rooms r JOIN members m ON m.room_id=r.id WHERE m.user_id=? "+support_clause,(uid,uid,uid))
         for row in rows:
-            row['unread']=min(99,await self.db.scalar('SELECT COUNT(*) FROM messages m WHERE room_id=? AND id>? AND user_id<>? AND removed=0 AND NOT EXISTS(SELECT 1 FROM message_hides WHERE message_id=m.id AND user_id=?)',(row['id'],row['last_read_id'],uid,uid)))
-            row['pinned']=bool(row.get('pinned_at'))
-            if row['kind']=='private':
-                name=await self.db.scalar('SELECT u.nickname FROM members m JOIN users u ON u.id=m.user_id WHERE room_id=? AND user_id<>? LIMIT 1',(row['id'],uid))
-                if name:row['name']=name
-                # 私聊才计算 peer_id / blocked；群聊固定 false。
-                pair=row.get('pair') or ''
-                a,b=pair.split(':') if ':' in pair else ('','')
-                try:peer=int(a) if int(a)!=uid else int(b)
-                except ValueError:peer=0
-                row['peer_id']=peer
-                row['blocked']=bool(peer and await self.db.first('SELECT 1 FROM blocks WHERE user_id=? AND target=?',(uid,peer)))
-            else:
-                row['peer_id']=0
-                row['blocked']=False
-        # 排序：置顶在前，再按最近消息倒序。
-        rows.sort(key=lambda r:(0 if r.get('pinned') else 1, -(r.get('pinned_at') or 0), -(r.get('last_at') or 0), -r['id']))
-        if await self.db.scalar('SELECT role FROM users WHERE id=?',(uid,)) in STAFF:
+            await self._decorate_room(row,uid)
+        if is_staff:
             have={row['id'] for row in rows}
             for row in await self.db.all('SELECT '+columns+" FROM rooms r WHERE support=1 AND COALESCE(support_status,'open')='open' ORDER BY id",(uid,uid)):
                 if row['id'] not in have:row.update(role='member',muted=0,last_read_id=0,unread=0,via_pool=True,pinned=False,pinned_at=0,blocked=False,peer_id=0);rows.append(row)
-        return json_response({'joined':rows,'general':await self.db.first('SELECT r.*,(SELECT COUNT(*) FROM members WHERE room_id=r.id) count FROM rooms r WHERE id=1'),'college':await self.db.scalar('SELECT college FROM users WHERE id=?',(uid,))})
+        # 用户的在聊客服会话：列表里不显示，但聊天窗/入口要靠它恢复与提示未读。
+        my_support=None
+        if not is_staff:
+            ms=await self.db.first("SELECT "+columns+",m.role,m.muted,m.last_read_id FROM rooms r JOIN members m ON m.room_id=r.id WHERE m.user_id=? AND r.support=1 AND COALESCE(r.support_status,'open')='open' ORDER BY r.id DESC LIMIT 1",(uid,uid,uid))
+            if ms:await self._decorate_room(ms,uid);my_support=ms
+        return json_response({'joined':rows,'my_support':my_support,'general':await self.db.first('SELECT r.*,(SELECT COUNT(*) FROM members WHERE room_id=r.id) count FROM rooms r WHERE id=1'),'college':await self.db.scalar('SELECT college FROM users WHERE id=?',(uid,))})
 
     async def cf_pin_room(self,r):
         """置顶 / 取消置顶：只动当前用户这一行 room_pins。"""
@@ -237,7 +258,13 @@ class CommunityApi:
         d=await json_body(r);rid=int_param(d,'room_id');member,room=await self.cf_community_member(uid,rid);require(not member['muted'],'你在该群已被禁言',403)
         body=ValidationMixin.text(d.get('body'),2000,'消息');key=d.get('key');require(isinstance(key,str) and 1<=len(key)<=100,'缺少消息标识')
         private=room['kind']=='private'
-        if private:require(not await self.db.first('SELECT 1 FROM blocks b JOIN members p ON p.room_id=? AND p.user_id<>? WHERE (b.user_id=? AND b.target=p.user_id) OR (b.user_id=p.user_id AND b.target=?)',(rid,uid,uid,uid)),'该会话已被屏蔽',403)
+        if private and not room['support']:
+            # 好友门禁：同意好友申请之前，私聊发不出去（对方仍可读历史）。
+            # 客服会话（转角客服）不在此列——顾客/客服无需互为好友即可沟通，
+            # 否则双方都发不出消息，客服功能直接不可用。
+            peer=await self.db.first('SELECT user_id FROM members WHERE room_id=? AND user_id<>? LIMIT 1',(rid,uid))
+            require(peer and await self.cf_is_friend(uid,peer['user_id']),'先加对方为好友才能聊天',403)
+        if private and not room['support']:require(not await self.db.first('SELECT 1 FROM blocks b JOIN members p ON p.room_id=? AND p.user_id<>? WHERE (b.user_id=? AND b.target=p.user_id) OR (b.user_id=p.user_id AND b.target=?)',(rid,uid,uid,uid)),'该会话已被屏蔽',403)
         mark,stored=await self.cf_community_scan(body,private);await self.require_capacity()
         guard="""SELECT 1 FROM members m JOIN rooms r ON r.id=m.room_id JOIN users u ON u.id=m.user_id WHERE m.room_id=? AND m.user_id=? AND m.muted=0 AND u.status='active' AND (r.support=0 OR u.role NOT IN ('admin','support','developer') OR r.assignee=u.id) AND (r.kind<>'private' OR NOT EXISTS(SELECT 1 FROM blocks b JOIN members p ON p.room_id=r.id AND p.user_id<>u.id WHERE (b.user_id=u.id AND b.target=p.user_id) OR (b.user_id=p.user_id AND b.target=u.id)))"""
         stmts=[]
@@ -246,6 +273,15 @@ class CommunityApi:
                       ("UPDATE rooms SET support_status='open',support_closed_at=0,support_closed_by='',assignee=0 WHERE id=?",(rid,)),
                       ('UPDATE members SET last_read_id=0 WHERE room_id=?',(rid,))]
         stmts.append(('INSERT OR IGNORE INTO messages(room_id,user_id,body,created,request_key,moderation) VALUES(?,?,?,?,?,?)',(rid,uid,body,time.time(),key,stored)))
+        # 客服会话给对方发通知：客服回复→通知客户；客户发消息→通知受理客服。
+        # 因为客服房不再进聊天列表，只能靠通知把对方拉回来。
+        if room['support']:
+            srole=await self.db.scalar('SELECT role FROM users WHERE id=?',(uid,))
+            if srole in STAFF:
+                cust=await self.db.scalar("SELECT m.user_id FROM members m JOIN users u ON u.id=m.user_id WHERE m.room_id=? AND u.role NOT IN ('admin','support','developer') LIMIT 1",(rid,))
+                if cust:stmts.append(('INSERT INTO notifications(user_id,kind,body,ticket_id,created) VALUES(?,?,?,?,?)',(cust,'support_reply',f'客服回复了你的咨询：{body[:50]}',room['ticket_id'],time.time())))
+            elif room['assignee']:
+                stmts.append(('INSERT INTO notifications(user_id,kind,body,ticket_id,created) VALUES(?,?,?,?,?)',(room['assignee'],'support_reply',f'咨询有新消息：{body[:50]}',room['ticket_id'],time.time())))
         await self.db.guarded_batch(guard,(rid,uid),stmts,message='会话权限已变化，请重试')
         return json_response({'ok':True,'moderation':mark})
 

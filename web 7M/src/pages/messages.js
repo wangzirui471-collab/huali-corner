@@ -170,11 +170,18 @@ function renderRoomList(rooms, notices, activeId){
     `<span class="wx-room-main"><span class="wx-room-top"><b>订单与售后通知</b></span>`+
     `<span class="wx-room-preview">${notices.unread?notices.unread+' 条未读':'全部已读'}</span></span>`+
     (notices.unread?`<i class="wx-badge">${notices.unread}</i>`:'')+`</button>`+
-    // 「在线客服」只是入口：已经有客服会话的人直接看会话，不再重复摆一个按钮。
-    (state.me?.role==='user' && !rooms.joined.some(r=>r.support)
-      ? `<button class="wx-room" data-action="chat-support" data-name="在线客服"><span class="wx-avatar support" data-tone="support">${icon('message')}</span>`+
-        `<span class="wx-room-main"><span class="wx-room-top"><b>在线客服</b></span>`+
-        `<span class="wx-room-preview">先提交问题，受理后可实时沟通</span></span></button>`
+    // 客服会话不进聊天列表，统一走这个入口：有进行中的咨询显示「我的客服」并带未读，
+    // 没有则显示「在线客服」。点进去复用 /support/room（已存在则恢复同一会话）。
+    (state.me?.role==='user'
+      ? (()=>{
+          const ms=rooms.my_support, unread=ms&&ms.unread?ms.unread:0;
+          const label=ms?'我的客服':'在线客服';
+          const preview=ms?(unread?`客服有 ${unread} 条新消息`:'咨询进行中，点此继续'):'先提交问题，受理后可实时沟通';
+          return `<button class="wx-room" data-action="chat-support" data-name="${label}"><span class="wx-avatar support" data-tone="support">${icon('message')}</span>`+
+            `<span class="wx-room-main"><span class="wx-room-top"><b>${label}</b></span>`+
+            `<span class="wx-room-preview">${preview}</span></span></button>`+
+            (unread?`<i class="wx-badge">${unread}</i>`:'');
+        })()
       : '')+
     (joined.map(r => roomItem(r, activeId)).join('') ||
       `<p class="muted wx-empty-tip">还没有会话<br>去社区加入群聊，或在商品页联系卖家</p>`);
@@ -358,7 +365,10 @@ export async function chats(roomId){
   // 三个处理器需要拿当前房间 / 最新列表来刷新。
   state.rooms = rooms; state.notices = notices;
   const noticeView = String(roomId) === 'notice';
-  const room = noticeView ? null : rooms.joined.find(r => r.id === Number(roomId));
+  // 客服会话不在 joined 里，要从 my_support 恢复，否则直接打开 messages/<id> 会读不到房间。
+  const room = noticeView ? null :
+    (rooms.joined.find(r => r.id === Number(roomId)) ||
+     (rooms.my_support && rooms.my_support.id === Number(roomId) ? rooms.my_support : null));
   // rooms 里的 role 是我在这群的群角色，补进 room 供「移除消息」判断。
   if (room){
     room.myRole = room.role;
@@ -388,7 +398,8 @@ const NOTE_META = {
   order_updated: ['bag', 'info'], order_change_result: ['refresh', 'info'],
   order_reschedule: ['refresh', 'info'], order_handover: ['check', 'info'],
   order_timeout: ['close', 'mute'],
-  product_moderate: ['alert', 'danger'], product_review: ['check', 'ok']
+  product_moderate: ['alert', 'danger'], product_review: ['check', 'ok'],
+  support_reply: ['message', 'info']
 };
 
 // 每条通知点进去该落到哪。按「引用越精确越优先」：
