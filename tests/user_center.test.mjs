@@ -58,8 +58,10 @@ check('资料表单 id', form.includes('id="user-profile-form"'));
 check('昵称字段', form.includes('name="nickname"'));
 check('版本号隐藏域带真实版本', form.includes('name="profile_version" value="3"'));
 check('版本号在表单内', form.indexOf('name="profile_version"') < form.indexOf('name="nickname"'));
-check('学院只读', form.includes('id="user-college"') && form.includes('readonly'));
+check('学院只读', form.includes('class="uc-readonly"') && !form.includes('name="college"'));
 check('反馈区存在', form.includes('data-user-profile-feedback'));
+check('设置行结构（标签 + 控件）', form.includes('class="uc-row') && form.includes('uc-label'));
+check('头像表单左预览右操作', userAvatarForm(me).includes('uc-avatar-body'));
 
 // 5. 头像表单：确认按钮默认隐藏（上传前不能点）
 const avatar = userAvatarForm(me);

@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>个人资料与头像 · 改版线框</title>
+<style>
+:root{
+  --ink:#1a1a1a; --ink-2:#3f3f46; --muted:#8a8a93; --faint:#b4b4bb;
+  --line:#f0f0f2; --line-2:#e6e6e9;
+  --bg:#ffffff; --canvas:#fafafa;
+  --brand:#ffcc38; --brand-ink:#2b2000; --brand-soft:#fff9e8;
+  --ctl:#f6f6f7;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);color:var(--ink-2);
+  font:14px/1.7 "PingFang SC","Microsoft YaHei",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+h1,h2,h3,p{margin:0}
+a{color:inherit;text-decoration:none}
+
+/* ---------- 站点导航（保持不变） ---------- */
+.site{background:#fff;border-bottom:1px solid var(--line)}
+.site .in{max-width:1080px;margin:0 auto;padding:0 24px;height:64px;display:flex;align-items:center;gap:22px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--ink);font-size:17px}
+.logo i{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#ffcc38,#f5b21a);display:block}
+.search{flex:1;max-width:400px;display:flex;align-items:center;gap:8px;background:#f6f6f7;
+  border:1px solid var(--line-2);border-radius:6px;padding:0 12px;height:38px;color:var(--faint);font-size:13.5px}
+.site .right{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:13.5px;color:#5c5c66}
+.pill-user{display:flex;align-items:center;gap:7px;background:var(--brand);color:var(--brand-ink);
+  height:36px;padding:0 12px 0 5px;border-radius:18px;font-weight:600}
+.pill-user .av{width:26px;height:26px;border-radius:50%;background:#fff;display:grid;place-items:center;
+  font-size:12px;color:#8a6a00;font-weight:700}
+.subnav{background:#fff;border-bottom:1px solid var(--line)}
+.subnav .in{max-width:1080px;margin:0 auto;padding:0 24px;display:flex;align-items:center;gap:26px;height:48px}
+.subnav a{font-size:14px;color:#5c5c66}
+.subnav a.on{color:var(--ink);font-weight:600;position:relative}
+.subnav a.on::after{content:"";position:absolute;left:0;right:0;bottom:-13px;height:2px;background:var(--brand)}
+.subnav .btn-pub{margin-left:auto;background:var(--brand);color:var(--brand-ink);font-weight:600;
+  height:34px;padding:0 14px;border-radius:6px;display:inline-flex;align-items:center;gap:6px;font-size:13.5px}
+
+/* ---------- 页面骨架：去掉大圆角卡片，改全宽分区 + 细线 ---------- */
+.page{max-width:1080px;margin:0 auto;padding:0 24px 80px}
+.page-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:26px 0 18px}
+.page-head h1{font-size:20px;font-weight:700;color:var(--ink);letter-spacing:-.2px}
+.page-head .desc{font-size:12.5px;color:var(--muted);margin-top:3px}
+.page-head .save{background:var(--brand);color:var(--brand-ink);font-weight:600;height:38px;padding:0 20px;
+  border:0;border-radius:6px;font-size:14px;cursor:pointer}
+
+.board{background:#fff}
+/* 分区标题 */
+.sec-head{display:flex;align-items:baseline;justify-content:space-between;padding:22px 0 10px}
+.sec-head h2{font-size:14px;font-weight:700;color:var(--ink)}
+.sec-head span{font-size:12px;color:var(--faint)}
+
+/* 资料预览区（对应抖音个人主页头部） */
+.profile-preview{display:flex;align-items:center;gap:18px;padding:8px 0 22px;border-bottom:1px solid var(--line)}
+.profile-preview .big{width:76px;height:76px;border-radius:50%;background:var(--brand-soft);
+  display:grid;place-items:center;font-size:26px;font-weight:700;color:#a07d00;flex:none}
+.profile-preview .who b{display:block;font-size:19px;font-weight:700;color:var(--ink);line-height:1.4}
+.profile-preview .who p{font-size:13px;color:var(--muted);margin-top:3px}
+.profile-preview .who .tag{display:inline-block;margin-top:7px;font-size:12px;color:#7a5f00;
+  background:var(--brand-soft);border-radius:4px;padding:1px 8px}
+
+/* 设置行 */
+.rows{background:#fff}
+.row{display:flex;align-items:center;gap:24px;min-height:60px;padding:10px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row .label{flex:none;width:132px;color:#5c5c66;font-size:14px}
+.row .label small{display:block;font-size:11.5px;color:var(--faint);line-height:1.5}
+.row .ctl{flex:1;display:flex;justify-content:flex-end;align-items:center;gap:10px;min-width:0}
+.row .ctl input,.row .ctl select{width:100%;max-width:340px;height:38px;padding:0 12px;font:inherit;font-size:14px;
+  color:var(--ink);background:#fff;border:1px solid var(--line-2);border-radius:6px;outline:none}
+.row .ctl input:focus,.row .ctl select:focus{border-color:var(--brand)}
+.row .ctl input::placeholder{color:var(--faint)}
+.row .ctl .readonly{color:var(--muted);font-size:13.5px}
+.row .hint{flex:none;width:100%;max-width:340px;font-size:12px;color:var(--faint);text-align:left;margin-top:-2px}
+.row.stacked{display:block}
+.row.stacked .label{width:auto;margin-bottom:8px}
+.row.stacked .ctl{justify-content:flex-start}
+.row.stacked textarea{width:100%;min-height:88px;padding:10px 12px;font:inherit;font-size:14px;line-height:1.7;
+  color:var(--ink);background:#fff;border:1px solid var(--line-2);border-radius:6px;outline:none;resize:vertical}
+.row.stacked textarea:focus{border-color:var(--brand)}
+
+/* 头像分组：左预览 右操作 */
+.avatar-group{display:flex;gap:32px;padding:6px 0 24px;border-bottom:1px solid var(--line)}
+.avatar-group .left{flex:none;width:140px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.avatar-group .left .av{width:104px;height:104px;border-radius:50%;background:var(--brand-soft);
+  display:grid;place-items:center;font-size:34px;font-weight:700;color:#a07d00}
+.avatar-group .left small{font-size:11.5px;color:var(--faint)}
+.avatar-group .right{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:12px}
+.avatar-group .file{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+.avatar-group .file .btn-ghost{border:1px solid var(--line-2);background:#fff;height:34px;padding:0 14px;
+  border-radius:6px;font-size:13px;color:var(--ink-2);cursor:pointer}
+.avatar-group .ops{display:flex;flex-wrap:wrap;gap:10px}
+.btn-primary{background:var(--brand);color:var(--brand-ink);font-weight:600;height:36px;padding:0 16px;
+  border:0;border-radius:6px;font-size:13.5px;cursor:pointer}
+.btn-ghost{background:#fff;border:1px solid var(--line-2);color:var(--ink-2);height:36px;padding:0 16px;
+  border-radius:6px;font-size:13.5px;cursor:pointer}
+.btn-text{background:none;border:0;color:var(--muted);font-size:13px;cursor:pointer;padding:0 2px}
+.avatar-group .note{font-size:12px;color:var(--faint);line-height:1.7}
+
+/* 底部操作 */
+.actions{display:flex;align-items:center;gap:12px;padding:22px 0 0}
+.actions .tip{margin-left:auto;font-size:12px;color:var(--faint)}
+
+/* 标注：用标题前的序号，不用浮动气泡（浮动会被右边缘裁掉） */
+.mk{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;
+  border-radius:4px;background:#f1f2f4;color:#7b8087;font-size:11px;font-weight:600;margin-right:8px;
+  vertical-align:1px;letter-spacing:0}
+.mobile-frame{width:375px;background:#fff;border:1px solid var(--line-2);border-radius:12px;overflow:hidden;margin-top:20px}
+.mobile-frame .site{display:none}
+.mobile-frame .m-head{height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;
+  border-bottom:1px solid var(--line);font-size:15px;font-weight:600;color:var(--ink)}
+.mobile-frame .row{flex-direction:column;align-items:stretch;gap:6px;padding:12px 14px}
+.mobile-frame .row .label{width:auto}
+.mobile-frame .row .ctl{justify-content:flex-start}
+.mobile-frame .row .ctl input,.mobile-frame .row .ctl select{max-width:none}
+.mobile-frame .avatar-group{flex-direction:column;align-items:center;gap:14px;padding:16px 14px}
+</style>
+</head>
+<body>
+
+<!-- 站点导航：保持与全站一致，不改 -->
+<div class="site"><div class="in">
+  <div class="logo"><i></i>华立转角</div>
+  <div class="search">搜教材、球拍、耳机、宿舍好物</div>
+  <div class="right"><span>消息</span><span>取货清单</span><span class="pill-user"><span class="av">g</span>godfly</span></div>
+</div></div>
+<div class="subnav"><div class="in">
+  <a>逛逛</a><a>社区</a><a>论坛</a><a class="on">我的</a><a>帮助与客服</a>
+  <a class="btn-pub">＋ 发布闲置</a>
+</div></div>
+
+<div class="page">
+  <!-- ① 页面标题 + 主保存 -->
+  <div class="page-head">
+    <div>
+      <h1><span class="mk">①</span>个人资料</h1>
+      <div class="desc">资料会展示在你的公开主页，随时可以修改。</div>
+    </div>
+    <button class="save">保存资料</button>
+  </div>
+
+  <!-- ② 资料预览区（抖音个人主页头部） -->
+  <div class="sec-head" style="padding:0 0 8px"><h2><span class="mk">②</span>资料预览</h2><span>公开主页展示的样子</span></div>
+  <div class="profile-preview">
+    <div class="big">g</div>
+    <div class="who">
+      <b>godfly</b>
+      <p>计算机工程学院 · 学历：本科 · 在读状态：暂不填写</p>
+      <span class="tag">信誉 100 / 100 · 不是交易担保</span>
+    </div>
+  </div>
+
+  <!-- ③ 基本信息分组 -->
+  <div class="sec-head">
+    <h2><span class="mk">③</span>基本信息</h2><span>带 * 为必填</span>
+  </div>
+
+  <div class="board">
+    <div class="rows">
+      <div class="row">
+        <div class="label">昵称 *<small>展示在帖子和订单里</small></div>
+        <div class="ctl"><input value="godfly" placeholder="最多 24 个字"></div>
+      </div>
+      <div class="row">
+        <div class="label">专业<small>选填</small></div>
+        <div class="ctl"><input value="" placeholder="例如：软件工程"></div>
+      </div>
+      <div class="row">
+        <div class="label">学历层次</div>
+        <div class="ctl"><select><option>本科</option><option>专科</option></select></div>
+      </div>
+      <div class="row">
+        <div class="label">在读 / 毕业状态</div>
+        <div class="ctl"><select><option>暂不填写</option><option>在读</option><option>已毕业</option></select></div>
+      </div>
+      <div class="row">
+        <div class="label">学院</div>
+        <div class="ctl"><span class="readonly">计算机工程学院 · 学院由平台统一维护，不可自行修改</span></div>
+      </div>
+      <div class="row stacked">
+        <div class="label">个人简介<small>选填，最多 300 字</small></div>
+        <div class="ctl"><textarea placeholder="介绍一下你自己，或者写下你希望交易时对方注意的事。"></textarea></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ 头像分组 -->
+  <div class="sec-head">
+    <h2><span class="mk">④</span>我的头像</h2><span>上传后先预览，确认才公开</span>
+  </div>
+
+  <div class="board">
+    <div class="avatar-group">
+      <div class="left">
+        <div class="av">g</div>
+        <small>当前头像</small>
+      </div>
+      <div class="right">
+        <div class="file">
+          <button class="btn-ghost">选择文件</button>
+          <span>未选择任何文件</span>
+        </div>
+        <div class="note">支持 JPEG、PNG、WebP，原文件不超过 2 MiB；不支持动画与多帧图片。</div>
+        <div class="ops">
+          <button class="btn-primary">上传并预览</button>
+          <button class="btn-ghost">本地预览</button>
+          <button class="btn-ghost">取消本次选择</button>
+          <button class="btn-text">移除当前头像</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑤ 底部操作 -->
+  <div class="actions">
+    <button class="btn-primary" style="height:40px;padding:0 22px">保存资料</button>
+    <button class="btn-ghost" style="height:40px;padding:0 22px">重新载入资料</button>
+    <span class="tip">保存前不会公开任何修改</span>
+  </div>
+</div>
+
+<!-- 移动端结构 -->
+<div style="max-width:1080px;margin:0 auto;padding:0 24px 60px">
+  <div class="sec-head" style="padding-top:0"><h2>移动端（375px）</h2><span>标签换行到控件上方，触控高 ≥44px</span></div>
+  <div class="mobile-frame">
+    <div class="m-head"><span>‹ 返回</span><span>个人资料</span><span style="color:#a07d00">保存</span></div>
+    <div style="display:flex;align-items:center;gap:14px;padding:16px 14px;border-bottom:1px solid var(--line)">
+      <div style="width:60px;height:60px;border-radius:50%;background:var(--brand-soft);display:grid;place-items:center;font-size:22px;font-weight:700;color:#a07d00">g</div>
+      <div><b style="display:block;font-size:17px;color:#1a1a1a">godfly</b><p style="font-size:12px;color:var(--muted)">计算机工程学院 · 本科</p></div>
+    </div>
+    <div class="row"><div class="label">昵称 *</div><div class="ctl"><input value="godfly"></div></div>
+    <div class="row"><div class="label">专业</div><div class="ctl"><input placeholder="例如：软件工程"></div></div>
+    <div class="row"><div class="label">学历层次</div><div class="ctl"><select><option>本科</option></select></div></div>
+    <div class="avatar-group">
+      <div style="width:80px;height:80px;border-radius:50%;background:var(--brand-soft);display:grid;place-items:center;font-size:26px;font-weight:700;color:#a07d00">g</div>
+      <div style="display:flex;flex-direction:column;gap:10px;width:100%">
+        <button class="btn-ghost" style="width:100%;height:44px">选择文件</button>
+        <button class="btn-primary" style="width:100%;height:44px">上传并预览</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
