@@ -45,6 +45,8 @@ export const clicks = {
   }
 };
 
+let pendingCheckout = null;
+
 export const submits = {
   // 卖家只能改交付时间（后端也只放行这一项），所以提交内容必须按角色裁剪，
   // 否则卖家打开弹窗、一个字都不改直接保存，也会被「仅买家可调整订单中的商品」拒掉。
@@ -73,11 +75,17 @@ export const submits = {
       address:d.address,
       appointment:new Date(d.appointment).getTime()/1000,
       // 同一笔订单重复提交时用它做幂等，避免生成两张单。
-      key:uid()
+      key:null
     };
     // 从「求购撮合」进来的订单带上求购编号，后端据此记 5% 撮合服务费。
     if (state.pendingWant) payload.want_id = state.pendingWant.want;
+    const fingerprint = JSON.stringify({...payload, buyer:state.me?.id});
+    if (!pendingCheckout || pendingCheckout.fingerprint !== fingerprint) {
+      pendingCheckout = {fingerprint, key:uid()};
+    }
+    payload.key = pendingCheckout.key;
     await api('/checkout', payload);
+    pendingCheckout = null;
     state.cart = [];
     state.pendingWant = null;
     saveCart();
