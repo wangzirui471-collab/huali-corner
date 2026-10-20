@@ -4,7 +4,7 @@ import { state } from '../core/state.js';
 import { api } from '../core/http.js';
 import { go, render } from '../core/nav.js';
 import { needLogin } from '../auth/login.js';
-import { forumState,boardOf,postsURL,refreshForumReplies } from '../pages/forum.js';
+import { forumState,boardOf,postsURL,wantsURL,FORUM_PAGE,refreshForumReplies } from '../pages/forum.js';
 import { postRow,replyRow } from '../components/forum.js';
 
 function focusReply(){
@@ -26,11 +26,11 @@ export const clicks={
     try{localStorage.setItem('hc-forum-layout',forumState.layout);}catch{}
   },
   'forum-more':async b=>{
-    b.disabled=true;const rid=state.renderId,url=postsURL(forumState.rows.length),more=await api(url);
+    b.disabled=true;const rid=state.renderId,url=forumState.board==='wants'?wantsURL(forumState.rows.length):postsURL(forumState.rows.length),more=await api(url);
     if(rid!==state.renderId||!$('#forum-feed'))return;
     const seen=new Set(forumState.rows.map(p=>p.id)),rows=more.filter(p=>!seen.has(p.id));
     forumState.rows.push(...rows);$('#forum-feed').insertAdjacentHTML('beforeend',rows.map(postRow).join(''));
-    if(more.length<20)b.parentElement.innerHTML='<span>已显示全部讨论</span>';
+    if(more.length<FORUM_PAGE)b.parentElement.innerHTML='<span>已显示全部讨论</span>';
   },
   'forum-focus-reply':focusReply,
   'forum-target-reply':(b,id)=>{
@@ -45,7 +45,7 @@ export const clicks={
     if(rid!==state.renderId||!$('#forum-replies'))return;
     const seen=new Set(forumState.replies.map(c=>c.id)),more=rows.filter(c=>!seen.has(c.id)),start=forumState.replies.length;
     forumState.replies.push(...more);$('#forum-replies').insertAdjacentHTML('beforeend',more.map((c,i)=>replyRow(c,start+i+1)).join(''));
-    if(rows.length<20)b.remove();
+    if(rows.length<FORUM_PAGE)b.remove();
   },
   'forum-share':async()=>{await navigator.clipboard.writeText(location.href);toast('帖子链接已复制');}
 };
@@ -67,7 +67,12 @@ export const submits={
   },
   'forum-want-form':async({d})=>{
     if(!needLogin())return;
-    const w=await api('/wants',{keyword:d.title,budget:d.budget,description:d.body});toast('求购已发布');go('forum-want/'+w.id);
+    // 后端 /wants 的 budget 是整数分；表单拿到的是元字符串，必须在这里换算，
+    // 否则 cents() 的类型校验会直接 400（社区页的发布框一直是对的）。
+    const yuan=Number(d.budget);
+    if(!Number.isFinite(yuan)||yuan<=0)throw Error('请输入有效预算');
+    const w=await api('/wants',{keyword:d.title,budget:Math.round(yuan*100),description:d.body});
+    toast('求购已发布');go('forum-want/'+w.id);
   },
   'forum-reply-form':async({form,d})=>{
     if(!needLogin())return;

@@ -700,8 +700,22 @@ class CommunityService(ValidationMixin):
             wid=c.execute('INSERT INTO wants(user_id,keyword,budget,description,status,created) VALUES(?,?,?,?,?,?)',(u,keyword,budget,desc,'open',time.time())).lastrowid
         return self.want(u,wid)
 
-    def wants(self,u=None):
-        return [self.want(u,r['id']) for r in self.rows('SELECT id FROM wants ORDER BY id DESC LIMIT 50')]
+    def wants(self,u=None,q='',limit=50,offset=0):
+        """求购列表：搜索与分页必须在 SQL 里做。
+
+        旧实现固定 LIMIT 50，论坛拿回数组后再在 JS 里 filter——
+        第 51 条起的求购永远搜不到。现在 q/limit/offset 都可选，
+        不传时保持原来的「最近 50 条」行为，兼容社区首页。
+        """
+        q=str(q or '').strip()
+        limit=max(1,min(int(limit or 50),200));offset=max(0,int(offset or 0))
+        sql='SELECT id FROM wants';args=[]
+        if q:
+            sql+=' WHERE keyword LIKE ? OR description LIKE ?'
+            args+=['%'+q+'%','%'+q+'%']
+        sql+=' ORDER BY id DESC LIMIT ? OFFSET ?'
+        args+=[limit,offset]
+        return [self.want(u,r['id']) for r in self.rows(sql,tuple(args))]
 
     def want(self,u,wid):
         w=self.row('SELECT w.*,u.nickname FROM wants w JOIN users u ON u.id=w.user_id WHERE w.id=?',(wid,))

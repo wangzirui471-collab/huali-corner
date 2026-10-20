@@ -344,8 +344,15 @@ class CommunityApi:
                 except DomainError:
                     if attempt==3:raise
             return json_response(await self.cf_community_want_dto(uid,wid))
-        uid,_=await sessions.current_user_id(self.db,r)
-        return json_response([await self.cf_community_want_dto(uid,w['id']) for w in await self.db.all('SELECT id FROM wants ORDER BY id DESC LIMIT 50')])
+        uid,_=await sessions.current_user_id(self.db,r);q=query_of(r)
+        search=str(q.get('q') or '').strip()
+        limit=max(1,min(int_param(q,'limit',False) or 50,200));offset=max(0,int_param(q,'offset',False) or 0)
+        sql='SELECT id FROM wants';args=[]
+        if search:
+            sql+=' WHERE keyword LIKE ? OR description LIKE ?'
+            args+=['%'+search+'%','%'+search+'%']
+        sql+=' ORDER BY id DESC LIMIT ? OFFSET ?';args+=[limit,offset]
+        return json_response([await self.cf_community_want_dto(uid,w['id']) for w in await self.db.all(sql,tuple(args))])
 
     async def cf_community_want(self,r):
         uid,_=await sessions.current_user_id(self.db,r);return json_response(await self.cf_community_want_dto(uid,int_param(query_of(r),'id')))

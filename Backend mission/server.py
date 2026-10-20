@@ -95,7 +95,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond({'user':public,'products':m.products(self.optional_user(),{'seller':str(who)})})
             if p=='/api/posts' and method=='GET':return self.respond(m.posts(query.get('topic',''),query.get('limit','20'),query.get('offset','0'),query))
             if p=='/api/comments' and method=='GET':return self.respond(m.comments(int(query['id']),query.get('before'),query.get('limit',100),query.get('after'),query.get('order','desc')))
-            if p=='/api/wants' and method=='GET':return self.respond(m.wants(self.optional_user()))
+            if p=='/api/wants' and method=='GET':return self.respond(m.wants(self.optional_user(),query.get('q',''),query.get('limit',50),query.get('offset',0)))
             if p=='/api/want' and method=='GET':return self.respond(m.want(self.optional_user(),int(query['id'])))
             if p.startswith('/media/ua_'):
                 # 头像必须优先分流：它们不登记在旧 uploads 表里，落到下面那条通用查询
