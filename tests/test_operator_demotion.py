@@ -1,4 +1,5 @@
 """Local account demotion changes only its target and preserves business records."""
+from contextlib import closing
 import sqlite3
 import shutil
 import subprocess
@@ -16,7 +17,7 @@ class OperatorDemotionTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.db = Path(self.tmp.name) / 'market.sqlite3'
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.executescript('''
                 CREATE TABLE users(id INTEGER PRIMARY KEY,nickname TEXT,role TEXT,status TEXT);
                 CREATE TABLE sessions(token TEXT,user_id INTEGER,expires REAL);
@@ -34,7 +35,7 @@ class OperatorDemotionTests(unittest.TestCase):
             ''')
 
     def query(self, sql, parameters=()):
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             return connection.execute(sql, parameters).fetchall()
 
     def test_demote_backup_sessions_handoff_audit_and_idempotency(self):
@@ -49,7 +50,7 @@ class OperatorDemotionTests(unittest.TestCase):
         self.assertEqual(self.query('SELECT * FROM orders'), [(1,3,2,'paid')])
         self.assertEqual(self.query('SELECT * FROM products'), [(1,2,'available')])
         self.assertEqual(self.query('SELECT target,type FROM audit'), [(2,'operator_role_demotion')])
-        with sqlite3.connect(result['backup_path']) as backup:
+        with closing(sqlite3.connect(result['backup_path'])) as backup, backup:
             self.assertEqual(backup.execute('SELECT role FROM users WHERE id=2').fetchone()[0], 'admin')
             self.assertEqual(backup.execute('SELECT COUNT(*) FROM sessions').fetchone()[0], 2)
         again = demote_account(self.db, 'godfly')
@@ -59,7 +60,7 @@ class OperatorDemotionTests(unittest.TestCase):
     def test_missing_duplicate_and_wrong_id_do_not_mutate(self):
         with self.assertRaises(ValueError):
             demote_account(self.db, 'not-found')
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute("INSERT INTO users VALUES(4,'GodFly','support','active')")
         with self.assertRaisesRegex(ValueError, '多个'):
             demote_account(self.db, 'godfly')
@@ -72,7 +73,7 @@ class OperatorDemotionTests(unittest.TestCase):
         self.assertEqual(self.query('SELECT role FROM users WHERE id=4'), [('user',)])
 
     def test_last_active_admin_and_incorrect_data_path_are_rejected(self):
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute("UPDATE users SET role='user' WHERE id=1")
         with self.assertRaisesRegex(ValueError, '最后'):
             demote_account(self.db, 'godfly')
@@ -82,7 +83,7 @@ class OperatorDemotionTests(unittest.TestCase):
         self.assertFalse(missing.exists())
 
     def test_failure_rolls_back_every_change(self):
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute("CREATE TRIGGER audit_failure BEFORE INSERT ON audit BEGIN SELECT RAISE(ABORT,'simulated failure'); END")
         with self.assertRaises(sqlite3.DatabaseError):
             demote_account(self.db, 'godfly')
@@ -97,17 +98,18 @@ class OperatorDemotionTests(unittest.TestCase):
         shutil.copyfile(root / 'scripts/demote_staff.py', tool / 'demote_staff.py')
         shutil.copyfile(root / 'Backend mission/app/staff/roles.py', tool / 'roles.py')
         result = subprocess.run([sys.executable, str(tool / 'demote_staff.py'), '--data', str(self.db.parent)],
-                                cwd=tool, capture_output=True, text=True, timeout=10)
+                                cwd=tool, capture_output=True, text=True, encoding='utf-8', timeout=10,
+                                env={**__import__('os').environ, 'PYTHONUTF8':'1'})
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('已降为普通用户', result.stdout)
         self.assertEqual(self.query('SELECT role FROM users WHERE id=2'), [('user',)])
 
     def test_wal_database_backup_and_demotion(self):
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute('PRAGMA journal_mode=WAL')
         result = demote_account(self.db, 'godfly')
         self.assertTrue(result['changed'])
-        with sqlite3.connect(result['backup_path']) as backup:
+        with closing(sqlite3.connect(result['backup_path'])) as backup, backup:
             self.assertEqual(backup.execute('PRAGMA integrity_check').fetchone()[0], 'ok')
             self.assertEqual(backup.execute('SELECT role FROM users WHERE id=2').fetchone()[0], 'admin')
 

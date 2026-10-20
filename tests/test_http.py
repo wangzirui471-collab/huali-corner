@@ -43,7 +43,16 @@ class HttpTests(unittest.TestCase):
             root=Path(root);web=root/'web';web.mkdir()
             outside=root/'web-private';outside.mkdir();(outside/'secret.txt').write_text('private')
             (web/'index.html').write_text('home')
-            (web/'escape').symlink_to(outside,target_is_directory=True)
+            try:
+                (web/'escape').symlink_to(outside,target_is_directory=True)
+            except OSError as exc:
+                if getattr(exc, 'winerror', None) != 1314:
+                    raise
+                # Directory junctions exercise the same resolved-path boundary on
+                # Windows without enabling global developer mode or elevation.
+                import subprocess
+                subprocess.run(['cmd', '/c', 'mklink', '/J', str(web/'escape'), str(outside)],
+                               check=True, capture_output=True)
             with patch('server.WEB',web):
                 self.assertEqual(self.req('/')[0],200)
                 self.assertEqual(self.req('/..%2fweb-private/secret.txt')[0],404)

@@ -33,3 +33,8 @@ repair-wheels/
 Backend mission/python_modules/
 Backend mission/.wrangler/
 .venv-trial-broken-*/
+
+# 本地依赖与运行产物（不随仓库提交）
+Backend mission/node_modules/
+_ui_messages.png
+d1out.json
