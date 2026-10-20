@@ -1,5 +1,10 @@
 # 华立转角 · 计算机工程学院试点
 
+## 项目导航与本地文件整理
+
+当前模块与文件位置见 [项目文件说明](docs/PROJECT_STRUCTURE.md)，规范及需求来源见 [文档导航](docs/README.md)，下一阶段建议见 [后端评估](docs/BACKEND_REVIEW-2026-10-18.md)。本轮将没有正式代码引用的旧平铺文件保留到本机 `_local/`，没有删除原数据或改动业务接口。`app/seed.py` 与小程序 `app.js` 继续保留。
+
+
 **不同电脑共享数据（2026-10-17）**：商品和订单存入运行后端的数据库，其他同学需访问同一个后端网址。每人各自运行 `127.0.0.1` 会形成独立数据。见[共享数据与部署说明](docs/共享数据与部署说明-2026-10-17.md)与[本轮测试问题清单](docs/测试问题清单-2026-10-17.md)。本轮修复了数据库适配导致的备份失败、初始化总群未提交及提交异常被忽略的问题；尚未创建公网实例，MySQL 仍需独立集成验收。
 
 **main 商品下架修复（2026-10-17）**
@@ -32,9 +37,9 @@ huali-corner-trial/
 │   ├── server.py      HTTP 服务与路由
 │   ├── app/           业务模块（分层，见下）
 │   │   ├── market.py  Market 组合类：把下面各模块拼成一个对象
+│   │   ├── seed.py    虚构演示数据播种
 │   │   ├── core/      config(路径) database(Store) errors(异常与校验)
-│   │   └── account/ catalog/ trade/ community/ support/ ops/
-│   ├── seed.py        演示数据播种
+│   │   └── account/ catalog/ trade/ community/ support/ staff/ moderation/ ops/
 │   └── manage_trial.py render.yaml requirements.txt
 ├── web 7M/              前端：网页静态文件 + 小程序
 │   ├── index.html market.css styles.css public-demo.js

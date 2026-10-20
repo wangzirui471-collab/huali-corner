@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>华立转角 · 论坛改版线框预览</title>
+<style>
+:root{
+  --f-ink:#1f2329; --f-ink-2:#3d4450; --f-muted:#6b7280; --f-faint:#98a0ad;
+  --f-line:#ebedf0; --f-line-strong:#dfe3e8;
+  --f-bg:#fafbfc; --f-surface:#fff;
+  --f-accent:#4b5563; --f-action:#2f3437; --f-danger:#c0392b;
+  --r-card:8px; --r-ctl:6px;
+  --sh:0 1px 2px rgba(16,24,40,.04);
+  --t:background-color .14s ease-out,border-color .14s ease-out,color .14s ease-out;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--f-bg);color:var(--f-ink-2);
+  font:15px/1.75 "PingFang SC","Microsoft YaHei",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+h1,h2,h3,p,ul{margin:0}
+ul{padding-left:18px}
+.screen{max-width:1200px;margin:0 auto 0;padding:0 24px 56px}
+.screen-label{font-size:12px;letter-spacing:.14em;color:var(--f-faint);
+  padding:28px 0 10px;border-bottom:1px solid var(--f-line);margin-bottom:22px;text-transform:uppercase}
+
+/* 站点导航 */
+.site-nav{background:#fff;border-bottom:1px solid var(--f-line)}
+.site-nav .inner{max-width:1200px;margin:0 auto;padding:0 24px;height:64px;display:flex;align-items:center;gap:22px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:650;color:var(--f-ink)}
+.logo i{width:30px;height:30px;border-radius:8px;background:#e9ebee;display:block}
+.search{flex:1;max-width:420px;display:flex;align-items:center;gap:8px;background:#f5f6f8;
+  border:1px solid var(--f-line-strong);border-radius:var(--r-ctl);padding:0 12px;height:38px}
+.search span{color:var(--f-faint);font-size:13.5px}
+.site-nav .right{margin-left:auto;display:flex;align-items:center;gap:16px;font-size:13.5px;color:var(--f-muted)}
+.dot-avatar{width:30px;height:30px;border-radius:50%;background:#e9ebee;display:grid;place-items:center;
+  font-size:12px;color:#6b7280}
+
+/* 论坛 tab */
+.tabs{background:#fff;border-bottom:1px solid var(--f-line)}
+.tabs .inner{max-width:1200px;margin:0 auto;padding:0 24px;display:flex;gap:30px}
+.tabs a{padding:14px 0 12px;border-bottom:2px solid transparent;color:var(--f-muted);font-size:14.5px;transition:var(--t)}
+.tabs a.on{color:var(--f-ink);border-bottom-color:var(--f-ink);font-weight:650}
+.tabs a:last-child{margin-left:auto}
+
+.heading{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:30px 0 22px}
+.heading h1{font-size:27px;font-weight:650;color:var(--f-ink);letter-spacing:-.4px;line-height:1.3}
+.heading p{color:var(--f-muted);font-size:13.5px;margin-top:4px}
+.btn{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 16px;border-radius:var(--r-ctl);
+  border:1px solid var(--f-line-strong);background:#fff;color:var(--f-ink-2);font:inherit;font-size:14px;
+  cursor:pointer;transition:var(--t);white-space:nowrap}
+.btn:hover{border-color:#c9ced6;background:#fcfcfd}
+.btn.primary{background:var(--f-action);border-color:var(--f-action);color:#fff}
+.btn.primary:hover{background:#424849}
+.card{background:var(--f-surface);border:1px solid var(--f-line);border-radius:var(--r-card)}
+
+/* 板块 */
+.boards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.board{padding:20px;display:flex;flex-direction:column;min-height:196px}
+.board-top{display:flex;align-items:center;gap:10px}
+.board-top .ic{width:34px;height:34px;border:1px solid var(--f-line);border-radius:8px;display:grid;
+  place-items:center;color:var(--f-muted);font-size:15px}
+.board h2{font-size:17px;font-weight:650;color:var(--f-ink)}
+.board .desc{color:var(--f-muted);font-size:13px;margin:12px 0 14px;line-height:1.7}
+.board .posts{border-top:1px solid #f2f3f5;padding-top:12px;display:flex;flex-direction:column;gap:9px;flex:1}
+.board .posts a{display:flex;justify-content:space-between;gap:12px;font-size:13.5px;color:var(--f-ink-2);transition:var(--t)}
+.board .posts a:hover{color:var(--f-ink);text-decoration:underline;text-underline-offset:3px}
+.board .posts small{color:var(--f-faint);font-size:12px;white-space:nowrap}
+.board .more{margin-top:14px;font-size:12.5px;color:var(--f-muted);display:flex;gap:6px;align-items:center}
+
+/* 两栏 */
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 268px;gap:28px;align-items:start;margin-top:22px}
+.side{display:grid;gap:16px}
+.side-card{padding:18px 20px}
+.side-card h3{font-size:14.5px;font-weight:650;color:var(--f-ink);margin-bottom:10px}
+.side-card a,.side-card li{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;
+  color:var(--f-muted);padding:7px 0;transition:var(--t)}
+.side-card a:hover{color:var(--f-ink)}
+.side-card li{display:list-item;line-height:1.8}
+
+/* 列表 */
+.sec-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--f-line)}
+.sec-head h2{font-size:16px;font-weight:650;color:var(--f-ink)}
+.sec-head a{font-size:12.5px;color:var(--f-muted)}
+.row{padding:20px 20px 18px;border-bottom:1px solid var(--f-line);display:flex;gap:24px;
+  align-items:flex-start;transition:var(--t);cursor:pointer}
+.row:hover{background:#fbfbfc}
+.row:last-child{border-bottom:0}
+.row-main{min-width:0;flex:1}
+.row-title-line{display:flex;align-items:flex-start;gap:8px}
+.pin{flex:none;display:flex;align-items:center;gap:6px;height:20px;font-size:12px;color:var(--f-faint)}
+.pin::before{content:"";width:2px;height:15px;background:#c3c8d0;border-radius:1px}
+.row h3{font-size:17px;font-weight:650;line-height:1.4;color:var(--f-ink);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.excerpt{color:var(--f-muted);font-size:13.5px;line-height:1.7;margin-top:7px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.meta{display:flex;align-items:center;gap:10px;margin-top:11px;font-size:12.5px;color:var(--f-faint);flex-wrap:wrap}
+.meta .who{display:flex;align-items:center;gap:6px;color:var(--f-muted)}
+.meta .av{width:18px;height:18px;border-radius:50%;background:#eceef1;display:grid;place-items:center;font-size:10px;color:#7c8490}
+.stats{flex:none;font-size:12.5px;color:var(--f-muted);display:flex;gap:14px;padding-top:4px;
+  font-variant-numeric:tabular-nums}
+
+/* 工具条 */
+.toolbar{display:flex;align-items:center;gap:24px;padding:0 20px;height:50px;border-bottom:1px solid var(--f-line)}
+.toolbar .sorts{display:flex;gap:22px;font-size:14px;color:var(--f-muted)}
+.toolbar .sorts button{background:none;border:0;font:inherit;color:inherit;cursor:pointer;padding:0;
+  height:50px;border-bottom:2px solid transparent;transition:var(--t)}
+.toolbar .sorts button.on{color:var(--f-ink);font-weight:650;border-bottom-color:var(--f-ink)}
+.toolbar .end{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--f-faint)}
+.switch{display:flex;border:1px solid var(--f-line-strong);border-radius:var(--r-ctl);overflow:hidden}
+.switch span{padding:5px 10px;font-size:12.5px;color:var(--f-muted);cursor:pointer;transition:var(--t)}
+.switch span.on{background:#f0f2f5;color:var(--f-ink)}
+.load-more{display:flex;justify-content:center;padding:22px}
+.load-more button{height:40px;padding:0 22px;border-radius:var(--r-ctl);border:1px solid var(--f-line-strong);
+  background:#fff;color:var(--f-ink-2);font:inherit;font-size:14px;cursor:pointer;transition:var(--t)}
+.load-more button:hover{background:#fcfcfd;border-color:#c9ced6}
+
+/* 详情 */
+.crumb{font-size:12.5px;color:var(--f-faint);padding:22px 0 14px;display:flex;gap:8px}
+.crumb b{font-weight:400;color:var(--f-muted)}
+.detail{display:grid;grid-template-columns:minmax(0,760px) 268px;gap:40px;align-items:start;justify-content:center}
+.topic-tag{font-size:12.5px;color:var(--f-muted)}
+.article h1{font-size:26px;font-weight:650;line-height:1.35;color:var(--f-ink);letter-spacing:-.3px;margin:8px 0 16px}
+.author{display:flex;align-items:center;gap:10px;padding-bottom:16px;border-bottom:1px solid var(--f-line)}
+.author .av{width:36px;height:36px;border-radius:50%;background:#eceef1;display:grid;place-items:center;
+  font-size:13px;color:#6b7280}
+.author b{font-size:15px;font-weight:600;color:var(--f-ink)}
+.author p{font-size:12.5px;color:var(--f-faint);display:flex;gap:8px;align-items:center}
+.lz{font-size:11.5px;color:var(--f-faint);border:1px solid var(--f-line);border-radius:4px;padding:0 5px;line-height:17px}
+.prose{font-size:16px;line-height:1.85;color:var(--f-ink-2);padding:20px 0 4px;white-space:pre-wrap;overflow-wrap:anywhere}
+.prose p+p{margin-top:1.05em}
+.acts{display:flex;gap:10px;padding:18px 0 26px;border-bottom:1px solid var(--f-line)}
+.reply-head{display:flex;align-items:baseline;justify-content:space-between;padding:22px 0 14px}
+.reply-head h2{font-size:16px;font-weight:650;color:var(--f-ink)}
+.reply-head h2 span{color:var(--f-faint);font-weight:400;margin-left:6px}
+.reply-head small{font-size:12.5px;color:var(--f-faint)}
+.floor{border:1px solid var(--f-line);border-radius:var(--r-card);background:#fff;padding:16px 18px;
+  display:flex;gap:16px;margin-bottom:12px;transition:var(--t)}
+.floor:hover{border-color:var(--f-line-strong)}
+.floor .no{flex:none;width:26px;font-size:12.5px;color:var(--f-faint);font-variant-numeric:tabular-nums;padding-top:2px}
+.floor .body{min-width:0;flex:1}
+.floor .fhead{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--f-faint)}
+.floor .fhead .av{width:22px;height:22px;border-radius:50%;background:#eceef1;display:grid;place-items:center;font-size:10px;color:#7c8490}
+.floor .fhead b{font-size:14px;font-weight:600;color:var(--f-ink-2)}
+.floor .fhead .reply{margin-left:auto;background:none;border:0;font:inherit;font-size:12.5px;
+  color:var(--f-muted);cursor:pointer;padding:0;transition:var(--t)}
+.floor .fhead .reply:hover{color:var(--f-ink)}
+.floor .ftext{font-size:14.5px;line-height:1.75;color:var(--f-ink-2);margin-top:8px;white-space:pre-wrap;overflow-wrap:anywhere}
+.quote{font-size:12.5px;color:var(--f-faint);border-left:2px solid var(--f-line-strong);padding-left:8px;margin-top:8px}
+.fold{background:none;border:0;font:inherit;font-size:12.5px;color:var(--f-muted);padding:8px 0 0;cursor:pointer}
+.composer{padding:20px;margin-top:10px}
+.composer h2{font-size:15px;font-weight:650;color:var(--f-ink)}
+.composer .ctx{font-size:12.5px;color:var(--f-faint);margin-top:4px}
+.composer textarea{width:100%;min-height:96px;border:0;border-bottom:1px solid var(--f-line-strong);
+  padding:12px 0;font:inherit;font-size:14.5px;line-height:1.75;color:var(--f-ink-2);resize:vertical;outline:none;
+  background:transparent;transition:var(--t)}
+.composer textarea:focus{border-bottom-color:var(--f-accent)}
+.composer .foot{display:flex;align-items:center;justify-content:space-between;margin-top:14px;gap:16px}
+.composer .foot small{font-size:12.5px;color:var(--f-faint)}
+.side-author{padding:20px;text-align:center}
+.side-author .av{width:56px;height:56px;border-radius:50%;background:#eceef1;display:grid;place-items:center;
+  font-size:18px;color:#6b7280;margin:0 auto 10px}
+.side-author b{display:block;font-size:15px;font-weight:600;color:var(--f-ink)}
+.side-author small{font-size:12.5px;color:var(--f-faint)}
+
+/* 个人中心 */
+.me{max-width:760px;margin:0 auto}
+.me-card{padding:0}
+.me-hero{display:flex;align-items:center;gap:14px;padding:20px}
+.me-hero .av{width:56px;height:56px;border-radius:50%;background:#eceef1;display:grid;place-items:center;font-size:18px;color:#6b7280}
+.me-hero b{font-size:18px;font-weight:650;color:var(--f-ink)}
+.me-hero p{font-size:12.5px;color:var(--f-muted)}
+.pill{display:inline-block;font-size:12px;color:var(--f-ink-2);background:#f2f3f5;border-radius:4px;
+  padding:1px 7px;margin-top:5px;font-variant-numeric:tabular-nums}
+.stats-strip{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--f-line)}
+.stats-strip div{padding:14px 0;text-align:center;border-right:1px solid var(--f-line)}
+.stats-strip div:last-child{border-right:0}
+.stats-strip small{display:block;font-size:12px;color:var(--f-muted)}
+.stats-strip b{font-size:17px;color:var(--f-ink);font-variant-numeric:tabular-nums}
+.orders-grid{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--f-line)}
+.orders-grid>div{padding:16px 20px}
+.orders-grid>div:first-child{border-right:1px solid var(--f-line)}
+.orders-grid h4{font-size:13px;font-weight:650;color:var(--f-ink);margin-bottom:8px}
+.orders-grid a{display:flex;justify-content:space-between;font-size:13px;color:var(--f-muted);padding:5px 0}
+.orders-grid a b{color:var(--f-ink);font-weight:600;font-variant-numeric:tabular-nums}
+.list-lines{border-top:1px solid var(--f-line)}
+.list-lines a{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;
+  font-size:14px;color:var(--f-ink-2);border-bottom:1px solid var(--f-line);transition:var(--t)}
+.list-lines a:last-child{border-bottom:0}
+.list-lines a:hover{background:#fbfbfc}
+.unread{width:6px;height:6px;border-radius:50%;background:#c0392b;display:inline-block;margin-right:8px}
+
+/* 消息 */
+.chat-row{display:flex;gap:12px;padding:16px 20px;border-bottom:1px solid var(--f-line);align-items:center;transition:var(--t)}
+.chat-row:hover{background:#fbfbfc}
+.chat-row .av{width:40px;height:40px;border-radius:50%;background:#eceef1;display:grid;place-items:center;font-size:14px;color:#6b7280}
+.chat-row .cm{min-width:0;flex:1}
+.chat-row .cm b{font-size:14.5px;font-weight:600;color:var(--f-ink);display:block}
+.chat-row .cm p{font-size:13px;color:var(--f-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-row time{font-size:12px;color:var(--f-faint);flex:none}
+.note{font-size:12.5px;color:var(--f-faint);padding:10px 2px}
+.mobile{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap}
+.phone{width:375px;background:#fff;border:1px solid var(--f-line-strong);border-radius:14px;overflow:hidden;padding-bottom:8px}
+.phone .bar{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;
+  border-bottom:1px solid var(--f-line);font-size:13.5px;color:var(--f-ink)}
+.phone .tabs{margin:0}
+.phone .tabs .inner{padding:0 14px;gap:18px;overflow-x:auto}
+.phone .tabs a{font-size:13.5px;white-space:nowrap;padding:12px 0 10px}
+.phone .row{padding:15px 14px;display:block}
+.phone .row h3{font-size:15px}
+.phone .excerpt{font-size:13px;-webkit-line-clamp:2}
+.phone .meta{font-size:12px}
+.phone .sech{padding:14px 14px 0;font-size:16px;font-weight:650;color:var(--f-ink)}
+</style>
+</head>
+<body>
+
+<div class="site-nav"><div class="inner">
+  <div class="logo"><i></i>华立转角</div>
+  <div class="search"><span>搜索帖子、技能或需求</span></div>
+  <div class="right"><span>消息</span><span>取货清单</span><span class="dot-avatar">张</span></div>
+</div></div>
+<div class="tabs"><div class="inner">
+  <a class="on" href="#">论坛首页</a><a href="#">校园求购</a><a href="#">交换人生</a><a href="#">代拿快递</a><a href="#">我的帖子</a>
+</div></div>
+
+<div class="screen">
+  <div class="screen-label">① 论坛首页 · 3 列板块 + 最新讨论 + 侧栏</div>
+
+  <div class="heading">
+    <div><h1>校园论坛</h1><p>把需要说清楚，把经验分享给同学。</p></div>
+    <button class="btn primary">＋ 发布帖子</button>
+  </div>
+
+  <div class="boards">
+    <section class="card board">
+      <div class="board-top"><span class="ic">⌕</span><h2>校园求购</h2></div>
+      <p class="desc">让需要的好物，找到有它的同学。</p>
+      <div class="posts">
+        <a href="#">求购 数据结构教材 第二版<small>小明</small></a>
+        <a href="#">求购 宿舍台灯，能调光<small>阿昕</small></a>
+      </div>
+      <div class="more">浏览板块 →</div>
+    </section>
+    <section class="card board">
+      <div class="board-top"><span class="ic">⟳</span><h2>交换人生</h2></div>
+      <p class="desc">分享你的技能，交换时间与经验。</p>
+      <div class="posts">
+        <a href="#">想学吉他，可以用修图技能换<small>阿哲</small></a>
+        <a href="#">帮改简历，换一节课的摄影<small>林同学</small></a>
+      </div>
+      <div class="more">浏览板块 →</div>
+    </section>
+    <section class="card board">
+      <div class="board-top"><span class="ic">▤</span><h2>代拿快递</h2></div>
+      <p class="desc">顺路帮一点忙，让校园生活更方便。</p>
+      <div class="posts">
+        <a href="#">今天下午去东区，可代拿 2 件<small>小陈</small></a>
+        <a href="#">明早西区驿站，有人顺路吗<small>王同学</small></a>
+      </div>
+      <div class="more">浏览板块 →</div>
+    </section>
+  </div>
+
+  <div class="cols">
+    <section class="card">
+      <div class="sec-head"><h2>最新讨论</h2><a href="#">查看全部 →</a></div>
+      <div class="row">
+        <div class="row-main">
+          <div class="row-title-line"><span class="pin">置顶</span><h3>期末互助：谁能帮我看看这段指针代码？</h3></div>
+          <p class="excerpt">我这边有一段 C 语言的指针题，运行结果和预期不一样，试过打印地址，两个值差 4，但我觉得应该差 8，有没有同学能帮我看一下。</p>
+          <div class="meta"><span>互助</span><span class="who"><span class="av">张</span>张同学</span><span>3 小时前</span></div>
+        </div>
+        <div class="stats"><span>回复 24</span></div>
+      </div>
+      <div class="row">
+        <div class="row-main">
+          <div class="row-title-line"><h3>想学吉他，可以用修图技能换</h3></div>
+          <p class="excerpt">我会 Lightroom 和 PS，想找人带我入门吉他，可以先帮你修一组毕业照。</p>
+          <div class="meta"><span>交换人生</span><span class="who"><span class="av">哲</span>阿哲</span><span>昨天</span></div>
+        </div>
+        <div class="stats"><span>回复 7</span></div>
+      </div>
+      <div class="row">
+        <div class="row-main">
+          <div class="row-title-line"><h3>东区驿站代拿，下午四点前下单</h3></div>
+          <p class="excerpt">顺路，不收额外费用，自备取件码即可，大件请提前说明。</p>
+          <div class="meta"><span>代拿快递</span><span class="who"><span class="av">陈</span>小陈</span><span>2 天前</span></div>
+        </div>
+        <div class="stats"><span>回复 2</span></div>
+      </div>
+    </section>
+    <aside class="side">
+      <section class="card side-card">
+        <h3>我的论坛</h3>
+        <a href="#">我的帖子<span>→</span></a>
+        <a href="#">回复与通知<span>→</span></a>
+        <a href="#">个人中心<span>→</span></a>
+      </section>
+      <section class="card side-card">
+        <h3>交流之前</h3>
+        <p style="color:#6b7280;font-size:13px">把需求说清楚，让沟通更简单。</p>
+        <ul><li>尊重彼此，友善交流</li><li>公开内容中保护隐私</li><li>时间地点费用先确认</li><li>遇到问题可举报</li></ul>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<div class="screen">
+  <div class="screen-label">② 帖子列表页 · 列表 / 卡片布局、排序筛选、轻量置顶</div>
+  <div class="crumb"><b>校园论坛</b><span>/</span><span>交换人生</span></div>
+  <div class="heading" style="padding-top:4px">
+    <div><h1 style="font-size:23px">交换人生</h1><p>分享你的技能，交换时间与经验。</p></div>
+    <button class="btn primary">＋ 发布帖子</button>
+  </div>
+  <div class="card">
+    <div class="toolbar">
+      <div class="sorts"><button class="on">最新</button><button>热门</button><button>回复最多</button><button>只看有回复</button></div>
+      <div class="end"><span>共 128 帖</span><div class="switch"><span class="on">≡</span><span>▦</span></div></div>
+    </div>
+    <div class="row">
+      <div class="row-main">
+        <div class="row-title-line"><span class="pin">置顶</span><h3>期末互助：谁能帮我看看这段指针代码？</h3></div>
+        <p class="excerpt">我这边有一段 C 语言的指针题，运行结果和预期不一样…</p>
+        <div class="meta"><span>互助</span><span class="who"><span class="av">张</span>张同学</span><span>3 小时前</span></div>
+      </div>
+      <div class="stats"><span>回复 24</span></div>
+    </div>
+    <div class="row">
+      <div class="row-main">
+        <div class="row-title-line"><h3>想学吉他，可以用修图技能换</h3></div>
+        <p class="excerpt">我会 Lightroom 和 PS，想找人带我入门吉他，可以先帮你修一组毕业照。</p>
+        <div class="meta"><span>交换人生</span><span class="who"><span class="av">哲</span>阿哲</span><span>昨天</span></div>
+      </div>
+      <div class="stats"><span>回复 7</span></div>
+    </div>
+    <div class="row">
+      <div class="row-main">
+        <div class="row-title-line"><h3>帮改简历 / 作品集排版</h3></div>
+        <p class="excerpt">做过两届招新海报，可以帮你调简历版式和字体，换一顿饭或者一节课都行。</p>
+        <div class="meta"><span>交换人生</span><span class="who"><span class="av">林</span>林同学</span><span>2 天前</span></div>
+      </div>
+      <div class="stats"><span>回复 0</span></div>
+    </div>
+  </div>
+  <div class="load-more"><button>加载更多帖子（还有 88 条）</button></div>
+</div>
+
+<div class="screen">
+  <div class="screen-label">③ 帖子详情页（重点）· 760px 阅读列 + 轻卡片楼层 + 底部回复框</div>
+  <div class="crumb"><b>校园论坛</b><span>/</span><b>交换人生</b><span>/</span><span>帖子详情</span></div>
+  <div class="detail">
+    <div>
+      <article class="article">
+        <div class="topic-tag">互助</div>
+        <h1>期末互助：谁能帮我看看这段指针代码？</h1>
+        <div class="author">
+          <span class="av">张</span>
+          <div><b>张同学</b><p><span>3 小时前</span><span class="lz">楼主</span></p></div>
+        </div>
+        <div class="prose">我这边有一段 C 语言的指针题，运行结果和我预期不一样。
+
+题目是这样的：
+
+    int *p = &a;
+    printf("%p %p", p, p+1);
+
+试过打印地址，两个值差 4，但我觉得应该差 8，因为 a 是 long long。
+
+有没有同学能帮我看一下，是不是我理解错了什么？</div>
+        <div class="acts"><button class="btn primary">参与讨论</button><button class="btn">分享</button><button class="btn">举报</button></div>
+      </article>
+
+      <div class="reply-head"><h2>全部回复 <span>24</span></h2><small>按时间顺序</small></div>
+
+      <div class="floor">
+        <div class="no">1F</div>
+        <div class="body">
+          <div class="fhead"><span class="av">王</span><b>王同学</b><span>1 小时前</span><button class="reply">回复</button></div>
+          <div class="ftext">可能是结构体对齐的问题，你试试用 sizeof 看一下 a 的实际大小。</div>
+        </div>
+      </div>
+      <div class="floor">
+        <div class="no">2F</div>
+        <div class="body">
+          <div class="fhead"><span class="av">陈</span><b>陈同学</b><span>40 分钟前</span><button class="reply">回复</button></div>
+          <div class="quote">回复 王同学</div>
+          <div class="ftext">同意，另外也可能是 char* 强转的问题。先把 a 的类型和 sizeof 一起打出来，基本就能定位了。</div>
+        </div>
+      </div>
+      <div class="floor">
+        <div class="no">3F</div>
+        <div class="body">
+          <div class="fhead"><span class="av">李</span><b>李同学</b><span>12 分钟前</span><button class="reply">回复</button></div>
+          <div class="ftext">指针加 1 是加一个元素的大小，不是加一个字节。你 a 是什么类型就是多少。</div>
+          <button class="fold">展开全文 ⌄</button>
+        </div>
+      </div>
+      <div class="load-more"><button>加载更早的回复</button></div>
+
+      <section class="card composer">
+        <h2>参与讨论</h2>
+        <p class="ctx">回复楼主 · 张同学</p>
+        <textarea placeholder="写下你的想法，友善交流，让讨论更有帮助。"></textarea>
+        <div class="foot"><small>友善表达，保护彼此隐私。</small><button class="btn primary">发布回复</button></div>
+      </section>
+    </div>
+
+    <aside class="side">
+      <section class="card side-author">
+        <div class="av">张</div><b>张同学</b><small>计算机工程学院 · 发帖 8</small>
+        <button class="btn" style="margin-top:14px;width:100%">查看主页</button>
+      </section>
+      <section class="card side-card">
+        <h3>本板块其他讨论</h3>
+        <a href="#">想学吉他，可以用修图技能换<span>7</span></a>
+        <a href="#">帮改简历 / 作品集排版<span>0</span></a>
+        <a href="#">找人一起练口语<span>3</span></a>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<div class="screen">
+  <div class="screen-label">④ 个人中心 与 消息页 · 分区靠分隔线，不用彩色 pill</div>
+  <div class="mobile" style="gap:20px;align-items:flex-start">
+    <div class="me">
+      <section class="card me-card">
+        <div class="me-hero">
+          <span class="av">张</span>
+          <div><b>张同学</b><p>计算机工程学院 · 本科</p><span class="pill">信誉 88 / 100</span></div>
+        </div>
+        <div class="stats-strip">
+          <div><small>收藏</small><b>12</b></div><div><small>清单</small><b>3</b></div>
+          <div><small>通知</small><b>5</b></div><div><small>在售</small><b>4</b></div>
+        </div>
+        <div class="orders-grid">
+          <div><h4>购买</h4><a href="#">待付款<b>0</b></a><a href="#">待收货<b>1</b></a><a href="#">退款/售后<b>0</b></a></div>
+          <div><h4>出售</h4><a href="#">待发货<b>2</b></a><a href="#">我卖出的<b>6</b></a><a href="#">我发布的<b>4</b></a></div>
+        </div>
+        <div class="list-lines">
+          <a href="#">我的收藏<span>›</span></a><a href="#">在售商品<span>›</span></a><a href="#">消息通知<span>›</span></a>
+        </div>
+        <div class="list-lines">
+          <a href="#">公开主页<span>›</span></a><a href="#">账号与安全<span>›</span></a><a href="#">帮助与客服<span>›</span></a>
+        </div>
+      </section>
+    </div>
+
+    <div style="flex:1;min-width:320px">
+      <section class="card">
+        <div class="sec-head"><h2>消息</h2><a href="#">全部标为已读</a></div>
+        <div class="chat-row"><span class="av">哲</span><div class="cm"><b><span class="unread"></span>阿哲</b><p>那把吉他我明天带过去，你看几点方便？</p></div><time>刚刚</time></div>
+        <div class="chat-row"><span class="av">王</span><div class="cm"><b>王同学</b><p>代码我看了一下，是 sizeof 的问题…</p></div><time>1 小时前</time></div>
+        <div class="chat-row"><span class="av">客</span><div class="cm"><b><span class="unread"></span>转角客服</b><p>你的订单 #12 已进入争议处理，客服会尽快跟进。</p></div><time>昨天</time></div>
+      </section>
+      <p class="note">未读用 6px 圆点，不再用红色数字气泡；超过 9 条才显示数字。</p>
+    </div>
+  </div>
+</div>
+
+<div class="screen">
+  <div class="screen-label">⑤ 移动端 375px · tab 横滚、列表纵向、触控高 ≥44px</div>
+  <div class="mobile">
+    <div class="phone">
+      <div class="bar"><span>华立转角</span><span>⌕　☰</span></div>
+      <div class="tabs"><div class="inner"><a class="on">论坛首页</a><a>求购</a><a>交换人生</a><a>代拿快递</a></div></div>
+      <div class="sech" style="padding-bottom:6px">交换人生</div>
+      <div class="row">
+        <div class="row-main">
+          <div class="row-title-line"><h3>期末互助：谁能帮我看看这段指针代码？</h3></div>
+          <p class="excerpt">我这边有一段 C 语言的指针题，运行结果和预期不一样…</p>
+          <div class="meta"><span>互助</span><span class="who"><span class="av">张</span>张同学</span><span>3 小时前</span><span>回复 24</span></div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="row-main">
+          <div class="row-title-line"><h3>想学吉他，可以用修图技能换</h3></div>
+          <p class="excerpt">我会 Lightroom 和 PS，想找人带我入门吉他。</p>
+          <div class="meta"><span>交换人生</span><span class="who"><span class="av">哲</span>阿哲</span><span>昨天</span></div>
+        </div>
+      </div>
+      <div class="load-more" style="padding:16px"><button style="min-height:44px">加载更多</button></div>
+    </div>
+    <div style="max-width:420px;color:#6b7280;font-size:13px;line-height:2">
+      <p><b style="color:#1f2329">移动端强约束</b></p>
+      <p>· 论坛 tab <code>overflow-x:auto</code>，隐藏滚动条</p>
+      <p>· 列表行改为纵向，摘要固定 2 行</p>
+      <p>· 标题/按钮/摘要一律 <code>overflow-wrap:anywhere</code>，杜绝横向溢出</p>
+      <p>· 所有可点元素命中区 ≥44×44</p>
+      <p>· 详情页阅读列退化为「屏宽 − 32px」，行高仍 1.8</p>
+    </div>
+  </div>
+</div>
+
+<div class="screen" style="padding-top:8px">
+  <p style="color:#98a0ad;font-size:12px;border-top:1px solid var(--f-line);padding-top:16px">
+    线框预览 · 与《docs/论坛界面改版方案.md》§1–§6 一一对应。全部为静态示意，不含真实数据：
+    浏览数与置顶标识在有真实字段前不应出现在成品里。
+  </p>
+</div>
+
+</body>
+</html>
