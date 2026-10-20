@@ -1,24 +1,30 @@
 'use strict';
-// 基础设施层 · 与后端通信
-// 公开演示版没有后端，全部走 public-demo.js 注入的本地快照。
-
+// Shared JSON transport. Never expose proxy HTML or invalidate a session on a server error.
 import { state } from './state.js';
 
 export async function api(path, data){
   if (window.HUALI_STATIC_DEMO) return window.hualiDemoApi(path, data);
-  // 记下发起时的账号与渲染代次；如果请求返回前已经切换，就丢弃这次结果，
-  // 免得旧请求把上一个账号的内容盖到新页面上。
   const session = state.token, epoch = state.renderId;
   const res = await fetch('/api'+path, {
     method: data === undefined ? 'GET' : 'POST',
-    headers: {'Content-Type':'application/json', ...(state.token ? {Authorization:'Bearer '+state.token} : {})},
+    headers: {'Content-Type':'application/json', ...(session ? {Authorization:'Bearer '+session} : {})},
     body: data === undefined ? undefined : JSON.stringify(data)
   });
-  const body = await res.json();
+  const type = (res.headers.get('Content-Type') || '').toLowerCase();
+  let body;
+  if (type.includes('application/json') || type.includes('+json')){
+    try { body = await res.json(); } catch { /* malformed response is handled below */ }
+  }
   if (session !== state.token || epoch !== state.renderId) throw new Error('页面或账号已切换，请重试');
-  if (!res.ok) {
-    // 带上 HTTP 状态：调用方需要区分「409 资料被别人改了」和普通失败，
-    // 靠比对中文错误文案太脆。message 保持原样，老调用方不受影响。
+  if (!body || typeof body !== 'object'){
+    const error = new Error(res.status >= 500
+      ? '服务暂时不可用，请稍后重试；当前登录状态已保留'
+      : '接口响应异常，请刷新页面重试；若仍失败请联系管理员');
+    error.status = res.status;
+    error.code = 'INVALID_API_RESPONSE';
+    throw error;
+  }
+  if (!res.ok){
     const error = new Error(body.error || '请求失败');
     error.status = res.status;
     throw error;

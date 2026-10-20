@@ -91,7 +91,11 @@ export async function pbkdf2Hex(password, saltHex, rounds = DEFAULTS.rounds, dkL
 
 export function randomSaltHex(){
   // 16 字节 = 32 位十六进制，与后端 `crypto.new_salt()` 等长。
-  const bytes = subtleCrypto().getRandomValues(new Uint8Array(16));
+  const crypto = window.crypto;
+  if (!crypto || typeof crypto.getRandomValues !== 'function'){
+    throw new Error('当前浏览器不支持安全随机数，请使用 HTTPS 和新版浏览器');
+  }
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
   return bytesToHex(bytes);
 }
 
