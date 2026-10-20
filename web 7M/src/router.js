@@ -6,6 +6,7 @@ import { toast } from './core/dom.js';
 import { state, bumpRenderId, clearPoll, demoFeatures } from './core/state.js';
 import { shell, heading, empty } from './core/shell.js';
 import { go, setRenderer } from './core/nav.js';
+import { startProgress, stopProgress } from './core/progress.js';
 import { refreshBadges } from './core/badges.js';
 import { needLogin, loginModal } from './auth/login.js';
 import { home } from './pages/home.js';
@@ -15,6 +16,7 @@ import { cartPage } from './pages/cart.js';
 import { orders } from './pages/orders.js';
 import { myProducts } from './pages/listings.js';
 import { community } from './pages/community.js';
+import { forum,forumPost,forumWant,forumCompose } from './pages/forum.js';
 import { chats } from './pages/messages.js';
 import { profile, mine } from './pages/me.js';
 import { support, ticketPage } from './pages/support.js';
@@ -26,7 +28,7 @@ import { credit } from './pages/credit.js';
 // 公开演示版只开放这四条只读路由。
 const DEMO_ROUTES = ['home', 'product', 'profile', 'community'];
 // 其余路由必须登录，未登录时先给一页说明再弹登录框。
-const AUTH_ROUTES = ['favorites', 'publish', 'cart', 'orders', 'listings', 'messages', 'me', 'support', 'staff', 'admin', 'dossier', 'ticket', 'credit'];
+const AUTH_ROUTES = ['favorites', 'publish', 'cart', 'orders', 'listings', 'messages', 'me', 'support', 'staff', 'admin', 'dossier', 'ticket', 'credit', 'forum','forum-post','forum-want','forum-compose'];
 
 function publicDemoFeature(route){
   const [title, description] = demoFeatures[route] || ['功能预览', '该操作只在本地模拟版中提供。'];
@@ -50,6 +52,8 @@ export async function render(){
   clearPoll();
   releaseMediaURLs();
   window.scrollTo(0, 0);
+  // 路由一变就亮进度条（含浏览器前进/后退触发的 hashchange，不只是点按钮）。
+  startProgress();
   const [route, id] = (location.hash.slice(1) || 'home').split('/');
   try{
     if (window.HUALI_STATIC_DEMO && !DEMO_ROUTES.includes(route)){ publicDemoFeature(route); return; }
@@ -67,6 +71,10 @@ export async function render(){
       orders,
       listings: myProducts,
       community,
+      forum:()=>forum(id),
+      'forum-post':()=>forumPost(id),
+      'forum-want':()=>forumWant(id),
+      'forum-compose':()=>forumCompose(id),
       messages: () => chats(id),
       profile: () => profile(id),
       me: mine,
@@ -87,6 +95,9 @@ export async function render(){
       shell(heading('SOMETHING WENT WRONG', '暂时无法打开', err.message) + empty('请稍后重试'), 'home');
       toast(err.message);
     }
+  }finally{
+    // 只有最后一次渲染能收进度条：慢请求回来后不能把新页面的进度条关掉。
+    if (rid === state.renderId) stopProgress();
   }
 }
 

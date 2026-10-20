@@ -10,6 +10,8 @@ import * as ui from './ui.js';
 import * as catalog from './catalog.js';
 import * as trade from './trade.js';
 import * as social from './social.js';
+import * as friend from './friend.js';
+import * as forum from './forum.js';
 import * as support from './support.js';
 import * as account from './account.js';
 import * as staff from './staff.js';
@@ -19,8 +21,8 @@ import * as userProfile from './user-profile.js';
 // 公开演示版只放行这些只读交互，其余一律弹说明、不渲染任何表单。
 const DEMO_CLICK_ALLOWED = ['market-channel','market-shortcut','free-shelf','feed-sort','category','login','close','photo','share'];
 
-const clicks = {...ui.clicks, ...catalog.clicks, ...trade.clicks, ...social.clicks, ...support.clicks, ...account.clicks, ...staff.clicks, ...admin.clicks, ...userProfile.clicks};
-const submits = {...catalog.submits, ...trade.submits, ...social.submits, ...support.submits, ...account.submits, ...staff.submits, ...admin.submits, ...userProfile.submits};
+const clicks = {...ui.clicks, ...catalog.clicks, ...trade.clicks, ...social.clicks, ...friend.clicks, ...forum.clicks, ...support.clicks, ...account.clicks, ...staff.clicks, ...admin.clicks, ...userProfile.clicks};
+const submits = {...catalog.submits, ...trade.submits, ...social.submits, ...friend.submits, ...forum.submits, ...support.submits, ...account.submits, ...staff.submits, ...admin.submits, ...userProfile.submits};
 
 export function registerActions(){
   // 头像的两个事件必须在捕获/独立阶段注册：
@@ -31,7 +33,12 @@ export function registerActions(){
   document.addEventListener('error', userProfile.avatarImageError, true);
   document.addEventListener('click', async ev => {
     const goBtn = ev.target.closest('[data-go]');
-    if (goBtn){ go(goBtn.dataset.go); return; }
+    if (goBtn){
+      // 整行可点时，行内还嵌着「改身份 / 停用 / 重置密码」这类操作按钮：
+      // 按钮优先。否则点按钮会先命中整行的 data-go，操作永远触发不了。
+      const act = ev.target.closest('[data-action]');
+      if (!(act && act !== goBtn && goBtn.contains(act))){ go(goBtn.dataset.go); return; }
+    }
     const b = ev.target.closest('[data-action]');
     if (!b) return;
     const a = b.dataset.action, id = Number(b.dataset.id);
