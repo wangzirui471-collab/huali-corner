@@ -162,6 +162,8 @@ export async function mine(){
     </section>
 
     <section class="me-card me-tools">
+      ${tile('forum/account','book','我的帖子',0,'','',false)}
+      ${tile('forum','community','校园论坛',0,'','',false)}
       ${tile('profile/'+state.me.id,'user','公开主页',0)}
       ${state.config.trial?tile('','shield','账号与安全',0,'data-action="change-password"'):''}
       ${tile('support','message','帮助与客服',0)}

@@ -441,14 +441,15 @@ class CommunityService(ValidationMixin):
             # 清完顺手把已读位点也拨到当下，避免「记录没了，角标还在」的怪相。
             c.execute('UPDATE members SET last_read_id=COALESCE((SELECT MAX(id) FROM messages WHERE room_id=?),0) WHERE room_id=? AND user_id=?',(int(rid),int(rid),u))
         return {'ok':True}
-    def posts(self,topic='',limit=20,offset=0):
+    def posts(self,topic='',limit=20,offset=0,filters=None):
         # 分页：前端「加载更多」按 limit 递增 offset 取更早的帖子。
         # 老实现 LIMIT 100 无分页，第 101 条帖子起永远翻不到。
-        limit=max(1,min(int(limit or 20),50));offset=max(0,int(offset or 0))
-        return self.rows('SELECT p.*,u.nickname,u.college,(SELECT COUNT(*) FROM comments c WHERE c.post_id=p.id) replies FROM posts p JOIN users u ON u.id=p.user_id WHERE p.removed=0 AND (?=\'\' OR topic=?) ORDER BY p.id DESC LIMIT ? OFFSET ?',(topic,topic,limit,offset))
+        from .forum_read import posts_query
+        sql,args=posts_query(topic,limit,offset,filters,hide_removed_comments=True)
+        return self.rows(sql,args)
     def add_post(self,u,d):
         body=self.text(d.get('body'),2000,'帖子内容');topic=d.get('topic','交流')
-        self.require(topic in ['交流','求购','毕业季','互助'],'分区不正确')
+        self.require(topic in ['交流','求购','毕业季','互助','交换人生','代拿快递'],'分区不正确')
         # 帖子是公开的引流入口，尺度按最严的来：联系方式也算高危。
         report=scan_text(body)
         self.require(not report['blocked'],'帖子不能发布：'+message_for(report),422)
@@ -459,7 +460,7 @@ class CommunityService(ValidationMixin):
             self._notify_mentions(c,u,self.profile(u)['nickname'],body,pid)
         return {'id':pid,'moderation':mark}
 
-    def comments(self,p,before=None):
+    def comments(self,p,before=None,limit=100,after=None,order='desc'):
         # 取「最新」评论：老实现 ORDER BY c.id LIMIT 100 是升序取最旧 100 条，
         # 一条超过 100 条评论的帖子，最新回复（含用户刚发的）反而看不到。
         # 这里 DESC 取最新 100 条再倒序返回，保证最新评论一定可见；
@@ -468,13 +469,15 @@ class CommunityService(ValidationMixin):
         # 一并带出（parent_user_id/parent_nickname），前端据此渲染「谁回复谁」。
         # 被处置（违法/辱骂）的评论不进结果；帖子本身被删时也不给看评论区。
         self.require(self.row('SELECT 1 FROM posts WHERE id=? AND removed=0',(p,)),'帖子不存在或已被删除',404)
-        limit=100
+        limit=max(1,min(int(limit or 100),100))
         base='''SELECT c.*,u.nickname,
             pc.user_id AS parent_user_id, pu.nickname AS parent_nickname
             FROM comments c JOIN users u ON u.id=c.user_id
             LEFT JOIN comments pc ON pc.id=c.parent_id
             LEFT JOIN users pu ON pu.id=pc.user_id
             WHERE c.post_id=? AND c.removed=0'''
+        if order=='asc':
+            return self.rows(base+' AND c.id>? ORDER BY c.id ASC LIMIT ?',(p,int(after or 0),limit))
         if before:
             rows=self.rows(base+' AND c.id<? ORDER BY c.id DESC LIMIT ?',(p,int(before),limit))
         else:
