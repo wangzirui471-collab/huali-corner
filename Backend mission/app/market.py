@@ -11,6 +11,7 @@ Java 里由 Spring 容器负责装配，Python 这里用多继承显式拼装。
     trade      交易
     community  社区
     support    客服
+    notifications 站内通知
     staff      人员与权限（平台侧账号）
     moderation 内容审核（词库 + 扫描 + 词库维护）
     ops        运维
@@ -25,6 +26,7 @@ from .account.profiles import UserProfiles
 from .account.avatars import UserAvatars
 from .catalog.service import CatalogService
 from .trade.service import TradeService
+from .notifications.service import NotificationService
 from .community.service import CommunityService
 from .support.service import SupportService
 from .staff.service import StaffService
@@ -35,7 +37,7 @@ from pathlib import Path
 
 
 class Market(Store, AccountService, UserProfiles, UserAvatars, CatalogService, TradeService,
-             CommunityService, SupportService, StaffService,
+             NotificationService, CommunityService, SupportService, StaffService,
              ModerationService, OpsService):
     """试用版应用的组合根。"""
 

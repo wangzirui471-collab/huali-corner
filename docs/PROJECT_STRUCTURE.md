@@ -16,9 +16,10 @@ huali-corner-trial/
 │       ├── core/              路径、连接、事务、异常
 │       ├── account/           登录、资料、头像、信誉辅助逻辑
 │       ├── catalog/           商品、图片、上下架、审核入口、报价
-│       ├── trade/             订单、账本、订单通知、定时业务
+│       ├── trade/             订单、账本、定时业务
 │       ├── community/         帖子、私聊、群聊、客服会话
 │       ├── support/           工单、退款处理、信誉处置
+│       ├── notifications/     站内通知：写入、列表、已读
 │       ├── staff/             人员账号与角色层级
 │       ├── moderation/        内容规则与审核
 │       └── ops/               对账与一致性备份
@@ -56,8 +57,14 @@ huali-corner-trial/
 
 `app/seed.py` 是正式演示数据模块，与归档的根目录旧 `seed.py` 不同；前者保留。`web 7M/miniprogram/app.js` 是小程序入口，与归档的网页根目录 `app.js` 不同；前者保留。
 
-## 本轮没有强行拆分的模块
+## 模块拆分记录
 
-通知目前在 `trade/service.py`，SQL schema 与数据库适配目前在 `core/database.py`。若以后拆成 `notifications/`、迁移模块或独立路由模块，需要单独保证导入、事务和 API 兼容；本次不为目录外观制造空模块或搬动运行代码。
+2026-10-20 按《转角软件开发规范 V1.0》§3.1 把站内通知从 `trade/service.py` 拆到 `notifications/`：
+
+- 只搬运 `notify` / `notifications` / `read_notifications`，方法名、参数、返回结构和事务边界不变；
+- `Market` 组合根增加 `NotificationService`，既有 `self.notify(...)` 调用方无需改动；
+- `/api/notifications` 与 `/api/badges` 接口合同保持不变。
+
+SQL schema 与数据库适配仍在 `core/database.py`；迁移模块或独立路由模块如需拆分，另按同一原则评估导入、事务和 API 兼容。
 
 整理期间另外检测到 `app/cloudflare/` 新增及 `docs/CLOUDFLARE_ACCESS.md` 更新，属于并行部署工作，已原样保留；上方目录列出已检查的既有主线模块，不代表该适配已完成验收。

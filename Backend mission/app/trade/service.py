@@ -56,25 +56,6 @@ class TradeService(ValidationMixin):
 
     def journal(self,c,oid,kind,amount):c.execute('INSERT OR IGNORE INTO ledger(order_id,kind,amount,created) VALUES(?,?,?,?)',(oid,kind,amount,time.time()))
 
-    # --- 站内通知 ---------------------------------------------------------
-    # 消息页承诺了「订单通知 / 售后通知」，但之前只有聊天消息表，订单事件没有任何出口。
-    # 这里用一张独立的 notifications 表承载系统事件，前端在「消息 → 订单通知」里读。
-    # post_id 供社区通知（帖子回复 / @提及）跳转；三类 id 互斥，谁有值跳谁。
-    def notify(self,c,user_id,kind,body,order_id=None,ticket_id=None,post_id=None,product_id=None):
-        c.execute('INSERT INTO notifications(user_id,kind,order_id,ticket_id,post_id,body,created,product_id) VALUES(?,?,?,?,?,?,?,?)',
-                  (user_id,kind,order_id,ticket_id,post_id,body,time.time(),product_id))
-
-    def notifications(self,u,limit=100):
-        rows=self.rows('SELECT id,kind,order_id,ticket_id,post_id,product_id,body,read_at,created FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT ?',(u,int(limit)))
-        unread=self.row('SELECT COUNT(*) n FROM notifications WHERE user_id=? AND read_at IS NULL',(u,))['n']
-        return {'unread':unread,'items':rows}
-
-    def read_notifications(self,u,nid=None):
-        with self.tx() as c:
-            if nid:c.execute('UPDATE notifications SET read_at=? WHERE id=? AND user_id=?',(time.time(),int(nid),u))
-            else:c.execute('UPDATE notifications SET read_at=? WHERE user_id=? AND read_at IS NULL',(time.time(),u))
-        return {'ok':True}
-
     def badges(self,u):
         """顶栏角标的一次性数据源：通知未读 + 聊天未读。
 
