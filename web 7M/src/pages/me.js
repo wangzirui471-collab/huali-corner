@@ -22,9 +22,8 @@ import { needLogin } from '../auth/login.js';
 // 公开主页。看别人的时候是只读的；看自己的时候，资料与头像就在这里——
 // 「我的」页改版后不再放表单，编辑资料回到它归属的地方：主页。
 //
-// 自己这版照后台设置页组织（参考淘宝「我的淘宝 → 账号管理」、京东「头像照片」）：
-// 左侧设置导航 + 右侧白色内容面板，面板内分「基本资料 / 头像照片」两块，
-// 保存按钮跟在表单末尾（与参考一致），不做满屏卡片堆叠。
+// 自己这版按「设置页」组织：标题行（sticky 保存）→ 资料预览 → 基本信息 → 我的头像 → 底部操作。
+// 分区靠 1px 分割线，不再用大圆角卡片包住整块内容。
 export async function profile(id){
   const r=await api('/profile?id='+id),u=r.user;
   const own=state.me&&state.me.id===u.id;
@@ -33,44 +32,41 @@ export async function profile(id){
   const self=own&&!window.HUALI_STATIC_DEMO?await api('/user/profile'):null;
   const products=r.products.filter(p=>p.status==='available').map(card).join('');
   if(self){
-    // data-user-center 必须包住所有表单控件：事件层用它定位作用域与账号归属。
-    // 左侧导航放在它外面——导航是普通跳转，不参与「提交中锁定」。
+    // 版心两栏：左边「账号设置」导航，右边资料内容。
+    // data-user-center 必须包住所有表单控件：事件层用它定位作用域与账号归属
+    // （导航是普通跳转，放在它外面，不参与「提交中锁定」）。
     shell(`<div class="uc-page">
-      <div class="uc-shell">
-        <aside class="uc-side" aria-label="账号设置">
-          <h2>账号设置</h2>
-          <nav>
-            <a class="is-active" aria-current="page">个人资料</a>
-            <a href="#forum/account">我的帖子</a>
-            <a href="#favorites">我的收藏</a>
-            <a href="#" data-action="change-password">修改密码</a>
-            <a href="#me">返回我的</a>
-          </nav>
-        </aside>
-        <div class="user-center uc-main" data-user-center data-user-owner="${u.id}">
+      <div class="uc-layout">
+        <nav class="uc-nav" aria-label="账号设置">
+          <p class="uc-nav-title">账号设置</p>
+          <a class="is-active" aria-current="page">个人资料</a>
+          <a href="#forum/account">我的帖子</a>
+          <a href="#favorites">我的收藏</a>
+          <a href="#" data-action="change-password">修改密码</a>
+          <a href="#me">返回我的</a>
+        </nav>
+        <div class="uc-main user-center" data-user-center data-user-owner="${u.id}">
           <header class="uc-head">
-            <div><h1>个人资料</h1><p>资料会展示在你的公开主页，随时可以修改。</p></div>
+            <div class="uc-head-main"><h1><span class="uc-mk">①</span>个人资料</h1><p>资料会展示在你的公开主页，随时可以修改。</p></div>
+            <button class="uc-btn is-primary uc-head-save" type="submit" form="user-profile-form" data-user-control>保存资料</button>
           </header>
-
-          <section class="uc-block">
-            <div class="uc-block-head"><h2>资料预览</h2><span>公开主页展示的样子</span></div>
+          <section class="uc-sec">
+            <div class="uc-sec-head"><h2><span class="uc-mk">②</span>资料预览</h2><span>公开主页展示的样子</span></div>
             <div data-user-summary>${userProfileSummary(self)}</div>
           </section>
-
-          <section class="uc-block">
-            <div class="uc-block-head"><h2>基本资料</h2><span>带 <i class="uc-req">*</i> 为必填</span></div>
+          <section class="uc-sec">
+            <div class="uc-sec-head"><h2><span class="uc-mk">③</span>基本信息</h2><span>带 * 为必填</span></div>
             ${userProfileForm(self)}
-            <div class="uc-actions">
-              <button class="uc-btn is-primary" type="submit" form="user-profile-form" data-user-control>保存资料</button>
-              <button class="uc-btn" type="button" data-action="user-profile-reset" data-user-control>重新载入</button>
-              <span class="uc-actions-tip">保存前不会公开任何修改</span>
-            </div>
           </section>
-
-          <section class="uc-block">
-            <div class="uc-block-head"><h2>头像照片</h2><span>上传后先预览，确认才公开</span></div>
+          <section class="uc-sec">
+            <div class="uc-sec-head"><h2><span class="uc-mk">④</span>我的头像</h2><span>上传后先预览，确认才公开</span></div>
             ${userAvatarForm(self)}
           </section>
+          <div class="uc-foot">
+            <button class="uc-btn is-primary uc-foot-save" type="submit" form="user-profile-form" data-user-control>保存资料</button>
+            <button class="uc-btn" type="button" data-action="user-profile-reset" data-user-control>重新载入资料</button>
+            <span class="uc-foot-tip">保存前不会公开任何修改</span>
+          </div>
         </div>
       </div>
       <section class="uc-products"><h2>在售商品</h2><div class="product-grid">${products}</div></section>
