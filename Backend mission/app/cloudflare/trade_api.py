@@ -59,9 +59,6 @@ class TradeApi:
                 and all(type(i) is int and i > 0 for i in ids) and len(set(ids)) == len(ids),
                 '请选择1至20件不同商品')
         key = ValidationMixin.text(data.get('key'), 100, '请求标识')
-        old = await self.db.first('SELECT * FROM orders WHERE buyer_id=? AND request_key=?', (uid, key))
-        if old:
-            return json_response(await self.cf_trade_dto(old))
         delivery = data.get('delivery')
         require(delivery in ('pickup', 'delivery'), '交付方式错误')
         appointment = data.get('appointment')
@@ -69,6 +66,18 @@ class TradeApi:
         require(type(appointment) in (int, float) and now+60 < appointment < now+86400*30,
                 '请选择未来30天内的交付时间')
         address = ValidationMixin.text(data.get('address'), 150, '收货公共地点') if delivery == 'delivery' else ''
+        old = await self.db.first('SELECT * FROM orders WHERE buyer_id=? AND request_key=?', (uid, key))
+        if old:
+            # 幂等键只保证「同一次提交重试」返回同一张单；若内容变了还返回旧单，
+            # 用户会以为买的是新商品，实际拿到的是上一笔。必须 409 让他刷新重来。
+            old_ids = sorted(i.get('id') for i in json.loads(old['items'] or '[]'))
+            same = (old_ids == sorted(ids) and old['delivery'] == delivery
+                    and (old['address'] or '') == (address or '')
+                    and abs((old['appointment'] or 0) - float(appointment)) < 1e-6)
+            require(same, '同一请求标识不能提交不同内容，请刷新后重试', 409)
+            return json_response(await self.cf_trade_dto(old))
+        require(await self.db.scalar("SELECT 1 FROM users WHERE id=? AND status='active'", (uid,)),
+                '账号当前不可交易', 409)
         marks = ','.join('?' for _ in ids)
         products = await self.db.all('SELECT * FROM products WHERE id IN ('+marks+') ORDER BY id', tuple(ids))
         require(len(products) == len(ids), '商品不存在', 404)
@@ -79,13 +88,21 @@ class TradeApi:
         require(all(p['delivery'] in (delivery, 'both') for p in products), '商品不支持所选交付方式')
         require(await self.db.scalar("SELECT 1 FROM users WHERE id=? AND status='active'", (seller,)),
                 '卖家当前不可交易', 409)
-        guards = ["EXISTS(SELECT 1 FROM users WHERE id=? AND status='active')"]
-        guard_args = [seller]
+        guards = ["EXISTS(SELECT 1 FROM users WHERE id=? AND status='active')",
+                  "EXISTS(SELECT 1 FROM users WHERE id=? AND status='active')"]
+        guard_args = [seller, uid]
+        live_since = now - 86400
         items = []
         for p in products:
+            # 接受超过 24 小时未成交的报价不再生效；其他买家有生效中的接受报价时，
+            # 商品已被锁定，本买家不能抢先下单（一货多卖的最后一道闸）。
+            require(not await self.db.first(
+                "SELECT 1 FROM offers WHERE product_id=? AND buyer_id<>? AND status='accepted' AND COALESCE(accepted_at,created)>? LIMIT 1",
+                (p['id'], uid, live_since)), '该商品已有其他买家的报价被接受，正在等待成交', 409)
             offer = await self.db.first(
-                "SELECT id,amount FROM offers WHERE product_id=? AND buyer_id=? AND status='accepted' ORDER BY id DESC LIMIT 1",
-                (p['id'], uid))
+                "SELECT id,amount FROM offers WHERE product_id=? AND buyer_id=? AND status='accepted' "
+                "AND COALESCE(accepted_at,created)>? ORDER BY id DESC LIMIT 1",
+                (p['id'], uid, live_since))
             price = offer['amount'] if offer else p['price']
             detail = json.loads(p['data'] or '{}')
             photos = detail.get('photos') or []
@@ -96,8 +113,12 @@ class TradeApi:
             guards.append("EXISTS(SELECT 1 FROM products WHERE id=? AND seller_id=? AND status='available' "
                           'AND price=? AND delivery_fee=? AND delivery=? AND data=?)')
             guard_args.extend((p['id'], seller, p['price'], p['delivery_fee'], p['delivery'], p['data']))
-            guards.append("COALESCE((SELECT id FROM offers WHERE product_id=? AND buyer_id=? AND status='accepted' ORDER BY id DESC LIMIT 1),0)=?")
-            guard_args.extend((p['id'], uid, offer['id'] if offer else 0))
+            guards.append("COALESCE((SELECT id FROM offers WHERE product_id=? AND buyer_id=? AND status='accepted' "
+                          "AND COALESCE(accepted_at,created)>? ORDER BY id DESC LIMIT 1),0)=?")
+            guard_args.extend((p['id'], uid, live_since, offer['id'] if offer else 0))
+            guards.append("NOT EXISTS(SELECT 1 FROM offers WHERE product_id=? AND buyer_id<>? AND status='accepted' "
+                          "AND COALESCE(accepted_at,created)>?)")
+            guard_args.extend((p['id'], uid, live_since))
         want = None
         if data.get('want_id') is not None:
             require(type(data['want_id']) is int and data['want_id'] > 0, '求购编号无效')
@@ -180,8 +201,9 @@ class TradeApi:
             if status in ('paid', 'awaiting_handover', 'awaiting_receipt', 'completed'):
                 return json_response(await self.cf_trade_dto(row))
             require(status == 'awaiting_payment' and now-row['created'] < 1800, '订单不可付款或已超时', 409)
-            guard += " AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active')"
-            params += (row['seller_id'],)
+            guard += (" AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active')"
+                      " AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active')")
+            params += (uid, row['seller_id'])
             stmts += [("UPDATE orders SET status='paid',paid_at=? WHERE id=?", (now, oid)),
                       self.cf_trade_journal(oid, 'payment', row['total'], now),
                       self.cf_trade_note(row['seller_id'], 'order_paid', f'订单 #{oid} 已模拟付款，请确认交付安排。', oid)]
