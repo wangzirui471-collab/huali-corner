@@ -20,6 +20,7 @@ huali-corner-trial/
 │       ├── community/         帖子、私聊、群聊、客服会话
 │       ├── support/           工单、退款处理、信誉处置
 │       ├── notifications/     站内通知：写入、列表、已读
+│       ├── reviews/           订单评价与好评加分
 │       ├── staff/             人员账号与角色层级
 │       ├── moderation/        内容规则与审核
 │       └── ops/               对账与一致性备份
@@ -66,5 +67,10 @@ huali-corner-trial/
 - `/api/notifications` 与 `/api/badges` 接口合同保持不变。
 
 SQL schema 与数据库适配仍在 `core/database.py`；迁移模块或独立路由模块如需拆分，另按同一原则评估导入、事务和 API 兼容。
+
+2026-10-20 同批次把订单评价从 `support/service.py` 拆到 `reviews/`：
+
+- 只搬运 `review` / `_award_good_review`，`/api/review` 合同、评价覆盖规则、好评加分日／月上限与事务边界不变；
+- 评价不再依赖客服工单模块，后续修改评价规则只需改 `reviews/`。
 
 整理期间另外检测到 `app/cloudflare/` 新增及 `docs/CLOUDFLARE_ACCESS.md` 更新，属于并行部署工作，已原样保留；上方目录列出已检查的既有主线模块，不代表该适配已完成验收。

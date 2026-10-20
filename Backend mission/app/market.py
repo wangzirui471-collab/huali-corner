@@ -9,6 +9,7 @@ Java 里由 Spring 容器负责装配，Python 这里用多继承显式拼装。
     account    账号
     catalog    商品
     trade      交易
+    reviews    订单评价
     community  社区
     support    客服
     notifications 站内通知
@@ -27,6 +28,7 @@ from .account.avatars import UserAvatars
 from .catalog.service import CatalogService
 from .trade.service import TradeService
 from .notifications.service import NotificationService
+from .reviews.service import ReviewService
 from .community.service import CommunityService
 from .support.service import SupportService
 from .staff.service import StaffService
@@ -37,7 +39,7 @@ from pathlib import Path
 
 
 class Market(Store, AccountService, UserProfiles, UserAvatars, CatalogService, TradeService,
-             NotificationService, CommunityService, SupportService, StaffService,
+             NotificationService, ReviewService, CommunityService, SupportService, StaffService,
              ModerationService, OpsService):
     """试用版应用的组合根。"""
 
