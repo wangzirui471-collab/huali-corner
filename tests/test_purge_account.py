@@ -69,21 +69,44 @@ class PurgeAccountTests(unittest.TestCase):
         ticket = self.m.row('SELECT user_id,subject FROM tickets WHERE id=?', (tid,))
         self.assertEqual(ticket['user_id'], self.usr, '工单应保留原 user_id')
 
-    def test_only_developer_can_purge(self):
-        """管理员只能封号，清除是高危不可逆操作，只给开发者。"""
-        with self.assertRaises(DomainError) as ctx:
-            self.m.purge_account(self.adm, self.usr, '越权尝试')
-        self.assertIn('仅开发者', str(ctx.exception))
+    def test_developer_clears_admin_support_and_user(self):
+        """开发者可以清除后三个等级：管理员、客服、普通用户。"""
+        sup = self.reg('13800000044', '客服甲', 'support')
+        adm2 = self.reg('13800000045', '管理员乙', 'admin')
+        usr2 = self.reg('13800000046', '用户乙', 'user')
+        for uid, label in ((sup, '客服'), (adm2, '管理员'), (usr2, '普通用户')):
+            self.m.purge_account(self.dev, uid, '清理' + label)
+            self.assertEqual(self.row(uid)['status'], 'deleted', label)
 
-    def test_cannot_purge_self(self):
+    def test_admin_clears_support_and_user_only(self):
+        """管理员可以清除客服与普通用户，但不能清除同级管理员或开发者。"""
+        sup = self.reg('13800000044', '客服甲', 'support')
+        self.m.purge_account(self.adm, self.usr, '清理用户')
+        self.assertEqual(self.row(self.usr)['status'], 'deleted')
+        self.m.purge_account(self.adm, sup, '清理客服')
+        self.assertEqual(self.row(sup)['status'], 'deleted')
+        adm2 = self.reg('13800000045', '管理员乙', 'admin')
+        with self.assertRaises(DomainError) as ctx:
+            self.m.purge_account(self.adm, adm2, '管理员互删')
+        self.assertIn('同级或更高', str(ctx.exception))
+        with self.assertRaises(DomainError):
+            self.m.purge_account(self.adm, self.dev, '删开发者')
+
+    def test_cannot_purge_self_or_peer_developer(self):
         with self.assertRaises(DomainError):
             self.m.purge_account(self.dev, self.dev, '自杀')
-
-    def test_cannot_purge_admin_or_developer(self):
-        """防止互删/自毁：管理员与开发者账号不能被清除。"""
         with self.assertRaises(DomainError):
-            self.m.purge_account(self.dev, self.adm, '删管理员')
-        self.assertEqual(self.row(self.adm)['status'], 'active')
+            self.m.purge_account(self.adm, self.adm, '自杀')
+        dev2 = self.reg('13800000047', '开发者乙', 'developer')
+        with self.assertRaises(DomainError) as ctx:
+            self.m.purge_account(self.dev, dev2, '删同级开发者')
+        self.assertIn('同级或更高', str(ctx.exception))
+
+    def test_support_cannot_purge(self):
+        sup = self.reg('13800000048', '客服乙', 'support')
+        with self.assertRaises(DomainError) as ctx:
+            self.m.purge_account(sup, self.usr, '越权')
+        self.assertIn('仅管理员或开发者', str(ctx.exception))
 
     def test_audit_records_who_and_why(self):
         self.m.purge_account(self.dev, self.usr, '本人申请重置')

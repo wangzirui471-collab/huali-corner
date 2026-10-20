@@ -15,13 +15,16 @@ import { money, date } from '../core/format.js';
 import { state, statusNames } from '../core/state.js';
 import { api } from '../core/http.js';
 import { shell, heading } from '../core/shell.js';
-import { isAdmin, isDeveloper } from '../core/roles.js';
+import { isAdmin } from '../core/roles.js';
 import { needLogin } from '../auth/login.js';
 
 const ROLE_NAMES = { user: '普通用户', support: '客服', admin: '平台管理员', developer: '开发者' };
 const ROLE_TONE = { user: 'mute', support: 'info', admin: 'violet', developer: 'warn' };
 const USER_STATUS = { active: '正常', banned: '已封禁', deactivated: '已注销', deleted: '已清除' };
 const USER_TONE = { active: 'ok', banned: 'danger', deactivated: 'mute' };
+// 清除账号的分级：开发者(3) 可清 admin/support/user；管理员(2) 可清 support/user。
+// 规则与后端一致：操作者必须高于目标等级，且不能是自己。
+const PURGE_RANK = { user: 0, support: 1, admin: 2, developer: 3 };
 const TICKET_TYPES = { refund: '售后', report: '举报', appeal: '申诉', reschedule: '改约', other: '咨询' };
 const TICKET_TONE = { refund: 'violet', report: 'danger', appeal: 'warn', reschedule: 'info', other: 'mute' };
 const AUDIT_LABELS = {
@@ -45,6 +48,11 @@ export async function dossier(id) {
   if (!Number.isInteger(target) || target <= 0) throw new Error('用户编号无效');
 
   const data = await api('/user/dossier?id=' + target);
+  // 会话与聊天单独取：档案接口刻意不整包带聊天正文（私聊是最高敏内容）。
+  // 列表失败不影响档案主体——旧版线上 Worker 没有这个路由时页面仍能打开。
+  let chatRooms = [], chatError = '';
+  try { chatRooms = (await api('/admin/chats?user_id=' + target)).rooms || []; }
+  catch (err) { chatError = err.message || '加载失败'; }
   const user = data.user || {};
   const products = data.products || [];
   const orders = data.orders || [];
@@ -155,20 +163,58 @@ export async function dossier(id) {
       </div>`).join('')}</div>`
     : '<p class="desk-empty">没有发布过求购</p>';
 
-  // 清除账号：仅开发者可见，且不能作用在管理员/开发者身上。
+  // --- 会话与聊天（只读；仅 admin/developer，读正文会写 chat_view 审计） -----
+  const CHAT_KIND = { general: '校区总群', college: '学院群' };
+  const chatList = chatRooms.length
+    ? `<div class="desk-list">${chatRooms.map(r => {
+        const last = r.last || null;
+        const label = r.support ? '客服会话' : (CHAT_KIND[r.kind] || (r.kind === 'private' ? '私聊' : '会话'));
+        const name = r.name || ('会话 #' + r.id);
+        const preview = last ? (last.body || '（已撤回）') : '暂无消息';
+        return `<div class="desk-row">
+          <span class="row-glyph" data-tone="${r.support ? 'warn' : r.kind === 'private' ? 'info' : 'mute'}">${icon('message')}</span>
+          <div class="desk-row-main"><b>${e(name)}</b>
+            <small>${e(label)} · #${r.id}${r.ticket_id ? ' · 工单 #' + r.ticket_id : ''} · ${r.message_count || 0} 条 · ${last ? date(last.created) : '—'}</small>
+            <p>${last ? e(last.nickname || '') + '：' : ''}${e(preview.slice(0, 80))}</p></div>
+          <button class="btn secondary" data-action="chat-view" data-id="${user.id}" data-room="${r.id}" data-name="${e(name)}">查看会话</button>
+        </div>`;
+      }).join('')}</div>`
+    : `<p class="desk-empty">${chatError ? '会话列表暂不可用：' + e(chatError) : '该用户还没有加入任何会话'}</p>`;
+
+  // 清除账号：分级授权，且不能清除自己或同级/更高等级账号。
   // 放在页面最底部，避免误触——它不可撤销。
-  const canPurge = isDeveloper(state.me) && user.id !== state.me.id && !['admin', 'developer'].includes(user.role);
+  const actorRank = PURGE_RANK[state.me.role] ?? -1;
+  const targetRank = PURGE_RANK[user.role] ?? 99;
+  const canPurge = ['admin', 'developer'].includes(state.me.role)
+    && user.id !== state.me.id && actorRank > targetRank;
   const dangerZone = canPurge ? `<section class="panel dossier-danger">
     <h2>危险操作</h2>
     <p class="muted">清除后该账号的登录信息与密码将被移除，手机号${data.phone ? `（${e(data.phone)}）` : ''}释放给本人重新注册；历史订单、工单、评价与审计记录全部保留，昵称显示为「已注销用户」。此操作不可撤销。</p>
+    <p class="muted">权限分级：开发者可清除管理员 / 客服 / 用户；管理员可清除客服 / 用户；同级与上级不可清除。</p>
     <button class="btn danger" data-action="purge-account" data-id="${user.id}" data-nick="${e(user.nickname || '')}">清除账号</button>
   </section>` : '';
+
+  // 不能清除时，把原因直接写在页面上——自查时最常见的疑问就是「按钮为什么不见了」。
+  // 只对「看自己」和「看管理员/开发者」两种场景提示；管理员看普通用户时不显示，
+  // 免得把「你没权限」当成噪音塞满页面。注意必须在 canPurge 声明之后求值。
+  const noPurgeNote = !canPurge && (user.id === state.me.id
+    || (['admin', 'developer'].includes(state.me.role) && targetRank >= actorRank))
+    ? `<section class="panel">
+        <h2>关于「清除账号」</h2>
+        <p class="muted">${user.id === state.me.id
+          ? '这是你自己的账号。为防止误操作把自己锁在门外，不能在这里清除；如需退出，请到「我的 → 注销账号」。'
+          : '该账号与你同级或等级更高，不能在这里清除。开发者可清除管理员 / 客服 / 用户，管理员可清除客服 / 用户。'}</p>
+      </section>`
+    : '';
 
   shell(`${heading('DOSSIER', '用户档案 · ' + (user.nickname || ''),
     '仅平台管理员与开发者可见；本次查阅已写入审计记录。')}
     <button class="back" data-go="admin/people?scope=all">← 返回用户列表</button>
     ${head}${stats}
     <div class="dossier-grid">
+      <section class="panel">${sectionHead('message', '会话与聊天（只读）')}
+        <p class="muted">私聊与群聊正文默认不随档案带出；点「查看会话」才会读取，且每次读取都会写入审计。</p>
+        ${chatList}</section>
       <section class="panel">${sectionHead('chart', '信誉与处置记录')}${creditList}</section>
       <section class="panel">${sectionHead('bag', '参与订单')}${orderList}</section>
       <section class="panel">${sectionHead('tag', '商品')}${productList}</section>
@@ -178,5 +224,5 @@ export async function dossier(id) {
       <section class="panel">${sectionHead('chart', '发出的评价')}${reviewList}</section>
       <section class="panel">${sectionHead('search', '发布的求购')}${wantList}</section>
     </div>
-    ${dangerZone}`, 'staff');
+    ${dangerZone}${noPurgeNote}`, 'staff');
 }

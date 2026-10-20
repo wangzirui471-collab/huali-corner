@@ -154,7 +154,10 @@ function row(tags, search, inner, opts = {}) {
   const glyph = opts.glyph
     ? `<span class="row-glyph" data-tone="${opts.tone || 'mute'}">${icon(opts.glyph)}</span>`
     : '';
-  return `<div class="desk-row" data-group="${e(search.group)}" data-tags="${e(tags.join(' '))}" data-search="${e(search.text)}">${glyph}${inner}</div>`;
+  // opts.go：整行可点（进用户档案）。行内按钮由事件层优先处理，
+  // 见 actions/index.js 的「按钮优先于整行导航」保护。
+  const go = opts.go ? ` data-go="${e(opts.go)}" role="link" tabindex="0"` : '';
+  return `<div class="desk-row${opts.go ? ' is-clickable' : ''}"${go} data-group="${e(search.group)}" data-tags="${e(tags.join(' '))}" data-search="${e(search.text)}">${glyph}${inner}</div>`;
 }
 
 // --- 概览 -----------------------------------------------------------------
@@ -222,7 +225,7 @@ function personRow(a) {
      </div>
      ${pill}
      ${acts}`,
-    { glyph: 'user', tone }
+    { glyph: 'user', tone, go: self ? '' : `dossier/${a.id}` }
   );
 }
 
@@ -242,8 +245,8 @@ function peopleSection({ staff, scope = 'staff', q = '' }) {
       <button class="desk-tab ${all ? 'active' : ''}" data-go="admin/people?scope=all">全部用户</button>
     </div>
     <p class="desk-lead">${all
-      ? '所有在平台注册过的账号，包括从没进过后台的普通同学。点「改身份」可以把任何人提成客服、管理员或开发者——改权立即生效并踢掉对方全部会话，操作全程留痕。'
-      : '这里管的是<strong>平台自己人</strong>：客服、管理员、开发者。四级权限——开发者任命管理员，管理员设置/废除客服并封号，客服日常值守。改身份立即生效并踢掉对方全部会话，操作全程留痕。'}</p>
+      ? '所有在平台注册过的账号，包括从没进过后台的普通同学。点「改身份」可以把任何人提成客服、管理员或开发者——改权立即生效并踢掉对方全部会话，操作全程留痕。点账号整行可直接进入用户档案。'
+      : '这里管的是<strong>平台自己人</strong>：客服、管理员、开发者。四级权限——开发者任命管理员，管理员设置/废除客服并封号，客服日常值守。改身份立即生效并踢掉对方全部会话，操作全程留痕。点账号整行可直接进入用户档案。'}</p>
     ${all ? `<form class="desk-search" id="people-search-form">${icon('search')}<input type="search" name="q" value="${e(q)}" placeholder="搜昵称或手机号" aria-label="搜索账号"><button class="btn secondary">搜索</button></form>` : ''}
     <div class="desk-summary">
       <span>共 <b>${staff.length}</b> 个账号</span>

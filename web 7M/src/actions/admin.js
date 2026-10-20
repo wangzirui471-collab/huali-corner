@@ -15,6 +15,14 @@ import { render } from '../core/nav.js';
 import { modal, closeModal } from '../core/shell.js';
 import { field, selectField } from '../components/forms.js';
 import { state } from '../core/state.js';
+import { pbkdf2Hex, randomSaltHex } from '../core/pbkdf2.js';
+
+async function staffCredential(password) {
+  if (state.config.auth_mode !== 'client_kdf') return { password };
+  const salt = randomSaltHex();
+  const rounds = Number(state.config.pbkdf2_rounds) || 600000;
+  return { salt, rounds, digest: await pbkdf2Hex(password, salt, rounds) };
+}
 
 async function call(path, payload, okMessage) {
   await api(path, payload);
@@ -168,7 +176,7 @@ export const submits = {
 
   'staff-create-form': async ({ d }) => {
     const result = await api('/admin/staff', {
-      phone: d.phone, nickname: d.nickname, role: d.role, password: d.password
+      phone: d.phone, nickname: d.nickname, role: d.role, ...await staffCredential(d.password)
     });
     closeModal();
     await render();
@@ -188,7 +196,16 @@ export const submits = {
       await call('/admin/staff/status', { id, status: form.dataset.value },
         form.dataset.value === 'active' ? '账号已启用' : '账号已停用，会话已注销');
     } else if (op === 'staff-reset') {
-      const result = await api('/admin/staff/password', { id });
+      let temporaryPassword;
+      let payload = { id };
+      if (state.config.auth_mode === 'client_kdf') {
+        const bytes = new Uint8Array(18);
+        window.crypto.getRandomValues(bytes);
+        temporaryPassword = Array.from(bytes, n => n.toString(16).padStart(2, '0')).join('');
+        payload = { id, ...await staffCredential(temporaryPassword) };
+      }
+      const result = await api('/admin/staff/password', payload);
+      if (temporaryPassword) result.password = temporaryPassword;
       closeModal();
       await render();
       modal(`<h2>密码已重置</h2>
