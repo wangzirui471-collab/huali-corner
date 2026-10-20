@@ -47,9 +47,11 @@ from .catalog_api import CatalogApi, CATALOG_ROUTES
 from .community_api import CommunityApi, COMMUNITY_ROUTES
 from .staff_api import StaffApi, STAFF_ROUTES
 from .auth_api import AuthApi, AUTH_ROUTES
+from .friend_api import FriendApi, FRIEND_ROUTES
+from ..core.config import COLLEGES, GRADES
 
 
-class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, CloudRules, ReadPages):
+class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, CloudRules, ReadPages):
     def __init__(self, env):
         self.env = env
         self.db = Database(env.DB)
@@ -206,7 +208,8 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, CloudRules, Rea
             'pilot': '计算机工程学院',
             'campus': '广州校区',
             'support_hours': '08:00–20:00',
-            'colleges': [{'source_name': '计算机工程学院'}],
+            'colleges': [{'source_name': name} for name in COLLEGES],
+            'grades': GRADES,
             'buildings': BUILDINGS,
         })
 
@@ -312,6 +315,13 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, CloudRules, Rea
         account = self.normalize_account(data.get('phone'))
         nickname = (data.get('nickname') or '').strip()
         require(0 < len(nickname) <= 24, '昵称需填写且不超过24字')
+        # 学院/年级：注册时可选，学院必须在名单内（名单来自用户给的 xlsx，只取名称）。
+        college = (data.get('college') or '').strip()
+        grade = (data.get('grade') or '').strip()
+        major = (data.get('major') or '').strip()
+        require(college in COLLEGES, '请选择正确的学院')
+        require(grade in GRADES, '请选择正确的年级')
+        require(len(major) <= 24, '专业不超过24字')
         salt = self.check_salt(data.get('salt'))
         rounds = self.check_rounds(int(data.get('rounds') or 0))
         digest = self.check_digest(data.get('digest'))
@@ -325,8 +335,8 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, CloudRules, Rea
 
         # 用户与密码必须一次成事：第二条语句用子查询自取 id，不依赖交互式事务。
         results = await self.db.batch([
-            ('INSERT INTO users(phone,nickname,college,role) VALUES(?,?,?,?)',
-             (account, nickname, '计算机工程学院', 'user')),
+            ('INSERT INTO users(phone,nickname,college,major,grade,role) VALUES(?,?,?,?,?,?)',
+             (account, nickname, college, major, grade, 'user')),
             ('''INSERT INTO password_credentials(user_id,salt,digest,rounds,recovery_digest)
                 SELECT id,?,?,?,? FROM users WHERE phone=?''',
              (salt, digest, rounds, recovery_digest, account)),
@@ -580,3 +590,4 @@ ROUTES.update(CATALOG_ROUTES)
 ROUTES.update(COMMUNITY_ROUTES)
 ROUTES.update(STAFF_ROUTES)
 ROUTES.update(AUTH_ROUTES)
+ROUTES.update(FRIEND_ROUTES)
