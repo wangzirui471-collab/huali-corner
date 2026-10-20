@@ -392,6 +392,11 @@ class CommunityService(ValidationMixin):
         private=room['kind']=='private'
         if private:
             peer=self.row('SELECT user_id FROM members WHERE room_id=? AND user_id<>?',(r,u))['user_id']
+            # 好友门禁：同意申请之前私聊发不出去（对方仍可读历史）。
+            # 客服会话豁免——顾客与客服无需互为好友，否则两边都发不出消息，
+            # 客服功能直接不可用。
+            if not room['support']:
+                self.require(self.is_friend(u,peer),'先加对方为好友才能聊天',403)
             self.require(not self.row('SELECT 1 FROM blocks WHERE (user_id=? AND target=?) OR (user_id=? AND target=?)',(u,peer,peer,u)),'该会话已被屏蔽',403)
         # 聊天是反引流的主战场之一：群里一句「加微信」能带走一整群的人。
         # 私聊用另一套尺度——联系方式放行，站外平台/站外收款/违禁品照拦，
@@ -416,6 +421,106 @@ class CommunityService(ValidationMixin):
             if enabled:c.execute('INSERT OR IGNORE INTO blocks VALUES(?,?)',(u,int(target)))
             else:c.execute('DELETE FROM blocks WHERE user_id=? AND target=?',(u,int(target)))
         return {'ok':True}
+
+    # --- 好友系统 ---------------------------------------------------------
+    # 规则与 Cloudflare 版（app/cloudflare/friend_api.py）保持一致：
+    # 先申请、对方同意后才能私聊；申请附言 ≤15 字且要过私聊敏感词；
+    # 回应求购时带上 want_id，这是「我能卖」撮合闭环的凭据。
+    # 本地试用版此前完全没有这组接口——前端按钮一点就 404。
+
+    FRIEND_MESSAGE_LIMIT = 15
+
+    def _friend_row(self, uid, target):
+        return self.row(
+            'SELECT * FROM friendships WHERE (requester=? AND target=?) OR (requester=? AND target=?) '
+            'ORDER BY id DESC LIMIT 1', (uid, target, target, uid))
+
+    def is_friend(self, uid, peer):
+        return bool(self.row(
+            "SELECT 1 FROM friendships WHERE status='accepted' AND "
+            '((requester=? AND target=?) OR (requester=? AND target=?))', (uid, peer, peer, uid)))
+
+    def friends(self, u):
+        """好友列表 + 收到/发出的待处理申请。只回公开资料字段。"""
+        rows = self.rows(
+            '''SELECT f.*, us.nickname, us.college, us.major, us.score
+               FROM friendships f JOIN users us
+                 ON us.id = CASE WHEN f.requester=? THEN f.target ELSE f.requester END
+               WHERE f.requester=? OR f.target=?
+               ORDER BY COALESCE(f.decided, f.created) DESC''', (u, u, u))
+        out = {'friends': [], 'incoming': [], 'outgoing': []}
+        for r in rows:
+            peer = r['target'] if r['requester'] == u else r['requester']
+            item = {'id': r['id'], 'user_id': peer, 'nickname': r['nickname'], 'college': r['college'],
+                    'major': r['major'], 'score': r['score'], 'message': r['message'],
+                    'want_id': r['want_id'], 'status': r['status'],
+                    'created': r['created'], 'decided': r['decided']}
+            if r['status'] == 'accepted':
+                out['friends'].append(item)
+            elif r['status'] == 'pending':
+                (out['incoming'] if r['target'] == u else out['outgoing']).append(item)
+        return out
+
+    def friend_state(self, u, target):
+        """给前端决定按钮文案：self / accepted / pending_out / pending_in / none。"""
+        target = int(target)
+        if target == u:
+            return {'state': 'self'}
+        row = self._friend_row(u, target)
+        if not row or row['status'] == 'rejected':
+            return {'state': 'none'}
+        if row['status'] == 'accepted':
+            return {'state': 'accepted'}
+        return {'state': 'pending_out' if row['requester'] == u else 'pending_in'}
+
+    def friend_request(self, u, target, message='', want_id=0):
+        target = int(target)
+        self.require(target and target != u, '不能加自己为好友')
+        self.require(self.row("SELECT 1 FROM users WHERE id=? AND status='active'", (target,)), '用户不存在', 404)
+        message = str(message or '').strip()
+        self.require(len(message) <= self.FRIEND_MESSAGE_LIMIT,
+                     '申请附言最多 %d 个字' % self.FRIEND_MESSAGE_LIMIT)
+        if message:
+            self.require(not scan_private(message)['blocked'], '申请附言包含不能发送的内容', 422)
+        want_id = int(want_id or 0)
+        if want_id:
+            self.require(self.row('SELECT 1 FROM wants WHERE id=?', (want_id,)), '求购不存在', 404)
+        row = self._friend_row(u, target)
+        if row and row['status'] == 'accepted':
+            return {'ok': True, 'state': 'accepted', 'message': '你们已经是好友'}
+        if row and row['status'] == 'pending':
+            if row['requester'] == u:
+                return {'ok': True, 'state': 'pending_out', 'message': '申请已发送，等对方处理'}
+            return {'ok': True, 'state': 'pending_in', 'message': '对方已向你发出申请，去「好友」处理'}
+        now = time.time()
+        nick = self.profile(u)['nickname']
+        body = nick + ' 想加你为好友' + ('：' + message if message else '')
+        with self.tx() as c:
+            if row:
+                c.execute("UPDATE friendships SET requester=?,target=?,message=?,want_id=?,"
+                          "status='pending',created=?,decided=NULL WHERE id=?",
+                          (u, target, message, want_id, now, row['id']))
+            else:
+                c.execute('INSERT INTO friendships(requester,target,message,want_id,status,created) '
+                          'VALUES(?,?,?,?,?,?)', (u, target, message, want_id, 'pending', now))
+            c.execute('INSERT INTO notifications(user_id,kind,body,created) VALUES(?,?,?,?)',
+                      (target, 'friend_request', body, now))
+        return {'ok': True, 'state': 'pending_out', 'message': '申请已发送'}
+
+    def friend_decide(self, u, fid, accept=True):
+        row = self.row('SELECT * FROM friendships WHERE id=?', (int(fid),))
+        self.require(row, '申请不存在', 404)
+        self.require(row['target'] == u, '只能处理发给你的申请', 403)
+        self.require(row['status'] == 'pending', '该申请已处理')
+        now = time.time()
+        nick = self.profile(u)['nickname']
+        notice = (nick + ' 同意了你的好友申请，现在可以聊天了') if accept else '对方拒绝了你的好友申请'
+        with self.tx() as c:
+            c.execute('UPDATE friendships SET status=?,decided=? WHERE id=?',
+                      ('accepted' if accept else 'rejected', now, int(fid)))
+            c.execute('INSERT INTO notifications(user_id,kind,body,created) VALUES(?,?,?,?)',
+                      (row['requester'], 'friend_accepted' if accept else 'friend_rejected', notice, now))
+        return {'ok': True, 'status': 'accepted' if accept else 'rejected'}
 
     # 置顶 / 取消置顶：写到 room_pins 私表，仅自己可见。群聊和私聊都能置顶。
     # 列表接口 rooms() 把这个字段一并返回，前端按 pinned desc, last_at desc 排序。

@@ -21,6 +21,12 @@ class SocialNotificationTests(unittest.TestCase):
         self.alice = self.m.register_password('13800000021', 'Passw0rd!123', '阿甲')['user']['id']
         self.bob = self.m.register_password('13800000022', 'Passw0rd!123', '阿乙')['user']['id']
         self.carol = self.m.register_password('13800000023', 'Passw0rd!123', '阿丙')['user']['id']
+        # 2026-10 起私聊要求先是好友：这组用例测的是未读/通知，不是门禁。
+        self.m.friend_request(self.alice, self.bob, '')
+        self.m.friend_decide(self.bob, self.m.friends(self.bob)['incoming'][0]['id'], True)
+        # 建立好友关系本身会产生通知，会污染下面「未读条数」的断言，清掉。
+        with self.m.tx() as c:
+            c.execute('DELETE FROM notifications')
 
     def tearDown(self):
         self.tmp.cleanup()

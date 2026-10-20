@@ -192,6 +192,13 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/rooms':return self.respond(m.rooms(u))
             if p=='/api/rooms/join' and method=='POST':return self.respond(m.join_room(u,data['kind']))
             if p=='/api/rooms/private' and method=='POST':return self.respond(m.private_room(u,int(data['peer'])))
+            # 好友系统：与 Cloudflare 版同一套规则（申请 → 同意 → 才能私聊）。
+            if p=='/api/friends' and method=='GET':return self.respond(m.friends(u))
+            if p=='/api/friend/state':return self.respond(m.friend_state(u,int(query.get('user_id') or query['id'])))
+            if p=='/api/friend/request' and method=='POST':
+                return self.respond(m.friend_request(u,int(data['target']),data.get('message',''),data.get('want_id') or 0))
+            if p=='/api/friend/decide' and method=='POST':
+                return self.respond(m.friend_decide(u,int(data['id']),bool(data.get('accept',True))))
             # 置顶 / 取消置顶：只动当前用户的视图，不影响其他成员。
             if p=='/api/rooms/pin' and method=='POST':return self.respond(m.pin_room(u,int(data['room_id']),bool(data.get('pinned',True))))
             # 删除聊天记录：只清自己这边的 message_hides，对方不受影响。

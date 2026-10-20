@@ -126,6 +126,7 @@ class MarketTests(unittest.TestCase):
         with self.assertRaises(DomainError):self.m.review(self.b,999,5,'好')
     def test_private_chat_membership_and_blocks(self):
         r=self.m.private_room(self.a,self.b)
+        befriend(self.m,self.a,self.b)
         self.m.send_message(self.a,r['id'],'你好','message1')
         self.m.send_message(self.a,r['id'],'你好','message1')
         self.assertEqual(len(self.m.messages(self.b,r['id'])),1)
@@ -375,6 +376,7 @@ class ChatRoomTests(unittest.TestCase):
 
     def test_recall_window_and_permission(self):
         r=self.m.private_room(self.a,self.b)
+        befriend(self.m,self.a,self.b)
         self.m.send_message(self.a,r['id'],'说错话了','k1')
         mid=self.m.messages(self.a,r['id'])[0]['id']
         with self.assertRaises(DomainError):self.m.recall_message(self.b,mid)   # 不能撤别人的
@@ -394,3 +396,11 @@ class ChatRoomTests(unittest.TestCase):
         self.assertEqual(len(first),200)
         self.assertEqual(first[0]['body'],'m50'); self.assertEqual(first[-1]['body'],'m249')
         self.assertEqual(self.m.messages(self.a,r['id'],first[-1]['id']),[])
+
+
+def befriend(m, a, b):
+    """2026-10 起私聊要求先是好友；这里把关系建好，测试才能走到消息逻辑。"""
+    m.friend_request(a, b, '')
+    incoming = m.friends(b)['incoming']
+    if incoming:
+        m.friend_decide(b, incoming[0]['id'], True)

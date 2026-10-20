@@ -85,11 +85,24 @@ export async function profile(id){
     </div>`,'me');
     return;
   }
+  // 私聊要先是好友（2026-10 好友门禁）：非好友只给「加好友」，
+  // 已经是好友才给「发私信」。以前这里只有一个「发私信」，现在点下去
+  // 会被门禁拦，反而让人不知道下一步该干嘛。
+  const friendState = own ? 'self'
+    : ((await api('/friend/state?user_id=' + u.id).catch(() => ({state: 'none'}))).state || 'none');
+  const connectBtn = friendState === 'accepted'
+    ? `<button class="btn primary" data-action="chat" data-id="${u.id}">发私信</button>`
+    : friendState === 'pending_out'
+      ? `<button class="btn secondary" data-action="add-friend" data-id="${u.id}" data-name="${e(u.nickname)}">已申请，等对方同意</button>`
+      : friendState === 'pending_in'
+        ? `<button class="btn primary" data-action="add-friend" data-id="${u.id}" data-name="${e(u.nickname)}">对方申请了你，点此处理</button>`
+        : `<button class="btn primary" data-action="add-friend" data-id="${u.id}" data-name="${e(u.nickname)}">加好友</button>`;
+
   shell(`${heading('NICE TO MEET YOU','同学的转角','看看这位同学的公开信息和在售好物。')}
   <section class="panel profile-card">
     ${userAvatar(u,'large')}
     <div><h2>${e(u.nickname)}${u.trusted?'<span class="trusted-pill">诚信客户</span>':''}</h2><p>${e(u.college)} · ${e(u.major)} · ${e(u.education)}</p><p>${e(u.bio||'让闲置遇到真正需要它的人。')}</p><span class="tag">信誉 ${u.score}/100 · 不是交易担保</span></div>
-    <button class="btn primary" data-action="chat" data-id="${u.id}">发私信</button>
+    ${connectBtn}
   </section>
   <h2>在售商品</h2>
   <div class="product-grid">${products}</div>`,'me');

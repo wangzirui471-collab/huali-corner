@@ -274,6 +274,9 @@ class ChatPostModerationTests(DeskTestCase):
 
     def test_private_chat_allows_contact_but_blocks_offsite_payment(self):
         room = self.m.private_room(self.user, self.peer)['id']
+        # 私聊门禁（2026-10）：先成好友，才轮得到敏感词判定。
+        self.m.friend_request(self.user, self.peer, '')
+        self.m.friend_decide(self.peer, self.m.friends(self.peer)['incoming'][0]['id'], True)
         # 约交付时间互留微信是正常沟通，私聊不该拦。
         self.assertTrue(self.m.send_message(self.user, room, '加微信约个时间', 'p1')['ok'])
         # 但把付款搬出平台必须拦——那是诈骗高发点。
