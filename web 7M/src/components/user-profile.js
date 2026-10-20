@@ -100,15 +100,15 @@ export function userAvatarForm(user){
         <input data-user-control id="uc-avatar-file" name="avatarfile" type="file" class="uc-file-native" accept="image/jpeg,image/png,image/webp" aria-describedby="uc-avatar-note">
         <div class="uc-file-row">
           <label class="uc-btn uc-file-btn" for="uc-avatar-file">选择图片</label>
-          <span class="uc-file-name" data-user-file-name>未选择任何文件</span>
+          <span class="uc-file-name" data-user-file-name>未选择图片</span>
         </div>
         <p id="uc-avatar-note" class="uc-note">支持 JPEG、PNG、WebP，原文件不超过 2 MiB；不支持动画与多帧图片。</p>
         <div class="uc-ops">
           <button data-user-control class="uc-btn is-primary" type="submit">上传并预览</button>
           <button data-user-control class="uc-btn" type="button" data-action="user-avatar-preview">本地预览</button>
           <button data-user-control class="uc-btn" type="button" data-action="user-avatar-cancel">取消本次选择</button>
-          <button data-user-control class="uc-link" type="button" data-action="user-avatar-remove">移除当前头像</button>
           <button data-user-control class="uc-btn is-primary" type="button" data-action="user-avatar-confirm" hidden>确认设为头像</button>
+          <button data-user-control class="uc-link uc-ops-end" type="button" data-action="user-avatar-remove">移除当前头像</button>
         </div>
         <div data-user-avatar-feedback class="uc-feedback" role="status" aria-live="polite" tabindex="-1"></div>
       </div>

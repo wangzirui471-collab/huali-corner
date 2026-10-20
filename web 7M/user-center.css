@@ -69,23 +69,22 @@
   max-width:1080px; margin:0 auto; color:var(--uc-ink-2);
 }
 .uc-page a{ color:inherit; }
+/* 设置页整页白底：抖音式设置页不铺灰色画布，分区靠细线而不是卡片 */
+.market-main:has(.uc-page){ background:#fff; }
 
 /* 标题行：sticky，长表单滚到一半也够得着保存 */
 .uc-head{ position:sticky; top:calc(var(--header-h, 64px)); z-index:5;
   display:flex; align-items:center; justify-content:space-between; gap:16px;
-  padding:18px 0 16px; background:#fff; border-bottom:1px solid var(--uc-line); }
-.uc-head h1{ display:flex; align-items:center; gap:8px; margin:0; font-size:20px; font-weight:700;
-  line-height:1.4; color:var(--uc-ink); letter-spacing:-.2px; }
+  padding:16px 0 12px; background:#fff; border-bottom:1px solid var(--uc-line); }
+.uc-head h1{ margin:0; font-size:20px; font-weight:700;
+  line-height:1.4; color:var(--uc-ink); letter-spacing:-.3px; }
 .uc-head p{ margin:3px 0 0; font-size:12.5px; color:var(--uc-muted); line-height:1.6; }
-.uc-mk{ display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px;
-  padding:0 5px; border-radius:4px; background:#f1f2f4; color:#7b8087;
-  font-size:11px; font-weight:600; line-height:1; }
 
 /* 分区 */
 .uc-sec{ padding:0 0 4px; }
-.uc-sec-head{ display:flex; align-items:baseline; justify-content:space-between; gap:16px; padding:22px 0 10px; }
-.uc-sec-head h2{ display:flex; align-items:center; gap:8px; margin:0; font-size:14px; font-weight:700; color:var(--uc-ink); }
-.uc-sec-head > span{ font-size:12px; color:var(--uc-faint); }
+.uc-sec-head{ display:flex; align-items:baseline; justify-content:space-between; gap:16px; padding:26px 0 8px; }
+.uc-sec-head h2{ margin:0; font-size:15px; font-weight:700; color:var(--uc-ink); letter-spacing:-.1px; }
+.uc-sec-head > span{ font-size:11.5px; color:var(--uc-faint); }
 
 /* 预览区：对应抖音个人主页头部 */
 .uc-preview{ display:flex; align-items:center; gap:18px; padding:6px 0 22px; border-bottom:1px solid var(--uc-line); }
@@ -100,21 +99,21 @@
 /* 设置行 */
 .uc-form{ margin:0; }
 .uc-rows{ display:block; }
-.uc-row{ display:flex; align-items:center; gap:24px; min-height:60px;
-  padding:10px 0; border-bottom:1px solid var(--uc-line); }
+.uc-row{ display:flex; align-items:center; gap:20px; min-height:56px;
+  padding:8px 0; border-bottom:1px solid var(--uc-line); }
 .uc-row:last-child{ border-bottom:0; }
-.uc-label-wrap{ flex:0 0 132px; min-width:0; }
-.uc-label{ display:block; font-size:14px; color:#5c5c66; line-height:1.6; }
-.uc-note{ display:block; margin:2px 0 0; font-size:11.5px; color:var(--uc-faint); line-height:1.55; }
+.uc-label-wrap{ flex:0 0 120px; min-width:0; }
+.uc-label{ display:block; font-size:13.5px; color:var(--uc-ink-2); line-height:1.6; }
+.uc-note{ display:block; margin:2px 0 0; font-size:11px; color:var(--uc-faint); line-height:1.55; }
 .uc-ctl{ flex:1; min-width:0; display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
-.uc-ctl input, .uc-ctl select{ width:100%; max-width:340px; height:38px; padding:0 12px;
-  border:1px solid var(--uc-line-2); border-radius:6px; background:#fff;
+.uc-ctl input, .uc-ctl select{ width:100%; max-width:320px; height:36px; padding:0 12px;
+  border:1px solid var(--uc-line-2); border-radius:8px; background:#fff;
   font:inherit; font-size:14px; color:var(--uc-ink); outline:none;
   transition:border-color .14s ease-out; }
 .uc-ctl input:focus, .uc-ctl select:focus{ border-color:var(--uc-brand); }
 .uc-ctl input::placeholder{ color:var(--uc-faint); }
 .uc-readonly{ font-size:13.5px; color:var(--uc-muted); }
-.uc-readonly-note{ text-align:right; max-width:340px; }
+.uc-readonly-note{ text-align:right; max-width:320px; }
 /* 只读行是「一句说明」而不是一个控件：左对齐读起来才顺，右对齐会像被截断的输入框 */
 .uc-row:has(.uc-readonly) .uc-ctl{ align-items:flex-start; }
 .uc-row:has(.uc-readonly) .uc-readonly-note{ text-align:left; }
@@ -123,7 +122,7 @@
 .uc-row.is-stacked .uc-label-wrap{ margin-bottom:8px; }
 .uc-row.is-stacked .uc-ctl{ align-items:stretch; }
 .uc-ctl textarea{ width:100%; min-height:88px; padding:10px 12px;
-  border:1px solid var(--uc-line-2); border-radius:6px; background:#fff;
+  border:1px solid var(--uc-line-2); border-radius:8px; background:#fff;
   font:inherit; font-size:14px; line-height:1.7; color:var(--uc-ink); resize:vertical; outline:none;
   transition:border-color .14s ease-out; }
 .uc-ctl textarea:focus{ border-color:var(--uc-brand); }
@@ -144,30 +143,25 @@
 
 /* 头像分组：左预览 右操作 */
 .uc-avatar-form{ margin:0; }
-.uc-avatar-body{ display:flex; gap:32px; padding:6px 0 22px; border-bottom:1px solid var(--uc-line); }
-.uc-avatar-left{ flex:0 0 140px; display:flex; flex-direction:column; align-items:center; gap:8px; }
+.uc-avatar-body{ display:flex; gap:28px; padding:4px 0 20px; border-bottom:1px solid var(--uc-line); }
+.uc-avatar-left{ flex:0 0 120px; display:flex; flex-direction:column; align-items:center; gap:8px; }
 .uc-avatar-slot{ display:flex; align-items:center; justify-content:center; }
-.uc-avatar-slot .user-avatar{ width:104px; height:104px; }
-.uc-avatar-slot .user-avatar-fallback{ font-size:34px; }
-.uc-avatar-right{ flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; gap:12px; }
-.uc-avatar-right .uc-note{ margin:0; font-size:12px; }
-.uc-file-input{ display:block; max-width:100%; font:inherit; font-size:13px; color:var(--uc-muted); }
-.uc-file-input::file-selector-button{ margin-right:10px; height:34px; padding:0 14px;
-  border:1px solid var(--uc-line-2); border-radius:6px; background:#fff; color:var(--uc-ink-2);
-  font:inherit; font-size:13px; cursor:pointer; transition:background-color .14s ease-out; }
-.uc-file-input::file-selector-button:hover{ background:#fafafa; }
-
+.uc-avatar-slot .user-avatar{ width:96px; height:96px; }
+.uc-avatar-slot .user-avatar-fallback{ font-size:30px; }
+.uc-avatar-right{ flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; gap:10px; }
+.uc-avatar-right .uc-note{ margin:0; font-size:11.5px; }
 /* 自定义文件选择：原生 input 视觉隐藏但仍可聚焦，按钮是 label（点它等于点 input） */
 .uc-file-native{ position:absolute; width:1px; height:1px; margin:-1px; padding:0; border:0;
   overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
 .uc-file-native:focus-visible + .uc-file-row .uc-file-btn{ outline:2px solid var(--brand-ink,#7d5c07); outline-offset:3px; }
 .uc-file-row{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
 .uc-file-btn{ cursor:pointer; }
-.uc-file-name{ font-size:13px; color:var(--uc-muted); overflow-wrap:anywhere; min-width:0; }
+.uc-file-name{ font-size:12.5px; color:var(--uc-muted); overflow-wrap:anywhere; min-width:0; }
 .uc-file-name.is-picked{ color:var(--uc-ink-2); }
 
 /* 按钮：主按钮品牌黄 + 深字，次按钮白底描边 */
-.uc-ops{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+.uc-ops{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.uc-ops-end{ margin-left:auto; }
 .uc-btn{ display:inline-flex; align-items:center; justify-content:center; height:36px; padding:0 16px;
   border:1px solid var(--uc-line-2); border-radius:6px; background:#fff; color:var(--uc-ink-2);
   font:inherit; font-size:13.5px; line-height:1; white-space:nowrap; cursor:pointer;
@@ -184,11 +178,10 @@
 
 /* 底部操作 */
 .uc-foot{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:22px 0 8px; }
-.uc-foot-save{ height:40px; padding:0 22px; }
 .uc-foot .uc-btn{ height:40px; padding:0 20px; }
 .uc-foot-tip{ margin-left:auto; font-size:12px; color:var(--uc-faint); }
 
-.uc-products{ max-width:1080px; margin:34px auto 0; }
+.uc-products{ max-width:1080px; margin:38px auto 0; padding-top:26px; border-top:1px solid var(--uc-line); }
 .uc-products > h2{ margin:0 0 14px; font-size:17px; font-weight:650; color:var(--uc-ink); }
 
 /* ---------- 响应式 ---------- */
@@ -275,8 +268,12 @@
 .uc-nav-back .icon{ width:14px; height:14px; transform:scaleX(-1); }
 .uc-nav-back:hover{ color:var(--uc-ink, #1a1a1a); text-decoration:none; }
 
-/* 粘性页头会挡住分区标题，锚点滚动时留出呼吸位 */
-#uc-preview, #uc-basic, #uc-avatar, #uc-products{ scroll-margin-top:calc(var(--header-h, 64px) + 24px); }
+/* 粘性页头会挡住分区标题：站点头 + 设置页自己的 sticky 标题行都要让开。
+   桌面 uc-head 约 68px，移动端更矮但窄屏会换成两行（标题 + 整行保存）。 */
+#uc-preview, #uc-basic, #uc-avatar, #uc-products{ scroll-margin-top:calc(var(--header-h, 64px) + 92px); }
+@media (max-width:419px){
+  #uc-preview, #uc-basic, #uc-avatar, #uc-products{ scroll-margin-top:calc(var(--header-h, 64px) + 140px); }
+}
 
 /* 账号与安全弹窗：密码与注销收在一个入口，避免和「我的」页重复 */
 .uc-security-list{ display:flex; flex-direction:column; gap:8px; margin-top:14px; }

@@ -60,23 +60,22 @@ export async function profile(id){
         </nav>
         <div class="uc-main user-center" data-user-center data-user-owner="${u.id}">
           <header class="uc-head">
-            <div class="uc-head-main"><h1><span class="uc-mk">①</span>个人资料</h1><p>资料会展示在你的公开主页，随时可以修改。</p></div>
-            <button class="uc-btn is-primary uc-head-save" type="submit" form="user-profile-form" data-user-control>保存资料</button>
+            <div class="uc-head-main"><h1>个人资料</h1><p>资料会展示在你的公开主页，随时可以修改。</p></div>
+            <button class="uc-btn is-primary uc-head-save" type="submit" form="user-profile-form" data-user-control>保存</button>
           </header>
           <section class="uc-sec" id="uc-preview">
-            <div class="uc-sec-head"><h2><span class="uc-mk">②</span>资料预览</h2><span>公开主页展示的样子</span></div>
+            <div class="uc-sec-head"><h2>资料预览</h2><span>公开主页展示的样子</span></div>
             <div data-user-summary>${userProfileSummary(self)}</div>
           </section>
           <section class="uc-sec" id="uc-basic">
-            <div class="uc-sec-head"><h2><span class="uc-mk">③</span>基本信息</h2><span>带 * 为必填</span></div>
+            <div class="uc-sec-head"><h2>基本信息</h2><span>带 * 为必填</span></div>
             ${userProfileForm(self)}
           </section>
           <section class="uc-sec" id="uc-avatar">
-            <div class="uc-sec-head"><h2><span class="uc-mk">④</span>我的头像</h2><span>上传后先预览，确认才公开</span></div>
+            <div class="uc-sec-head"><h2>我的头像</h2><span>上传后先预览，确认才公开</span></div>
             ${userAvatarForm(self)}
           </section>
           <div class="uc-foot">
-            <button class="uc-btn is-primary uc-foot-save" type="submit" form="user-profile-form" data-user-control>保存资料</button>
             <button class="uc-btn" type="button" data-action="user-profile-reset" data-user-control>重新载入资料</button>
             <span class="uc-foot-tip">保存前不会公开任何修改</span>
           </div>
