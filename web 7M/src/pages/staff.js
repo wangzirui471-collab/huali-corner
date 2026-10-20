@@ -502,7 +502,17 @@ function supportSection({ sessions }) {
 
 export async function staffDesk(section = 'overview') {
   if (!needLogin()) return;
-  if (!['admin', 'support', 'developer'].includes(state.me.role)) throw new Error('没有客服权限');
+  // 普通用户走到这里通常是手输地址或旧书签。给一页说明 + 出口，
+  // 不要 throw 到路由层变成「暂时无法打开」——那不是故障，不需要吓人。
+  if (!['admin', 'support', 'developer'].includes(state.me.role)){
+    shell(heading('NO ACCESS', '客服工作台仅对客服开放',
+      '你当前是普通用户，日常功能都在「我的」和「帮助与客服」里。')
+      + `<section class="panel error-actions">
+           <button class="btn primary" data-go="support">去帮助与客服</button>
+           <button class="btn secondary" data-go="home">回到首页</button>
+         </section>`, 'home');
+    return;
+  }
   const key = SECTIONS.some(([k]) => k === section) ? section : 'overview';
 
   let body;

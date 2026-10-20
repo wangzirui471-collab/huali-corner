@@ -637,6 +637,9 @@ button { -webkit-tap-highlight-color: transparent; }
 .page-heading p { color: var(--muted); font-size: 13px; }
 .eyebrow { letter-spacing: 2px; font-weight: 700; }
 
+/* 错误页 / 权限说明页：给两条明确的出路，而不是把用户丢在一句报错里。 */
+.error-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 4px; }
+
 /* --- 14. 面板与表单 ------------------------------------------------------ */
 .panel {
   border: 1px solid var(--line);

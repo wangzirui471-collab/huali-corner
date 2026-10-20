@@ -418,7 +418,10 @@ export async function adminDesk(raw = '') {
     shell(heading('ACCESS DENIED', '这里只对平台管理员或开发者开放',
       '客服的日常工作在「客服工作台」，恢复上架、人员授权、词库维护由管理员负责。') +
       `<section class="panel"><p>如果你是客服，请点顶栏的「客服工作台」。</p>
-       <button class="btn primary" data-go="staff">去客服工作台</button></section>`, 'staff');
+       <div class="error-actions">
+         <button class="btn primary" data-go="staff">去客服工作台</button>
+         <button class="btn secondary" data-go="home">回到首页</button>
+       </div></section>`, 'staff');
     return;
   }
 

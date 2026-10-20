@@ -9,6 +9,9 @@ import { selectField } from '../components/forms.js';
 export const clicks = {
   close: () => closeModal(),
 
+  // 错误页的「重新加载」：整页重来一次，比让用户自己找刷新按钮直接。
+  'reload-page': () => location.reload(),
+
   // 演示商品的配图是背景裁切的拼图，没有别的角度可换；只有真实上传的照片才切 src。
   photo: b => {
     if (!document.querySelector('.detail-photo .photo-sprite')) $('#main-photo').src = b.dataset.url;

@@ -42,6 +42,41 @@ function releaseMediaURLs(){
   state.mediaURLs.clear();
 }
 
+// 错误页：按状态码分三类，每类都给一条明确的出路。
+// 以前一律显示「暂时无法打开 + 原始错误文案」——普通用户点到一个无权页面，
+// 会以为自己把应用点坏了，这是最伤信任的失败方式。权限不足不是故障，
+// 缺内容也不是故障，只有真正的服务异常才该说「稍后重试」。
+function renderError(err){
+  const status = Number(err?.status) || 0;
+  const message = String(err?.message || '');
+  const forbidden = status === 403 || /权限|无权|仅.{0,12}可/.test(message);
+  const missing = status === 404;
+  if (forbidden){
+    shell(heading('NO ACCESS', '这个页面不对你开放',
+      '当前账号没有访问权限。如果你觉得这里应该能进，可以在「帮助与客服」里提交问题。')
+      + `<section class="panel error-actions">
+           <button class="btn primary" data-go="home">回到首页</button>
+           <button class="btn secondary" data-go="support">帮助与客服</button>
+         </section>`, 'home');
+    return;
+  }
+  if (missing){
+    shell(heading('NOT FOUND', '内容不存在或已被删除',
+      message && message !== '请求失败' ? message : '这条内容可能已被作者删除，或者链接已经失效。')
+      + `<section class="panel error-actions">
+           <button class="btn primary" data-go="home">回到首页</button>
+           <button class="btn secondary" data-go="community">去社区看看</button>
+         </section>`, 'home');
+    return;
+  }
+  shell(heading('SOMETHING WENT WRONG', '暂时无法打开',
+    '服务这次没有响应成功，请重新加载试试。你的登录状态和已有数据都还在。')
+    + `<section class="panel error-actions">
+         <button class="btn primary" data-action="reload-page">重新加载</button>
+         <button class="btn secondary" data-go="home">回到首页</button>
+       </section>`, 'home');
+}
+
 export async function render(){
   // config 未就绪时放弃本次渲染：main.js 的初始化流程拿到 /api/config 之后
   // 还会再渲染一次当前路由。若不放弃，登录框会在 auth_mode 还没到位时被画出
@@ -92,8 +127,8 @@ export async function render(){
   }catch(err){
     // 只有「最后一次发起的渲染」才显示错误页，避免慢请求回来后盖掉新页面。
     if (rid === state.renderId){
-      shell(heading('SOMETHING WENT WRONG', '暂时无法打开', err.message) + empty('请稍后重试'), 'home');
-      toast(err.message);
+      renderError(err);
+      toast(err?.message || '加载失败');
     }
   }finally{
     // 只有最后一次渲染能收进度条：慢请求回来后不能把新页面的进度条关掉。

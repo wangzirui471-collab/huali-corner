@@ -43,7 +43,16 @@ export async function dossier(id) {
   if (!needLogin()) return;
   // 档案聚合了一个账号的全部痕迹（订单、评论、帖子、评价、求购、处置记录），
   // 2026-10-18 起仅平台管理员与开发者可看；客服的日常处置用不到全量档案。
-  if (!isAdmin(state.me)) throw new Error('仅平台管理员或开发者可查看用户档案');
+  // 被挡的人多半是点了旧书签，画一页说明比抛错更体面。
+  if (!isAdmin(state.me)){
+    shell(heading('NO ACCESS', '用户档案仅对管理员开放',
+      '这里能看到一个账号的全部记录，所以只开了管理员与开发者。你的日常处置在「客服工作台」。')
+      + `<section class="panel error-actions">
+           <button class="btn primary" data-go="staff">去客服工作台</button>
+           <button class="btn secondary" data-go="home">回到首页</button>
+         </section>`, 'home');
+    return;
+  }
   const target = Number(id);
   if (!Number.isInteger(target) || target <= 0) throw new Error('用户编号无效');
 
