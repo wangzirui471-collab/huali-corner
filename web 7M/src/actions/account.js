@@ -53,17 +53,14 @@ export const clicks = {
   // 那等于对外发布一个可用的管理员密码。
 
   logout: async () => {
-    await api('/auth/logout', {});
-    state.token = ''; state.me = null; state.cart = [];
-    sessionStorage.removeItem('hc-token');
-    go('home');
+    try { await api('/auth/logout', {}); }
+    finally { clearAccount(); go('home'); }
   },
 
   deactivate: async () => {
     if (!confirm('注销后账号立即下线、在售商品全部下架、无法再登录；订单、工单与信誉记录会保留以便追溯。有未完成订单或未结案工单时无法注销。确认注销账号？')) return;
     await api('/auth/deactivate', {});
-    state.token = ''; state.me = null; state.cart = [];
-    sessionStorage.removeItem('hc-token');
+    clearAccount();
     toast('账号已注销');
     go('home');
   },
@@ -75,8 +72,8 @@ export const clicks = {
 };
 
 function roundsFromConfig(){
-  const r = Number(state.config.pbkdf2_rounds);
-  return Number.isFinite(r) && r > 0 ? r : 600000;
+  // 新凭据固定使用平台规范；旧凭据登录仍使用服务端返回的历史轮数。
+  return 600000;
 }
 
 export const submits = {
@@ -97,12 +94,12 @@ export const submits = {
       const salt = randomSaltHex();
       const rounds = roundsFromConfig();
       const digest = await digestWith(d.password, salt, rounds);
-      const r = await api('/auth/register', { phone: d.phone, nickname: d.nickname, salt, rounds, digest });
+      const r = await api('/auth/register', { phone: d.phone, nickname: d.nickname, college: d.college, grade: d.grade, major: d.major || '', salt, rounds, digest });
       await setLogin(r);
       recoveryNotice(r.recovery_code);
       return;
     }
-    const r = await api('/auth/register', { phone: d.phone, password: d.password, nickname: d.nickname });
+    const r = await api('/auth/register', { phone: d.phone, password: d.password, nickname: d.nickname, college: d.college, grade: d.grade, major: d.major || '' });
     await setLogin(r);
     recoveryNotice(r.recovery_code);
   },
@@ -120,17 +117,17 @@ export const submits = {
 
 async function resetPassword(formId, form, d){
   if (d.new_password !== d.password_confirm) throw new Error('两次输入的密码不一致');
-  const baseBody = { phone: d.phone, new_password: d.new_password };
   if (state.config.auth_mode === 'client_kdf'){
     const salt = randomSaltHex();
     const rounds = roundsFromConfig();
     const new_digest = await digestWith(d.new_password, salt, rounds);
     let body;
     if (formId === 'recover-form'){
-      body = { ...baseBody, salt, rounds, digest: new_digest, recovery_code: d.recovery_code };
+      body = { phone: d.phone, salt, rounds, digest: new_digest, recovery_code: d.recovery_code };
     } else {
-      const old_digest = await digestWith(d.old_password, salt, rounds);
-      body = { ...baseBody, salt, rounds, digest: new_digest, old_digest };
+      const current = await api('/auth/salt');
+      const old_digest = await digestWith(d.old_password, current.salt, current.rounds);
+      body = { salt, rounds, digest: new_digest, old_digest };
     }
     const r = await api(formId === 'recover-form' ? '/auth/recover' : '/auth/password', body);
     clearAccount();
