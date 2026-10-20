@@ -38,27 +38,40 @@ export async function profile(id){
     shell(`<div class="uc-page">
       <div class="uc-layout">
         <nav class="uc-nav" aria-label="账号设置">
-          <p class="uc-nav-title">账号设置</p>
-          <a class="is-active" aria-current="page">个人资料</a>
-          <a href="#forum/account">我的帖子</a>
-          <a href="#favorites">我的收藏</a>
-          <a href="#" data-action="change-password">修改密码</a>
-          <a href="#me">返回我的</a>
+          <div class="uc-nav-who">
+            ${userAvatar(self, 'small')}
+            <div class="uc-nav-who-main">
+              <b>${e(self.nickname)}</b>
+              <small>${e(self.college || '学院未填写')}</small>
+            </div>
+          </div>
+          <p class="uc-nav-title">个人资料</p>
+          <div class="uc-nav-group">
+            <button type="button" class="uc-nav-link is-active" data-action="uc-scroll" data-target="uc-preview">${icon('user')}<span>资料预览</span></button>
+            <button type="button" class="uc-nav-link" data-action="uc-scroll" data-target="uc-basic">${icon('list')}<span>基本信息</span></button>
+            <button type="button" class="uc-nav-link" data-action="uc-scroll" data-target="uc-avatar">${icon('camera')}<span>我的头像</span></button>
+            <button type="button" class="uc-nav-link" data-action="uc-scroll" data-target="uc-products">${icon('tag')}<span>在售商品</span></button>
+          </div>
+          <p class="uc-nav-title">账号</p>
+          <div class="uc-nav-group">
+            <button type="button" class="uc-nav-link" data-action="uc-security">${icon('shield')}<span>账号与安全</span><small>密码 / 注销</small></button>
+          </div>
+          <a class="uc-nav-back" href="#me">${icon('arrow')}返回我的</a>
         </nav>
         <div class="uc-main user-center" data-user-center data-user-owner="${u.id}">
           <header class="uc-head">
             <div class="uc-head-main"><h1><span class="uc-mk">①</span>个人资料</h1><p>资料会展示在你的公开主页，随时可以修改。</p></div>
             <button class="uc-btn is-primary uc-head-save" type="submit" form="user-profile-form" data-user-control>保存资料</button>
           </header>
-          <section class="uc-sec">
+          <section class="uc-sec" id="uc-preview">
             <div class="uc-sec-head"><h2><span class="uc-mk">②</span>资料预览</h2><span>公开主页展示的样子</span></div>
             <div data-user-summary>${userProfileSummary(self)}</div>
           </section>
-          <section class="uc-sec">
+          <section class="uc-sec" id="uc-basic">
             <div class="uc-sec-head"><h2><span class="uc-mk">③</span>基本信息</h2><span>带 * 为必填</span></div>
             ${userProfileForm(self)}
           </section>
-          <section class="uc-sec">
+          <section class="uc-sec" id="uc-avatar">
             <div class="uc-sec-head"><h2><span class="uc-mk">④</span>我的头像</h2><span>上传后先预览，确认才公开</span></div>
             ${userAvatarForm(self)}
           </section>
@@ -69,7 +82,7 @@ export async function profile(id){
           </div>
         </div>
       </div>
-      <section class="uc-products"><h2>在售商品</h2><div class="product-grid">${products}</div></section>
+      <section class="uc-products" id="uc-products"><h2>在售商品</h2><div class="product-grid">${products}</div></section>
     </div>`,'me');
     return;
   }

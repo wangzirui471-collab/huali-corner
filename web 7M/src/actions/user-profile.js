@@ -2,9 +2,10 @@
 
 // All shared account data stays in state.me. Per-operation session snapshots
 // live only in closures; unsaved inputs and upload selections stay on the form.
-import { e } from '../core/dom.js';
+import { e, icon } from '../core/dom.js';
 import { state } from '../core/state.js';
 import { api } from '../core/http.js';
+import { modal } from '../core/shell.js';
 import { userAvatar } from '../components/user-avatar.js';
 import { userProfileSummary, userProfileComparison, userProfileValues } from '../components/user-profile.js';
 
@@ -316,7 +317,36 @@ export function avatarImageError(event){
   if (wrapper) wrapper.setAttribute('aria-label',wrapper.dataset.userAvatarLabel || '默认头像');
 }
 
+// 左侧设置导航：只跳本页分区，不再重复「我的」页已有的帖子/收藏入口。
+function scrollToSection(button){
+  const target = document.getElementById(button.dataset.target || '');
+  if (!target) return;
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  button.closest('.uc-nav-group')?.querySelectorAll('.uc-nav-link')
+    .forEach(x => x.classList.toggle('is-active', x === button));
+}
+
+// 账号与安全：密码与注销收在一个入口，避免和「我的」页各放一个重复按钮。
+function securityModal(){
+  modal(`<h2>账号与安全</h2>
+    <p class="muted">密码与注销都在这里处理；操作立即生效，请确认后再点。</p>
+    <div class="uc-security-list">
+      <button type="button" class="uc-security-item" data-action="change-password">
+        <span class="uc-security-icon">${icon('shield')}</span>
+        <span class="uc-security-main"><b>修改密码</b><small>修改后所有设备退出登录，并生成新的恢复码</small></span>
+        ${icon('arrow')}
+      </button>
+      <button type="button" class="uc-security-item is-danger" data-action="deactivate">
+        <span class="uc-security-icon">${icon('trash')}</span>
+        <span class="uc-security-main"><b>注销账号</b><small>账号立即下线、在售商品下架；历史订单与工单保留</small></span>
+        ${icon('arrow')}
+      </button>
+    </div>`);
+}
+
 export const clicks = {
+  'uc-scroll':scrollToSection,
+  'uc-security':securityModal,
   'user-profile-compare':compareProfile,
   'user-profile-keep-input':keepInputs,
   'user-profile-reset':resetProfile,
