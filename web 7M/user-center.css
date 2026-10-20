@@ -57,179 +57,203 @@
 }
 
 /* ==========================================================================
-   用户中心 · 设置页版式（个人资料 / 头像）
-   2026-10-21 改版：去掉大圆角卡片外框，改「分区 + 设置行 + 1px 分割线」。
+   用户中心 · 后台设置页版式（个人资料 / 头像照片）
+   2026-10-21 第二版：照淘宝「账号管理」与京东「头像照片」的组织方式重做。
+     · 浅灰画布 + 白色面板承载，面板内左侧设置导航、右侧内容
+     · 行是「左标签固定列 + 右控件」，保存按钮跟在表单末尾（与参考一致）
+     · 昵称下方给规则提示框，头像给多尺寸效果预览
    规则全部收在 .uc- 前缀下，不影响站内其它页面。
-   令牌刻意不引 market.css 的 --ink/--brand：那份是电商视觉，这里的灰阶更浅、
-   按钮是品牌黄但文字压深，避免整页只有黄和黑两档。
    ========================================================================== */
-.user-center.uc-page{
-  --uc-ink:#1a1a1a; --uc-ink-2:#3f3f46; --uc-muted:#8a8a93; --uc-faint:#b4b4bb;
-  --uc-line:#f0f0f2; --uc-line-2:#e6e6e9; --uc-brand:#ffcc38; --uc-brand-ink:#2b2000;
-  max-width:1080px; margin:0 auto; color:var(--uc-ink-2);
+.uc-page{
+  --uc-ink:#1f2329; --uc-ink-2:#4a4f57; --uc-muted:#6b7280; --uc-faint:#9aa0a6;
+  --uc-line:#f0f1f3; --uc-line-2:#e5e7eb; --uc-line-3:#dcdfe4;
+  --uc-brand:#ffcc38; --uc-brand-ink:#2b2000;
+  max-width:1120px; margin:0 auto; padding:0 24px 56px; color:var(--uc-ink-2);
+  font-size:14px; line-height:1.7;
 }
-.user-center.uc-page a{ color:inherit; }
+.market-main:has(.uc-page){ background:#f5f6f7; }
 
-/* 标题行：sticky，长表单滚到一半也够得着保存 */
-.uc-head{ position:sticky; top:calc(var(--header-h, 64px)); z-index:5;
-  display:flex; align-items:center; justify-content:space-between; gap:16px;
-  padding:18px 0 16px; background:#fff; border-bottom:1px solid var(--uc-line); }
-.uc-head h1{ display:flex; align-items:center; gap:8px; margin:0; font-size:20px; font-weight:700;
-  line-height:1.4; color:var(--uc-ink); letter-spacing:-.2px; }
-.uc-head p{ margin:3px 0 0; font-size:12.5px; color:var(--uc-muted); line-height:1.6; }
-.uc-mk{ display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px;
-  padding:0 5px; border-radius:4px; background:#f1f2f4; color:#7b8087;
-  font-size:11px; font-weight:600; line-height:1; }
+/* 面板与左导航 */
+.uc-shell{ display:grid; grid-template-columns:200px minmax(0,1fr);
+  background:#fff; border:1px solid #e9eaee; border-radius:3px; overflow:hidden; }
+.uc-side{ background:#fbfbfc; border-right:1px solid #eef0f3; padding:18px 0 24px; }
+.uc-side h2{ margin:0; padding:0 20px 10px; font-size:12px; font-weight:600;
+  letter-spacing:.14em; color:var(--uc-faint); }
+.uc-side nav{ display:flex; flex-direction:column; }
+.uc-side a{ display:block; padding:10px 20px; font-size:14px; color:var(--uc-ink-2);
+  border-left:2px solid transparent; transition:background-color .14s ease-out,color .14s ease-out; }
+.uc-side a:hover{ background:#fff; color:var(--uc-ink); text-decoration:none; }
+.uc-side a.is-active{ background:#fff; color:var(--uc-ink); font-weight:600;
+  border-left-color:var(--uc-brand); }
 
-/* 分区 */
-.uc-sec{ padding:0 0 4px; }
-.uc-sec-head{ display:flex; align-items:baseline; justify-content:space-between; gap:16px; padding:22px 0 10px; }
-.uc-sec-head h2{ display:flex; align-items:center; gap:8px; margin:0; font-size:14px; font-weight:700; color:var(--uc-ink); }
-.uc-sec-head > span{ font-size:12px; color:var(--uc-faint); }
+/* 内容区 */
+.uc-main{ min-width:0; padding:0 32px 30px; }
+.uc-head{ padding:24px 0 16px; border-bottom:1px solid var(--uc-line); }
+.uc-head h1{ margin:0; font-size:20px; font-weight:700; line-height:1.4;
+  color:var(--uc-ink); letter-spacing:-.2px; }
+.uc-head p{ margin:4px 0 0; font-size:12.5px; color:var(--uc-faint); }
+.uc-block{ padding:22px 0; border-bottom:1px solid var(--uc-line); }
+.uc-block:last-child{ border-bottom:0; padding-bottom:8px; }
+.uc-block-head{ display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-bottom:6px; }
+.uc-block-head h2{ margin:0; font-size:15px; font-weight:700; color:var(--uc-ink); }
+.uc-block-head > span{ font-size:12.5px; color:var(--uc-faint); }
 
-/* 预览区：对应抖音个人主页头部 */
-.uc-preview{ display:flex; align-items:center; gap:18px; padding:6px 0 22px; border-bottom:1px solid var(--uc-line); }
-.uc-preview .user-avatar{ width:76px; height:76px; }
-.uc-preview .user-avatar-fallback{ font-size:26px; }
+/* 资料预览条 */
+.uc-preview{ display:flex; align-items:center; gap:16px; padding:6px 0 2px; }
+.uc-preview .user-avatar{ width:64px; height:64px; }
+.uc-preview .user-avatar-fallback{ font-size:24px; }
 .uc-preview-who{ min-width:0; }
-.uc-preview-name{ display:block; font-size:19px; font-weight:700; line-height:1.4; color:var(--uc-ink); }
-.uc-preview-meta{ margin:3px 0 0; font-size:13px; color:var(--uc-muted); line-height:1.6; }
-.uc-chip{ display:inline-block; margin-top:7px; padding:1px 8px; border-radius:4px;
-  background:#fff9e8; color:#7a5f00; font-size:12px; line-height:1.7; }
+.uc-preview-name{ display:block; font-size:17px; font-weight:600; line-height:1.5; color:var(--uc-ink); }
+.uc-preview-meta{ margin:2px 0 0; font-size:13px; color:var(--uc-muted); }
+.uc-chip{ display:inline-block; margin-top:6px; padding:0 8px; border-radius:2px;
+  background:#fff8e6; color:#8a6708; font-size:12px; line-height:1.8; }
 
 /* 设置行 */
 .uc-form{ margin:0; }
-.uc-rows{ display:block; }
-.uc-row{ display:flex; align-items:center; gap:24px; min-height:60px;
-  padding:10px 0; border-bottom:1px solid var(--uc-line); }
-.uc-row:last-child{ border-bottom:0; }
-.uc-label-wrap{ flex:0 0 132px; min-width:0; }
-.uc-label{ display:block; font-size:14px; color:#5c5c66; line-height:1.6; }
-.uc-note{ display:block; margin:2px 0 0; font-size:11.5px; color:var(--uc-faint); line-height:1.55; }
-.uc-ctl{ flex:1; min-width:0; display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
-.uc-ctl input, .uc-ctl select{ width:100%; max-width:340px; height:38px; padding:0 12px;
-  border:1px solid var(--uc-line-2); border-radius:6px; background:#fff;
+.uc-row{ display:flex; gap:20px; padding:11px 0; align-items:flex-start; }
+.uc-label{ flex:0 0 92px; font-size:14px; color:var(--uc-ink-2); line-height:36px; }
+.uc-label label{ cursor:pointer; }
+.uc-req{ margin-left:3px; font-style:normal; color:#d8563f; }
+.uc-ctl{ flex:1; min-width:0; max-width:460px; }
+.uc-ctl input, .uc-ctl select{ width:100%; height:36px; padding:0 10px;
+  border:1px solid var(--uc-line-3); border-radius:3px; background:#fff;
   font:inherit; font-size:14px; color:var(--uc-ink); outline:none;
-  transition:border-color .14s ease-out; }
+  transition:border-color .14s ease-out,background-color .14s ease-out; }
+.uc-ctl input:hover, .uc-ctl select:hover{ border-color:#c6cad1; }
 .uc-ctl input:focus, .uc-ctl select:focus{ border-color:var(--uc-brand); }
-.uc-ctl input::placeholder{ color:var(--uc-faint); }
-.uc-readonly{ font-size:13.5px; color:var(--uc-muted); }
-.uc-readonly-note{ text-align:right; max-width:340px; }
-/* 只读行是「一句说明」而不是一个控件：左对齐读起来才顺，右对齐会像被截断的输入框 */
-.uc-row:has(.uc-readonly) .uc-ctl{ align-items:flex-start; }
-.uc-row:has(.uc-readonly) .uc-readonly-note{ text-align:left; }
-/* 文本域整行：标签上去，控件占满 */
-.uc-row.is-stacked{ display:block; padding:14px 0 16px; }
-.uc-row.is-stacked .uc-label-wrap{ margin-bottom:8px; }
-.uc-row.is-stacked .uc-ctl{ align-items:stretch; }
-.uc-ctl textarea{ width:100%; min-height:88px; padding:10px 12px;
-  border:1px solid var(--uc-line-2); border-radius:6px; background:#fff;
-  font:inherit; font-size:14px; line-height:1.7; color:var(--uc-ink); resize:vertical; outline:none;
+.uc-ctl input::placeholder, .uc-ctl textarea::placeholder{ color:var(--uc-faint); }
+.uc-ctl textarea{ width:100%; min-height:96px; padding:8px 10px;
+  border:1px solid var(--uc-line-3); border-radius:3px; background:#fff;
+  font:inherit; font-size:14px; line-height:1.75; color:var(--uc-ink); resize:vertical; outline:none;
   transition:border-color .14s ease-out; }
+.uc-ctl textarea:hover{ border-color:#c6cad1; }
 .uc-ctl textarea:focus{ border-color:var(--uc-brand); }
+.uc-readonly{ display:inline-block; min-height:36px; line-height:36px; font-size:14px; color:var(--uc-muted); }
+.uc-hint-text{ margin:4px 0 0; font-size:12.5px; line-height:1.7; color:var(--uc-faint); }
+.uc-counter{ margin-top:4px; text-align:right; font-size:12px; color:var(--uc-faint); }
+
+/* 昵称下的规则提示：参考淘宝的提示框，这里是中性灰底，不抢焦点 */
+.uc-hint{ display:flex; gap:8px; margin-top:10px; padding:10px 12px;
+  background:#f7f8fa; border:1px solid #eef0f3; border-radius:3px; }
+.uc-hint-icon{ flex:none; width:15px; height:15px; margin-top:2px; border-radius:50%;
+  background:#c9ced6; color:#fff; font-size:10px; font-weight:700; font-style:normal;
+  line-height:15px; text-align:center; }
+.uc-hint p{ margin:0; font-size:12.5px; line-height:1.7; color:var(--uc-muted); }
+.uc-hint p + p{ margin-top:2px; }
+
+/* 按钮 */
+.uc-btn{ display:inline-flex; align-items:center; justify-content:center; height:36px; padding:0 18px;
+  border:1px solid var(--uc-line-3); border-radius:3px; background:#fff; color:var(--uc-ink-2);
+  font:inherit; font-size:14px; line-height:1; white-space:nowrap; cursor:pointer;
+  transition:background-color .14s ease-out,border-color .14s ease-out,color .14s ease-out; }
+.uc-btn:hover{ background:#fafbfc; border-color:#c6cad1; }
+.uc-btn.is-primary{ background:var(--uc-brand); border-color:var(--uc-brand);
+  color:var(--uc-brand-ink); font-weight:600; }
+.uc-btn.is-primary:hover{ background:#ffd75c; border-color:#ffd75c; }
+.uc-btn[hidden]{ display:none; }
+.uc-btn:disabled{ cursor:wait; opacity:.6; }
+.uc-link{ background:none; border:0; padding:0 2px; color:var(--uc-muted);
+  font:inherit; font-size:13.5px; cursor:pointer; }
+.uc-link:hover{ color:#c0392b; text-decoration:underline; text-underline-offset:3px; }
+.uc-link[hidden]{ display:none; }
+
+.uc-actions{ display:flex; align-items:center; gap:12px; margin-top:14px; padding-top:16px;
+  border-top:1px solid var(--uc-line); }
+.uc-actions-tip{ margin-left:auto; font-size:12.5px; color:var(--uc-faint); }
+
+/* 头像区块：左大预览 · 右效果预览 */
+.uc-avatar-body{ display:grid; grid-template-columns:236px minmax(0,1fr); gap:32px; padding-top:8px; align-items:start; }
+.uc-avatar-left{ display:flex; flex-direction:column; align-items:flex-start; gap:10px; }
+.uc-avatar-slot{ display:flex; align-items:center; justify-content:center; }
+.uc-avatar-slot .user-avatar{ width:132px; height:132px; }
+.uc-avatar-slot .user-avatar-fallback{ font-size:40px; }
+.uc-avatar-actions{ display:flex; align-items:center; gap:12px; }
+.uc-file-native{ position:absolute; width:1px; height:1px; margin:-1px; padding:0; border:0;
+  overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.uc-file-native:focus-visible + .uc-btn{ outline:2px solid #7d5c07; outline-offset:3px; }
+label.uc-btn{ cursor:pointer; }
+.uc-file-name{ font-size:12.5px; color:var(--uc-faint); overflow-wrap:anywhere; }
+.uc-file-name.is-picked{ color:var(--uc-ink-2); }
+.uc-avatar-right .uc-hint-text + .uc-sizes{ margin-top:12px; }
+
+.uc-avatar-right{ min-width:0; }
+.uc-sub-title{ margin:0 0 4px; font-size:13.5px; font-weight:600; color:var(--uc-ink); }
+
+/* 多尺寸效果预览：容器设 --uc-avatar-url，三种尺寸同时换图 */
+.uc-sizes{ display:flex; align-items:flex-start; gap:22px; margin:14px 0 20px; }
+.uc-size-item{ margin:0; min-width:104px; text-align:center; }
+.uc-size{ display:flex; align-items:center; justify-content:center; border-radius:50%;
+  background:#f5f6f8 center/cover no-repeat; background-image:var(--uc-avatar-url,none);
+  color:#9aa0a6; font-weight:600; }
+.uc-size em{ font-style:normal; }
+.uc-has-photo .uc-size em{ visibility:hidden; }
+.uc-size-lg{ --s:84px; width:84px; height:84px; font-size:30px; }
+.uc-size-md{ --s:40px; width:40px; height:40px; font-size:16px; }
+.uc-size-sm{ --s:24px; width:24px; height:24px; font-size:11px; }
+.uc-size-item figcaption{ margin-top:6px; font-size:12px; color:var(--uc-faint); }
+
+.uc-avatar-right .uc-hint-text{ margin:0; }\n.uc-avatar-right .uc-ops{ margin-top:4px; }\n.uc-ops{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+.uc-ops .uc-btn{ height:34px; padding:0 14px; font-size:13.5px; }
 
 /* 反馈与 409 对照 */
 .uc-feedback{ margin-top:10px; font-size:13px; line-height:1.7; color:var(--uc-muted); }
 .uc-feedback:empty{ display:none; }
 .uc-feedback:focus{ outline:2px solid var(--uc-brand); outline-offset:3px; }
-.uc-feedback p{ margin:0 0 6px; padding:10px 12px; border-radius:6px;
-  background:#fff9e8; color:#7a5f00; border:1px solid #f6e6bd; }
-.uc-feedback button{ margin-top:2px; }
+.uc-feedback p{ margin:0 0 6px; padding:9px 12px; border-radius:3px;
+  background:#fff8e6; color:#8a6708; border:1px solid #f2e3b8; }
 .uc-compare{ margin-top:14px; padding:14px 16px; border:1px solid var(--uc-line-2);
-  border-radius:8px; background:#fafafa; }
+  border-radius:3px; background:#fbfbfc; }
 .uc-compare[hidden]{ display:none; }
-.uc-compare-title{ margin:0 0 4px; font-size:13.5px; font-weight:700; color:var(--uc-ink); }
-.uc-compare .uc-preview{ border-bottom:0; padding:12px 0 0; }
-.uc-compare .uc-preview .user-avatar{ width:56px; height:56px; }
+.uc-compare-title{ margin:0 0 2px; font-size:13.5px; font-weight:600; color:var(--uc-ink); }
+.uc-compare .uc-preview{ padding:12px 0 4px; }
 
-/* 头像分组：左预览 右操作 */
-.uc-avatar-form{ margin:0; }
-.uc-avatar-body{ display:flex; gap:32px; padding:6px 0 22px; border-bottom:1px solid var(--uc-line); }
-.uc-avatar-left{ flex:0 0 140px; display:flex; flex-direction:column; align-items:center; gap:8px; }
-.uc-avatar-slot{ display:flex; align-items:center; justify-content:center; }
-.uc-avatar-slot .user-avatar{ width:104px; height:104px; }
-.uc-avatar-slot .user-avatar-fallback{ font-size:34px; }
-.uc-avatar-right{ flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; gap:12px; }
-.uc-avatar-right .uc-note{ margin:0; font-size:12px; }
-.uc-file-input{ display:block; max-width:100%; font:inherit; font-size:13px; color:var(--uc-muted); }
-.uc-file-input::file-selector-button{ margin-right:10px; height:34px; padding:0 14px;
-  border:1px solid var(--uc-line-2); border-radius:6px; background:#fff; color:var(--uc-ink-2);
-  font:inherit; font-size:13px; cursor:pointer; transition:background-color .14s ease-out; }
-.uc-file-input::file-selector-button:hover{ background:#fafafa; }
-
-/* 自定义文件选择：原生 input 视觉隐藏但仍可聚焦，按钮是 label（点它等于点 input） */
-.uc-file-native{ position:absolute; width:1px; height:1px; margin:-1px; padding:0; border:0;
-  overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
-.uc-file-native:focus-visible + .uc-file-row .uc-file-btn{ outline:2px solid var(--brand-ink,#7d5c07); outline-offset:3px; }
-.uc-file-row{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-.uc-file-btn{ cursor:pointer; }
-.uc-file-name{ font-size:13px; color:var(--uc-muted); overflow-wrap:anywhere; min-width:0; }
-.uc-file-name.is-picked{ color:var(--uc-ink-2); }
-
-/* 按钮：主按钮品牌黄 + 深字，次按钮白底描边 */
-.uc-ops{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
-.uc-btn{ display:inline-flex; align-items:center; justify-content:center; height:36px; padding:0 16px;
-  border:1px solid var(--uc-line-2); border-radius:6px; background:#fff; color:var(--uc-ink-2);
-  font:inherit; font-size:13.5px; line-height:1; white-space:nowrap; cursor:pointer;
-  transition:background-color .14s ease-out,border-color .14s ease-out,color .14s ease-out; }
-.uc-btn:hover{ background:#fafafa; border-color:#d9d9dd; }
-.uc-btn.is-primary{ background:var(--uc-brand); border-color:var(--uc-brand); color:var(--uc-brand-ink); font-weight:600; }
-.uc-btn.is-primary:hover{ background:#ffd75c; border-color:#ffd75c; }
-.uc-btn[hidden]{ display:none; }
-.uc-btn:disabled{ cursor:wait; opacity:.6; }
-.uc-link{ background:none; border:0; padding:0 2px; height:auto; color:var(--uc-muted);
-  font:inherit; font-size:13px; cursor:pointer; }
-.uc-link:hover{ color:var(--uc-ink-2); text-decoration:underline; text-underline-offset:3px; }
-.uc-link[hidden]{ display:none; }
-
-/* 底部操作 */
-.uc-foot{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:22px 0 8px; }
-.uc-foot-save{ height:40px; padding:0 22px; }
-.uc-foot .uc-btn{ height:40px; padding:0 20px; }
-.uc-foot-tip{ margin-left:auto; font-size:12px; color:var(--uc-faint); }
-
-.uc-products{ max-width:1080px; margin:34px auto 0; }
-.uc-products > h2{ margin:0 0 14px; font-size:17px; font-weight:650; color:var(--uc-ink); }
+.uc-products{ max-width:1120px; margin:30px auto 0; }
+.uc-products > h2{ margin:0 0 14px; font-size:16px; font-weight:600; color:var(--uc-ink); }
 
 /* ---------- 响应式 ---------- */
 @media (max-width:1023px){
-  .uc-label-wrap{ flex-basis:108px; }
-  .uc-ctl input, .uc-ctl select{ max-width:none; }
+  .uc-shell{ grid-template-columns:minmax(0,1fr); }
+  .uc-side{ border-right:0; border-bottom:1px solid #eef0f3; padding:12px 0; }
+  .uc-side h2{ display:none; }
+  .uc-side nav{ flex-direction:row; gap:4px; overflow-x:auto; padding:0 12px; scrollbar-width:none; }
+  .uc-side nav::-webkit-scrollbar{ display:none; }
+  .uc-side a{ white-space:nowrap; padding:8px 12px; border-left:0;
+    border-bottom:2px solid transparent; }
+  .uc-side a.is-active{ border-left:0; border-bottom-color:var(--uc-brand); }
+  .uc-main{ padding:0 20px 24px; }
+  .uc-avatar-body{ grid-template-columns:minmax(0,1fr); gap:22px; }
+  .uc-avatar-left{ align-items:flex-start; }
+  .uc-avatar-note{ text-align:left; max-width:none; }
+  .uc-file-name{ text-align:left; }
 }
 @media (max-width:767px){
-  .uc-head{ padding:14px 0 12px; }
+  .uc-page{ padding:0 14px 40px; }
+  .uc-main{ padding:0 14px 20px; }
+  .uc-head{ padding:18px 0 12px; }
   .uc-head h1{ font-size:18px; }
-  .uc-head .uc-head-save{ padding:0 14px; }
-  .uc-sec-head{ padding:18px 0 8px; }
-  /* 标签换到控件上方（抖音 App 的样式） */
-  .uc-row{ flex-direction:column; align-items:stretch; gap:6px; padding:12px 0; }
-  .uc-label-wrap{ flex:0 0 auto; }
-  .uc-ctl{ align-items:stretch; }
+  .uc-block{ padding:18px 0; }
+  /* 标签换到控件上方 */
+  .uc-row{ flex-direction:column; gap:6px; padding:11px 0; }
+  .uc-label{ flex:0 0 auto; line-height:1.6; }
+  .uc-ctl{ max-width:none; }
   .uc-ctl input, .uc-ctl select{ height:44px; font-size:15px; }
   .uc-ctl textarea{ font-size:15px; }
-  .uc-readonly-note{ text-align:left; max-width:none; }
-  /* 头像：预览居中，操作整行 */
-  .uc-avatar-body{ flex-direction:column; align-items:center; gap:16px; }
-  .uc-avatar-left{ flex:0 0 auto; }
-  .uc-avatar-right{ width:100%; }
+  .uc-actions{ flex-wrap:wrap; }
+  .uc-actions .uc-btn{ flex:1 1 45%; height:44px; }
+  .uc-actions-tip{ margin-left:0; flex:1 1 100%; text-align:center; }
+  .uc-avatar-slot .user-avatar{ width:88px; height:88px; }
+  .uc-avatar-slot .user-avatar-fallback{ font-size:30px; }
+  .uc-sizes{ gap:18px; }
+  .uc-size-lg{ width:72px; height:72px; font-size:26px; }
   .uc-ops{ width:100%; }
   .uc-ops .uc-btn{ flex:1 1 45%; height:44px; }
-  .uc-ops .uc-link{ flex:1 1 100%; height:40px; text-align:center; }
-  .uc-foot{ flex-direction:column; align-items:stretch; }
-  .uc-foot .uc-btn{ width:100%; }
-  .uc-foot-tip{ margin-left:0; text-align:center; }
 }
 @media (max-width:419px){
-  .uc-head{ flex-wrap:wrap; gap:10px; }
-  .uc-head-main{ min-width:100%; }
-  .uc-head .uc-head-save{ width:100%; height:40px; }
-  .uc-preview{ gap:14px; }
-  .uc-preview .user-avatar{ width:60px; height:60px; }
-  .uc-preview .user-avatar-fallback{ font-size:22px; }
-  .uc-preview-name{ font-size:17px; }
-  .uc-avatar-slot .user-avatar{ width:80px; height:80px; }
-  .uc-avatar-slot .user-avatar-fallback{ font-size:26px; }
+  .uc-preview{ gap:12px; }
+  .uc-preview .user-avatar{ width:56px; height:56px; }
+  .uc-preview-name{ font-size:16px; }
+  .uc-sizes{ gap:14px; }
 }
 @media (prefers-reduced-motion:reduce){
-  .uc-ctl input, .uc-ctl select, .uc-ctl textarea, .uc-btn, .uc-file-input::file-selector-button{ transition:none; }
+  .uc-side a, .uc-ctl input, .uc-ctl select, .uc-ctl textarea, .uc-btn{ transition:none; }
 }

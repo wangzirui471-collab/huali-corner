@@ -85,6 +85,16 @@ function syncVersions(root, version){
   for (const input of root.querySelectorAll('[name="profile_version"]')) input.value = String(version);
 }
 
+// 多尺寸效果预览：容器上设一个 CSS 变量，三种尺寸同时换图（省掉三次 DOM 操作）。
+// url 为空时退回「首字母」，由 .uc-has-photo 控制 <em> 的显隐。
+function syncAvatarSizes(scope, url){
+  const box = scope.root.querySelector('[data-user-avatar-sizes]');
+  if (!box) return;
+  const safe = typeof url === 'string' && /^(\/media\/ua_[0-9a-f]{32}|blob:)/.test(url) ? url : '';
+  box.style.setProperty('--uc-avatar-url', safe ? `url("${safe}")` : 'none');
+  box.classList.toggle('uc-has-photo', Boolean(safe));
+}
+
 function applyProfile(scope, profile){
   if (!scope.visible()) return false;
   assertProfile(profile,scope.owner);
@@ -94,6 +104,7 @@ function applyProfile(scope, profile){
   if (summary) summary.innerHTML = userProfileSummary(profile);
   const preview = scope.root.querySelector('[data-user-avatar-preview]');
   if (preview && !preview.dataset.userObjectUrl) preview.innerHTML = userAvatar(profile);
+  syncAvatarSizes(scope, profile.avatar_url);
   const comparison = scope.root.querySelector('[data-user-comparison]');
   if (comparison) { comparison.hidden = true; comparison.innerHTML = ''; }
   return true;
@@ -189,6 +200,8 @@ function putPreview(scope, blob){
   preview.dataset.userObjectUrl = url;
   // This blob URL is created here, never taken from user JSON or HTML.
   preview.innerHTML = `<span class="user-avatar user-avatar-large" role="img" aria-label="待确认的头像预览"><span class="user-avatar-fallback" aria-hidden="true">预览</span><img data-user-avatar-image src="${e(url)}" alt="待确认的头像预览"></span>`;
+  // 效果预览跟着本地待确认的那张走，用户能立刻判断小尺寸下是否还看得清
+  syncAvatarSizes(scope, url);
 }
 
 function clearSelection(scope){
@@ -200,6 +213,7 @@ function clearSelection(scope){
   releasePreview(preview);
   preview.innerHTML = userAvatar(state.me);
   scope.root.querySelector('[data-action="user-avatar-confirm"]').hidden = true;
+  syncAvatarSizes(scope, state.me && state.me.avatar_url);
 }
 
 // 文件名回显：自定义按钮替代了原生 input 的「未选择任何文件」文案，
