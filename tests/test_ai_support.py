@@ -15,11 +15,32 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ai.classify('谢谢'), 'greeting')
 
     def test_process_question_not_transferred(self):
-        # 流程咨询不直接转人工；纯投诉/诉求才转
+        # 流程咨询和投诉都按业务问题处理；只有明说「转人工」才升级（ChatterMate 模式）
         self.assertEqual(ai.classify('怎么退钱'), 'business')
         self.assertEqual(ai.classify('退款要多久'), 'business')
-        self.assertEqual(ai.classify('我要投诉'), 'transfer')
+        self.assertEqual(ai.classify('我要投诉'), 'business')
         self.assertEqual(ai.classify('怎么投诉'), 'business')
+        self.assertEqual(ai.classify('我要转人工'), 'human')
+        self.assertEqual(ai.classify('找客服'), 'human')
+
+    async def test_complaint_is_not_auto_escalated(self):
+        # 对处理结果不满：先接住情绪 + 给自助路径，不替客户升级
+        r = await ai.ai_answer('你们这平台骗子，我要投诉', SimpleNamespace())
+        self.assertEqual(r['action'], 'reply')
+        self.assertIn('抱歉', r['answer'])
+
+    async def test_human_intent_transfers_online_and_leaves_message_offline(self):
+        original = ai.support_state
+        try:
+            ai.support_state = lambda now=None: {'online': True, 'hours': '08:00—20:00', 'next_open': '今天 08:00'}
+            r = await ai.ai_answer('我要转人工', SimpleNamespace())
+            self.assertEqual(r['action'], 'transfer')
+            ai.support_state = lambda now=None: {'online': False, 'hours': '08:00—20:00', 'next_open': '明天 08:00'}
+            r2 = await ai.ai_answer('我要转人工', SimpleNamespace())
+            self.assertEqual(r2['action'], 'leave_message')
+            self.assertIn('不在线', r2['answer'])
+        finally:
+            ai.support_state = original
 
     def test_links(self):
         self.assertEqual(ai.links_for('怎么发布闲置')[0]['href'], '#publish')

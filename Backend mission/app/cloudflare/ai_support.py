@@ -14,19 +14,22 @@ from .ai_knowledge import KNOWLEDGE
 
 STAFF = ('support', 'admin', 'developer')
 
-FALLBACK = '这个问题我暂时无法准确解答，建议提交工单，客服 08:00—20:00 处理。'
-TRANSFER_REPLY = '好的，建议提交工单，客服 08:00—20:00 处理。'
+SUPPORT_HOURS = '08:00—20:00'
+
+FALLBACK = '这个我暂时没查到确切规则，先给你三个可行的方向：换个说法再问一次（带上页面名称或订单号）、去「帮助与客服」页看看有没有对应说明、需要真人处理的话直接说「转人工」。你把遇到的具体情况描述一下，我也可以接着帮你查。'
+TRANSFER_REPLY = '好的，马上帮你转接人工客服，请稍等。'
+LEAVE_REPLY = '客服现在不在线（每天 %s），留言和工单会按提交顺序排着，%s上班后处理。'
 GREETING_REPLY = '您好，我是转角客服助手。请问有什么可以帮您？'
 
-TRANSFER_WORDS = (
-    '转人工', '人工客服', '找客服', '人工', '真人', '客服在吗',
+# 转人工的触发词：只认「客户明确说要人工」。
+# 参照 ChatterMate（开源 AI 客服平台）的做法——human handoff 由 explicit requests
+# for a human 触发。投诉、差评、退钱、赔偿这类情绪词**不算**：那是「有事要说」，
+# 先按业务问题回答，答完再问一句要不要人工，不要替客户升级。
+HUMAN_WORDS = ('人工', '真人', '客服在吗', '找客服', '有人吗', '人工客服', '人工处理')
+# 带这些词是「对处理结果不满」，先安抚 + 给自助路径，不自动转人工。
+COMPLAINT_WORDS = (
     '投诉', '差评', '骗子', '骗人', '气死', '垃圾', '曝光', '12315',
-    '强烈不满', '太差', '恶心', '坑人', '退钱', '赔偿',
-)
-# 带这些词说明是在问「流程」，不是投诉/诉求；「怎么退钱」应回答流程而不是直接转人工。
-PROCESS_WORDS = (
-    '怎么', '如何', '流程', '多久', '能不能', '可以吗', '步骤', '怎样',
-    '什么', '哪里', '为什么',
+    '强烈不满', '太差', '恶心', '坑人', '退钱', '赔偿', '不服', '凭什么',
 )
 GREETING_WORDS = (
     '你好', '您好', 'hi', 'hello', '在吗', '谢谢', '多谢', '再见', '拜拜',
@@ -64,13 +67,13 @@ SYSTEM_PROMPT = """你是一名企业客服 Agent，只服务「转角」校园�
 【执行流程】
 1. 只允许使用下方【参考资料】中明确写出的信息回答业务问题。
 2. 绝对不允许使用你自带的模型知识补充业务事实。
-3. 资料没有写到的内容，一律使用固定兜底话术，不要猜测、不要估算。
+3. 参考资料没有写到的内容，不要猜测、不要估算，也不要让客户去提交工单。
+   这种情况下直接告诉客户「我这边没查到确切规则」，然后给出两三个可行的下一步
+   （换个说法再问、去哪个页面看、需要真人时怎么说），并请他补充具体情况。
 4. 不承诺优惠、质保、赔偿、发货时效；不使用“大概、可能、应该是”等不确定表述。
 5. 回答简短、友好、口语化，适合客户聊天，不超过 200 字；不要用 Markdown、标题或长段落。
-6. 不主动拓展无关内容；不查询或暴露他人手机号、聊天记录、订单等隐私。
-
-【固定兜底话术（必须一字不差）】
-这个问题我暂时无法准确解答，建议提交工单，客服 08:00—20:00 处理。
+6. 不主动推荐转人工或提交工单。是否转人工由客户自己决定，只有客户明确说了才转。
+7. 不主动拓展无关内容；不查询或暴露他人手机号、聊天记录、订单等隐私。
 
 【参考资料】
 {context}
@@ -117,7 +120,9 @@ def retrieve(question, k=4):
             score += 0.2
         scored.append((score, chunk))
     scored.sort(key=lambda x: x[0], reverse=True)
-    return [(s, c) for s, c in scored[:k] if s >= 0.22]
+    # 阈值与 ai_service 的 HC_AI_MIN_SCORE 默认值（0.12）保持一致：
+    # 之前这里写死 0.22，本地能命中的问题到线上反而查不到。
+    return [(s, c) for s, c in scored[:k] if s >= 0.12]
 
 
 def _strip_greetings(q):
@@ -128,18 +133,34 @@ def _strip_greetings(q):
 
 
 def classify(question):
+    """只做三分类：明确要人工 / 纯问候 / 业务问题。
+
+    不再有「投诉就转人工」这一档：参照 ChatterMate，只有客户明说才升级。
+    """
     q = (question or '').strip().lower()
-    has_transfer = any(w in q for w in TRANSFER_WORDS)
-    has_process = any(w in q for w in PROCESS_WORDS)
-    # 「怎么退钱」「退款要多久」是流程咨询，不该直接转人工；
-    # 「我要投诉」「骗子」这种没有流程词的才是投诉/诉求。
-    if has_transfer and not has_process:
-        return 'transfer'
+    if '人工智能' in q:
+        q = q.replace('人工智能', '')
+    if any(w in q for w in HUMAN_WORDS):
+        return 'human'
     rest = _strip_greetings(q)
     # 「你好，怎么退款」不能被当成纯问候：剥掉问候词后还有实质内容就按业务问题处理。
     if len(rest) <= 2 and any(w in q for w in GREETING_WORDS):
         return 'greeting'
     return 'business'
+
+
+def support_state(now=None):
+    """客服在不在线。按北京时间算，与前端 supportOnDuty() 同一套口径。
+
+    参照 Chatwoot 的 business hours：不在线不是「转人工失败」，而是「消息收下排队」。
+    """
+    t = time.gmtime((now if now is not None else time.time()) + 8 * 3600)
+    hour = t.tm_hour
+    return {
+        'online': 8 <= hour < 20,
+        'hours': SUPPORT_HOURS,
+        'next_open': '今天 08:00' if hour < 8 else '明天 08:00',
+    }
 
 
 def build_context(hits):
@@ -303,12 +324,47 @@ def trim(text, limit=300):
     return (cut[:pos + 1] if pos > 80 else cut) + '…'
 
 
+def _support_payload(extra=None):
+    st = support_state()
+    out = {'support': st}
+    out.update(extra or {})
+    return out
+
+
 def extractive(hits):
     body = re.sub(r'^#+\s*.*$', '', hits[0][1]['text'], flags=re.M).strip()
     body = re.sub(r'\s+', ' ', body)
     sentences = [s for s in re.split(r'(?<=[。！？])', body) if s.strip()]
     answer = ('根据平台规则：' + ''.join(sentences[:2]).strip()).strip()
-    return trim(answer, 260) if len(answer) >= 12 else FALLBACK
+    return trim(answer, 260) if len(answer) >= 12 else ''
+
+
+def no_hit_reply(q):
+    """知识库没命中时的回答。
+
+    参照 FastGPT 对知识库问答的三类验收标准：资料里没有的问题，
+    要「承认不确定 + 主动追问补充条件」，而不是给个链接把人推开。
+    所以这里不设 action=transfer，也不引导提交工单——工单是用户自己开口要的。
+    """
+    body = FALLBACK + '\n\n' + (
+        '顺便说一下：下单、退款、好友、发布、信誉这几类问题我基本都能直接答，'
+        '换个说法（比如带上页面名或订单号）再问一次通常就有。')
+    return _support_payload({
+        'answer': body, 'action': 'reply', 'sources': [], 'links': SUPPORT_LINK,
+        'mode': 'guess', 'latency_ms': 0,
+    })
+
+
+def complaint_reply(q):
+    """对处理结果不满：先接住情绪 + 给自助路径，不替客户升级。"""
+    body = ('非常抱歉让你有这种感觉。你先别急，这类事有两条路可以走：\n'
+            '· 如果是订单问题，去「我的 → 订单」申请售后，客服核实后处理；\n'
+            '· 如果你要举报某个商品、帖子或消息，在对应页面点「举报」，客服 08:00—20:00 核实。\n'
+            '你把情况说清楚，我也可以先帮你查规则。需要真人处理的话，直接跟我说「转人工」。')
+    return _support_payload({
+        'answer': body, 'action': 'reply', 'sources': [], 'links': SUPPORT_LINK,
+        'mode': 'rule', 'latency_ms': 0,
+    })
 
 
 async def call_api(question, context, env, history=None):
@@ -353,15 +409,26 @@ async def ai_answer(question, env, history=None, db=None):
     elapsed = lambda: int((time.time() - started) * 1000)
     if not q:
         return {'answer': GREETING_REPLY, 'action': 'reply', 'sources': [], 'links': [],
-                'mode': 'rule', 'latency_ms': 0}
+                'mode': 'rule', 'latency_ms': 0, 'support': support_state()}
 
     intent = classify(q)
     if intent == 'greeting':
         return {'answer': GREETING_REPLY, 'action': 'reply', 'sources': [], 'links': [],
-                'mode': 'rule', 'latency_ms': elapsed()}
-    if intent == 'transfer':
-        return {'answer': TRANSFER_REPLY, 'action': 'transfer', 'sources': [], 'links': SUPPORT_LINK,
-                'mode': 'rule', 'latency_ms': elapsed()}
+                'mode': 'rule', 'latency_ms': elapsed(), 'support': support_state()}
+
+    # 客户明确要人工才升级。在线就转，不在线就是「留言排队」，不是转人工失败。
+    if intent == 'human':
+        st = support_state()
+        if st['online']:
+            return {'answer': TRANSFER_REPLY, 'action': 'transfer', 'sources': [],
+                    'links': SUPPORT_LINK, 'mode': 'rule', 'latency_ms': elapsed(), 'support': st}
+        return {'answer': '客服现在不在线（每天 %s），留言和工单会按提交顺序排着，%s上班后处理。'
+                          '你先把情况写下来，我也可以现在就帮你查规则。' % (st['hours'], st['next_open']),
+                'action': 'leave_message', 'sources': [], 'links': SUPPORT_LINK,
+                'mode': 'rule', 'latency_ms': elapsed(), 'support': st}
+
+    if any(w in q for w in COMPLAINT_WORDS):
+        return complaint_reply(q)
 
     # 购买意图直接搜商品：不走大模型，快且不烧额度。
     buy = await buy_query(q, db)
@@ -370,8 +437,9 @@ async def ai_answer(question, env, history=None, db=None):
 
     hits = retrieve(q)
     if not hits:
-        return {'answer': FALLBACK, 'action': 'transfer', 'sources': [], 'links': SUPPORT_LINK,
-                'mode': 'guard', 'latency_ms': elapsed()}
+        out = no_hit_reply(q)
+        out['latency_ms'] = elapsed()
+        return out
 
     context = build_context(hits)
     notice = ''
@@ -386,14 +454,19 @@ async def ai_answer(question, env, history=None, db=None):
 
     text = strip_thinking(text)
     links = links_for(hits[0][1]['title'])
+    # 模型没说清或用了不确定表述时，退回知识库原文摘录——资料就在手边，
+    # 没道理因为模型嘴软就把人推去工单。
     if not text or any(w in text for w in UNCERTAIN_WORDS):
-        return {'answer': FALLBACK, 'action': 'transfer', 'sources': sources_of(hits),
-                'links': SUPPORT_LINK, 'mode': mode, 'notice': notice, 'latency_ms': elapsed()}
+        text = extractive(hits)
+        if not text:
+            out = no_hit_reply(q)
+            out.update({'latency_ms': elapsed(), 'notice': notice, 'mode': mode})
+            return out
 
     text = trim(text, 300)
-    action = 'transfer' if ('转接人工' in text or '转人工' in text) else 'reply'
-    return {'answer': text, 'action': action, 'sources': sources_of(hits), 'links': links,
-            'mode': mode, 'notice': notice, 'latency_ms': elapsed()}
+    # 只有客户自己说要人工才升级；模型即使顺嘴提到「转人工」也不算。
+    return {'answer': text, 'action': 'reply', 'sources': sources_of(hits), 'links': links,
+            'mode': mode, 'notice': notice, 'latency_ms': elapsed(), 'support': support_state()}
 
 
 class AiSupport:

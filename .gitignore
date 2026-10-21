@@ -1,5 +1,8 @@
 var/
 var-trial/
+# 压测/云端/临时数据目录（var-load、var-cloud 等）统一忽略；
+# 正式数据只用 var/（演示）与 var-trial/（试用），其余一律不进仓库。
+var-*/
 __pycache__/
 *.pyc
 .venv/
@@ -33,6 +36,8 @@ repair-wheels/
 Backend mission/python_modules/
 Backend mission/.wrangler/
 .venv-trial-broken-*/
+# wrangler 本地缓存（含账号信息），任何位置都不提交
+.wrangler/
 
 # 本地依赖与运行产物（不随仓库提交）
 Backend mission/node_modules/

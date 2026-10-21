@@ -2,6 +2,30 @@
 
 2026-10-18 整理。此次只归档无正式代码引用的本地旧文件、集中存放参考资料并补文档导航；未修改业务代码、数据结构、接口、金额单位、角色或交易规则。
 
+## 2026-10-21 根目录清理
+
+根目录重新变乱的原因不是代码，而是**每轮压测、云端验证、启动器修复都会新生成 `var-*` / `_backup-*` 目录，且没有清理**。其中 `var-load/`（压测快照 + 上传图）已达 178M、`var-cloud/` 未进 `.gitignore`——一旦有人 `git add -A` 就会把数据目录提交进仓库。
+
+本次处理（全部为**移动**，未删除任何文件，可整目录移回）：
+
+| 原位置 | 现状 | 说明 |
+| --- | --- | --- |
+| `_backup-2026-10-15`、`_backup-d1`、`_backup-docs-20261020`、`_backup-launcher-20261018-114347`、`_backup-rescan-20261018-144913` | → `_local/archive/2026-10-21/` | 5 个历史备份，合计约 9.6M |
+| `var-load/` | → 同上 | 178M 压测数据（backups 141M + uploads 35M），今日 14:25 产生 |
+| `var-cloud/` | → 同上 | 772K 云端验证副本 |
+| `.venv-trial-broken-20261019/` | → 同上 | 30M 损坏的 Python 环境 |
+| `_shots/` | → 同上 | 13M 测试截图 |
+| `d1out.json`、`_ui_messages.png` | → 同上 | D1 导出与单张截图 |
+
+`.gitignore` 同时补齐两条规则，防止复发：
+
+- `var-*/`：覆盖 `var-load/`、`var-cloud/` 及未来任意 `var-xxx/`；`var/`（演示）与 `var-trial/`（试用）原本已忽略。
+- `.wrangler/`：根目录 wrangler 缓存含 `wrangler-account.json` 账号信息，任何位置都不提交。
+
+**根目录当前只应出现**：`Backend mission/`、`web 7M/`、`docs/`、`scripts/`、`tests/`、`downloads/`、`var/`、`var-trial/`、`repair-wheels/`、`tools/`、`.venv-trial/`、`_local/`、`_local-run/`、`start-*.bat`、`README.md`、`UPDATE-WINDOWS.txt`。出现其它 `var-*`、`_backup-*`、`*broken*` 目录时，应直接归入 `_local/archive/<日期>/`，不要留在根目录。
+
+**启动脚本分工（6 个都在用，不是重复入口）**：`start-trial-8081.bat` 常规试用主入口；`start-trial-lan-8081.bat` 局域网访问；`start-mysql-8081.bat` MySQL 数据源；`start-public-8081.bat` Cloudflare 临时隧道；`启动转角.bat` 参数化启动（可传端口与数据目录）；`start-trial.bat` 早期 8080 版本，仅兼容旧习惯。
+
 ```text
 huali-corner-trial/
 ├── Backend mission/
