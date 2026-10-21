@@ -31,7 +31,8 @@ const SECTIONS = [
   ['people', '人员与权限', 'user'],
   ['shops', '店铺处置', 'tag'],
   ['words', '敏感词库', 'shield'],
-  ['audit', '审计', 'list']
+  ['audit', '审计', 'list'],
+  ['ai', 'AI 客服', 'message']
 ];
 
 const BLURBS = {
@@ -39,7 +40,8 @@ const BLURBS = {
   people: '建号、停用、重置密码、强制下线。每一步都留审计，谁给谁开了权限都能查。',
   shops: '整店导流的处置入口：一次下架该卖家全部在售商品，只留一条审计和一条通知。',
   words: '改词条立即生效，不用改代码也不用重启。改动写在数据目录，不污染仓库。',
-  audit: '客服只能看到自己经手的记录；管理员可按人、类型、时间筛选并导出 CSV。'
+  audit: '客服只能看到自己经手的记录；管理员可按人、类型、时间筛选并导出 CSV。',
+  ai: 'AI 开关、每日额度、权限矩阵与用量；API Key 由开发者在环境变量/Worker secret 中配置，不在网页里保存。'
 };
 
 const ROLE_TONE = { support: 'info', admin: 'violet', developer: 'warn' };
@@ -56,7 +58,7 @@ const AUDIT_LABELS = {
   ticket_refund: '同意退款', ticket_reject: '驳回工单', ticket_resolved: '结案',
   ticket_review: '提交复核', dossier_view: '查阅用户档案',
   product_moderate: '平台处置商品', product_review: '审核商品',
-  role_change: '角色变更', operator_password_reset: '重置密码',
+  role_change: '角色变更', operator_password_reset: '重置密码', ai_config: 'AI 客服设置',
   staff_create: '新建运营账号', staff_disable: '停用账号', staff_enable: '启用账号',
   staff_password_reset: '重置运营密码', session_revoke: '强制下线',
   seller_moderate: '整店下架', content_remove: '移除内容', content_restore: '恢复内容',
@@ -412,6 +414,39 @@ function auditSection({ rows, params }) {
 
 // --- 入口 -----------------------------------------------------------------
 
+function aiSection(data) {
+  const s = data.settings || {}, u = data.usage || {}, k = data.knowledge || {};
+  const perm = data.permissions || [];
+  const cell = v => v ? '<span class="state-pill ok">可</span>' : '<span class="state-pill mute">—</span>';
+  const rows = perm.map(p => `<tr><td>${e(p.cap)}</td><td>${cell(p.user)}</td><td>${cell(p.support)}</td><td>${cell(p.admin)}</td><td>${cell(p.developer)}</td></tr>`).join('');
+  const days = (u.days || []).map(d => `<span class="ai-usage-day"><b>${Number(d.count) || 0}</b><small>${e(String(d.day).slice(5))}</small></span>`).join('')
+    || '<span class="muted">最近 7 天还没有调用</span>';
+  const top = (u.top || []).map(x => `<li><span>${e(x.nickname || ('#' + x.user_id))}</span><b>${Number(x.count) || 0}</b></li>`).join('')
+    || '<li class="muted">暂无</li>';
+  return `<section class="desk-panel ai-admin">
+    <div class="desk-panel-head">
+      <div><h2>AI 客服</h2><p>${e(data.provider || 'api')} · ${e(data.model || 'deepseek-flash')} · ${data.key_configured ? 'API Key 已配置' : '未配置 API Key（当前走知识库摘录）'}</p></div>
+      <span class="state-pill ${s.enabled ? 'ok' : 'mute'}">${s.enabled ? '已启用' : '已关闭'}</span>
+    </div>
+    <form id="ai-settings-form" class="ai-settings-form">
+      <label class="checkbox"><input type="checkbox" name="enabled" ${s.enabled ? 'checked' : ''}> 启用 AI 客服（关闭后客服页宠物、工单 AI 建议都不可用）</label>
+      <div class="ai-limit-grid">
+        <label class="field"><span>普通用户每日次数</span><input type="number" name="daily_limit" min="1" max="500" value="${Number(s.daily_limit) || 30}"></label>
+        <label class="field"><span>客服 / 管理员每日次数</span><input type="number" name="staff_daily_limit" min="1" max="500" value="${Number(s.staff_daily_limit) || 100}"></label>
+      </div>
+      <button class="btn primary">保存设置</button>
+    </form>
+    <div class="ai-admin-grid">
+      <section class="ai-admin-card"><h3>最近 7 天用量</h3><p class="ai-big">${Number(u.total) || 0}<small>次</small></p><div class="ai-usage-days">${days}</div></section>
+      <section class="ai-admin-card"><h3>调用最多</h3><ol class="ai-top">${top}</ol></section>
+      <section class="ai-admin-card"><h3>知识库</h3><p class="ai-big">${Number(k.chunks) || 0}<small>条片段</small></p><p class="muted">${k.vector ? '向量检索' : '关键词检索'} · ${e(k.source || '')}</p>${data.reload_supported ? '<button class="btn secondary" data-action="ai-reload">重新载入知识库</button>' : '<p class="muted">线上知识库随部署更新；改完 FAQ 重新生成 ai_knowledge.py 后部署。</p>'}</section>
+    </div>
+    <h3 class="ai-matrix-title">权限矩阵</h3>
+    <div class="ai-matrix-wrap"><table class="ai-matrix"><thead><tr><th>能力</th><th>普通用户</th><th>客服</th><th>管理员</th><th>开发者</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="muted ai-footnote">模型、接口地址与 API Key 由开发者在环境变量 / Worker secret 中配置；管理员只能调整开关与额度，避免把密钥写进数据库或网页。</p>
+  </section>`;
+}
+
 export async function adminDesk(raw = '') {
   if (!needLogin()) return;
   if (!['admin', 'developer'].includes(state.me.role)) {
@@ -447,6 +482,8 @@ export async function adminDesk(raw = '') {
     body = shopsSection({ sellers: await api('/admin/sellers') });
   } else if (key === 'words') {
     body = wordsSection({ data: await api('/moderation/words') });
+  } else if (key === 'ai') {
+    body = aiSection(await api('/admin/ai'));
   } else {
     const query = new URLSearchParams();
     if (params.get('type')) query.set('type', params.get('type'));

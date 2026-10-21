@@ -69,3 +69,19 @@ def suggest(question):
     if not isinstance(data, dict) or not data.get('answer'):
         raise DomainError('AI 服务返回格式不正确', 502)
     return data
+
+
+def reload_index():
+    """让本地 AI 服务重新读取 index.json（改完 FAQ 后不用重启）。"""
+    req = urllib.request.Request(
+        _url() + '/reload', data=b'{}', method='POST',
+        headers={'Content-Type': 'application/json'},
+    )
+    token = os.environ.get('HC_AI_TOKEN', '')
+    if token:
+        req.add_header('Authorization', 'Bearer ' + token)
+    try:
+        with _NO_PROXY.open(req, timeout=10) as resp:
+            return json.loads(resp.read().decode('utf-8'))
+    except Exception:  # noqa: BLE001
+        raise DomainError('AI 服务未启动：请先运行 python ai_service/server.py', 503) from None

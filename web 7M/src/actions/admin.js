@@ -160,10 +160,27 @@ export const clicks = {
         <label class="checkbox"><input type="checkbox" name="confirm" required>我确认清除该账号，且了解不可恢复</label>
         <button class="btn danger full">确认清除</button>
       </form>`);
+  },
+
+  'ai-reload': async () => {
+    await api('/admin/ai/reload', {});
+    toast('知识库已重新载入');
+    await render();
   }
 };
 
 export const submits = {
+
+  // AI 客服设置：只有管理员/开发者能进这个页面；额度 1—500。
+  'ai-settings-form': async ({ d, fd }) => {
+    const r = await api('/admin/ai', {
+      enabled: fd.has('enabled'),
+      daily_limit: Number(d.daily_limit),
+      staff_daily_limit: Number(d.staff_daily_limit)
+    });
+    toast(r.settings.enabled ? 'AI 客服设置已保存' : 'AI 客服已关闭');
+    await render();
+  },
 
   // 全部用户视图的搜索：搜索词进 URL，刷新/分享都能还原。
   'people-search-form': async ({ d }) => {

@@ -188,6 +188,15 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, AiSu
 
     # ---- 配置 ------------------------------------------------------------
 
+    async def cf_ai_available(self):
+        """AI 总开关：后台 enabled + 线上是否配置了 API Key。"""
+        try:
+            row = await self.db.first('SELECT enabled FROM ai_settings WHERE id=1')
+        except Exception:  # noqa: BLE001 - 表还没迁移时按默认开启
+            row = None
+        enabled = bool(row['enabled']) if row else True
+        return enabled and bool(getattr(self.env, 'HC_AI_API_KEY', ''))
+
     async def config(self, request):
         # 字段与 server.py 的 /api/config 完全一致，前端不需要改。
         # auth_mode:
@@ -212,7 +221,7 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, AiSu
             'colleges': [{'source_name': name} for name in COLLEGES],
             'grades': GRADES,
             'buildings': BUILDINGS,
-            'ai': bool(getattr(self.env, 'HC_AI_API_KEY', '')),
+            'ai': await self.cf_ai_available(),
         })
 
     # ---- 商品 ------------------------------------------------------------

@@ -39,3 +39,6 @@ CREATE INDEX IF NOT EXISTS user_avatar_uploads_owner ON user_avatar_uploads(user
 
 -- AI 客服每日额度与 2 秒限速（Cloudflare 侧）
 CREATE TABLE IF NOT EXISTS ai_usage(user_id INTEGER,day TEXT,count INTEGER DEFAULT 0,last_at REAL DEFAULT 0,PRIMARY KEY(user_id,day));
+
+-- AI 客服开关与每日额度（管理员/开发者在后台调整）
+CREATE TABLE IF NOT EXISTS ai_settings(id INTEGER PRIMARY KEY CHECK(id=1),enabled INTEGER DEFAULT 1,daily_limit INTEGER DEFAULT 30,staff_daily_limit INTEGER DEFAULT 100,updated_by INTEGER DEFAULT 0,updated_at REAL DEFAULT 0);

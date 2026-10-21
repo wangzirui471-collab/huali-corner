@@ -35,6 +35,17 @@ STOP = {
     '东西', '事情', '这边', '那边', '行不', '好不', '要不', '大概', '可能',
 }
 
+
+AI_PERMISSIONS = [
+    {'cap': '客服页 AI 宠物（提问）', 'user': True, 'support': True, 'admin': True, 'developer': True},
+    {'cap': '工单页 AI 建议回复', 'user': False, 'support': True, 'admin': True, 'developer': True},
+    {'cap': '查看自己的今日额度', 'user': True, 'support': True, 'admin': True, 'developer': True},
+    {'cap': '查看全部用量与来源统计', 'user': False, 'support': False, 'admin': True, 'developer': True},
+    {'cap': '开启/关闭 AI、调整每日额度', 'user': False, 'support': False, 'admin': True, 'developer': True},
+    {'cap': '重载知识库（本地）', 'user': False, 'support': False, 'admin': True, 'developer': True},
+    {'cap': '修改模型/接口地址/API Key', 'user': False, 'support': False, 'admin': False, 'developer': True},
+]
+
 SYSTEM_PROMPT = """你是一名企业客服 Agent，只服务「转角」校园二手交易平台。
 你必须严格按下面的流程工作，不要输出任何思考过程、推理步骤或思维链。
 
@@ -230,8 +241,48 @@ async def ai_answer(question, env):
 
 
 class AiSupport:
+    async def ai_settings(self):
+        await self.db.run('INSERT OR IGNORE INTO ai_settings(id,enabled,daily_limit,staff_daily_limit) VALUES(1,1,30,100)')
+        return await self.db.first('SELECT * FROM ai_settings WHERE id=1')
+
+    async def ai_enabled(self):
+        s = await self.ai_settings()
+        return bool(s and s['enabled']) and bool(getattr(self.env, 'HC_AI_API_KEY', ''))
+
+    async def ai_role(self, uid):
+        return await self.db.scalar('SELECT role FROM users WHERE id=?', (uid,)) or 'user'
+
+    async def ai_quota(self, uid, role=None):
+        s = await self.ai_settings()
+        role = role or await self.ai_role(uid)
+        limit = int(s['staff_daily_limit'] if role in STAFF else s['daily_limit'])
+        day = time.strftime('%Y-%m-%d', time.gmtime(time.time() + 8 * 3600))
+        row = await self.db.first('SELECT count,last_at FROM ai_usage WHERE user_id=? AND day=?', (uid, day))
+        if row:
+            require(int(row['count'] or 0) < limit, f'今天的 AI 提问次数已用完（{limit} 次），请转人工', 429)
+            require(time.time() - float(row['last_at'] or 0) >= 2, '问得太快了，请稍等两秒', 429)
+        return limit
+
+    async def ai_count(self, uid):
+        day = time.strftime('%Y-%m-%d', time.gmtime(time.time() + 8 * 3600))
+        await self.db.run(
+            'INSERT INTO ai_usage(user_id,day,count,last_at) VALUES(?,?,1,?) '
+            'ON CONFLICT(user_id,day) DO UPDATE SET count=count+1,last_at=excluded.last_at',
+            (uid, day, time.time()))
+
+    async def ai_usage_summary(self, days=7):
+        days = max(1, min(int(days or 7), 90))
+        since = time.strftime('%Y-%m-%d', time.gmtime(time.time() - (days - 1) * 86400 + 8 * 3600))
+        rows = await self.db.all('SELECT day,SUM(count) count FROM ai_usage WHERE day>=? GROUP BY day ORDER BY day', (since,))
+        top = await self.db.all('SELECT a.user_id,u.nickname,SUM(a.count) count FROM ai_usage a LEFT JOIN users u ON u.id=a.user_id WHERE a.day>=? GROUP BY a.user_id ORDER BY count DESC LIMIT 5', (since,))
+        return {'since': since,
+                'days': [{'day': r['day'], 'count': int(r['count'] or 0)} for r in rows],
+                'top': [{'user_id': r['user_id'], 'nickname': r['nickname'], 'count': int(r['count'] or 0)} for r in top],
+                'total': sum(int(r['count'] or 0) for r in rows)}
+
     async def ai_chat(self, request):
         uid = await self.page_user(request)
+        require(await self.ai_enabled(), 'AI 客服已关闭，请转人工客服', 503)
         d = await json_body(request)
         question = ValidationMixin.text(d.get('question'), 300, '问题')
         await self.ai_quota(uid)
@@ -242,6 +293,7 @@ class AiSupport:
     async def ai_reply(self, request):
         uid, role = await self.cf_staff_actor(request)
         require(role in STAFF, '仅客服、管理员或开发者可操作', 403)
+        require(await self.ai_enabled(), 'AI 客服已关闭，请转人工客服', 503)
         d = await json_body(request)
         tid = int_param(d, 'ticket_id')
         t = await self.db.first('SELECT id,subject,body FROM tickets WHERE id=?', (tid,))
@@ -250,28 +302,58 @@ class AiSupport:
             'SELECT body FROM ticket_messages WHERE ticket_id=? AND internal=0 ORDER BY id DESC LIMIT 6', (tid,))
         question = (str(t['subject']) + ' ' + str(t['body']) + ' ' +
                     ' '.join(str(m['body']) for m in reversed(msgs)))[:2000]
-        await self.ai_quota(uid)
+        await self.ai_quota(uid, role)
         result = await ai_answer(question, self.env)
         await self.ai_count(uid)
         return json_response(result)
 
-    async def ai_quota(self, uid):
-        day = time.strftime('%Y-%m-%d', time.gmtime(time.time() + 8 * 3600))
-        limit = int(getattr(self.env, 'HC_AI_DAILY_LIMIT', '30') or 30)
-        row = await self.db.first('SELECT count,last_at FROM ai_usage WHERE user_id=? AND day=?', (uid, day))
-        if row:
-            require(row['count'] < limit, f'今天的 AI 提问次数已用完（{limit} 次），请转人工', 429)
-            require(time.time() - (row['last_at'] or 0) >= 2, '问得太快了，请稍等两秒', 429)
+    async def ai_admin_get(self, request):
+        uid, _ = await self.cf_staff_actor(request, admin=True)
+        s = await self.ai_settings()
+        key = bool(getattr(self.env, 'HC_AI_API_KEY', ''))
+        return json_response({
+            'settings': {'enabled': bool(s['enabled']), 'daily_limit': int(s['daily_limit']),
+                         'staff_daily_limit': int(s['staff_daily_limit']), 'updated_at': s['updated_at']},
+            'usage': await self.ai_usage_summary(7),
+            'knowledge': {'chunks': len(KNOWLEDGE), 'created': None, 'vector': False,
+                          'source': 'app/cloudflare/ai_knowledge.py'},
+            'provider': 'api' if key else 'mock',
+            'model': getattr(self.env, 'HC_AI_MODEL', 'deepseek-flash'),
+            'key_configured': key,
+            'reload_supported': False,
+            'permissions': AI_PERMISSIONS,
+        })
 
-    async def ai_count(self, uid):
-        day = time.strftime('%Y-%m-%d', time.gmtime(time.time() + 8 * 3600))
-        await self.db.run(
-            'INSERT INTO ai_usage(user_id,day,count,last_at) VALUES(?,?,1,?) '
-            'ON CONFLICT(user_id,day) DO UPDATE SET count=count+1,last_at=excluded.last_at',
-            (uid, day, time.time()))
+    async def ai_admin_update(self, request):
+        uid, _ = await self.cf_staff_actor(request, admin=True)
+        d = await json_body(request)
+        enabled = 1 if d.get('enabled') else 0
+        try:
+            daily = max(1, min(int(d.get('daily_limit') or 30), 500))
+            staff = max(1, min(int(d.get('staff_daily_limit') or 100), 500))
+        except (TypeError, ValueError):
+            raise DomainError('额度必须是 1—500 的整数', 400) from None
+        await self.db.run('INSERT OR IGNORE INTO ai_settings(id,enabled,daily_limit,staff_daily_limit) VALUES(1,1,30,100)')
+        await self.db.run('UPDATE ai_settings SET enabled=?,daily_limit=?,staff_daily_limit=?,updated_by=?,updated_at=? WHERE id=1',
+                          (enabled, daily, staff, uid, time.time()))
+        await self.db.run('INSERT INTO audit(actor,target,type,delta,reason,ticket_id,created) VALUES(?,?,?,?,?,?,?)',
+                          (uid, 0, 'ai_config', None,
+                           f"AI 客服：{'开启' if enabled else '关闭'}；普通用户 {daily}/天，客服 {staff}/天",
+                           None, time.time()))
+        return await self.ai_admin_get(request)
 
+    async def ai_admin(self, request):
+        if request.method == 'POST':
+            return await self.ai_admin_update(request)
+        return await self.ai_admin_get(request)
+
+    async def ai_reload(self, request):
+        await self.cf_staff_actor(request, admin=True)
+        raise DomainError('线上知识库随部署更新：改完 FAQ 后重新生成 ai_knowledge.py 并重新部署', 501)
 
 AI_ROUTES = {
     '/api/ai/chat': (('POST',), 'ai_chat'),
     '/api/ai/reply': (('POST',), 'ai_reply'),
+    '/api/admin/ai': (('GET', 'POST'), 'ai_admin'),
+    '/api/admin/ai/reload': (('POST',), 'ai_reload'),
 }

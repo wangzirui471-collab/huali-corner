@@ -1,6 +1,19 @@
 """客服模块：工单受理与处理、信誉调整、订单评价。"""
-import json, time
+import json, os, time
+from pathlib import Path
 from ..core.errors import ValidationMixin, DomainError
+
+# AI 客服权限矩阵：前端展示与后端校验共用同一份口径。
+AI_PERMISSIONS = [
+    {'cap': '客服页 AI 宠物（提问）', 'user': True, 'support': True, 'admin': True, 'developer': True},
+    {'cap': '工单页 AI 建议回复', 'user': False, 'support': True, 'admin': True, 'developer': True},
+    {'cap': '查看自己的今日额度', 'user': True, 'support': True, 'admin': True, 'developer': True},
+    {'cap': '查看全部用量与来源统计', 'user': False, 'support': False, 'admin': True, 'developer': True},
+    {'cap': '开启/关闭 AI、调整每日额度', 'user': False, 'support': False, 'admin': True, 'developer': True},
+    {'cap': '重载知识库（本地）', 'user': False, 'support': False, 'admin': True, 'developer': True},
+    {'cap': '修改模型/接口地址/API Key', 'user': False, 'support': False, 'admin': False, 'developer': True},
+]
+
 from ..account.credit import GOOD_REVIEW, AWARD_PER_REVIEW, AWARD_DAILY_CAP, AWARD_MONTHLY_CAP, AWARD_REASON_PREFIX, day_start, month_start, suggest_penalty, VIOLATION_BASE, VIOLATION_LABEL
 
 
@@ -134,16 +147,54 @@ class SupportService(ValidationMixin):
                     self.notify(c,target,'ticket_reply',f'工单 #{tid} 客服已回复，请到客服中心查看。',t['order_id'],tid)
         return self.ticket(u,tid)
 
-    def ai_reply(self,u,tid):
-        """给客服生成建议回复：只把工单的公开信息发给本地 AI。
+    # --- AI 客服：开关、额度、配置与权限 ---------------------------------
+    def ai_settings(self):
+        with self.tx() as c:
+            c.execute('INSERT OR IGNORE INTO ai_settings(id,enabled,daily_limit,staff_daily_limit) VALUES(1,1,30,100)')
+        return self.row('SELECT * FROM ai_settings WHERE id=1')
 
-        内部备注不进入提示词；返回的建议由客服确认后才插入回复框，
-        不会自动发给客户。调用记录只写工单号/来源/耗时，不写客户原话。
-        """
+    def ai_enabled(self):
+        return bool(self.ai_settings()['enabled']) and os.environ.get('HC_AI_ENABLED', '1') == '1'
+
+    @staticmethod
+    def _ai_day():
+        return time.strftime('%Y-%m-%d', time.gmtime(time.time() + 8 * 3600))
+
+    def ai_quota(self,u,role=None):
+        s=self.ai_settings();role=role or self.profile(u)['role']
+        limit=int(s['staff_daily_limit'] if role in ('support','admin','developer') else s['daily_limit'])
+        row=self.row('SELECT count,last_at FROM ai_usage WHERE user_id=? AND day=?',(u,self._ai_day()))
+        if row:
+            self.require(int(row['count'] or 0)<limit,f'今天的 AI 提问次数已用完（{limit} 次），请转人工',429)
+            self.require(time.time()-float(row['last_at'] or 0)>=2,'问得太快了，请稍等两秒',429)
+        return limit
+
+    def ai_count(self,u):
+        day=self._ai_day();now=time.time()
+        with self.tx() as c:
+            row=c.execute('SELECT count FROM ai_usage WHERE user_id=? AND day=?',(u,day)).fetchone()
+            if row:
+                c.execute('UPDATE ai_usage SET count=count+1,last_at=? WHERE user_id=? AND day=?',(now,u,day))
+            else:
+                c.execute('INSERT INTO ai_usage(user_id,day,count,last_at) VALUES(?,?,1,?)',(u,day,now))
+
+    def _ai_log(self,u,channel,result,ticket_id=None):
+        try:
+            line={'time':time.time(),'actor':u,'channel':channel,'ticket_id':ticket_id,
+                  'action':result.get('action'),'mode':result.get('mode'),
+                  'sources':[s.get('title') for s in (result.get('sources') or [])],
+                  'latency_ms':result.get('latency_ms')}
+            with open(self.root/'ai-usage.jsonl','a',encoding='utf-8') as f:
+                f.write(json.dumps(line,ensure_ascii=False)+'\n')
+        except OSError:
+            pass
+
+    def ai_reply(self,u,tid):
+        """给客服生成建议回复；只有客服/管理员/开发者可用，且计入客服额度。"""
+        self.require(self.ai_enabled(),'AI 客服已关闭，请转人工客服',503)
         self.staff(u)
+        self.ai_quota(u)
         t=self.ticket(u,int(tid))
-        # 只拼用户真正在问的内容；「工单类型/主题」这类标签会稀释检索词，
-        # 让「怎么发布闲置」这种明确问题反而检索不到。
         parts=[str(t['subject']),str(t['body'])]
         recent=[m for m in (t.get('messages') or []) if not m.get('internal')][-6:]
         if recent:
@@ -151,36 +202,79 @@ class SupportService(ValidationMixin):
         question='\n'.join(parts)[:2000]
         from .ai import suggest
         result=suggest(question)
-        try:
-            line={'time':time.time(),'actor':u,'ticket_id':t['id'],'action':result.get('action'),
-                  'mode':result.get('mode'),'sources':[s.get('title') for s in (result.get('sources') or [])],
-                  'latency_ms':result.get('latency_ms')}
-            with open(self.root/'ai-usage.jsonl','a',encoding='utf-8') as f:
-                f.write(json.dumps(line,ensure_ascii=False)+'\n')
-        except OSError:
-            pass
+        self.ai_count(u)
+        self._ai_log(u,'staff',result,t['id'])
         return result
 
     def ai_chat(self,u,q):
-        """客户侧 AI 小助手：不绑定工单，任何登录用户可用。
-
-        只发用户这一句问题，不带订单/手机号等上下文；结果由客服宠物展示。
-        频率限制在 ai.py；日志只记来源/耗时，不记问题与回答全文。
-        """
+        """客户侧 AI 小助手：登录用户可用，按普通用户额度限流。"""
+        self.require(self.ai_enabled(),'AI 客服已关闭，请转人工客服',503)
         question=self.text(q,300,'问题')
-        from .ai import suggest, rate_ok
-        if not rate_ok(u):
-            raise DomainError('问得太快了，请稍等两秒',429)
+        self.ai_quota(u)
+        from .ai import suggest
         result=suggest(question)
-        try:
-            line={'time':time.time(),'actor':u,'channel':'customer','action':result.get('action'),
-                  'mode':result.get('mode'),'sources':[s.get('title') for s in (result.get('sources') or [])],
-                  'latency_ms':result.get('latency_ms')}
-            with open(self.root/'ai-usage.jsonl','a',encoding='utf-8') as f:
-                f.write(json.dumps(line,ensure_ascii=False)+'\n')
-        except OSError:
-            pass
+        self.ai_count(u)
+        self._ai_log(u,'customer',result)
         return result
+
+    def ai_usage_summary(self,days=7):
+        days=max(1,min(int(days or 7),90))
+        since=time.strftime('%Y-%m-%d', time.gmtime(time.time()-(days-1)*86400+8*3600))
+        rows=self.rows('SELECT day,SUM(count) count FROM ai_usage WHERE day>=? GROUP BY day ORDER BY day',(since,))
+        top=self.rows('SELECT a.user_id,u.nickname,SUM(a.count) count FROM ai_usage a LEFT JOIN users u ON u.id=a.user_id WHERE a.day>=? GROUP BY a.user_id ORDER BY count DESC LIMIT 5',(since,))
+        return {'since':since,
+                'days':[{'day':r['day'],'count':int(r['count'] or 0)} for r in rows],
+                'top':[{'user_id':r['user_id'],'nickname':r['nickname'],'count':int(r['count'] or 0)} for r in top],
+                'total':sum(int(r['count'] or 0) for r in rows)}
+
+    def ai_admin_get(self,u):
+        self.admin(u)
+        s=self.ai_settings()
+        index=Path(__file__).resolve().parents[3]/'ai_service'/'index.json'
+        chunks=0;created=None;vector=False
+        if index.exists():
+            try:
+                data=json.loads(index.read_text(encoding='utf-8'))
+                chunks=len(data.get('chunks') or []);created=data.get('created');vector=bool(data.get('embed_ok'))
+            except (OSError,ValueError):
+                pass
+        key=bool(os.environ.get('HC_AI_API_KEY') or os.environ.get('DEEPSEEK_API_KEY'))
+        return {'settings':{'enabled':bool(s['enabled']),'daily_limit':int(s['daily_limit']),
+                            'staff_daily_limit':int(s['staff_daily_limit']),'updated_at':s['updated_at']},
+                'usage':self.ai_usage_summary(7),
+                'knowledge':{'chunks':chunks,'created':created,'vector':vector,'source':'ai_service/index.json'},
+                'provider':os.environ.get('HC_AI_PROVIDER','api'),
+                'model':os.environ.get('HC_AI_MODEL','deepseek-flash'),
+                'key_configured':key,
+                'reload_supported':True,
+                'permissions':AI_PERMISSIONS}
+
+    def ai_admin_update(self,u,d):
+        self.admin(u)
+        enabled=1 if d.get('enabled') else 0
+        daily=self._ai_limit(d.get('daily_limit'),30)
+        staff=self._ai_limit(d.get('staff_daily_limit'),100)
+        with self.tx() as c:
+            c.execute('INSERT OR IGNORE INTO ai_settings(id,enabled,daily_limit,staff_daily_limit) VALUES(1,1,30,100)')
+            c.execute('UPDATE ai_settings SET enabled=?,daily_limit=?,staff_daily_limit=?,updated_by=?,updated_at=? WHERE id=1',
+                      (enabled,daily,staff,u,time.time()))
+            c.execute('INSERT INTO audit(actor,target,type,delta,reason,ticket_id,created) VALUES(?,?,?,?,?,?,?)',
+                      (u,0,'ai_config',None,f"AI 客服：{'开启' if enabled else '关闭'}；普通用户 {daily}/天，客服 {staff}/天",None,time.time()))
+        return self.ai_admin_get(u)
+
+    @staticmethod
+    def _ai_limit(value,default):
+        try:
+            n=int(value)
+        except (TypeError,ValueError):
+            n=default
+        return max(1,min(n,500))
+
+    def ai_reload(self,u):
+        self.admin(u)
+        from .ai import reload_index
+        reload_index()
+        return {'ok':True}
 
     def check_conflict(self,u,t):
         if t.get('product_id'):

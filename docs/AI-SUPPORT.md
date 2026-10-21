@@ -75,6 +75,8 @@ ai_service（127.0.0.1:8093）
 | `web 7M/ai-pet.css` | 宠物动画、面板与消息样式 |
 | `web 7M/assets/ai-pet/` | 待机雪碧条与宠物头像 |
 | `POST /api/ai/chat` | 客户侧 AI 小助手（登录用户、限速） |
+| `GET/POST /api/admin/ai` | 管理员/开发者：AI 开关、额度、用量、权限矩阵 |
+| `POST /api/admin/ai/reload` | 管理员/开发者：重新载入本地知识库 |
 | `web 7M/src/actions/support.js` | 生成、插入回复框、错误提示 |
 | `web 7M/ai-support.css` | 面板样式 |
 | `Backend mission/app/cloudflare/ai_support.py` | Worker 侧检索 + 外接 API + 每日额度 |
@@ -90,6 +92,27 @@ ai_service（127.0.0.1:8093）
 - Key：本地 `HC_AI_API_KEY`；线上 `wrangler secret put HC_AI_API_KEY`。
 - 没有 Key 时自动退化为知识库摘录，`mode=mock`，前端标注原因。
 - 线上额度：每账号每天 30 次、两次提问至少间隔 2 秒（D1 `ai_usage`）。
+
+## 5.1 权限矩阵与配置
+
+参照开源 AI 客服（Chatwoot 的角色/收件箱权限、Dify / RAGFlow 的知识库与应用权限）的做法，落成四层权限：
+
+| 能力 | 普通用户 | 客服 | 管理员 | 开发者 |
+| --- | --- | --- | --- | --- |
+| 客服页 AI 宠物（提问） | ✅ | ✅ | ✅ | ✅ |
+| 工单页 AI 建议回复 | ❌ | ✅ | ✅ | ✅ |
+| 查看自己的今日额度 | ✅ | ✅ | ✅ | ✅ |
+| 查看全部用量与来源统计 | ❌ | ❌ | ✅ | ✅ |
+| 开启/关闭 AI、调整每日额度 | ❌ | ❌ | ✅ | ✅ |
+| 重载知识库（本地） | ❌ | ❌ | ✅ | ✅ |
+| 修改模型/接口地址/API Key | ❌ | ❌ | ❌ | ✅ |
+
+- 管理员入口：**管理员工作台 → AI 客服**，可改启用开关、普通用户每日次数、客服每日次数；
+- 修改写入 `ai_settings` 表并记审计（类型 `ai_config`），`/api/config` 的 `ai` 随之变化，宠物/按钮自动显隐；
+- 模型、接口地址、API Key 只放在环境变量 / Worker secret，管理员看不到也改不了（避免密钥进数据库）；
+- 额度：普通用户默认 30 次/天、客服 100 次/天，两次提问至少间隔 2 秒；超限返回 429「今天的 AI 提问次数已用完，请转人工」；
+- 用量：D1/本地 `ai_usage` 表 + `var-trial/ai-usage.jsonl`（只记元数据，不记问题原文）；
+- 知识库维护：本地可在后台点「重新载入知识库」；线上改完 FAQ 需重新生成 `ai_knowledge.py` 并部署。
 
 ## 6. 隐私与日志
 
