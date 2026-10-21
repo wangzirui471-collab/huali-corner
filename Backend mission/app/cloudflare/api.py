@@ -272,16 +272,20 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, Clou
         mine = set()
         if ids:
             placeholders = ','.join('?' * len(ids))
+            viewer = uid or 0
+            # 一次查询同时拿到点赞数、我是否点赞、我是否收藏（原来要 2 次 D1 往返）。
             for r in await self.db.all(
-                    "SELECT product_id, COUNT(*) n FROM reactions WHERE kind='like' "
-                    "AND product_id IN (" + placeholders + ") GROUP BY product_id", tuple(ids)):
-                like_counts[r['product_id']] = r['n']
-            if uid:
-                for r in await self.db.all(
-                        "SELECT product_id, kind FROM reactions WHERE user_id=? "
-                        "AND product_id IN (" + placeholders + ") AND kind IN ('like','favorite')",
-                        (uid, *ids)):
-                    mine.add((r['product_id'], r['kind']))
+                    "SELECT product_id,"
+                    " SUM(CASE WHEN kind='like' THEN 1 ELSE 0 END) likes,"
+                    " MAX(CASE WHEN user_id=? AND kind='like' THEN 1 ELSE 0 END) liked,"
+                    " MAX(CASE WHEN user_id=? AND kind='favorite' THEN 1 ELSE 0 END) favorited"
+                    " FROM reactions WHERE product_id IN (" + placeholders + ")"
+                    " AND kind IN ('like','favorite') GROUP BY product_id",
+                    (viewer, viewer, *ids)):
+                pid = r['product_id']
+                like_counts[pid] = r['likes'] or 0
+                if r['liked']: mine.add((pid, 'like'))
+                if r['favorited']: mine.add((pid, 'favorite'))
         for item in items:
             item['seller_trusted'] = trusted.get(item['seller_id'], False)
             item['likes'] = like_counts.get(item['id'], 0)
