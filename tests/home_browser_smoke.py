@@ -113,11 +113,13 @@ def run():
                 page.wait_for_function('document.querySelector(".home-page")!==null')
                 page.locator('.desktop-navigation [data-go="community"]').click()
                 expect(page).to_have_url(base+'/#community')
-                expect(page.locator('.community-layout')).to_be_visible()
+                expect(page.locator('.community-hub')).to_be_visible()
+                expect(page.locator('.community-hub a[href="#forum/wants"]').first).to_be_visible()
+                expect(page.locator('.want-board')).to_have_count(0)
                 assert pending
                 for route in pending: route.fulfill(status=200, content_type='application/json', body='[]')
                 page.unroute('**/api/products?*', hold)
-                expect(page.locator('.community-layout')).to_be_visible()
+                expect(page.locator('.community-hub')).to_be_visible()
                 expect(page.locator('.home-promos')).to_have_count(0)
 
                 for width in [390,320,768]:
@@ -128,6 +130,11 @@ def run():
                     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth'), f'overflow {width}'
                     expect(page.locator('.mobile-nav [data-go="forum"]')).to_be_visible()
                     expect(page.locator('.mobile-publish')).to_be_visible()
+                    expect(page.locator('.mobile-nav > button')).to_have_count(5)
+                    expect(page.locator('.mobile-nav [data-go="me"]')).to_have_count(0)
+                    nav=page.locator('.mobile-publish').bounding_box()
+                    assert abs(nav['x']+nav['width']/2-width/2)<=1
+                    expect(page.locator('.account-button[data-go="me"]')).to_be_visible()
                     page.screenshot(path=str(output/f'home-mobile-{width}.png'))
                 page.set_viewport_size({'width':1440,'height':1100})
                 page.goto(base+'/#favorites',wait_until='networkidle')
@@ -202,7 +209,7 @@ def run():
                 expect(fallback.locator('.home-feed h2')).to_contain_text('免费好物')
                 panel.locator('[data-action="home-slide"][data-index="0"]').click()
                 panel.locator('[data-action="home-promo-open"]').click()
-                expect(fallback.locator('.community-layout')).to_be_visible()
+                expect(fallback.locator('.community-hub')).to_be_visible()
                 fallback.locator('.brand').click()
                 panel=fallback.locator('[data-home-carousel="campus"]')
                 panel.locator('[data-action="home-slide"][data-index="2"]').click()
@@ -212,7 +219,7 @@ def run():
                 expect(fallback.get_by_role('dialog')).to_be_visible()
                 assert not errors, errors
                 browser.close()
-                print('PASS: original layout, two three-slide autoplay windows, hover/focus/manual continuation, all six destinations, pagination/retry/dedup, favorites, search, free, stale response, three mobile widths and retained owner/staff functions')
+                print('PASS: original layout, dual three-slide autoplay, hover/focus/manual continuation, six destinations, paging/favorites, stale isolation, three mobile widths, centered five-slot nav, upper My Account, retained community hub and owner/staff functions')
                 print('Screenshots: '+str(output))
         finally:
             server.shutdown()

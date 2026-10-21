@@ -209,6 +209,7 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 
 .account-button:hover { background: var(--brand-hi); transform: translateY(-1px); }
+.account-button .account-name { max-width: 8em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .avatar {
   color: #7b5a35;
@@ -872,7 +873,8 @@ button { -webkit-tap-highlight-color: transparent; }
 /* --- 20. 移动端底部导航 --------------------------------------------------
    旧版被 styles.css 的 .mobile-nav{display:none} 整个隐藏，从未真正显示过。
    这里在窄屏内重新打开，并固定在视口底部；桌面（>850px）保持隐藏。
-   五个等宽槽位：逛逛 | 社区 | ＋发布(正圆凸起) | 消息 | 我的。
+   五个等宽槽位：逛逛 | 社区 | ＋发布(正圆凸起) | 论坛 | 消息。
+   「我的」已移到右上角账号入口，底部不再重复；六项时 FAB 会偏离中心，故固定五项。
    样式完全自包含，不依赖旧 styles.css 的 .nav-item（那是侧栏的横向布局）。 */
 .mobile-nav {
   align-items: stretch; min-height: 62px;
@@ -886,6 +888,11 @@ button { -webkit-tap-highlight-color: transparent; }
   color: var(--muted); font-weight: 600; background: none;
 }
 .mobile-nav .nav-item.active { color: var(--ink); }
+/* 活动项顶部一小段品牌色指示条：不改变布局，只做轻量强调。 */
+.mobile-nav .nav-item.active::before {
+  content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: 18px; height: 3px; border-radius: 0 0 3px 3px; background: var(--brand-lo);
+}
 .mobile-nav .nav-item.active .icon { stroke: var(--brand-lo); fill: none; }
 .mobile-nav .nav-badge { top: 3px; right: calc(50% - 24px); }
 /* 中央发布：正圆骑在导航条上沿，槽位仍等宽，不再出现大槽位和悬空方块。 */
@@ -1004,6 +1011,10 @@ button { -webkit-tap-highlight-color: transparent; }
   .header-actions { gap: 11px; }
   .cart-button { font-size: 10px; padding: 8px 10px; gap: 4px; }
   .account-button { font-size: 10.5px; padding: 8px 12px; max-width: 84px; }
+  /* 登录后右上角只留圆形头像，作为「我的」入口；未登录仍显示「登录 / 注册」。 */
+  .account-button.has-avatar { padding: 3px; border-radius: 50%; max-width: none; }
+  .account-button.has-avatar .account-name { display: none; }
+  .account-button.has-avatar .avatar { width: 32px; height: 32px; font-size: 14px; }
   .header-message { display: none; }
   .market-search { height: 41px; border-width: 1.5px; padding: 3px 4px 3px 13px; gap: 8px; }
   .market-search > .icon { width: 18px; height: 18px; }
@@ -2459,4 +2470,329 @@ button.me-notice { width: 100%; text-align: left; cursor: pointer; border: 0; fo
   .forum-tabs { grid-template-columns: minmax(0, 1fr); }
   .forum-tab { flex-direction: row; align-items: center; gap: 10px; padding: 12px 14px; }
   .forum-tab small { margin-left: auto; }
+}
+
+/* ==========================================================================
+   31. 社区首页 · 视觉升级（2026-10-21）
+   目标：干净、高级、简约的校园产品质感。
+   - 品牌黄降低饱和度，只做点缀与主按钮，大面用中性灰白；
+   - 卡片圆角 + 柔和投影 + hover 微动效，拉开信息层级；
+   - 求购已迁到论坛，社区只保留交流/社群，首屏给出去论坛求购的入口。
+   仅作用于 .community-hub，避免影响全站。
+   ========================================================================== */
+.community-hub {
+  --c-brand: #f4c445;
+  --c-brand-2: #ffd873;
+  --c-brand-soft: #fff8e6;
+  --c-brand-ink: #8a6a12;
+  --c-ink: #22242a;
+  --c-ink-2: #4c5059;
+  --c-muted: #7c818c;
+  --c-faint: #9aa0ab;
+  --c-line: #eceef3;
+  --c-line-2: #e4e6ec;
+  --c-surface: #ffffff;
+  --c-shadow-sm: 0 1px 2px rgba(24, 28, 38, .04), 0 8px 22px -16px rgba(24, 28, 38, .18);
+  --c-shadow-md: 0 2px 4px rgba(24, 28, 38, .04), 0 22px 48px -26px rgba(24, 28, 38, .26);
+  --c-radius: 20px;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+/* --- 首屏 hero ---------------------------------------------------------- */
+.community-hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 34px 38px;
+  border-radius: 26px;
+  overflow: hidden;
+  margin-bottom: 26px;
+  border: 1px solid #f1ecdd;
+  background:
+    radial-gradient(120% 170% at 100% 0%, rgba(244, 196, 69, .26), transparent 55%),
+    linear-gradient(135deg, #fffdf7 0%, #ffffff 58%);
+  box-shadow: var(--c-shadow-sm);
+}
+.community-hero::after {
+  content: '';
+  position: absolute;
+  right: -70px;
+  top: -70px;
+  width: 230px;
+  height: 230px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(244, 196, 69, .20), transparent 70%);
+  pointer-events: none;
+}
+.community-hero-copy { position: relative; z-index: 1; min-width: 0; }
+.community-hero-copy h1 {
+  margin: 8px 0 8px;
+  font-size: 34px;
+  line-height: 1.2;
+  letter-spacing: -1px;
+  font-weight: 800;
+  color: var(--c-ink);
+}
+.community-hero-copy p { margin: 0; font-size: 14px; line-height: 1.7; color: var(--c-muted); }
+.community-eyebrow {
+  display: inline-block;
+  font-size: 10.5px;
+  letter-spacing: 2.4px;
+  font-weight: 700;
+  color: #b8942f;
+  text-transform: uppercase;
+}
+.community-hero-actions { position: relative; z-index: 1; display: flex; gap: 12px; flex-wrap: wrap; }
+.community-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 650;
+  text-decoration: none;
+  transition: transform .18s var(--ease), box-shadow .18s var(--ease), border-color .18s var(--ease);
+}
+.community-cta .icon { width: 17px; height: 17px; }
+.community-cta.primary {
+  color: #4a3a06;
+  background: linear-gradient(135deg, var(--c-brand-2), var(--c-brand));
+  box-shadow: 0 10px 24px -12px rgba(214, 166, 26, .7);
+}
+.community-cta.primary:hover { transform: translateY(-2px); box-shadow: 0 15px 32px -12px rgba(214, 166, 26, .82); }
+.community-cta.ghost {
+  color: var(--c-ink-2);
+  background: #fff;
+  border: 1px solid var(--c-line-2);
+}
+.community-cta.ghost:hover { transform: translateY(-2px); border-color: #e3dcc8; box-shadow: var(--c-shadow-sm); }
+
+/* --- 栅格 --------------------------------------------------------------- */
+.community-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  gap: 26px;
+  align-items: start;
+}
+.community-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.community-side {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+  position: sticky;
+  top: calc(var(--header-h, 120px) + 16px);
+}
+
+/* --- 发帖卡 ------------------------------------------------------------- */
+.composer-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px 24px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--c-radius);
+  box-shadow: var(--c-shadow-sm);
+  transition: box-shadow .2s var(--ease), border-color .2s var(--ease);
+}
+.composer-card:focus-within { box-shadow: var(--c-shadow-md); border-color: #efe6cf; }
+.composer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.composer-title h2 { margin: 0 0 4px; font-size: 19px; letter-spacing: -.3px; color: var(--c-ink); }
+.composer-title p { margin: 0; font-size: 12.5px; color: var(--c-muted); line-height: 1.6; }
+.composer-head .field { margin: 0; min-width: 118px; }
+.composer-head .field > span { font-size: 11.5px; color: var(--c-muted); }
+.composer-head .field select {
+  border-radius: 12px;
+  border: 1px solid var(--c-line-2);
+  background: #fbfbfc;
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--c-ink-2);
+}
+.composer-card textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 96px;
+  padding: 14px 16px;
+  border: 1px solid var(--c-line);
+  border-radius: 14px;
+  background: #fbfbfc;
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: var(--c-ink);
+  resize: vertical;
+  transition: border-color .18s, background .18s, box-shadow .18s;
+}
+.composer-card textarea:focus {
+  outline: none;
+  border-color: #f0d488;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(244, 196, 69, .16);
+}
+.composer-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.composer-foot small { font-size: 11.5px; color: var(--c-muted); }
+.composer-foot .btn.primary {
+  border-radius: 999px;
+  padding: 11px 20px;
+  font-weight: 650;
+  color: #4a3a06;
+  background: linear-gradient(135deg, var(--c-brand-2), var(--c-brand));
+  box-shadow: 0 10px 22px -12px rgba(214, 166, 26, .7);
+  transition: transform .18s var(--ease), box-shadow .18s var(--ease);
+}
+.composer-foot .btn.primary:hover { transform: translateY(-1px); box-shadow: 0 14px 28px -12px rgba(214, 166, 26, .82); }
+
+/* --- 动态区标题 / 空态 -------------------------------------------------- */
+.community-feed-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 6px 2px 0; }
+.community-feed-head h2 { margin: 0; font-size: 18px; letter-spacing: -.3px; color: var(--c-ink); }
+.community-feed-head span { font-size: 12.5px; color: var(--c-muted); }
+.community-feed { display: flex; flex-direction: column; gap: 16px; }
+.community-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 46px 20px;
+  border: 1px dashed #ece7d6;
+  border-radius: var(--c-radius);
+  background: #fffdf8;
+  text-align: center;
+  color: var(--c-muted);
+}
+.community-empty .icon { width: 34px; height: 34px; color: #d8bf74; margin-bottom: 4px; }
+.community-empty b { font-size: 15px; color: var(--c-ink); }
+.community-empty p { margin: 0; font-size: 13px; }
+
+/* --- 帖子卡（仅社区信息流内）------------------------------------------- */
+.community-feed .post-card {
+  padding: 22px 24px 0;
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--c-radius);
+  box-shadow: var(--c-shadow-sm);
+  transition: transform .2s var(--ease), box-shadow .2s var(--ease), border-color .2s var(--ease);
+}
+.community-feed .post-card:hover { transform: translateY(-2px); box-shadow: var(--c-shadow-md); border-color: #eae4d4; }
+.community-feed .post-head { gap: 12px; }
+.community-feed .post-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fff1c2, #ffe08a);
+  color: var(--c-brand-ink);
+  font-weight: 800;
+}
+.community-feed .post-who b { font-size: 14px; color: var(--c-ink); }
+.community-feed .post-who small { font-size: 11.5px; color: var(--c-faint); }
+.community-feed .type-chip { border-radius: 999px; padding: 5px 12px; font-size: 11.5px; font-weight: 600; }
+.community-feed .post-body { margin: 14px 0 0; font-size: 14.5px; line-height: 1.85; color: var(--c-ink-2); }
+.community-feed .post-actions {
+  margin: 16px -24px 0;
+  padding: 10px 16px;
+  gap: 6px;
+  border-top: 1px solid var(--c-line);
+  background: #fcfcfd;
+  border-radius: 0 0 var(--c-radius) var(--c-radius);
+}
+.community-feed .post-action { border-radius: 999px; padding: 7px 13px; font-size: 12.5px; }
+
+/* --- 社群卡 ------------------------------------------------------------- */
+.group-card {
+  padding: 24px 22px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--c-radius);
+  box-shadow: var(--c-shadow-sm);
+}
+.group-card h2 { margin: 6px 0 16px; font-size: 20px; line-height: 1.45; letter-spacing: -.4px; color: var(--c-ink); }
+.group-art {
+  display: grid;
+  place-items: center;
+  height: 132px;
+  margin: 0 0 18px;
+  border-radius: 18px;
+  color: #b8912a;
+  background: radial-gradient(120% 140% at 30% 20%, #fff6d8, #fdf0c8);
+}
+.group-art .icon { width: 54px; height: 54px; opacity: .9; }
+.group-item { padding: 16px 0; border-top: 1px solid var(--c-line); }
+.group-item:first-of-type { border-top: 0; padding-top: 0; }
+.group-item-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+.group-item-head b { font-size: 15px; color: var(--c-ink); }
+.group-badge {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--c-brand-ink);
+  background: #fff4d1;
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+.group-item p { margin: 0 0 12px; font-size: 12.5px; line-height: 1.7; color: var(--c-muted); }
+.group-card .btn { width: 100%; border-radius: 12px; padding: 11px; font-size: 13px; }
+.group-card .btn.primary {
+  color: #4a3a06;
+  background: linear-gradient(135deg, var(--c-brand-2), var(--c-brand));
+  box-shadow: 0 8px 20px -12px rgba(214, 166, 26, .7);
+}
+.group-note { margin: 16px 0 0; font-size: 11.5px; line-height: 1.7; color: var(--c-faint); }
+
+/* --- 去论坛卡 ----------------------------------------------------------- */
+.side-forum-card {
+  padding: 20px 22px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: var(--c-radius);
+  box-shadow: var(--c-shadow-sm);
+}
+.side-forum-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.side-forum-head h3 { margin: 0; font-size: 15px; color: var(--c-ink); }
+.side-forum-head a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--c-muted);
+  text-decoration: none;
+  transition: color .15s;
+}
+.side-forum-head a:hover { color: var(--c-ink); }
+.side-forum-head .icon { width: 14px; height: 14px; }
+.side-forum-link {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 11px 0;
+  border-top: 1px solid var(--c-line);
+  text-decoration: none;
+  transition: padding-left .18s var(--ease);
+}
+.side-forum-link:first-of-type { border-top: 0; }
+.side-forum-link span { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--c-ink-2); }
+.side-forum-link .icon { width: 16px; height: 16px; color: #b8912a; }
+.side-forum-link small { padding-left: 24px; font-size: 11.5px; color: var(--c-muted); }
+.side-forum-link:hover { padding-left: 4px; }
+.side-forum-link:hover span { color: var(--c-ink); }
+
+/* --- 响应式 ------------------------------------------------------------- */
+@media (max-width: 980px) {
+  .community-grid { grid-template-columns: minmax(0, 1fr); }
+  .community-side { position: static; }
+}
+@media (max-width: 580px) {
+  .community-hero { padding: 24px 20px; border-radius: 20px; }
+  .community-hero-copy h1 { font-size: 26px; }
+  .community-hero-actions { width: 100%; }
+  .community-cta { flex: 1; justify-content: center; padding: 11px 14px; font-size: 12.5px; }
+  .composer-card { padding: 18px 16px; }
+  .community-feed .post-card { padding: 18px 16px 0; }
+  .community-feed .post-actions { margin: 14px -16px 0; padding: 8px 10px; }
+  .group-card, .side-forum-card { padding: 20px 16px; }
 }
