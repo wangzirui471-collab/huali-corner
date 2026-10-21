@@ -11,6 +11,7 @@ import { render } from './router.js';
 import { closeModal } from './core/shell.js';
 import { registerActions } from './actions/index.js';
 import { registerChangeHandlers } from './actions/change.js';
+import { mountPet } from './components/ai-pet.js';
 
 registerActions();
 registerChangeHandlers();
@@ -50,6 +51,8 @@ window.addEventListener('resize', () => {
       }
     }
     await render();
+    // 小转挂在 body 上，跟 #app 的每次重渲染无关：换页不会消失，位置也不会被重置。
+    mountPet();
   }catch(err){
     $('#app').textContent = '服务暂不可用：'+err.message;
   }
