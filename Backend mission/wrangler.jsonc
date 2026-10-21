@@ -8,6 +8,13 @@
   "observability": {
     "logs": {"enabled": true, "invocation_logs": true}
   },
+  // AI 客服：模型名用官方 deepseek-flash（DeepSeek-V4.1-Flash）；
+  // API Key 不进仓库，用 `wrangler secret put HC_AI_API_KEY` 单独设置。
+  "vars": {
+    "HC_AI_MODEL": "deepseek-flash",
+    "HC_AI_API_URL": "https://api.deepseek.com/chat/completions",
+    "HC_AI_DAILY_LIMIT": "30"
+  },
   "assets": {
     "directory": "../web 7M",
     "binding": "ASSETS",

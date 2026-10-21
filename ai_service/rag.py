@@ -184,7 +184,7 @@ def extractive(hits):
 
 def call_ollama(question, context):
     payload = {
-        'model': config.CHAT_MODEL,
+        'model': config.OLLAMA_MODEL,
         'messages': [
             {'role': 'system', 'content': SYSTEM_PROMPT.format(context=context, query=question)},
             {'role': 'user', 'content': question},
@@ -207,6 +207,34 @@ def call_ollama(question, context):
         data = json.loads(resp.read().decode('utf-8'))
     msg = data.get('message') or {}
     return msg.get('content') or ''
+
+
+def call_api(question, context):
+    """调用 DeepSeek 官方 OpenAI 兼容接口（默认模型 deepseek-flash）。"""
+    if not config.API_KEY:
+        raise RuntimeError('未配置 HC_AI_API_KEY')
+    payload = {
+        'model': config.CHAT_MODEL,
+        'messages': [
+            {'role': 'system', 'content': SYSTEM_PROMPT.format(context=context, query=question)},
+            {'role': 'user', 'content': question},
+        ],
+        'stream': False,
+        'temperature': 0.2,
+        'max_tokens': config.NUM_PREDICT,
+    }
+    req = urllib.request.Request(
+        config.API_URL,
+        data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
+        headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + config.API_KEY},
+        method='POST',
+    )
+    with _NO_PROXY.open(req, timeout=config.TIMEOUT) as resp:
+        data = json.loads(resp.read().decode('utf-8'))
+    choices = data.get('choices') or []
+    if not choices:
+        raise RuntimeError('API 返回空结果')
+    return (choices[0].get('message') or {}).get('content') or ''
 
 
 def answer(question):
@@ -232,17 +260,32 @@ def answer(question):
     notice = ''
     mode = 'llm'
     text = ''
-    if config.MOCK:
+    provider = 'mock' if config.MOCK else config.PROVIDER
+    if provider == 'api' and not config.API_KEY:
+        provider = 'mock'
+        notice = '未配置 DeepSeek API Key（HC_AI_API_KEY），以下为知识库原文摘录。'
+    if provider == 'mock':
         mode = 'mock'
-        notice = '当前未连接生成模型，以下为知识库原文摘录。'
+        if not notice:
+            notice = '当前为知识库摘录模式。'
         text = extractive(hits)
-    else:
+    elif provider == 'ollama':
         try:
             with _LOCK:
                 text = call_ollama(q, context)
-        except Exception as exc:  # noqa: BLE001 - 模型没起时降级，不中断客服
+            mode = 'llm'
+        except Exception as exc:  # noqa: BLE001 - 本地模型没起时降级
             mode = 'mock'
-            notice = f'生成模型暂不可用（{type(exc).__name__}），以下为知识库原文摘录。'
+            notice = f'本地模型暂不可用（{type(exc).__name__}），以下为知识库原文摘录。'
+            text = extractive(hits)
+    else:
+        try:
+            with _LOCK:
+                text = call_api(q, context)
+            mode = 'llm'
+        except Exception as exc:  # noqa: BLE001 - API 失败时降级，不中断客服
+            mode = 'mock'
+            notice = f'DeepSeek API 暂不可用（{type(exc).__name__}），以下为知识库原文摘录。'
             text = extractive(hits)
 
     text = strip_thinking(text)

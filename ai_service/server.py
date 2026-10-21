@@ -59,10 +59,12 @@ class Handler(BaseHTTPRequestHandler):
         return self._send({
             'ok': True,
             'chunks': len(idx.get('chunks') or []),
-            'model': idx.get('chat_model'),
+            'provider': 'mock' if (config.MOCK or (config.PROVIDER == 'api' and not config.API_KEY)) else config.PROVIDER,
+            'model': config.OLLAMA_MODEL if config.PROVIDER == 'ollama' else config.CHAT_MODEL,
             'embed_model': idx.get('embed_model'),
             'embed_ok': bool(idx.get('embed_ok')),
-            'mode': 'mock' if config.MOCK else 'llm',
+            'api_configured': bool(config.API_KEY),
+            'mode': 'mock' if (config.MOCK or (config.PROVIDER == 'api' and not config.API_KEY)) else 'llm',
             'index_created': idx.get('created'),
         })
 

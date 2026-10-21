@@ -36,3 +36,6 @@ CREATE TABLE IF NOT EXISTS user_avatar_uploads(
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,phone TEXT UNIQUE,nickname TEXT NOT NULL,college TEXT DEFAULT '计算机工程学院',major TEXT DEFAULT '',education TEXT DEFAULT '本科',bio TEXT DEFAULT '',role TEXT DEFAULT 'user',score INTEGER DEFAULT 100 CHECK(score BETWEEN 0 AND 100), status TEXT DEFAULT 'active', last_login REAL DEFAULT 0, degree_level TEXT NOT NULL DEFAULT 'unspecified', study_status TEXT NOT NULL DEFAULT 'unspecified', profile_version INTEGER NOT NULL DEFAULT 0, avatar_upload_id TEXT, grade TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS wants(id INTEGER PRIMARY KEY,user_id INTEGER,keyword TEXT,budget INTEGER,description TEXT,status TEXT DEFAULT 'open',created REAL);
 CREATE INDEX IF NOT EXISTS user_avatar_uploads_owner ON user_avatar_uploads(user_id);
+
+-- AI 客服每日额度与 2 秒限速（Cloudflare 侧）
+CREATE TABLE IF NOT EXISTS ai_usage(user_id INTEGER,day TEXT,count INTEGER DEFAULT 0,last_at REAL DEFAULT 0,PRIMARY KEY(user_id,day));

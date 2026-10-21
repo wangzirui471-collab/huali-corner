@@ -46,12 +46,13 @@ from .trade_api import TradeApi, TRADE_ROUTES
 from .catalog_api import CatalogApi, CATALOG_ROUTES
 from .community_api import CommunityApi, COMMUNITY_ROUTES
 from .staff_api import StaffApi, STAFF_ROUTES
+from .ai_support import AiSupport, AI_ROUTES
 from .auth_api import AuthApi, AUTH_ROUTES
 from .friend_api import FriendApi, FRIEND_ROUTES
 from ..core.config import COLLEGES, GRADES
 
 
-class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, CloudRules, ReadPages):
+class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, AiSupport, CloudRules, ReadPages):
     def __init__(self, env):
         self.env = env
         self.db = Database(env.DB)
@@ -211,6 +212,7 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, Clou
             'colleges': [{'source_name': name} for name in COLLEGES],
             'grades': GRADES,
             'buildings': BUILDINGS,
+            'ai': bool(getattr(self.env, 'HC_AI_API_KEY', '')),
         })
 
     # ---- 商品 ------------------------------------------------------------
@@ -589,5 +591,6 @@ ROUTES.update(TRADE_ROUTES)
 ROUTES.update(CATALOG_ROUTES)
 ROUTES.update(COMMUNITY_ROUTES)
 ROUTES.update(STAFF_ROUTES)
+ROUTES.update(AI_ROUTES)
 ROUTES.update(AUTH_ROUTES)
 ROUTES.update(FRIEND_ROUTES)

@@ -1,6 +1,6 @@
 # AI 客服（本地 RAG）设计与边界
 
-> 2026-10-21 新增。给客服工单页提供「AI 建议回复」：本地知识库检索 + DeepSeek 开源模型生成，数据不出本机。
+> 2026-10-21 新增。给客服工单页提供「AI 建议回复」：本地知识库检索 + 外接 DeepSeek API 生成（默认 `deepseek-flash`，官方最便宜档）。
 > 部署与命令见 [`ai_service/README.md`](../ai_service/README.md)。
 
 ## 1. 产品定位
@@ -11,7 +11,7 @@
 
 - 不是自动回复机器人——不会替客服直接发给客户；
 - 不是退款/处罚决策工具——不承诺优惠、赔付、封号结果；
-- 不是云端 API——不调用 OpenAI/DeepSeek 云服务，工单内容不发第三方。
+- 不是本地模型——默认调用 DeepSeek 官方 API，问题文本会发送到 DeepSeek；敏感信息不要输入。
 
 **为什么先做“建议”**：RTX4060 8G 跑 7B 量化只能承受 1—2 个并发；自动回复一旦胡说或卡住，客户直接流失。人工确认一步，既保留效率又可控。等准确率稳定、并发需求明确后，再把高置信度的 `action=reply` 接成自动发送。
 
@@ -51,7 +51,7 @@ POST /api/ai/reply  {ticket_id}
         │
         ▼
 ai_service（127.0.0.1:8093）
-    classify -> retrieve（index.json） -> prompt -> Ollama /api/chat
+    classify -> retrieve（index.json） -> prompt -> DeepSeek /chat/completions
         │
         ▼
 {answer, action, sources, mode, notice, latency_ms}
@@ -77,18 +77,24 @@ ai_service（127.0.0.1:8093）
 | `POST /api/ai/chat` | 客户侧 AI 小助手（登录用户、限速） |
 | `web 7M/src/actions/support.js` | 生成、插入回复框、错误提示 |
 | `web 7M/ai-support.css` | 面板样式 |
+| `Backend mission/app/cloudflare/ai_support.py` | Worker 侧检索 + 外接 API + 每日额度 |
+| `Backend mission/app/cloudflare/ai_knowledge.py` | 打包进 Worker 的知识库（自动生成） |
 
 ## 5. 配置与开关
 
 - 本地 `server.py` 的 `/api/config` 返回 `ai: true`（`HC_AI_ENABLED=1`，默认开）。
-- Cloudflare Worker 的 config 不含 `ai`，前端视为 false → **线上不显示按钮**，AI 只在本机可用。
-- AI 服务地址：`HC_AI_URL`，默认 `http://127.0.0.1:8093`。
-- 模型：`HC_AI_MODEL=deepseek-r1:7b`；显存不够换 `deepseek-r1:1.5b`；想更快换 `qwen2.5:7b`。
-- 没有模型时：`HC_AI_MOCK=1`，只摘录知识库原文，`mode=mock`，前端会标注。
+- Cloudflare 的 `ai` = 是否设置了 `HC_AI_API_KEY` 密钥；未设置时宠物/按钮不显示。
+- 本地 AI 服务地址：`HC_AI_URL`，默认 `http://127.0.0.1:8093`。
+- 模型：`HC_AI_MODEL=deepseek-flash`（DeepSeek-V4.1-Flash，官方最便宜档）；
+  接口 `HC_AI_API_URL=https://api.deepseek.com/chat/completions`。
+- Key：本地 `HC_AI_API_KEY`；线上 `wrangler secret put HC_AI_API_KEY`。
+- 没有 Key 时自动退化为知识库摘录，`mode=mock`，前端标注原因。
+- 线上额度：每账号每天 30 次、两次提问至少间隔 2 秒（D1 `ai_usage`）。
 
 ## 6. 隐私与日志
 
-- AI 服务只绑定回环地址；工单内容只在本机内存处理。
+- 本地 AI 服务只绑定回环地址；但生成阶段会把【命中的资料 + 问题】发送到 DeepSeek API。
+- 不要输入密码、恢复码、完整手机号、他人聊天记录等敏感信息；内部备注不进入提示词。
 - 后端只写 `var-trial/ai-usage.jsonl`：时间、操作人、工单号、action、mode、来源标题、耗时；**不写客户原话和回答全文**。
 - 内部备注不发 AI；管理端聊天审计规则不变。
 - 知识库里不要放：真实手机号、聊天原文、学生名单、部署凭据。
@@ -106,12 +112,13 @@ ai_service（127.0.0.1:8093）
 | AI-07 | 隐私 | `ai-usage.jsonl` 不含客户原话/回答全文；内部备注不进入提示词 |
 | AI-08 | 线上隐藏 | Cloudflare 环境 `config.ai` 为假，工单页无 AI 面板 |
 | AI-09 | 宠物入口 | 客服页右下角宠物可见；点击打开对话；快捷问题有回答；兜底时「提交工单」可打开工单弹窗 |
+| AI-10 | 外接 API | 设置 Key 后 `mode=llm`；未设置时自动摘录并标注；401/额度 429 有可读提示 |
 
 ## 8. 局限与下一步
 
-- 8G 显卡 7B Q4 只适合 1—2 个客服同时用；并发上来会排队变慢。
-- 知识库需要人工维护；规则改了要重跑 `ingest.py`。
-- R1 首轮加载慢、偶发输出推理段落（已做剥离，仍建议备选 `qwen2.5:7b`）。
+- 依赖 DeepSeek API 可用性与余额；Key 失效时自动退回知识库摘录。
+- 成本：按 token 计费，线上每账号每天 30 次上限；可在 `ai-usage.jsonl` 观察调用量。
+- 知识库需要人工维护；规则改了要重跑 `ingest.py` 并重新生成 Worker 的 `ai_knowledge.py`。
 - 下一步（按优先级）：
   1. 客服对 AI 草稿点「有用/没用」，积累评测集；
   2. 高置信度 + 常见问题（发布/退款/面交/客服时间）开放自动回复；
