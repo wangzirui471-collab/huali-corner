@@ -31,7 +31,9 @@ export const state = {
   pendingWant: null,
   // 页面里创建过的 blob: URL（头像本地预览等）。集中登记才能保证换页/换账号时
   // 全部 revoke：漏一个就泄漏一份内存，反复上传头像会持续涨。
-  mediaURLs: new Set()
+  mediaURLs: new Set(),
+  // 旧 Bearer 图片兼容器：路由切换时取消尚未结束的私密图片请求。
+  mediaLoader: null
 };
 
 export const statusNames = {

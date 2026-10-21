@@ -3,6 +3,12 @@ var-trial/
 __pycache__/
 *.pyc
 .venv/
+.venv-workers/
+.local-deps/
+.npm-cache/
+.uv-cache/
+.uv-python/
+.local-config/
 *.xlsx
 .env
 .DS_Store
@@ -31,10 +37,15 @@ repair-wheels/
 
 # Cloudflare Workers：依赖由 schema.sql + pylock 生成，不随仓库提交
 Backend mission/python_modules/
+python_modules/
 Backend mission/.wrangler/
+experiments/worker-poc/.wrangler/
 .venv-trial-broken-*/
 
 # 本地依赖与运行产物（不随仓库提交）
 Backend mission/node_modules/
+node_modules/
+experiments/worker-poc/src/vendor/
+experiments/worker-poc/src/huali/
 _ui_messages.png
 d1out.json

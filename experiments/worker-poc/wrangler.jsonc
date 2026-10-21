@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "huali-refactor-local-poc",
+  "main": "src/main.py",
+  "compatibility_date": "2026-10-21",
+  "compatibility_flags": ["python_workers"],
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api", "/api/*", "/media", "/media/*"],
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "huali-refactor-local-poc",
+    "database_id": "local-poc-only",
+    "remote": false
+  }],
+  "r2_buckets": [{
+    "binding": "MEDIA",
+    "bucket_name": "huali-refactor-local-poc",
+    "remote": false
+  }],
+  "triggers": {"crons": ["*/5 * * * *"]}
+}

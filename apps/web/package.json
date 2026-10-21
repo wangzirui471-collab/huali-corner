@@ -1,0 +1,43 @@
+{
+  "name": "@huali/web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "preview": "vite preview --host 127.0.0.1",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "vue-tsc --noEmit -p jsconfig.json",
+    "test:unit": "vitest run",
+    "build": "npm run typecheck && vite build",
+    "build:preview": "npm run typecheck && vite build --mode preview",
+    "generate:api": "openapi-typescript ../../contracts/openapi.json -o src/shared/http/generated.d.ts"
+  },
+  "dependencies": {
+    "element-plus": "2.14.7",
+    "pinia": "3.0.4",
+    "vue": "3.5.44",
+    "vue-router": "4.6.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.6.5",
+    "@types/punycode": "2.1.4",
+    "@vitejs/plugin-vue": "6.0.10",
+    "@vue/test-utils": "2.5.1",
+    "eslint": "10.13.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-vue": "10.11.1",
+    "happy-dom": "21.0.4",
+    "openapi-typescript": "7.13.0",
+    "prettier": "3.9.10",
+    "typescript": "5.9.3",
+    "vite": "8.3.5",
+    "vitest": "5.0.5",
+    "vue-tsc": "3.3.13"
+  }
+}

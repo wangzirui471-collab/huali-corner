@@ -21,6 +21,8 @@ export function needLogin(){
 }
 
 export function clearAccount(){
+  // 私密图片请求不能跨越账号退出；URL 由紧随其后的路由重绘统一回收。
+  state.mediaLoader?.cancel();
   state.token = ''; state.me = null; state.cart = [];
   clearPoll();
   state.pendingWant = null;

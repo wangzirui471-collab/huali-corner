@@ -1,0 +1,69 @@
+# 仅执行隔离检查；不访问 Cloudflare 凭据、真实数据库或部署入口。
+name: Refactor checks
+
+on:
+  pull_request:
+  push:
+    branches: [main, master, 'release/**', 'refactor/**']
+
+permissions:
+  contents: read
+
+jobs:
+  new-engineering:
+    name: 新工程与协议 / Windows 中文路径
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: 重构 验证
+    steps:
+      # 中文与空格目录用于持续守住本机发现过的 URL/路径兼容问题。
+      - uses: actions/checkout@v7
+        with:
+          path: 重构 验证
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: '0.13.4'
+          enable-cache: false
+      - name: 安装锁定依赖
+        run: ./scripts/refactor.ps1 -Task Setup
+      - name: 检查中文方法注释、格式、类型、契约与构建
+        run: ./scripts/refactor.ps1 -Task Check
+      - name: 检查服务端与前端协议生成物一致
+        run: |
+          ./scripts/refactor.ps1 -Task Contracts
+          git diff --exit-code -- contracts/openapi.json apps/web/src/shared/http/generated.d.ts
+          if ($LASTEXITCODE -ne 0) { throw '请提交与服务端模型一致的协议生成物' }
+
+  legacy-contracts:
+    name: 旧客户端与业务合同
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: '0.13.4'
+          enable-cache: false
+      # 使用与本机旧基线一致的 Python 和图像/MySQL 依赖，不覆盖新 API 环境。
+      - name: 验证旧后端业务与迁移合同
+        run: uv run --no-project --python 3.12 --with Pillow==12.3.0 --with PyMySQL==1.2.3 python -B -X utf8 -m unittest discover -s tests -p 'test_*.py'
+      - name: 验证旧 Web 和小程序 JavaScript 模块
+        shell: pwsh
+        run: |
+          # 运行全部现有脚本，任一失败立即停止，不把缺失脚本视为通过。
+          $scripts = @(Get-ChildItem tests -File | Where-Object { $_.Name -match '\.test\.(mjs|js)$' })
+          if ($scripts.Count -eq 0) { throw '没有发现旧客户端测试脚本' }
+          foreach ($script in $scripts) {
+            node $script.FullName
+            if ($LASTEXITCODE -ne 0) { throw "旧客户端测试失败：$($script.Name)" }
+          }

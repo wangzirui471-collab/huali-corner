@@ -1,0 +1,42 @@
+/* 来自重构文档 04 的语义令牌；Logo 源文件保留自己的紫色与黄色。 */
+:root {
+  --color-brand-mark: #7f68af;
+  --color-action: #f5ca54;
+  --color-action-hover: #e9bc42;
+  --color-action-ink: #3e341b;
+  --color-link: #68509c;
+  --color-focus: #68509c;
+  --color-canvas: #f6f7f9;
+  --color-surface: #fff;
+  --color-surface-subtle: #f9fafb;
+  --color-text: #20232a;
+  --color-text-secondary: #4b5260;
+  --color-text-muted: #626872;
+  --color-border: #e5e7eb;
+  --color-control-border: #8c939f;
+  --color-price: #8a5b1a;
+  --color-success: #23764c;
+  --color-danger: #b3372b;
+  --color-warning-ink: #89620f;
+  --color-warning-bg: #fff5d6;
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-48: 48px;
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-dialog: 16px;
+  --shadow-card: 0 2px 8px rgb(32 35 42 / 4%);
+  --shadow-overlay: 0 12px 40px rgb(32 35 42 / 16%);
+  --duration-fast: 150ms;
+  --layer-header: 10;
+  --layer-navigation: 20;
+  --layer-overlay: 30;
+  --layer-toast: 40;
+  --content-width: 1240px;
+  --font-body: system-ui, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}

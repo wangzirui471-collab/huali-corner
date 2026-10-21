@@ -38,6 +38,8 @@ function publicDemoFeature(route){
 // blob: URL 只对本次渲染有意义（头像本地预览）。换页统一回收，
 // 否则每换一次头像就漏一份内存，来回切页越积越多。
 function releaseMediaURLs(){
+  // 先让旧响应失效，再撤销 URL，防止回收后迟到请求重新填入上一账号的图。
+  state.mediaLoader?.cancel();
   for (const url of state.mediaURLs){ try{ URL.revokeObjectURL(url); }catch{} }
   state.mediaURLs.clear();
 }

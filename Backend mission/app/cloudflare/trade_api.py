@@ -1,5 +1,6 @@
 """Existing simulated trade rules using conditional, atomic D1 batches."""
 import json
+import hashlib
 import secrets
 import time
 from ..core.errors import ValidationMixin, DomainError
@@ -7,6 +8,32 @@ from .http import json_body, json_response, query_of, int_param, require
 
 
 class TradeApi:
+    @staticmethod
+    def cf_checkout_request_hash(ids, delivery, address, appointment, want_id):
+        """将已校验的商品、交付、预约和求购参数转换为原始请求摘要。
+
+        商品编号排序消除顺序差异；摘要不随订单后续编辑改变，用于识别重试。
+        """
+        payload = {'product_ids': sorted(ids), 'delivery': delivery, 'address': address,
+                   'appointment': float(appointment), 'want_id': want_id}
+        encoded = json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+        return hashlib.sha256(encoded.encode('utf-8')).hexdigest()
+
+    @staticmethod
+    def cf_checkout_replay_matches(old, request_hash, ids, delivery, address, appointment, want_id):
+        """判断重试是否与原请求一致；旧订单无摘要时兼容比较已存字段。
+
+        旧记录编辑后无法还原原始请求，因此不能保证历史记录的全部重放语义。
+        """
+        if old.get('request_hash'):
+            return old['request_hash'] == request_hash
+        # 迁移前的订单没有不可变请求摘要，只能按历史字段保守比较。
+        old_ids = sorted(item.get('id') for item in json.loads(old['items'] or '[]'))
+        return (old_ids == sorted(ids) and old['delivery'] == delivery
+                and (old['address'] or '') == address
+                and abs((old['appointment'] or 0) - float(appointment)) < 1e-6
+                and old.get('want_id') == want_id)
+
     @staticmethod
     def cf_trade_note(uid, kind, body, oid=None, tid=None):
         return ('INSERT INTO notifications(user_id,kind,order_id,ticket_id,body,created) VALUES(?,?,?,?,?,?)',
@@ -51,6 +78,11 @@ class TradeApi:
         return json_response(await self.cf_trade_dto(row))
 
     async def cf_trade_checkout(self, request):
+        """校验下单请求，在一个 D1 batch 内创建订单、预留商品并写通知。
+
+        同一请求键重复提交返回原订单；内容改变返回冲突。事务内再次校验
+        商品、报价、双方账号及求购状态，任一步失败时整体回滚。
+        """
         uid = await self.page_user(request)
         await self.require_capacity()
         data = await json_body(request)
@@ -63,19 +95,18 @@ class TradeApi:
         require(delivery in ('pickup', 'delivery'), '交付方式错误')
         appointment = data.get('appointment')
         now = time.time()
-        require(type(appointment) in (int, float) and now+60 < appointment < now+86400*30,
-                '请选择未来30天内的交付时间')
+        require(type(appointment) in (int, float), '请选择未来30天内的交付时间')
         address = ValidationMixin.text(data.get('address'), 150, '收货公共地点') if delivery == 'delivery' else ''
+        want_id = data.get('want_id')
+        require(want_id is None or (type(want_id) is int and want_id > 0), '求购编号无效')
+        request_hash = self.cf_checkout_request_hash(ids, delivery, address, appointment, want_id)
         old = await self.db.first('SELECT * FROM orders WHERE buyer_id=? AND request_key=?', (uid, key))
         if old:
-            # 幂等键只保证「同一次提交重试」返回同一张单；若内容变了还返回旧单，
-            # 用户会以为买的是新商品，实际拿到的是上一笔。必须 409 让他刷新重来。
-            old_ids = sorted(i.get('id') for i in json.loads(old['items'] or '[]'))
-            same = (old_ids == sorted(ids) and old['delivery'] == delivery
-                    and (old['address'] or '') == (address or '')
-                    and abs((old['appointment'] or 0) - float(appointment)) < 1e-6)
-            require(same, '同一请求标识不能提交不同内容，请刷新后重试', 409)
+            require(self.cf_checkout_replay_matches(old, request_hash, ids, delivery, address,
+                                                    appointment, want_id),
+                    '同一请求标识不能提交不同内容，请刷新后重试', 409)
             return json_response(await self.cf_trade_dto(old))
+        require(now+60 < appointment < now+86400*30, '请选择未来30天内的交付时间')
         require(await self.db.scalar("SELECT 1 FROM users WHERE id=? AND status='active'", (uid,)),
                 '账号当前不可交易', 409)
         marks = ','.join('?' for _ in ids)
@@ -88,9 +119,7 @@ class TradeApi:
         require(all(p['delivery'] in (delivery, 'both') for p in products), '商品不支持所选交付方式')
         require(await self.db.scalar("SELECT 1 FROM users WHERE id=? AND status='active'", (seller,)),
                 '卖家当前不可交易', 409)
-        guards = ["EXISTS(SELECT 1 FROM users WHERE id=? AND status='active')",
-                  "EXISTS(SELECT 1 FROM users WHERE id=? AND status='active')"]
-        guard_args = [seller, uid]
+        product_snapshots = []
         live_since = now - 86400
         items = []
         for p in products:
@@ -110,41 +139,60 @@ class TradeApi:
             item = {k: detail.get(k, '') for k in ('edition', 'notes', 'missing', 'accessories')}
             item.update(id=p['id'], title=p['title'], price=price, region=p['region'], photo=photos[0]['url'])
             items.append(item)
-            guards.append("EXISTS(SELECT 1 FROM products WHERE id=? AND seller_id=? AND status='available' "
-                          'AND price=? AND delivery_fee=? AND delivery=? AND data=?)')
-            guard_args.extend((p['id'], seller, p['price'], p['delivery_fee'], p['delivery'], p['data']))
-            guards.append("COALESCE((SELECT id FROM offers WHERE product_id=? AND buyer_id=? AND status='accepted' "
-                          "AND COALESCE(accepted_at,created)>? ORDER BY id DESC LIMIT 1),0)=?")
-            guard_args.extend((p['id'], uid, live_since, offer['id'] if offer else 0))
-            guards.append("NOT EXISTS(SELECT 1 FROM offers WHERE product_id=? AND buyer_id<>? AND status='accepted' "
-                          "AND COALESCE(accepted_at,created)>?)")
-            guard_args.extend((p['id'], uid, live_since))
+            product_snapshots.append({'id': p['id'], 'price': p['price'], 'delivery_fee': p['delivery_fee'],
+                                      'delivery': p['delivery'], 'data': p['data'],
+                                      'offer_id': offer['id'] if offer else 0,
+                                      'offer_amount': offer['amount'] if offer else 0})
         want = None
-        if data.get('want_id') is not None:
-            require(type(data['want_id']) is int and data['want_id'] > 0, '求购编号无效')
-            want = await self.db.first("SELECT * FROM wants WHERE id=? AND status='open'", (data['want_id'],))
+        if want_id is not None:
+            want = await self.db.first("SELECT * FROM wants WHERE id=? AND status='open'", (want_id,))
             require(want is not None, '该求购已成交或不存在')
             require(want['user_id'] == uid, '不能替他人完成求购', 403)
-            guards.append("EXISTS(SELECT 1 FROM wants WHERE id=? AND user_id=? AND status='open')")
-            guard_args.extend((want['id'], uid))
+        # 商品快照合成一个 JSON 参数，20 件商品也不会撑破单语句参数预算。
+        # 事务内重查所有快照与报价前提，防止预读后发生竞态而错误预留。
+        guard = ("SELECT 1 WHERE EXISTS(SELECT 1 FROM users WHERE id=?1 AND status='active') "
+                 "AND EXISTS(SELECT 1 FROM users WHERE id=?2 AND status='active') "
+                 "AND json_array_length(?3)=?4 AND NOT EXISTS ("
+                 "SELECT 1 FROM json_each(?3) expected LEFT JOIN products p "
+                 "ON p.id=json_extract(expected.value,'$.id') WHERE p.id IS NULL "
+                 "OR p.seller_id IS NOT ?1 OR p.status IS NOT 'available' "
+                 "OR p.price IS NOT json_extract(expected.value,'$.price') "
+                 "OR p.delivery_fee IS NOT json_extract(expected.value,'$.delivery_fee') "
+                 "OR p.delivery IS NOT json_extract(expected.value,'$.delivery') "
+                 "OR p.data IS NOT json_extract(expected.value,'$.data') "
+                 "OR COALESCE((SELECT id FROM offers WHERE product_id=p.id AND buyer_id=?2 "
+                 "AND status='accepted' AND COALESCE(accepted_at,created)>?5 "
+                 "ORDER BY id DESC LIMIT 1),0) IS NOT json_extract(expected.value,'$.offer_id') "
+                 "OR COALESCE((SELECT amount FROM offers WHERE product_id=p.id AND buyer_id=?2 "
+                 "AND status='accepted' AND COALESCE(accepted_at,created)>?5 "
+                 "ORDER BY id DESC LIMIT 1),0) IS NOT json_extract(expected.value,'$.offer_amount') "
+                 "OR EXISTS(SELECT 1 FROM offers WHERE product_id=p.id AND buyer_id<>?2 "
+                 "AND status='accepted' AND COALESCE(accepted_at,created)>?5))")
+        guard_args = [seller, uid, json.dumps(product_snapshots, ensure_ascii=False), len(ids), live_since]
+        if want:
+            guard += " AND EXISTS(SELECT 1 FROM wants WHERE id=?6 AND user_id=?2 AND status='open')"
+            guard_args.append(want['id'])
         subtotal = sum(i['price'] for i in items)
         fee = max(p['delivery_fee'] for p in products) if delivery == 'delivery' else 0
         oid = secrets.randbits(48)
-        stmts = [('INSERT INTO orders(id,buyer_id,seller_id,items,subtotal,delivery_fee,total,delivery,address,appointment,status,created,request_key,want_id) '
-                  'VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+        stmts = [('INSERT INTO orders(id,buyer_id,seller_id,items,subtotal,delivery_fee,total,delivery,address,appointment,status,created,request_key,want_id,request_hash) '
+                  'VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                   (oid, uid, seller, json.dumps(items, ensure_ascii=False), subtotal, fee, subtotal+fee, delivery,
-                   address, appointment, 'awaiting_payment', now, key, want['id'] if want else None))]
+                   address, appointment, 'awaiting_payment', now, key, want['id'] if want else None, request_hash))]
         stmts += [("UPDATE products SET status='reserved' WHERE id=?", (p['id'],)) for p in products]
         if want:
             stmts.extend([("UPDATE wants SET status='matched' WHERE id=?", (want['id'],)),
                           self.cf_trade_journal(oid, 'service_fee', subtotal*5//100, now)])
         stmts.append(self.cf_trade_note(seller, 'order_created', f'收到新订单 #{oid}，等待买家模拟付款。', oid))
         try:
-            await self.db.guarded_batch('SELECT 1 WHERE '+' AND '.join(guards), tuple(guard_args), stmts,
+            await self.db.guarded_batch(guard, tuple(guard_args), stmts,
                                         '商品、报价或求购状态已变化，请重新确认')
         except Exception:
             existing = await self.db.first('SELECT * FROM orders WHERE buyer_id=? AND request_key=?', (uid, key))
             if existing:
+                require(self.cf_checkout_replay_matches(existing, request_hash, ids, delivery, address,
+                                                        appointment, want_id),
+                        '同一请求标识不能提交不同内容，请刷新后重试', 409)
                 return json_response(await self.cf_trade_dto(existing))
             raise
         return json_response(await self.cf_trade_dto(await self.db.first('SELECT * FROM orders WHERE id=?', (oid,))))

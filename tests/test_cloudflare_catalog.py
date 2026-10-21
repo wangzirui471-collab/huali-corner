@@ -163,12 +163,13 @@ class CatalogTests(CloudCase):
   self.db.execute("UPDATE users SET status='disabled',avatar_upload_id=? WHERE id=2",(fid,))
   self.assertEqual((await self.req('/media/'+fid)).status,403)
   self.assertEqual((await self.req('/media/'+fid,uid=0)).status,403)
- async def test_private_media_requires_active_owner_or_staff_and_private_cache(self):
+ async def test_private_media_requires_active_owner_and_private_cache(self):
+  """私密凭证默认只允许有效上传者读取，员工需另走具体案件授权。"""
   uploaded=await self.post('/api/upload',dict(content=self.image(),angle='proof',private=True));fid=uploaded.body['id']
-  for uid in (2,1,4,5):
+  for uid in (2,):
    r=await self.req('/media/'+fid,uid=uid);self.assertEqual(r.status,200,r.body);self.assertEqual(r.headers['Cache-Control'],'private, no-store')
-  for uid in (0,3):self.assertEqual((await self.req('/media/'+fid,uid=uid)).status,403)
-  for uid in (2,1,4,5):
+  for uid in (0,1,3,4,5):self.assertEqual((await self.req('/media/'+fid,uid=uid)).status,403)
+  for uid in (2,):
    self.db.execute("UPDATE users SET status='disabled' WHERE id=?",(uid,))
    self.assertEqual((await self.req('/media/'+fid,uid=uid)).status,403)
  async def test_unpublished_public_upload_not_available_to_disabled_owner(self):

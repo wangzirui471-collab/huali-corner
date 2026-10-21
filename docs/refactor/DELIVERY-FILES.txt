@@ -1,0 +1,123 @@
+华立转角：本批交付文件清单（提交前工作区快照）
+生成日期：2026-10-22（Asia/Shanghai）
+根目录：C:\Users\90442\Desktop\前端学习\huali-corner
+分支：release/2026-10-trial-hotfix
+实施前基线 HEAD：b2b62660177f74b596a6add4fc030bd55354d9be
+说明：M/?? 是本批提交前的历史状态，包含用户提供的六份设计文档，不能删除；当前状态以 git status 为准。
+用户随后授权本批提交到原 GitHub 分支；最新交付提交用 git log -1 核对。依赖、缓存和 dist 等忽略产物不在本清单，未执行部署。
+
+ M .gitignore
+ M "Backend mission/app/cloudflare/api.py"
+ M "Backend mission/app/cloudflare/schema.sql"
+ M "Backend mission/app/cloudflare/trade_api.py"
+ M tests/test_cloudflare_catalog.py
+ M tests/test_cloudflare_trade.py
+ M tests/user_center.test.mjs
+ M "web 7M/miniprogram/app.js"
+ M "web 7M/miniprogram/pages/detail/index.js"
+ M "web 7M/miniprogram/pages/detail/index.wxml"
+ M "web 7M/src/auth/login.js"
+ M "web 7M/src/core/state.js"
+ M "web 7M/src/main.js"
+ M "web 7M/src/router.js"
+?? .github/pull_request_template.md
+?? .github/workflows/refactor-checks.yml
+?? AGENTS.md
+?? "Backend mission/app/cloudflare/media_authorization.py"
+?? apps/api/README.md
+?? apps/api/pyproject.toml
+?? apps/api/scripts/export_contract.py
+?? apps/api/src/huali/__init__.py
+?? apps/api/src/huali/bootstrap.py
+?? apps/api/src/huali/infrastructure/__init__.py
+?? apps/api/src/huali/infrastructure/d1/__init__.py
+?? apps/api/src/huali/infrastructure/d1/atomic.py
+?? apps/api/src/huali/infrastructure/images/__init__.py
+?? apps/api/src/huali/infrastructure/images/normalize.py
+?? apps/api/src/huali/main.py
+?? apps/api/src/huali/shared/__init__.py
+?? apps/api/src/huali/shared/errors.py
+?? apps/api/src/huali/shared/settings.py
+?? apps/api/src/huali/transport/__init__.py
+?? apps/api/src/huali/transport/contracts.py
+?? apps/api/src/huali/transport/errors.py
+?? apps/api/src/huali/transport/request_context.py
+?? apps/api/tests/test_architecture.py
+?? apps/api/tests/test_atomic.py
+?? apps/api/tests/test_contract.py
+?? apps/api/tests/test_images.py
+?? apps/api/uv.lock
+?? apps/web/.prettierignore
+?? apps/web/.prettierrc.json
+?? apps/web/README.md
+?? apps/web/eslint-rules.js
+?? apps/web/eslint.config.js
+?? apps/web/index.html
+?? apps/web/jsconfig.json
+?? apps/web/package-lock.json
+?? apps/web/package.json
+?? apps/web/public/brand/logo-lockup.svg
+?? apps/web/src/app/App.vue
+?? apps/web/src/app/ComponentGalleryPage.test.js
+?? apps/web/src/app/ComponentGalleryPage.vue
+?? apps/web/src/app/UnavailablePage.vue
+?? apps/web/src/app/base.css
+?? apps/web/src/app/router.js
+?? apps/web/src/main.js
+?? apps/web/src/shared/design-tokens/tokens.css
+?? apps/web/src/shared/http/client.js
+?? apps/web/src/shared/http/client.test.js
+?? apps/web/src/shared/http/generated.d.ts
+?? apps/web/src/shared/http/health.js
+?? apps/web/src/shared/http/request-scope.js
+?? apps/web/src/shared/ui/AppButton.test.js
+?? apps/web/src/shared/ui/AppButton.vue
+?? apps/web/src/shared/ui/AppDialog.vue
+?? apps/web/src/shared/ui/FormErrorSummary.vue
+?? apps/web/src/shared/ui/FormField.vue
+?? apps/web/src/shared/ui/InlineNotice.vue
+?? apps/web/src/shared/ui/PageState.vue
+?? apps/web/src/shared/ui/StatusBadge.vue
+?? apps/web/src/shared/ui/element-plus.css
+?? apps/web/vite.config.js
+?? contracts/README.md
+?? contracts/openapi.json
+?? docs/refactor/01-现状审计与业务基线.md
+?? docs/refactor/02-目标架构与数据设计.md
+?? docs/refactor/03-代码规范与协作约定.md
+?? docs/refactor/04-界面设计与体验规范.md
+?? docs/refactor/05-实施计划与模型交接.md
+?? docs/refactor/DELIVERY-FILES.txt
+?? docs/refactor/DELIVERY-HANDOFF.md
+?? docs/refactor/README.md
+?? docs/refactor/decisions/0001-checkout-request-identity.md
+?? docs/refactor/decisions/0002-compatibility-before-data-authority.md
+?? docs/refactor/decisions/0003-resource-media-authorization.md
+?? docs/refactor/decisions/0004-javascript-element-plus.md
+?? docs/refactor/decisions/0005-worker-image-runtime.md
+?? docs/refactor/evidence/form-1440.jpg
+?? docs/refactor/evidence/form-390.jpg
+?? docs/refactor/skill-usage.md
+?? docs/refactor/verification.md
+?? experiments/worker-poc/README.md
+?? experiments/worker-poc/image_smoke.py
+?? experiments/worker-poc/package-lock.json
+?? experiments/worker-poc/package.json
+?? experiments/worker-poc/public/index.html
+?? experiments/worker-poc/pylock.toml
+?? experiments/worker-poc/pyproject.toml
+?? experiments/worker-poc/schema.sql
+?? experiments/worker-poc/smoke.py
+?? experiments/worker-poc/src/kdf_probe.py
+?? experiments/worker-poc/src/main.py
+?? experiments/worker-poc/sync_sources.py
+?? experiments/worker-poc/uv.lock
+?? experiments/worker-poc/wrangler.jsonc
+?? infra/d1/migrations/0001_add_checkout_request_hash.sql
+?? infra/d1/migrations/0002_create_atomic_assertions.sql
+?? scripts/refactor.ps1
+?? tests/private_media.test.mjs
+?? tests/test_checkout_migration.py
+?? tests/test_cloudflare_media.py
+?? tests/test_legacy_kdf_vector.py
+?? "web 7M/src/core/authenticated-media.js"

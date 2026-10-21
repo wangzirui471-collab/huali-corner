@@ -98,6 +98,77 @@ class TradeTests(CloudCase):
             r=await self.req('/api/checkout',method='POST',body=payload)
             self.assertEqual(r.status,409,(changed,r.body))
         self.assertEqual(self.db.execute('SELECT count(*) FROM orders').fetchone()[0],1)
+
+    async def test_request_key_rejects_different_want_id(self):
+        """同一下单键改变求购关联时必须冲突，避免费用与求购状态串单。"""
+        self.db.execute("INSERT INTO wants(id,user_id,keyword,budget,status,created) VALUES(71,2,'测试求购',2000,'open',?)", (time.time(),))
+        self.db.commit()
+        first = await self.req('/api/checkout', method='POST', body={
+            'product_ids': [10], 'delivery': 'delivery', 'address': 'A2',
+            'appointment': self.appointment, 'key': 'want-replay', 'want_id': 71,
+        })
+        self.assertEqual(first.status, 200, first.body)
+        replay = await self.checkout('want-replay')
+        self.assertEqual(replay.status, 409, replay.body)
+
+    async def test_replay_uses_original_request_after_order_edit(self):
+        """订单编辑不改变原请求身份，原提交可重试，新内容必须换键。"""
+        first = await self.checkout('edited', [10, 11])
+        self.assertEqual(first.status, 200, first.body)
+        changed = await self.req('/api/order/update', method='POST', body={
+            'id': first.body['id'], 'product_ids': [10],
+        })
+        self.assertEqual(changed.status, 200, changed.body)
+        replay = await self.checkout('edited', [10, 11])
+        self.assertEqual(replay.status, 200, replay.body)
+        self.assertEqual(replay.body['id'], first.body['id'])
+        different = await self.checkout('edited', [10])
+        self.assertEqual(different.status, 409, different.body)
+
+    async def test_replay_after_appointment_window_keeps_original_result(self):
+        """已成功请求在预约时间过后重试，仍返回同一订单。"""
+        first = await self.checkout('expired-replay')
+        self.assertEqual(first.status, 200, first.body)
+        with patch('app.cloudflare.trade_api.time.time', return_value=self.appointment + 120):
+            replay = await self.checkout('expired-replay')
+        self.assertEqual(replay.status, 200, replay.body)
+        self.assertEqual(replay.body['id'], first.body['id'])
+
+    async def test_unknown_result_rejects_different_payload_for_existing_key(self):
+        """模拟首次读漏掉订单，提交异常恢复时仍校验原请求内容。"""
+        first = await self.checkout('unknown-result')
+        self.assertEqual(first.status, 200, first.body)
+        original_first = self.api.db.first
+        reads = 0
+        async def miss_existing(sql, params=()):
+            """仅首次查询隐藏已存订单，模拟提交结果未知后的读竞态。"""
+            nonlocal reads
+            if 'WHERE buyer_id=? AND request_key=?' in sql:
+                reads += 1
+                if reads == 1:
+                    return None
+            return await original_first(sql, params)
+        with patch.object(self.api.db, 'first', miss_existing):
+            changed = await self.checkout('unknown-result', [11])
+        self.assertEqual(changed.status, 409, changed.body)
+
+    async def test_twenty_item_checkout_guard_stays_within_d1_bind_limit(self):
+        """20 件商品整体下单，检查事务守卫的单语句绑定数未超预算。"""
+        payload = json.dumps({'description': '合成图片', 'photos': [{'url': '/assets/item0.svg'}]})
+        self.db.executemany(
+            "INSERT INTO products(id,seller_id,title,category,price,delivery_fee,delivery,region,data,created) "
+            "VALUES(?,3,'测试书','books',1200,200,'both','A1',?,?)",
+            [(product_id, payload, time.time()) for product_id in range(12, 30)],
+        )
+        self.db.commit()
+        original = self.api.db.guarded_batch
+        async def inspect(guard_sql, guard_params, statements, *args, **kwargs):
+            """提交前记录参数预算，并继续执行真实的内存事务适配。"""
+            self.assertLessEqual(len(guard_params), 100)
+            return await original(guard_sql, guard_params, statements, *args, **kwargs)
+        with patch.object(self.api.db, 'guarded_batch', inspect):
+            response = await self.checkout('twenty', list(range(10, 30)))
+        self.assertEqual(response.status, 200, response.body)
     async def test_checkout_honors_other_buyers_live_accepted_offer(self):
         self.db.execute("INSERT INTO offers(product_id,buyer_id,amount,status,created,accepted_at) VALUES(10,4,500,'accepted',?,?)",(time.time(),time.time()))
         r=await self.checkout();self.assertEqual(r.status,409,r.body)

@@ -20,6 +20,7 @@ from .http import (
     path_of, query_of, require,
 )
 from .media import MediaStore
+from .media_authorization import can_read_upload
 
 # 与 account/service.py 保持一致的账号规则
 PHONE_RE = r'1[3-9][0-9]{9}'
@@ -493,7 +494,11 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, Clou
     # ---- 媒体 ------------------------------------------------------------
 
     async def media(self, request, key):
-        """Private history is owner-only; selected active avatars are public."""
+        """校验图片归属和资源关系后读取 R2，返回不可共享缓存的图片响应。
+
+        key 是上传记录编号；员工读取历史图或凭证时另传 ticket_id。
+        选中的有效账号头像可公开读，历史头像只允许本人预览。
+        """
         uid, status = await sessions.current_user_id(self.db, request)
         active = uid is not None and status == 'active'
         cache = 'private, no-store'
@@ -512,21 +517,9 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, Clou
         else:
             upload = await self.db.first('SELECT * FROM uploads WHERE id=?', (key,))
             require(upload is not None, '图片不存在', 404)
-            if upload['private']:
-                role = None
-                if active:
-                    role = await self.db.scalar('SELECT role FROM users WHERE id=?', (uid,))
-                require(active and (uid == upload['user_id'] or role in ('admin', 'support', 'developer')),
-                        '无权读取私密图片', 403)
-            else:
-                needle = '%/media/' + key + '%'
-                listed = await self.db.first(
-                    "SELECT 1 FROM products WHERE status<>'removed' AND data LIKE ?", (needle,))
-                if not listed:
-                    listed = await self.db.first('SELECT 1 FROM orders WHERE items LIKE ?', (needle,))
-                require(listed or (active and uid == upload['user_id']), '图片尚未发布', 403)
-                if listed:
-                    cache = 'public, max-age=3600'
+            ticket_id = int_param(query_of(request), 'ticket_id', required=False)
+            allowed = await can_read_upload(self.db, key, uid if active else None, ticket_id)
+            require(allowed, '无权读取此图片', 403)
             path = upload['path']
         body, content_type = await self.media_store.read(path)
         return Response(body, headers={'Content-Type': content_type,

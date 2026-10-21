@@ -11,9 +11,17 @@ import { render } from './router.js';
 import { closeModal } from './core/shell.js';
 import { registerActions } from './actions/index.js';
 import { registerChangeHandlers } from './actions/change.js';
+import { installAuthenticatedMedia } from './core/authenticated-media.js';
 
 registerActions();
 registerChangeHandlers();
+
+// 旧页面仍使用 Bearer；受保护图片失败时带认证下载，不把订单图片改回公开。
+state.mediaLoader = installAuthenticatedMedia({
+  root: document,
+  getSession: () => ({token: state.token, epoch: state.renderId}),
+  registerURL: url => state.mediaURLs.add(url),
+});
 
 let syncingAccount = false;
 subscribeSession(token => {

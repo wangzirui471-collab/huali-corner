@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS probe_atomic (
+  id TEXT PRIMARY KEY,
+  marker TEXT NOT NULL,
+  ok INTEGER NOT NULL CHECK (ok = 1)
+);
+CREATE TABLE IF NOT EXISTS probe_jobs (
+  job_key TEXT PRIMARY KEY,
+  run_count INTEGER NOT NULL
+);

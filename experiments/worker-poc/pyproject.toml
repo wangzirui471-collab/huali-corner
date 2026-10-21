@@ -1,0 +1,8 @@
+[project]
+name = "huali-worker-poc"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = ["fastapi==0.157.0", "Pillow==12.2.0"]
+
+[dependency-groups]
+dev = ["workers-py", "workers-runtime-sdk"]

@@ -1,0 +1,11 @@
+{
+  "name": "huali-worker-poc",
+  "private": true,
+  "scripts": {
+    "dev": "pywrangler dev",
+    "d1:init": "pywrangler d1 execute huali-refactor-local-poc --local --file schema.sql"
+  },
+  "devDependencies": {
+    "wrangler": "4.151.3"
+  }
+}
