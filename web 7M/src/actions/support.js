@@ -38,10 +38,14 @@ async function petAsk(q){
   try{
     const r=await api('/ai/chat',{question:text,history:petHistory.slice(-4)});
     const src=(r.sources||[]).slice(0,3).map((s,i)=>`[${i+1}] ${e(s.title||s.source)}`).join(' · ');
-    const links=(r.links||[]).map(l=>`<a class="ai-pet-link" href="${e(l.href)}">${e(l.label)} →</a>`).join('');
+    const links=(r.links||[]).map(l=>l.action
+      ? `<button type="button" class="ai-pet-link" data-action="${e(l.action)}" data-q="${e(l.q||'')}">${e(l.label)} →</button>`
+      : `<a class="ai-pet-link" href="${e(l.href)}">${e(l.label)} →</a>`).join('');
+    const prods=(r.products||[]).map(p=>`<a class="ai-pet-prod" href="#product/${p.id}"><span class="ai-pet-prod-img" style="background-image:url('${e(p.url||'')}')"></span><span class="ai-pet-prod-txt"><b>${e(p.title)}</b><small>¥${money(p.price)}${p.nickname?' · '+e(p.nickname):''}</small></span></a>`).join('');
     const transfer=r.action==='transfer';
     wait.innerHTML=`<div>${petText(r.answer)}</div>
       ${links?`<div class="ai-pet-links">${links}</div>`:''}
+      ${prods?`<div class="ai-pet-prods">${prods}</div>`:''}
       ${src?`<div class="ai-pet-src">来源：${src}</div>`:''}
       ${transfer?`<div class="ai-pet-transfer"><b>需要人工处理？</b><p>退款、投诉、账号安全建议提交工单，客服 08:00—20:00 处理。</p><button type="button" class="btn primary" data-action="new-ticket">提交工单</button></div>`:''}
       ${r.notice?`<div class="ai-pet-src">${e(r.notice)}</div>`:''}`;
@@ -229,6 +233,13 @@ export const clicks = {
   },
   'ai-pet-toggle': () => togglePetPanel(),
   'ai-pet-chip': b => petAsk(b.dataset.q),
+  // 小转给了「去首页搜索」：把关键词塞进搜索框并跳到首页。
+  'pet-search': b => {
+    const q=b.dataset.q||'';
+    state.filter.q=q; state.filter.category=''; state.freeShelf=false; state.homeLimit=40;
+    togglePetPanel(false);
+    go('home');
+  },
 };
 
 export const submits = {

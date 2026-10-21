@@ -33,6 +33,13 @@ GREETING_WORDS = (
     '早上好', '晚上好', '下午好',
 )
 UNCERTAIN_WORDS = ('大概', '可能', '应该是', '估计', '也许', '或许', '差不多')
+# 购买意图：客户说「我想买键盘」时直接搜商品，不走大模型（快、不烧额度）。
+BUY_PATTERNS = (
+    '我想买', '我要买', '想买', '要买', '想买个', '要个', '想找', '要找',
+    '有没有', '有没有卖', '想淘', '要淘', '求购', '求个', '想要', '买一个',
+    '买部', '买台', '买本', '买双', '买件', '来一个', '来部', '来台',
+    '蹲一个', '蹲个', '入手',
+)
 STOP = {
     '怎么', '可以', '什么', '请问', '一下', '这个', '那个', '多少', '如何', '是否',
     '我的', '你的', '我们', '你们', '为什', '么样', '能不', '不能', '是不', '不是',
@@ -172,6 +179,110 @@ def links_for(title):
     return []
 
 
+# 商品目录缓存（60s）：用来判断「哪些词是商品信号」。
+# 借鉴 NVIDIA retail-shopping-assistant：匹配词表从目录派生，不硬编码停用词，
+# 于是「一个 / 一下 / please」这类任何语言的填充词都会被自动丢掉。
+_CATALOG = {'at': 0.0, 'tokens': frozenset()}
+
+
+async def catalog_tokens(db, ttl=60):
+    now = time.time()
+    if db is None or now - _CATALOG['at'] < ttl:
+        return _CATALOG['tokens']
+    tokens = set()
+    try:
+        rows = await db.all("SELECT title FROM products WHERE status='available'")
+        for r in rows:
+            tokens.update(tokenize(r['title'] or ''))
+    except Exception:  # noqa: BLE001 - 取不到目录就按原词检索
+        return _CATALOG['tokens']
+    _CATALOG.update(at=now, tokens=frozenset(tokens))
+    return _CATALOG['tokens']
+
+
+async def buy_query(question, db=None):
+    """从「我想买键盘」里取出商品关键词；不是购买意图返回 None。
+
+    关键词只保留「目录里出现过」的词：语言无关，不用维护停用词表。
+    """
+    q = str(question or '').strip().lower()
+    if not any(w in q for w in BUY_PATTERNS):
+        return None
+    rest = q
+    for w in BUY_PATTERNS:
+        rest = rest.replace(w, ' ')
+    rest = re.sub(r'[，。！？、,.!?~～;；:：\s]+', ' ', rest)
+    toks = [t for t in tokenize(rest) if t not in STOP and len(t) >= 2]
+    if not toks:
+        return None
+    if db is not None:
+        cat = await catalog_tokens(db)
+        hit = [t for t in toks if t in cat]
+        if hit:
+            toks = hit
+    kw = ''.join(toks)[:30]
+    return kw if len(kw) >= 2 else None
+
+
+def _detail(raw):
+    if isinstance(raw, dict):
+        return raw
+    try:
+        d = json.loads(raw or '{}')
+    except Exception:
+        return {}
+    return d if isinstance(d, dict) else {}
+
+
+def _photos_url(raw):
+    photos = raw
+    if isinstance(photos, str):
+        try:
+            photos = json.loads(photos)
+        except Exception:
+            return ''
+    if isinstance(photos, list) and photos and isinstance(photos[0], dict):
+        return str(photos[0].get('url') or '')
+    return ''
+
+
+async def buy_search(db, q, limit=4):
+    # k-multiplier：先多取候选，再按标题相关度重排（借鉴开源零售助手的做法）。
+    like = '%' + q + '%'
+    rows = await db.all(
+        'SELECT p.id,p.title,p.price,p.data,u.nickname FROM products p '
+        "JOIN users u ON u.id=p.seller_id WHERE p.status='available' "
+        'AND (p.title LIKE ? OR p.data LIKE ?) ORDER BY p.id DESC LIMIT 12',
+        (like, like))
+    grams = [t for t in tokenize(q) if len(t) >= 2]
+
+    def score(r):
+        title = (r['title'] or '').lower()
+        s = 6 if q in title else 0
+        s += 2 * title.count(q)
+        return s + sum(1 for t in grams if t in title)
+
+    rows.sort(key=score, reverse=True)  # 稳定排序：同分保持「最新」在前
+    out = []
+    for r in rows[:limit]:
+        out.append({'id': r['id'], 'title': r['title'], 'price': r['price'],
+                    'url': _photos_url(_detail(r['data']).get('photos')),
+                    'nickname': r['nickname']})
+    return out
+
+
+async def buy_answer(db, q):
+    rows = await buy_search(db, q)
+    label = '「' + q + '」'
+    if rows:
+        answer = '为你找到 %d 件%s相关商品，点卡片直接看详情：' % (len(rows), label)
+    else:
+        answer = '暂时没有找到%s的在售商品，可以换个说法，或点按钮去首页自己搜。' % label
+    return {'answer': answer, 'action': 'reply',
+            'links': [{'label': '去首页搜索' + label, 'action': 'pet-search', 'q': q}],
+            'products': rows, 'sources': [], 'mode': 'rule', 'latency_ms': 0}
+
+
 def strip_thinking(text):
     text = text or ''
     text = re.sub(r'```(?:think|reasoning).*?```', '', text, flags=re.S | re.I)
@@ -236,7 +347,7 @@ async def call_api(question, context, env, history=None):
     return (choices[0].get('message') or {}).get('content') or ''
 
 
-async def ai_answer(question, env, history=None):
+async def ai_answer(question, env, history=None, db=None):
     started = time.time()
     q = str(question or '').strip()[:800]
     elapsed = lambda: int((time.time() - started) * 1000)
@@ -251,6 +362,11 @@ async def ai_answer(question, env, history=None):
     if intent == 'transfer':
         return {'answer': TRANSFER_REPLY, 'action': 'transfer', 'sources': [], 'links': SUPPORT_LINK,
                 'mode': 'rule', 'latency_ms': elapsed()}
+
+    # 购买意图直接搜商品：不走大模型，快且不烧额度。
+    buy = await buy_query(q, db)
+    if buy:
+        return await buy_answer(db, buy)
 
     hits = retrieve(q)
     if not hits:
@@ -336,7 +452,7 @@ class AiSupport:
                 if role in ('user', 'assistant') and content:
                     history.append({'role': role, 'content': content})
         await self.ai_quota(uid)
-        result = await ai_answer(question, self.env, history)
+        result = await ai_answer(question, self.env, history, self.db)
         # 只有真正调用模型才计入额度；问候、转人工、无命中不扣次数。
         if result.get('mode') == 'llm':
             await self.ai_count(uid)

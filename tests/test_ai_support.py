@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 
 import cloudflare_test_support  # noqa: F401 - 设置 sys.path 并桩掉 workers
@@ -25,6 +26,52 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('#orders', [l['href'] for l in ai.links_for('怎么取消订单、怎么退款')])
         self.assertEqual(ai.links_for('怎么注销账号')[0]['href'], '#me')
         self.assertEqual(ai.links_for('客服什么时候在线、怎么找人工')[0]['href'], '#support')
+
+    def _memory_db(self):
+        import sqlite3
+        from cloudflare_test_support import Binding
+        from app.cloudflare.d1 import Database
+        conn = sqlite3.connect(':memory:')
+        conn.row_factory = sqlite3.Row
+        root = Path(cloudflare_test_support.__file__).resolve().parents[1]
+        conn.executescript((root / 'Backend mission/app/cloudflare/schema.sql').read_text(encoding='utf-8'))
+        self.addCleanup(conn.close)
+        conn.execute("INSERT INTO users(id,phone,nickname) VALUES(1,'13800000001','卖家')")
+        return Database(Binding(conn))
+
+    async def test_buy_query_derives_keywords_from_catalog(self):
+        ai._CATALOG['at'] = 0.0
+        db = self._memory_db()
+        await db.run("INSERT INTO products(id,seller_id,title,category,price,status,data,created) "
+                     "VALUES(1,1,'青轴机械键盘','electronics',19900,'available','{}',1)")
+        # 「一个」不在目录里会被丢掉，只留「键盘」
+        self.assertEqual(await ai.buy_query('我想买一个键盘', db), '键盘')
+        # 目录里没有的词也保留，让搜索去跑一遍再报没找到
+        self.assertEqual(await ai.buy_query('有没有台灯', db), '台灯')
+        self.assertIsNone(await ai.buy_query('怎么发布闲置', db))
+        self.assertIsNone(await ai.buy_query('我要投诉', db))
+
+    async def test_buy_search_ranks_title_matches_first(self):
+        db = self._memory_db()
+        await db.run("INSERT INTO products(id,seller_id,title,category,price,status,data,created) "
+                     "VALUES(1,1,'键帽收纳盒','electronics',9900,'available','{\"description\":\"适用于键盘\"}',1)")
+        await db.run("INSERT INTO products(id,seller_id,title,category,price,status,data,created) "
+                     "VALUES(2,1,'罗技机械键盘 K380','electronics',29900,'available','{}',2)")
+        rows = await ai.buy_search(db, '键盘')
+        self.assertEqual(rows[0]['title'], '罗技机械键盘 K380')
+        self.assertEqual(len(rows), 2)
+
+    async def test_buy_answer_returns_products_and_search_link(self):
+        db = self._memory_db()
+        await db.run("INSERT INTO products(id,seller_id,title,category,price,status,data,created) "
+                     "VALUES(1,1,'青轴机械键盘','electronics',19900,'available',"
+                     "'{\"photos\":[{\"url\":\"/media/pic1\"}]}',1)")
+        r = await ai.buy_answer(db, '键盘')
+        self.assertEqual(len(r['products']), 1)
+        self.assertEqual(r['products'][0]['title'], '青轴机械键盘')
+        self.assertEqual(r['products'][0]['url'], '/media/pic1')
+        self.assertEqual(r['links'][0]['action'], 'pet-search')
+        self.assertEqual(r['links'][0]['q'], '键盘')
 
     async def test_api_failure_degrades_instead_of_raising(self):
         original = ai.call_api

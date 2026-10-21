@@ -289,3 +289,21 @@
   transition: background .15s, transform .15s;
 }
 .ai-pet-link:hover{ background: #ffefb8; transform: translateY(-1px); }
+/* 链接做成按钮时继承字体与指针 */
+button.ai-pet-link{ cursor: pointer; font-family: inherit; }
+
+/* 购买意图的商品小卡：点卡片直接进详情 */
+.ai-pet-prods{ display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.ai-pet-prod{
+  display: flex; align-items: center; gap: 8px; padding: 6px;
+  border-radius: 10px; background: #fff; border: 1px solid #f0e2ae;
+  text-decoration: none; color: inherit;
+}
+.ai-pet-prod:hover{ background: #fffaf0; }
+.ai-pet-prod-img{
+  width: 44px; height: 44px; border-radius: 8px; flex: none;
+  background: #f4f4f6 center / cover no-repeat;
+}
+.ai-pet-prod-txt{ display: flex; flex-direction: column; min-width: 0; }
+.ai-pet-prod-txt b{ font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-pet-prod-txt small{ font-size: 11px; color: #d8451f; font-weight: 650; }
