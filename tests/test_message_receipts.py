@@ -17,7 +17,9 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'Backend mission'))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from app.market import Market, DomainError
+from chat_fixture import private_chat
 
 
 class MessageReceiptTests(unittest.TestCase):
@@ -43,7 +45,8 @@ class MessageReceiptTests(unittest.TestCase):
         return next(x for x in receipts['readers'] if x['user_id'] == uid)
 
     def test_private_receipt_marks_read_only_after_peer_pulls(self):
-        room = self.m.private_room(self.a, self.b)['id']
+        # 私聊发送有好友门禁，前置先建好友关系。
+        room = private_chat(self.m, self.a, self.b)
         mid = self.say(self.a, room, '在吗', 'k1')
 
         r = self.m.message_receipts(self.a, room)

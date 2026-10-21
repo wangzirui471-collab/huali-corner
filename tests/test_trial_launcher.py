@@ -32,7 +32,7 @@ class TrialLauncherTests(unittest.TestCase):
             (private/'existing-data-marker').write_text('preserved')
             (backend/'server.py').write_text(
                 'import os\nfrom pathlib import Path\n'
-                'assert Path.cwd() == Path(__file__).resolve().parent\n'
+                'assert Path.cwd().samefile(Path(__file__).resolve().parent)\n'
                 "assert os.environ['HUALI_DATA_DIR'] == 'private-data'\n"
                 "assert (Path(os.environ['HUALI_DATA_DIR'])/'existing-data-marker').read_text() == 'preserved'\n"
                 "assert os.environ['HC_DB'] == 'launcher-inheritance-test'\n")

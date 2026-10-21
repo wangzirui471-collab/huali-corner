@@ -1,7 +1,9 @@
 import sys, tempfile, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'Backend mission'))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from app.market import Market, DomainError
+from chat_fixture import befriend
 
 
 class AdminChatViewTests(unittest.TestCase):
@@ -22,6 +24,8 @@ class AdminChatViewTests(unittest.TestCase):
         return self.m.login(phone, code)['user']['id']
 
     def test_list_and_read_with_audit(self):
+        # 私聊发送有好友门禁，前置先建好友关系。
+        befriend(self.m, self.alice, self.bob)
         room = self.m.private_room(self.alice, self.bob)
         self.m.send_message(self.alice, room['id'], '在吗？这本高数还在', 'k-a-1')
         self.m.send_message(self.bob, room['id'], '在的，明天中午A1楼下', 'k-b-1')

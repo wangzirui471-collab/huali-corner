@@ -15,7 +15,9 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'Backend mission'))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from app.market import Market, DomainError
+from chat_fixture import private_chat
 
 
 class MessageActionTests(unittest.TestCase):
@@ -24,7 +26,9 @@ class MessageActionTests(unittest.TestCase):
         self.m = Market(self.tmp.name)
         self.a = self.login('13800000011')
         self.b = self.login('13800000012')
-        self.room = self.m.private_room(self.a, self.b)['id']
+        # 私聊发送有「先加好友」门禁，前置先把好友关系建好；门禁本身由
+        # test_stranger_cannot_send_before_friend 负向守住。
+        self.room = private_chat(self.m, self.a, self.b)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -92,6 +96,21 @@ class MessageActionTests(unittest.TestCase):
             self.m.recall_message(self.a, mid)
         self.m.hide_message(self.a, mid)
         self.assertNotIn('老消息', self.visible(self.a))
+
+    def test_stranger_cannot_send_before_friend(self):
+        """负向：没加好友的陌生人私聊发不出去（门禁不能因为修前置被删掉）。
+
+        这条用例故意不建好友关系，直接建会话就发消息，必须 403。
+        历史消息仍然可读，门禁只挡发送。
+        """
+        stranger = self.login('13800000019')
+        room = self.m.private_room(self.a, stranger)['id']
+        with self.assertRaises(DomainError) as ctx:
+            self.m.send_message(self.a, room, '没加好友就说话', 'k-stranger')
+        self.assertEqual(ctx.exception.status, 403)
+        self.assertEqual(self.m.is_friend(self.a, stranger), False)
+        # 建会话本身不写消息，读也是空集，不报错。
+        self.assertEqual(self.m.messages(self.a, room), [])
 
 
 if __name__ == '__main__':

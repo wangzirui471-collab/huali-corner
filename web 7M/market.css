@@ -629,6 +629,10 @@ button { -webkit-tap-highlight-color: transparent; }
 .site-footer button:hover { color: var(--ink-2); }
 .site-footer b { color: var(--ink-3); font-weight: 700; }
 .footer-note { display: block; margin-top: 5px; font-size: 9.5px; color: #c3c6cd; line-height: 1.6; }
+/* 页脚品牌锁版：完整标识（标记＋文字）单独成块，下方再放一句说明。
+   标识本身已含站名，页脚不再重复「华立转角」粗体字。 */
+.footer-brand { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; min-width: 0; }
+.footer-lockup { display: block; height: 42px; width: auto; }
 
 /* --- 13. 页面标题 -------------------------------------------------------- */
 .page-heading { margin-bottom: 22px; }

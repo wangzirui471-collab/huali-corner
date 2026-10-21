@@ -21,6 +21,7 @@ from cloudflare_test_support import Binding
 
 from app.cloudflare.api import Api as BaseApi
 from app.cloudflare.crypto import session_digest
+from app.cloudflare.friend_api import FRIEND_ROUTES
 
 if issubclass(BaseApi, CommunityApi):
     Api=BaseApi
@@ -40,7 +41,14 @@ class CommunityTests(unittest.IsolatedAsyncioTestCase):
         method='POST' if body is not None else 'GET'
         async def text():return json.dumps(body)
         r=SimpleNamespace(url='https://test.invalid'+path,method=method,text=text,uid=uid,headers={'Authorization':f'Bearer test-{uid}'} if uid else {})
-        return await guard(lambda:getattr(self.api,COMMUNITY_ROUTES[path.split('?')[0]][1])(r))
+        routes = dict(COMMUNITY_ROUTES, **FRIEND_ROUTES)
+        return await guard(lambda:getattr(self.api,routes[path.split('?')[0]][1])(r))
+    async def befriend(self):
+        sent = await self.req('/api/friend/request', {'target': 3})
+        self.assertEqual(sent.status, 200, sent.body)
+        fid = self.c.execute('SELECT id FROM friendships WHERE requester=2 AND target=3').fetchone()[0]
+        accepted = await self.req('/api/friend/decide', {'id': fid, 'accept': True}, uid=3)
+        self.assertEqual(accepted.status, 200, accepted.body)
     async def test_posts_comments_pagination_mentions_and_parent_scope(self):
         p=await self.req('/api/posts',{'body':'测试 @同学3','topic':'交流'});self.assertEqual(p.status,200)
         pid=p.body['id'];self.assertEqual((await self.req('/api/posts?limit=1')).body[0]['id'],pid)
@@ -50,6 +58,7 @@ class CommunityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.req('/api/comments',{'post_id':pid,'body':'回复','parent_id':999})).status,404)
         self.assertEqual((await self.req('/api/posts',{'body':'去 https://example.com','topic':'交流'})).status,422)
     async def test_private_idempotency_hide_recall_and_block(self):
+        await self.befriend()
         a=await self.req('/api/rooms/private',{'peer':3});self.assertEqual(a.status,200);rid=a.body['id']
         self.assertEqual((await self.req('/api/rooms/private',{'peer':2},uid=3)).body['id'],rid)
         for _ in range(2):self.assertEqual((await self.req('/api/messages',{'room_id':rid,'body':'你好','key':'one'})).status,200)
@@ -84,6 +93,7 @@ class CommunityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len((await self.req('/api/wants')).body),1)
 
     async def test_messages_latest_200_cursor_and_unread_hide(self):
+        await self.befriend()
         rid=(await self.req('/api/rooms/private',{'peer':3})).body['id']
         self.c.executemany('INSERT INTO messages(room_id,user_id,body,created,request_key) VALUES(?,?,?,?,?)',[(rid,2,str(i),time.time(),str(i)) for i in range(250)])
         rooms=(await self.req('/api/rooms',uid=3)).body
@@ -120,6 +130,7 @@ class CommunityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.req(f'/api/messages?room_id={rid}')).body[0]['body'],'消息已被移除')
 
     async def test_private_contact_allowed_public_contact_flagged(self):
+        await self.befriend()
         rid=(await self.req('/api/rooms/private',{'peer':3})).body['id']
         private=await self.req('/api/messages',{'room_id':rid,'body':'电话13800138000','key':'contact'})
         self.assertEqual(private.status,200);self.assertIsNone(private.body['moderation'])
@@ -156,6 +167,7 @@ class CommunityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.c.execute('SELECT COUNT(*) FROM members WHERE room_id=10').fetchone()[0],500)
 
     async def test_permission_change_between_check_and_send_rolls_back(self):
+        await self.befriend()
         rid=(await self.req('/api/rooms/private',{'peer':3})).body['id']
         original=self.api.db.guarded_batch
         async def race(sql,params,statements,**kw):
@@ -204,6 +216,7 @@ class CommunityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual({x['user_id']:x['n'] for x in rows},{2:1,3:1})
 
     async def test_unblock_restores_send_and_guest_writes_require_login(self):
+        await self.befriend()
         rid=(await self.req('/api/rooms/private',{'peer':3})).body['id']
         await self.req('/api/block',{'target':3});await self.req('/api/block',{'target':3,'enabled':False})
         self.assertEqual((await self.req('/api/messages',{'room_id':rid,'body':'恢复','key':'ok'})).status,200)
@@ -211,6 +224,15 @@ class CommunityTests(unittest.IsolatedAsyncioTestCase):
         self.c.execute("UPDATE users SET status='banned' WHERE id=2")
         self.assertEqual((await self.req('/api/rooms')).status,403)
         self.assertEqual((await self.req('/api/nominate',{'room_id':rid,'reason':'申请'})).status,403)
+
+    async def test_stranger_send_denied_until_friend_request_accepted(self):
+        rid = (await self.req('/api/rooms/private', {'peer': 3})).body['id']
+        blocked = await self.req('/api/messages', {'room_id': rid, 'body': '陌生人消息', 'key': 'stranger'})
+        self.assertEqual(blocked.status, 403, blocked.body)
+        self.assertEqual(self.c.execute('SELECT COUNT(*) FROM messages').fetchone()[0], 0)
+        await self.befriend()
+        sent = await self.req('/api/messages', {'room_id': rid, 'body': '好友消息', 'key': 'friend'})
+        self.assertEqual(sent.status, 200, sent.body)
 
 if __name__=='__main__':unittest.main()
 

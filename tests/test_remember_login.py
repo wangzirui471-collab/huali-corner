@@ -18,7 +18,8 @@ class LocalRememberLogin(unittest.TestCase):
 class CloudRememberLogin(CloudCase):
     async def test_cloud_login_uses_30_day_expiry(self):
         result=await self.req('/api/auth/register',uid=0,method='POST',body={
-            'phone':'remember@test.invalid','nickname':'缓存测试',
+            'phone':'13900000992','nickname':'缓存测试',
+            'college':'计算机工程学院','grade':'2026级',
             'salt':'12'*16,'digest':'ab'*32,'rounds':600000,
         })
         self.assertEqual(result.status,200)

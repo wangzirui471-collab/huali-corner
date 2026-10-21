@@ -487,7 +487,7 @@ class StaffApi:
         uid, _ = await self.cf_staff_actor(request, admin=True)
         import zipfile
         # Only project tables, all read inside one D1 batch snapshot. Hard bounds fail explicitly.
-        tables = ['audit','auth_attempts','blocks','comments','ledger','members','message_hides','messages','nominations','notifications','offers','order_changes','order_notes','orders','otp','password_credentials','posts','products','reactions','reviews','room_pins','rooms','sessions','settings','ticket_messages','tickets','uploads','user_avatar_uploads','users','wants']
+        tables = ['audit','auth_attempts','blocks','comments','friendships','ledger','members','message_hides','messages','nominations','notifications','offers','order_changes','order_notes','orders','otp','password_credentials','posts','products','reactions','reviews','room_pins','rooms','sessions','settings','ticket_messages','tickets','uploads','user_avatar_uploads','users','wants']
         results = await self.db.batch([("SELECT name,sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%'", ())]+[(f'SELECT * FROM "{table}" LIMIT 10001', ()) for table in tables])
         schema = [dict(r) for r in results[0].results]; snapshot = {table: [dict(r) for r in result.results] for table, result in zip(tables, results[1:])}
         require(all(len(rows) <= 10000 for rows in snapshot.values()), '数据量超出在线备份上限，请使用 Cloudflare D1/R2 导出工具', 413)

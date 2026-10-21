@@ -222,6 +222,7 @@ class StaffTests(CloudCase):
 
     async def test_complete_backup_private_zip_includes_sql_media_and_restore_checksums(self):
         key='media/products/2/synthetic.webp'; self.bucket.objects[key]=b'synthetic media'
+        self.db.execute("INSERT INTO friendships(requester,target,message,status,created) VALUES(2,3,'测试好友','accepted',1)")
         self.db.execute('INSERT INTO uploads(id,user_id,path,private) VALUES(?,?,?,1)',('u1',2,key))
         self.assertEqual((await self.post('/api/backup',{},uid=4)).status,403)
         r=await self.post('/api/backup',{}); self.assertEqual(r.status,200,r.body)
@@ -234,6 +235,16 @@ class StaffTests(CloudCase):
             restored.executescript(archive.read('database.sql').decode('utf-8'))
             self.assertEqual(restored.execute('SELECT COUNT(*) FROM users').fetchone()[0],5)
             self.assertEqual(restored.execute('SELECT path FROM uploads').fetchone()[0],key)
+            self.assertIn('friendships', manifest['tables'])
+            friendship = restored.execute('SELECT requester,target,message,status FROM friendships').fetchone()
+            self.assertEqual(friendship, (2, 3, '测试好友', 'accepted'))
+
+    async def test_unknown_application_table_prevents_incomplete_backup(self):
+        self.db.execute('CREATE TABLE future_records(id INTEGER PRIMARY KEY, body TEXT)')
+        result = await self.post('/api/backup', {})
+        self.assertEqual(result.status, 503, result.body)
+        self.assertIn('备份表清单', result.body['error'])
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM audit WHERE type='backup'").fetchone()[0], 0)
 
     async def test_missing_media_makes_backup_fail_without_false_success(self):
         self.db.execute("INSERT INTO uploads(id,user_id,path) VALUES('missing',2,'media/products/2/missing.webp')")
