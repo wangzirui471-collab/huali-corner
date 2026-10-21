@@ -157,7 +157,9 @@ function bindDrag(body){
     if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 5) return;   // 手抖不算拖动
     drag.moved = true;
     moveTo(drag.ox + dx, drag.oy + dy);
-    setPetState(dx > 0 ? 'right' : 'left', 0);
+    // 只在真的往某一侧移动时换朝向；dx 恰好为 0 时保持当前朝向，不要无端翻面。
+    if (dx > 0) setPetState('right', 0);
+    else if (dx < 0) setPetState('left', 0);
     placePanel();
   });
 
