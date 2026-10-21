@@ -31,6 +31,12 @@
     "database_id": "530fa313-3285-42b9-aebd-e65e9b4e86ed",
     "remote": true
   }],
+  // 服务端短 TTL 缓存（Cloudflare KV，最接近 Redis 的原生键值存储）。
+  // 只缓存匿名首屏列表，按路径+查询串做键；写失败/读失败都 fail-open。
+  "kv_namespaces": [{
+    "binding": "CACHE",
+    "id": "1d1bd586ea3d402e82a7e48b3ff23da0"
+  }],
   "triggers": {"crons": ["*/5 * * * *"]},
   "r2_buckets": [{
     "binding": "MEDIA",

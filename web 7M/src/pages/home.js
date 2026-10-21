@@ -19,13 +19,21 @@ function navigation(){
     <section class="category-grid home-shortcuts" data-home-shortcuts aria-label="快捷分类">${shortcuts.map(([category,label,ic,q],index)=>`<button data-action="market-shortcut" data-value="${category}" data-q="${q}"><span class="category-chip ${['coral','steel','gold','mint','blue','lilac'][index]}">${icon(ic)}</span>${label}</button>`).join('')}<button data-action="free-shelf"><span class="category-chip pink">${icon('heart')}</span>免费送</button><button data-go="community"><span class="category-chip sky">${icon('message')}</span>校园求购</button><button data-go="publish"><span class="category-chip apricot">${icon('plus')}</span>发布闲置</button></section>`;
 }
 
+// 首屏商品列表的查询串：home 与 main.js 的空闲预取共用，保证预取命中同一份缓存。
+function homeParams(favorite=false){
+  const filter={...state.filter};
+  const free=state.freeShelf&&!favorite;
+  const params=new URLSearchParams({...filter,...(favorite?{favorite:'1'}:{})});
+  if(!(free||favorite)){params.set('limit',String(PAGE_SIZE));params.set('page','1');}
+  return params;
+}
+export function productsURL(favorite=false){ return '/products?'+homeParams(favorite); }
+
 export async function home(favorite=false){
   const epoch=state.renderId, token=state.token, filter={...state.filter};
   const free=state.freeShelf&&!favorite;
-  const params=new URLSearchParams({...filter,...(favorite?{favorite:'1'}:{})});
-  // Preserve the full free-only/favorite filtering semantics of the existing API.
   const local=free||favorite;
-  if(!local){params.set('limit',String(PAGE_SIZE));params.set('page','1');}
+  const params=homeParams(favorite);
   let products=await api('/products?'+params);
   if(epoch!==state.renderId || token!==state.token) return;
   if(free) products=products.filter(product=>product.price===0);

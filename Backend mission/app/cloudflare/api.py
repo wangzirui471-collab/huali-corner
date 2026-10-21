@@ -59,6 +59,36 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, AiSu
         self.media_store = MediaStore(env.MEDIA)
         self.assets = getattr(env, 'ASSETS', None)
 
+    # ---- 服务端短 TTL 缓存（Cloudflare KV）--------------------------------
+    # 只给匿名首屏列表用：登录用户的响应带「已赞/已收藏」，不能进共享缓存。
+    # 值里存写入时间，读时判断 TTL（键固定，不会无限增长）；任何异常都 fail-open。
+
+    CACHE_TTL = 30
+
+    async def cache_get(self, key):
+        cache = getattr(self.env, 'CACHE', None)
+        if cache is None:
+            return None
+        try:
+            raw = await cache.get(key)
+            if not raw:
+                return None
+            obj = json.loads(raw)
+            if time.time() - float(obj.get('at') or 0) > self.CACHE_TTL:
+                return None
+            return obj.get('body')
+        except Exception:
+            return None
+
+    async def cache_set(self, key, body):
+        cache = getattr(self.env, 'CACHE', None)
+        if cache is None:
+            return
+        try:
+            await cache.put(key, json.dumps({'at': time.time(), 'body': body}, ensure_ascii=False))
+        except Exception:
+            pass
+
     # ---- 账号辅助 --------------------------------------------------------
 
     async def require_capacity(self):
@@ -229,6 +259,14 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, AiSu
     async def products(self, request):
         query = query_of(request)
         uid, _ = await sessions.current_user_id(self.db, request)
+        # 匿名首屏走服务端 KV 缓存；登录用户响应含个人「已赞/已收藏」，不进共享缓存。
+        cache_key = None
+        if uid is None:
+            parts = urlsplit(request.url)
+            cache_key = 'products:' + parts.path + '?' + parts.query
+            cached = await self.cache_get(cache_key)
+            if cached is not None:
+                return json_response(cached)
 
         page = max(1, int(query.get('page') or 1))
         limit = max(0, int(query.get('limit') or 0))
@@ -276,16 +314,34 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, AiSu
 
         items = base[(page - 1) * limit:page * limit] if limit else base
         trusted = await self.trusted_map([p['seller_id'] for p in items])
+        # 批量取点赞数 / 我是否点赞 / 我是否收藏，避免对每个商品各查 2~3 次
+        # （24 件商品会变成 48~72 次 D1 往返，这是商品列表 ~700ms 的主因）。
+        ids = [item['id'] for item in items]
+        like_counts = {}
+        mine = set()
+        if ids:
+            placeholders = ','.join('?' * len(ids))
+            viewer = uid or 0
+            # 一次查询同时拿到点赞数、我是否点赞、我是否收藏（原来要 2 次 D1 往返）。
+            for r in await self.db.all(
+                    "SELECT product_id,"
+                    " SUM(CASE WHEN kind='like' THEN 1 ELSE 0 END) likes,"
+                    " MAX(CASE WHEN user_id=? AND kind='like' THEN 1 ELSE 0 END) liked,"
+                    " MAX(CASE WHEN user_id=? AND kind='favorite' THEN 1 ELSE 0 END) favorited"
+                    " FROM reactions WHERE product_id IN (" + placeholders + ")"
+                    " AND kind IN ('like','favorite') GROUP BY product_id",
+                    (viewer, viewer, *ids)):
+                pid = r['product_id']
+                like_counts[pid] = r['likes'] or 0
+                if r['liked']: mine.add((pid, 'like'))
+                if r['favorited']: mine.add((pid, 'favorite'))
         for item in items:
             item['seller_trusted'] = trusted.get(item['seller_id'], False)
-            item['likes'] = await self.db.scalar(
-                "SELECT COUNT(*) FROM reactions WHERE product_id=? AND kind='like'", (item['id'],)) or 0
-            item['liked'] = bool(uid and await self.db.first(
-                "SELECT 1 FROM reactions WHERE product_id=? AND user_id=? AND kind='like'",
-                (item['id'], uid)))
-            item['favorited'] = bool(uid and await self.db.first(
-                "SELECT 1 FROM reactions WHERE product_id=? AND user_id=? AND kind='favorite'",
-                (item['id'], uid)))
+            item['likes'] = like_counts.get(item['id'], 0)
+            item['liked'] = (item['id'], 'like') in mine
+            item['favorited'] = (item['id'], 'favorite') in mine
+        if cache_key:
+            await self.cache_set(cache_key, items)
         return json_response(items)
 
     async def product(self, request):
