@@ -134,6 +134,33 @@ class SupportService(ValidationMixin):
                     self.notify(c,target,'ticket_reply',f'工单 #{tid} 客服已回复，请到客服中心查看。',t['order_id'],tid)
         return self.ticket(u,tid)
 
+    def ai_reply(self,u,tid):
+        """给客服生成建议回复：只把工单的公开信息发给本地 AI。
+
+        内部备注不进入提示词；返回的建议由客服确认后才插入回复框，
+        不会自动发给客户。调用记录只写工单号/来源/耗时，不写客户原话。
+        """
+        self.staff(u)
+        t=self.ticket(u,int(tid))
+        # 只拼用户真正在问的内容；「工单类型/主题」这类标签会稀释检索词，
+        # 让「怎么发布闲置」这种明确问题反而检索不到。
+        parts=[str(t['subject']),str(t['body'])]
+        recent=[m for m in (t.get('messages') or []) if not m.get('internal')][-6:]
+        if recent:
+            parts.append('\n'.join(str(m['body']) for m in recent))
+        question='\n'.join(parts)[:2000]
+        from .ai import suggest
+        result=suggest(question)
+        try:
+            line={'time':time.time(),'actor':u,'ticket_id':t['id'],'action':result.get('action'),
+                  'mode':result.get('mode'),'sources':[s.get('title') for s in (result.get('sources') or [])],
+                  'latency_ms':result.get('latency_ms')}
+            with open(self.root/'ai-usage.jsonl','a',encoding='utf-8') as f:
+                f.write(json.dumps(line,ensure_ascii=False)+'\n')
+        except OSError:
+            pass
+        return result
+
     def check_conflict(self,u,t):
         if t.get('product_id'):
             pid=t['product_id']

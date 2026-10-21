@@ -141,7 +141,43 @@ export const clicks = {
     await api('/admin/ban', {target:id, banned:banning, reason});
     toast(banning ? '已封禁' : '已解封');
     await render();
-  }
+  },
+  // 本地 AI 客服：只生成建议，绝不自动发给客户；客服核对后手动插入回复框。
+  'ai-reply': async b => {
+    const box = b.closest('.ai-reply');
+    if (!box) return;
+    const out = box.querySelector('.ai-reply-body');
+    const ticket = Number(box.dataset.ticket);
+    b.disabled = true;
+    out.hidden = false;
+    out.innerHTML = '<p class="ai-reply-loading">正在检索知识库并生成建议…</p>';
+    try {
+      const r = await api('/ai/reply', {ticket_id: ticket});
+      const sources = (r.sources || []).map((s, i) => `<li><b>[${i + 1}]</b> ${e(s.title || s.source)}</li>`).join('');
+      const transfer = r.action === 'transfer';
+      out.innerHTML = `<div class="ai-reply-badge ${transfer ? 'is-transfer' : ''}">${transfer ? '建议转人工' : 'AI 建议'}</div>
+        <div class="ai-reply-text">${e(r.answer).replace(/\n/g, '<br>')}</div>
+        ${r.notice ? `<p class="ai-reply-notice">${e(r.notice)}</p>` : ''}
+        <div class="ai-reply-meta">${r.mode === 'rule' ? '规则回复' : r.mode === 'guard' ? '未命中资料' : r.mode === 'mock' ? '知识库摘录' : '模型生成'}${r.latency_ms ? ` · ${Math.round(r.latency_ms)} ms` : ''}</div>
+        ${sources ? `<details class="ai-reply-sources"><summary>参考 ${r.sources.length} 条资料</summary><ol>${sources}</ol></details>` : ''}
+        <div class="ai-reply-actions"><button type="button" class="btn primary" data-action="ai-insert">插入回复框</button><button type="button" class="btn secondary" data-action="ai-reply">重新生成</button></div>`;
+    } catch (err) {
+      out.innerHTML = `<p class="ai-reply-error">${e(err.message)}</p>`;
+    } finally {
+      b.disabled = false;
+    }
+  },
+
+  'ai-insert': b => {
+    const box = b.closest('.ai-reply');
+    const text = box?.querySelector('.ai-reply-text')?.innerText || '';
+    const area = $('#ticket-reply-form')?.querySelector('textarea[name=body]');
+    if (!area || !text) return;
+    area.value = text;
+    area.focus();
+    area.scrollIntoView({block: 'center', behavior: 'smooth'});
+    toast('已插入回复框，请核对后发送');
+  },
 };
 
 export const submits = {

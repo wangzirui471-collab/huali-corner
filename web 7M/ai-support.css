@@ -1,0 +1,46 @@
+/* 客服 AI 建议回复（只在工单页、客服角色、config.ai 为真时出现） */
+.ai-reply{
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border: 1px solid #e6e6e9;
+  border-radius: 10px;
+  background: #fafafb;
+}
+.ai-reply-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ai-reply-head b{ font-size: 14px; color: #1a1a1a; }
+.ai-reply-head small{ display: block; margin-top: 2px; font-size: 11.5px; color: #8a8a93; }
+.ai-reply-body{ margin-top: 12px; }
+.ai-reply-loading{ margin: 0; font-size: 13px; color: #8a8a93; }
+.ai-reply-error{ margin: 0; font-size: 13px; color: #a83a28; }
+.ai-reply-badge{
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #fff3cc;
+  color: #7a5f00;
+  font-size: 11.5px;
+}
+.ai-reply-badge.is-transfer{ background: #fff1ee; color: #a83a28; }
+.ai-reply-text{
+  font-size: 14px;
+  line-height: 1.8;
+  color: #2b2c30;
+  white-space: pre-wrap;
+}
+.ai-reply-notice{ margin: 8px 0 0; font-size: 11.5px; color: #8a8a93; }
+.ai-reply-meta{ margin-top: 6px; font-size: 11px; color: #b4b4bb; }
+.ai-reply-sources{ margin-top: 8px; font-size: 12px; color: #6b6f77; }
+.ai-reply-sources summary{ cursor: pointer; }
+.ai-reply-sources ol{ margin: 6px 0 0; padding-left: 18px; }
+.ai-reply-actions{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+@media (max-width: 600px){
+  .ai-reply{ padding: 12px; }
+  .ai-reply-head{ align-items: flex-start; flex-direction: column; }
+  .ai-reply-actions .btn{ flex: 1 1 45%; }
+}
