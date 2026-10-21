@@ -1,0 +1,217 @@
+/* AI 客服宠物：客服页右下角悬浮入口 + 对话面板 */
+.ai-pet{
+  position: fixed;
+  right: 24px;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.ai-pet-bubble{
+  max-width: 230px;
+  padding: 8px 12px;
+  border: 1px solid #f0e6d8;
+  border-radius: 12px 12px 2px 12px;
+  background: #fffdf8;
+  color: #6b4b1e;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  box-shadow: 0 6px 18px rgba(80, 55, 20, .10);
+  cursor: pointer;
+}
+.ai-pet-bubble:hover{ background: #fff8e8; }
+.ai-pet-body{
+  width: 94px;
+  height: 94px;
+  padding: 0;
+  border: 1px solid #f0e6d8;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(80, 55, 20, .18);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+.ai-pet-body:hover{ transform: translateY(-2px) scale(1.02); box-shadow: 0 14px 34px rgba(80, 55, 20, .22); }
+.ai-pet-sprite{
+  width: 86px;
+  height: 86px;
+  background-image: url('/assets/ai-pet/idle-strip.png');
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  background-size: 688px 86px;
+  animation: ai-pet-idle 1.12s steps(8) infinite;
+}
+@keyframes ai-pet-idle{
+  from{ background-position: 0 0; }
+  to{ background-position: -688px 0; }
+}
+.ai-pet.is-open .ai-pet-bubble{ display: none; }
+
+.ai-pet-panel{
+  position: fixed;
+  right: 24px;
+  bottom: calc(132px + env(safe-area-inset-bottom, 0px));
+  width: min(372px, calc(100vw - 32px));
+  max-height: min(560px, 72vh);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #ececf0;
+  border-radius: 16px;
+  box-shadow: 0 20px 54px rgba(24, 24, 28, .20);
+  overflow: hidden;
+}
+.ai-pet-panel[hidden]{ display: none; }
+.ai-pet-head{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f2;
+  background: #fff;
+}
+.ai-pet-avatar{
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid #f0e6d8;
+  overflow: hidden;
+  flex: none;
+}
+.ai-pet-avatar img{ width: 100%; height: 100%; object-fit: contain; }
+.ai-pet-head b{ display: block; font-size: 14px; color: #1a1a1a; }
+.ai-pet-head small{ display: block; margin-top: 2px; font-size: 11px; color: #8a8a93; }
+.ai-pet-close{
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: #f5f5f7;
+  color: #6b6f77;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ai-pet-close:hover{ background: #ececf0; }
+.ai-pet-log{
+  flex: 1;
+  min-height: 140px;
+  overflow-y: auto;
+  padding: 14px;
+  background: #fafafb;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ai-pet-msg{
+  max-width: 88%;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #2b2c30;
+  overflow-wrap: anywhere;
+}
+.ai-pet-msg.bot{ align-self: flex-start; background: #fff; border: 1px solid #ececf0; border-bottom-left-radius: 4px; }
+.ai-pet-msg.user{ align-self: flex-end; background: #ffcc38; color: #2b2000; border-bottom-right-radius: 4px; }
+.ai-pet-typing{ color: #8a8a93; }
+.ai-pet-src{ margin-top: 6px; font-size: 11px; color: #8a8a93; line-height: 1.5; }
+.ai-pet-transfer{
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid #ffd9cf;
+  border-radius: 10px;
+  background: #fff7f4;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ai-pet-transfer b{ display: block; margin-bottom: 2px; color: #a83a28; }
+.ai-pet-transfer p{ margin: 0 0 8px; color: #6b6f77; }
+.ai-pet-chips{
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: #fff;
+}
+.ai-pet-chips::-webkit-scrollbar{ display: none; }
+.ai-pet-chips button{
+  flex: none;
+  padding: 5px 10px;
+  border: 1px solid #ececf0;
+  border-radius: 999px;
+  background: #fff;
+  color: #5c5c66;
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ai-pet-chips button:hover{ border-color: #ffcc38; background: #fffdf5; }
+.ai-pet-form{
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px 6px;
+  background: #fff;
+}
+.ai-pet-form textarea{
+  flex: 1;
+  min-height: 38px;
+  max-height: 92px;
+  padding: 9px 10px;
+  border: 1px solid #e6e6e9;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #1a1a1a;
+  resize: none;
+  outline: none;
+}
+.ai-pet-form textarea:focus{ border-color: #ffcc38; }
+.ai-pet-send{
+  height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: #ffcc38;
+  color: #2b2000;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: none;
+}
+.ai-pet-send:disabled{ opacity: .55; cursor: wait; }
+.ai-pet-note{ margin: 0; padding: 0 12px 10px; font-size: 10.5px; color: #b4b4bb; background: #fff; }
+.ai-pet-sr{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+@media (max-width: 600px){
+  .ai-pet{ right: 14px; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+  .ai-pet-body{ width: 78px; height: 78px; }
+  .ai-pet-sprite{ width: 72px; height: 72px; background-size: 576px 72px; animation-name: ai-pet-idle-sm; }
+  .ai-pet-panel{
+    left: 12px;
+    right: 12px;
+    width: auto;
+    bottom: calc(172px + env(safe-area-inset-bottom, 0px));
+    max-height: 66vh;
+  }
+}
+@keyframes ai-pet-idle-sm{
+  from{ background-position: 0 0; }
+  to{ background-position: -576px 0; }
+}
+@media (prefers-reduced-motion: reduce){
+  .ai-pet-sprite{ animation: none; }
+  .ai-pet-body{ transition: none; }
+}

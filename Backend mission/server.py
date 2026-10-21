@@ -182,6 +182,7 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/ticket':return self.respond(m.ticket(u,int(query['id'])))
             if p=='/api/ticket/reply' and method=='POST':return self.respond(m.reply_ticket(u,int(data['id']),data))
             if p=='/api/ai/reply' and method=='POST':return self.respond(m.ai_reply(u,int(data['ticket_id'])))
+            if p=='/api/ai/chat' and method=='POST':return self.respond(m.ai_chat(u,data.get('question','')))
             if p=='/api/ticket/resolve' and method=='POST':return self.respond(m.resolve_ticket(u,int(data['id']),data))
             # 历史工单补交易凭证：候选订单只返回当事人/所涉商品相关的那些，
             # 绑定后处理人才看得到金额、双方和交付记录，也才能据此扣信誉。

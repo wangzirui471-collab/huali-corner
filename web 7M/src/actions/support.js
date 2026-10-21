@@ -10,6 +10,43 @@ import { state, statusNames } from '../core/state.js';
 import { field } from '../components/forms.js';
 import { ticketModal } from '../pages/support.js';
 
+// --- AI 宠物对话 ---------------------------------------------------------
+function petText(text){ return e(text).replace(/\n/g,'<br>'); }
+
+function petAppend(html, who='bot'){
+  const log=$('#ai-pet-log'); if(!log) return null;
+  const el=document.createElement('div');
+  el.className='ai-pet-msg '+who;
+  el.innerHTML=html;
+  log.appendChild(el); log.scrollTop=log.scrollHeight;
+  return el;
+}
+
+async function petAsk(q){
+  const text=String(q||'').trim();
+  const log=$('#ai-pet-log'); if(!text||!log) return;
+  const form=$('#ai-pet-form'), area=form?.querySelector('textarea[name=q]'), send=form?.querySelector('button[type=submit]');
+  if(area) area.value='';
+  petAppend(petText(text),'user');
+  const wait=petAppend('<span class="ai-pet-typing">正在查知识库…</span>','bot');
+  if(send) send.disabled=true;
+  try{
+    const r=await api('/ai/chat',{question:text});
+    const src=(r.sources||[]).slice(0,3).map((s,i)=>`[${i+1}] ${e(s.title||s.source)}`).join(' · ');
+    const transfer=r.action==='transfer';
+    wait.innerHTML=`<div>${petText(r.answer)}</div>
+      ${src?`<div class="ai-pet-src">来源：${src}</div>`:''}
+      ${transfer?`<div class="ai-pet-transfer"><b>需要人工处理？</b><p>退款、投诉、账号安全建议直接提交工单，客服 08:00—20:00 处理。</p><button type="button" class="btn primary" data-action="new-ticket">提交工单</button></div>`:''}
+      ${r.notice?`<div class="ai-pet-src">${e(r.notice)}</div>`:''}`;
+  }catch(err){
+    wait.innerHTML=`<div>${petText(err.message||'AI 暂时不可用')}</div><div class="ai-pet-transfer"><b>先转人工？</b><button type="button" class="btn primary" data-action="new-ticket">提交工单</button></div>`;
+  }finally{
+    if(send) send.disabled=false;
+    log.scrollTop=log.scrollHeight;
+  }
+}
+
+
 export const clicks = {
   'new-ticket': () => ticketModal('other'),
   appeal: () => ticketModal('appeal'),
@@ -178,6 +215,13 @@ export const clicks = {
     area.scrollIntoView({block: 'center', behavior: 'smooth'});
     toast('已插入回复框，请核对后发送');
   },
+  'ai-pet-toggle': () => {
+    const panel=$('#ai-pet-panel'); if(!panel) return;
+    panel.hidden=!panel.hidden;
+    $('#ai-pet')?.classList.toggle('is-open',!panel.hidden);
+    if(!panel.hidden) setTimeout(()=>$('#ai-pet-q')?.focus(),50);
+  },
+  'ai-pet-chip': b => petAsk(b.dataset.q),
 };
 
 export const submits = {
@@ -238,5 +282,6 @@ export const submits = {
     closeModal();
     toast(delta !== null ? '信誉变动已审计记录' : `已按价格计算并扣分（现信誉 ${r.score}/100）`);
     await render();
-  }
+  },
+  'ai-pet-form': async ({d}) => { await petAsk(d.q); },
 };

@@ -161,6 +161,27 @@ class SupportService(ValidationMixin):
             pass
         return result
 
+    def ai_chat(self,u,q):
+        """客户侧 AI 小助手：不绑定工单，任何登录用户可用。
+
+        只发用户这一句问题，不带订单/手机号等上下文；结果由客服宠物展示。
+        频率限制在 ai.py；日志只记来源/耗时，不记问题与回答全文。
+        """
+        question=self.text(q,300,'问题')
+        from .ai import suggest, rate_ok
+        if not rate_ok(u):
+            raise DomainError('问得太快了，请稍等两秒',429)
+        result=suggest(question)
+        try:
+            line={'time':time.time(),'actor':u,'channel':'customer','action':result.get('action'),
+                  'mode':result.get('mode'),'sources':[s.get('title') for s in (result.get('sources') or [])],
+                  'latency_ms':result.get('latency_ms')}
+            with open(self.root/'ai-usage.jsonl','a',encoding='utf-8') as f:
+                f.write(json.dumps(line,ensure_ascii=False)+'\n')
+        except OSError:
+            pass
+        return result
+
     def check_conflict(self,u,t):
         if t.get('product_id'):
             pid=t['product_id']

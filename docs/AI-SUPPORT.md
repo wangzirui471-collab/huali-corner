@@ -25,6 +25,18 @@
 5. **不输出思维链**：R1 的 ` thinking`、推理段落、Markdown 标题都会被剥离；回答控制在 300 字内。
 6. **隐私**：内部备注不进入提示词；只取工单主题、用户描述和公开对话。
 
+## 2.1 客服页宠物入口
+
+客服页（`#support`，非客服工作台）右下角有一只 AI 宠物：
+
+- 待机动画：用户提供的 8×12 雪碧图第一行 8 帧，已抠成透明底 `assets/ai-pet/idle-strip.png`；
+- 点击宠物 → 打开「转角 AI 小助手」对话面板；
+- 快捷问题：怎么发布 / 怎么退款 / 客服时间 / 注销账号；
+- 普通登录用户即可使用，走 `POST /api/ai/chat`（不需要客服权限）；
+- 命中资料 → 正常回答；资料不足/投诉/要求人工 → 固定兜底 + 「提交工单」按钮；
+- 同一账号两次提问至少间隔 2 秒，避免连点刷模型；
+- 线上 Cloudflare `config.ai` 为假，宠物不渲染。
+
 ## 3. 架构
 
 ```
@@ -59,6 +71,10 @@ ai_service（127.0.0.1:8093）
 | `Backend mission/app/support/ai.py` | 后端到 AI 服务的客户端（绕过系统代理） |
 | `Backend mission/app/support/service.py` | `ai_reply`：权限、工单上下文、`ai-usage.jsonl` |
 | `web 7M/src/pages/support.js` | 工单页 AI 面板（仅客服 + `config.ai`） |
+| `web 7M/src/components/ai-pet.js` | 客服页悬浮宠物 + 对话面板 |
+| `web 7M/ai-pet.css` | 宠物动画、面板与消息样式 |
+| `web 7M/assets/ai-pet/` | 待机雪碧条与宠物头像 |
+| `POST /api/ai/chat` | 客户侧 AI 小助手（登录用户、限速） |
 | `web 7M/src/actions/support.js` | 生成、插入回复框、错误提示 |
 | `web 7M/ai-support.css` | 面板样式 |
 
@@ -89,6 +105,7 @@ ai_service（127.0.0.1:8093）
 | AI-06 | 不自动发送 | 生成后只填充回复框；不调用 `/ticket/reply` |
 | AI-07 | 隐私 | `ai-usage.jsonl` 不含客户原话/回答全文；内部备注不进入提示词 |
 | AI-08 | 线上隐藏 | Cloudflare 环境 `config.ai` 为假，工单页无 AI 面板 |
+| AI-09 | 宠物入口 | 客服页右下角宠物可见；点击打开对话；快捷问题有回答；兜底时「提交工单」可打开工单弹窗 |
 
 ## 8. 局限与下一步
 

@@ -5,6 +5,8 @@
 """
 import json
 import os
+import threading
+import time
 import urllib.error
 import urllib.request
 
@@ -12,6 +14,25 @@ from ..core.errors import DomainError
 
 # 本地 Ollama/AI 服务不能走系统代理；否则 127.0.0.1 也可能被代理成 502。
 _NO_PROXY = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+_RATE = {}
+_RATE_LOCK = threading.Lock()
+
+
+def rate_ok(uid, gap=2.0):
+    """同一账号两次提问至少间隔 2 秒，避免连点刷模型。"""
+    now = time.time()
+    with _RATE_LOCK:
+        last = _RATE.get(uid, 0)
+        if now - last < gap:
+            return False
+        _RATE[uid] = now
+        if len(_RATE) > 1000:
+            for key, ts in list(_RATE.items()):
+                if now - ts > 3600:
+                    _RATE.pop(key, None)
+        return True
+
 
 
 def enabled():
