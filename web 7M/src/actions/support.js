@@ -22,6 +22,9 @@ function petAppend(html, who='bot'){
   return el;
 }
 
+// 最近几轮对话：只用于让 AI 理解追问（例如「那退款呢」），不落库。
+let petHistory = [];
+
 async function petAsk(q){
   const text=String(q||'').trim();
   const log=$('#ai-pet-log'); if(!text||!log) return;
@@ -31,15 +34,20 @@ async function petAsk(q){
   const wait=petAppend('<span class="ai-pet-typing">正在查知识库…</span>','bot');
   if(send) send.disabled=true;
   try{
-    const r=await api('/ai/chat',{question:text});
+    const r=await api('/ai/chat',{question:text,history:petHistory.slice(-4)});
     const src=(r.sources||[]).slice(0,3).map((s,i)=>`[${i+1}] ${e(s.title||s.source)}`).join(' · ');
+    const links=(r.links||[]).map(l=>`<a class="ai-pet-link" href="${e(l.href)}">${e(l.label)} →</a>`).join('');
     const transfer=r.action==='transfer';
     wait.innerHTML=`<div>${petText(r.answer)}</div>
+      ${links?`<div class="ai-pet-links">${links}</div>`:''}
       ${src?`<div class="ai-pet-src">来源：${src}</div>`:''}
-      ${transfer?`<div class="ai-pet-transfer"><b>需要人工处理？</b><p>退款、投诉、账号安全建议直接提交工单，客服 08:00—20:00 处理。</p><button type="button" class="btn primary" data-action="new-ticket">提交工单</button></div>`:''}
+      ${transfer?`<div class="ai-pet-transfer"><b>需要人工处理？</b><p>退款、投诉、账号安全建议提交工单，客服 08:00—20:00 处理。</p><button type="button" class="btn primary" data-action="new-ticket">提交工单</button></div>`:''}
       ${r.notice?`<div class="ai-pet-src">${e(r.notice)}</div>`:''}`;
+    petHistory.push({role:'user',content:text},{role:'assistant',content:String(r.answer||'')});
+    petHistory=petHistory.slice(-4);
   }catch(err){
-    wait.innerHTML=`<div>${petText(err.message||'AI 暂时不可用')}</div><div class="ai-pet-transfer"><b>先转人工？</b><button type="button" class="btn primary" data-action="new-ticket">提交工单</button></div>`;
+    const msg=(err.status===429||err.status===503)?err.message:'AI 暂时不可用，请稍后再试或提交工单。';
+    wait.innerHTML=`<div>${petText(msg)}</div><div class="ai-pet-transfer"><b>需要人工处理？</b><button type="button" class="btn primary" data-action="new-ticket">提交工单</button></div>`;
   }finally{
     if(send) send.disabled=false;
     log.scrollTop=log.scrollHeight;

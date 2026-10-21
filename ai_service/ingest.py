@@ -88,13 +88,9 @@ def chunk_body(body, limit=700, overlap=80):
 
 
 def source_files():
-    files = sorted((config.BASE / 'knowledge').glob('*.md'))
-    # 只加入面向用户/客服的文档；内部部署、分支、凭据文档不进知识库
-    for name in ('TRIAL.md', 'PUBLIC-ACCESS.md', 'SUPPORT_CONTEXT-2026-10-20.md'):
-        p = config.ROOT / 'docs' / name
-        if p.exists():
-            files.append(p)
-    return files
+    # 只收客户向 FAQ；内部部署、分支、凭据、运维文档一律不进知识库。
+    # 曾经把 docs/TRIAL.md 等加进来，客户可能被回答「create-admin / 部署步骤」。
+    return sorted((config.BASE / 'knowledge').glob('*.md'))
 
 
 def main():

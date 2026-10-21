@@ -14,14 +14,19 @@ from .ai_knowledge import KNOWLEDGE
 
 STAFF = ('support', 'admin', 'developer')
 
-FALLBACK = '这个问题我暂时无法为您准确解答，马上帮您转接人工客服。'
-TRANSFER_REPLY = '好的，马上为您转接人工客服，请稍等。'
+FALLBACK = '这个问题我暂时无法准确解答，建议提交工单，客服 08:00—20:00 处理。'
+TRANSFER_REPLY = '好的，建议提交工单，客服 08:00—20:00 处理。'
 GREETING_REPLY = '您好，我是转角客服助手。请问有什么可以帮您？'
 
 TRANSFER_WORDS = (
     '转人工', '人工客服', '找客服', '人工', '真人', '客服在吗',
     '投诉', '差评', '骗子', '骗人', '气死', '垃圾', '曝光', '12315',
     '强烈不满', '太差', '恶心', '坑人', '退钱', '赔偿',
+)
+# 带这些词说明是在问「流程」，不是投诉/诉求；「怎么退钱」应回答流程而不是直接转人工。
+PROCESS_WORDS = (
+    '怎么', '如何', '流程', '多久', '能不能', '可以吗', '步骤', '怎样',
+    '什么', '哪里', '为什么',
 )
 GREETING_WORDS = (
     '你好', '您好', 'hi', 'hello', '在吗', '谢谢', '多谢', '再见', '拜拜',
@@ -58,7 +63,7 @@ SYSTEM_PROMPT = """你是一名企业客服 Agent，只服务「转角」校园�
 6. 不主动拓展无关内容；不查询或暴露他人手机号、聊天记录、订单等隐私。
 
 【固定兜底话术（必须一字不差）】
-这个问题我暂时无法为您准确解答，马上帮您转接人工客服。
+这个问题我暂时无法准确解答，建议提交工单，客服 08:00—20:00 处理。
 
 【参考资料】
 {context}
@@ -108,11 +113,24 @@ def retrieve(question, k=4):
     return [(s, c) for s, c in scored[:k] if s >= 0.22]
 
 
+def _strip_greetings(q):
+    s = q
+    for w in GREETING_WORDS:
+        s = s.replace(w, '')
+    return re.sub(r'[\s，。！？、,.!?~～]+', '', s)
+
+
 def classify(question):
     q = (question or '').strip().lower()
-    if any(w in q for w in TRANSFER_WORDS):
+    has_transfer = any(w in q for w in TRANSFER_WORDS)
+    has_process = any(w in q for w in PROCESS_WORDS)
+    # 「怎么退钱」「退款要多久」是流程咨询，不该直接转人工；
+    # 「我要投诉」「骗子」这种没有流程词的才是投诉/诉求。
+    if has_transfer and not has_process:
         return 'transfer'
-    if len(q) <= 24 and any(w in q for w in GREETING_WORDS):
+    rest = _strip_greetings(q)
+    # 「你好，怎么退款」不能被当成纯问候：剥掉问候词后还有实质内容就按业务问题处理。
+    if len(rest) <= 2 and any(w in q for w in GREETING_WORDS):
         return 'greeting'
     return 'business'
 
@@ -130,6 +148,28 @@ def sources_of(hits):
         seen.add(key)
         out.append({'title': chunk['title'], 'source': chunk['source'], 'score': round(score, 3)})
     return out
+
+
+# 回答里附带的「跳转文字链接」：客户看完规则可以一键去对应页面执行。
+# href 用站内 hash 路由，前端直接渲染成 <a href="#...">。
+LINK_RULES = (
+    (('发布', '三张图', '定价'), [{'label': '去发布闲置', 'href': '#publish'}]),
+    (('退款', '售后', '取消订单', '待付款', '付款', '面交', '改时间', '重新上架'),
+     [{'label': '去订单处理', 'href': '#orders'}, {'label': '提交工单', 'href': '#support'}]),
+    (('密码', '注销', '手机号', '隐私'), [{'label': '去账号与安全', 'href': '#me'}]),
+    (('信誉',), [{'label': '查看信誉与申诉', 'href': '#credit'}]),
+    (('客服', '人工'), [{'label': '去客服中心', 'href': '#support'}]),
+    (('举报',), [{'label': '去社区', 'href': '#community'}]),
+    (('支付', '小程序'), [{'label': '去客服中心', 'href': '#support'}]),
+)
+SUPPORT_LINK = [{'label': '去客服中心提交工单', 'href': '#support'}]
+
+
+def links_for(title):
+    for keys, links in LINK_RULES:
+        if any(k in (title or '') for k in keys):
+            return links
+    return []
 
 
 def strip_thinking(text):
@@ -160,7 +200,7 @@ def extractive(hits):
     return trim(answer, 260) if len(answer) >= 12 else FALLBACK
 
 
-async def call_api(question, context, env):
+async def call_api(question, context, env, history=None):
     """调用 DeepSeek 官方 OpenAI 兼容接口。"""
     api_key = getattr(env, 'HC_AI_API_KEY', '') or ''
     if not api_key:
@@ -171,6 +211,8 @@ async def call_api(question, context, env):
         'model': model,
         'messages': [
             {'role': 'system', 'content': SYSTEM_PROMPT.format(context=context, query=question)},
+            *[h for h in (history or [])
+              if h.get('role') in ('user', 'assistant') and h.get('content')],
             {'role': 'user', 'content': question},
         ],
         'stream': False,
@@ -194,50 +236,48 @@ async def call_api(question, context, env):
     return (choices[0].get('message') or {}).get('content') or ''
 
 
-async def ai_answer(question, env):
+async def ai_answer(question, env, history=None):
     started = time.time()
     q = str(question or '').strip()[:800]
+    elapsed = lambda: int((time.time() - started) * 1000)
     if not q:
-        return {'answer': GREETING_REPLY, 'action': 'reply', 'sources': [], 'mode': 'rule', 'latency_ms': 0}
+        return {'answer': GREETING_REPLY, 'action': 'reply', 'sources': [], 'links': [],
+                'mode': 'rule', 'latency_ms': 0}
 
     intent = classify(q)
     if intent == 'greeting':
-        return {'answer': GREETING_REPLY, 'action': 'reply', 'sources': [], 'mode': 'rule',
-                'latency_ms': int((time.time() - started) * 1000)}
+        return {'answer': GREETING_REPLY, 'action': 'reply', 'sources': [], 'links': [],
+                'mode': 'rule', 'latency_ms': elapsed()}
     if intent == 'transfer':
-        return {'answer': TRANSFER_REPLY, 'action': 'transfer', 'sources': [], 'mode': 'rule',
-                'latency_ms': int((time.time() - started) * 1000)}
+        return {'answer': TRANSFER_REPLY, 'action': 'transfer', 'sources': [], 'links': SUPPORT_LINK,
+                'mode': 'rule', 'latency_ms': elapsed()}
 
     hits = retrieve(q)
     if not hits:
-        return {'answer': FALLBACK, 'action': 'transfer', 'sources': [], 'mode': 'guard',
-                'latency_ms': int((time.time() - started) * 1000)}
+        return {'answer': FALLBACK, 'action': 'transfer', 'sources': [], 'links': SUPPORT_LINK,
+                'mode': 'guard', 'latency_ms': elapsed()}
 
     context = build_context(hits)
     notice = ''
     mode = 'llm'
     text = ''
     try:
-        text = await call_api(q, context, env)
-    except DomainError:
-        raise
-    except Exception as exc:  # noqa: BLE001 - API 失败时降级，不中断客服
+        text = await call_api(q, context, env, history)
+    except Exception:  # noqa: BLE001 - 供应商 401/429/5xx、超时、Key 失效都降级为摘录
         mode = 'mock'
-        notice = f'DeepSeek API 暂不可用（{type(exc).__name__}），以下为知识库原文摘录。'
+        notice = 'AI 服务暂时不可用，以下为平台规则原文。'
         text = extractive(hits)
 
     text = strip_thinking(text)
-    if not text:
-        return {'answer': FALLBACK, 'action': 'transfer', 'sources': sources_of(hits), 'mode': mode,
-                'notice': notice, 'latency_ms': int((time.time() - started) * 1000)}
-    if any(w in text for w in UNCERTAIN_WORDS):
-        return {'answer': FALLBACK, 'action': 'transfer', 'sources': sources_of(hits), 'mode': mode,
-                'notice': notice, 'latency_ms': int((time.time() - started) * 1000)}
+    links = links_for(hits[0][1]['title'])
+    if not text or any(w in text for w in UNCERTAIN_WORDS):
+        return {'answer': FALLBACK, 'action': 'transfer', 'sources': sources_of(hits),
+                'links': SUPPORT_LINK, 'mode': mode, 'notice': notice, 'latency_ms': elapsed()}
 
     text = trim(text, 300)
     action = 'transfer' if ('转接人工' in text or '转人工' in text) else 'reply'
-    return {'answer': text, 'action': action, 'sources': sources_of(hits), 'mode': mode,
-            'notice': notice, 'latency_ms': int((time.time() - started) * 1000)}
+    return {'answer': text, 'action': action, 'sources': sources_of(hits), 'links': links,
+            'mode': mode, 'notice': notice, 'latency_ms': elapsed()}
 
 
 class AiSupport:
@@ -259,7 +299,7 @@ class AiSupport:
         day = time.strftime('%Y-%m-%d', time.gmtime(time.time() + 8 * 3600))
         row = await self.db.first('SELECT count,last_at FROM ai_usage WHERE user_id=? AND day=?', (uid, day))
         if row:
-            require(int(row['count'] or 0) < limit, f'今天的 AI 提问次数已用完（{limit} 次），请转人工', 429)
+            require(int(row['count'] or 0) < limit, f'今天的 AI 提问次数已用完（{limit} 次），建议提交工单', 429)
             require(time.time() - float(row['last_at'] or 0) >= 2, '问得太快了，请稍等两秒', 429)
         return limit
 
@@ -285,9 +325,21 @@ class AiSupport:
         require(await self.ai_enabled(), 'AI 客服已关闭，请转人工客服', 503)
         d = await json_body(request)
         question = ValidationMixin.text(d.get('question'), 300, '问题')
+        history = []
+        raw = d.get('history')
+        if isinstance(raw, list):
+            for h in raw[-4:]:
+                if not isinstance(h, dict):
+                    continue
+                role = h.get('role')
+                content = str(h.get('content') or '').strip()[:300]
+                if role in ('user', 'assistant') and content:
+                    history.append({'role': role, 'content': content})
         await self.ai_quota(uid)
-        result = await ai_answer(question, self.env)
-        await self.ai_count(uid)
+        result = await ai_answer(question, self.env, history)
+        # 只有真正调用模型才计入额度；问候、转人工、无命中不扣次数。
+        if result.get('mode') == 'llm':
+            await self.ai_count(uid)
         return json_response(result)
 
     async def ai_reply(self, request):
@@ -304,7 +356,8 @@ class AiSupport:
                     ' '.join(str(m['body']) for m in reversed(msgs)))[:2000]
         await self.ai_quota(uid, role)
         result = await ai_answer(question, self.env)
-        await self.ai_count(uid)
+        if result.get('mode') == 'llm':
+            await self.ai_count(uid)
         return json_response(result)
 
     async def ai_admin_get(self, request):

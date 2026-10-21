@@ -215,3 +215,14 @@
   .ai-pet-sprite{ animation: none; }
   .ai-pet-body{ transition: none; }
 }
+
+/* 回答里的跳转文字链接：客户看完规则可直接去对应页面执行。 */
+.ai-pet-links{ display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ai-pet-link{
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 5px 11px; border-radius: 999px;
+  background: #fff6d8; border: 1px solid #f0e2ae; color: #7a5c07;
+  font-size: 12px; font-weight: 650; text-decoration: none;
+  transition: background .15s, transform .15s;
+}
+.ai-pet-link:hover{ background: #ffefb8; transform: translateY(-1px); }
