@@ -9,37 +9,29 @@ export function mountHomeFeed({root, feed, favorite}){
   const more=root.querySelector('[data-action="load-more"]');
   const status=root.querySelector('[data-feed-status]');
   const count=root.querySelector('[data-feed-count]');
-  const banner=root.querySelector('.home-banner');
-  const slides=[...root.querySelectorAll('[data-home-slide]')];
-  const dots=[...root.querySelectorAll('[data-action="home-slide"][data-index]')];
-  const pause=root.querySelector('[data-action="home-pause"]');
+  const carousels=[...root.querySelectorAll('[data-home-carousel]')].map(element=>({
+    element,
+    slides:[...element.querySelectorAll('[data-promo-slide]')],
+    dots:[...element.querySelectorAll('[data-action="home-slide"]')],
+    button:element.querySelector('[data-action="home-promo-open"]'),
+    index:0
+  }));
   const back=root.querySelector('[data-action="home-top"]');
   const motion=window.matchMedia('(prefers-reduced-motion: reduce)');
-  let disposed=false, observer, timer, index=0, paused=false, hover=false, focused=false;
+  let disposed=false, observer;
+  const timers=[];
   const alive=()=>!disposed && root.isConnected && state.renderId===epoch && state.token===token;
   const cleanup=[];
   function listen(target,event,handler){
     target?.addEventListener(event,handler);
     cleanup.push(()=>target?.removeEventListener(event,handler));
   }
-  function schedule(){
-    clearInterval(timer);
-    if (alive() && slides.length>1 && !paused && !hover && !focused && !document.hidden && !motion.matches)
-      timer=setInterval(()=>select(index+1,false),7000);
-  }
-  function select(next,manual=true){
-    if (!alive() || !slides.length) return;
-    index=(next+slides.length)%slides.length;
-    slides.forEach((slide,i)=>{slide.hidden=i!==index;});
-    dots.forEach((dot,i)=>{dot.setAttribute('aria-pressed',String(i===index));});
-    if (manual){ paused=true; updatePause(); }
-  }
-  function updatePause(){
-    if (pause){
-      pause.textContent=paused?'自动播放':'暂停轮播';
-      pause.setAttribute('aria-pressed',String(paused));
-    }
-    schedule();
+  function select(carousel,next){
+    if (!alive() || !carousel || !carousel.slides.length) return;
+    carousel.index=(next+carousel.slides.length)%carousel.slides.length;
+    carousel.slides.forEach((slide,index)=>{slide.hidden=index!==carousel.index;});
+    carousel.dots.forEach((dot,index)=>{dot.setAttribute('aria-pressed',String(index===carousel.index));});
+    carousel.button.setAttribute('aria-label',carousel.slides[carousel.index].dataset.title);
   }
   function updateCount(){ count.textContent=`已展示 ${grid.children.length} 件${favorite?'收藏':'商品'}`; }
   async function next(){
@@ -67,11 +59,10 @@ export function mountHomeFeed({root, feed, favorite}){
   const view={
     retainFavorite:!favorite,
     next,
-    slide(button){ select(button.dataset.index!==undefined?Number(button.dataset.index):index+Number(button.dataset.step)); },
-    pause(){ if (alive()){paused=!paused;updatePause();} },
+    slide(button){ select(carousels.find(carousel=>carousel.element.dataset.homeCarousel===button.dataset.window),Number(button.dataset.index)); },
     top(){ window.scrollTo({top:0,behavior:motion.matches?'instant':'smooth'}); },
     dispose(){
-      disposed=true; feed.dispose(); clearInterval(timer); observer?.disconnect();
+      disposed=true; feed.dispose(); timers.forEach(clearInterval); observer?.disconnect();
       cleanup.forEach(fn=>fn());
       if(state.homeView===view) state.homeView=null;
     }
@@ -84,12 +75,12 @@ export function mountHomeFeed({root, feed, favorite}){
     },{rootMargin:'350px 0px'});
     observer.observe(more);
   }
-  listen(banner,'mouseenter',()=>{hover=true;schedule();});
-  listen(banner,'mouseleave',()=>{hover=false;schedule();});
-  listen(banner,'focusin',()=>{focused=true;schedule();});
-  listen(banner,'focusout',event=>{focused=banner.contains(event.relatedTarget);schedule();});
-  listen(document,'visibilitychange',schedule); listen(motion,'change',schedule);
+  // Both windows keep playing after pointer, keyboard or manual navigation.
+  // Reduced motion removes visual transitions in CSS, not content rotation.
+  carousels.forEach(carousel=>{
+    if(carousel.slides.length>1) timers.push(setInterval(()=>select(carousel,carousel.index+1),Number(carousel.element.dataset.interval)));
+  });
   const scroll=()=>{back.hidden=window.scrollY<600;};
-  listen(window,'scroll',scroll); scroll(); updateCount(); schedule();
+  listen(window,'scroll',scroll); scroll(); updateCount();
   return view;
 }

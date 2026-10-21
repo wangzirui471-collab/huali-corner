@@ -25,7 +25,13 @@ export const clicks = {
   'feed-sort': b => { state.filter.sort = b.dataset.value; go('home'); },
   'load-more': () => state.homeView?.next(),
   'home-slide': b => state.homeView?.slide(b),
-  'home-pause': () => state.homeView?.pause(),
+  'home-promo-open': b => {
+    const slide=b.querySelector('[data-promo-slide]:not([hidden])');
+    if (!slide) return;
+    if (slide.dataset.route) go(slide.dataset.route);
+    else if (slide.dataset.free) clicks['free-shelf']();
+    else clicks['market-shortcut']({dataset:{value:slide.dataset.category}});
+  },
   'home-top': () => state.homeView?.top(),
 
   async favorite(b, id){
