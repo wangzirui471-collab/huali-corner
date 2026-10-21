@@ -18,6 +18,8 @@ export const state = {
   freeShelf: false,
   // 逛逛商品流的分页：初始 40 件，「加载更多」累加；切换筛选时归位。
   homeLimit: 40,
+  // 当前首页的交互句柄，换页时释放观察器、事件与轮播计时器。
+  homeView: null,
   // 社区帖子流的分页：初始 20 条，「加载更多」累加。
   // 社区帖子流：offset 分页累积，避免「增大 limit」撞上后端 50 条封顶。
   postsFeed: [],

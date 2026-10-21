@@ -23,13 +23,26 @@ export const clicks = {
     go('home');
   },
   'feed-sort': b => { state.filter.sort = b.dataset.value; go('home'); },
-  'load-more': () => { state.homeLimit += 40; render(); },
+  'load-more': () => state.homeView?.next(),
+  'home-slide': b => state.homeView?.slide(b),
+  'home-pause': () => state.homeView?.pause(),
+  'home-top': () => state.homeView?.top(),
 
   async favorite(b, id){
     if (!needLogin()) return;
-    await api('/react', {product_id:id, kind:'favorite', on:b.dataset.on === 'true'});
-    toast('收藏已更新');
-    await render();
+    if (b.disabled) return;
+    b.disabled=true;
+    const on=b.dataset.on === 'true';
+    try{
+      await api('/react', {product_id:id, kind:'favorite', on});
+      toast('收藏已更新');
+      if (state.homeView?.retainFavorite && b.isConnected){
+        b.dataset.on=String(!on);
+        b.classList.toggle('selected',on);
+        b.setAttribute('aria-pressed',String(on));
+        b.setAttribute('aria-label',(on?'取消收藏':'收藏')+(b.dataset.title||''));
+      }else await render();
+    }finally{ b.disabled=false; }
   },
   async like(b, id){
     if (!needLogin()) return;

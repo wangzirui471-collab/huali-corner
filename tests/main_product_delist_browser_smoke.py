@@ -1,5 +1,6 @@
-"""Main-branch UI: staff can remove a listing from detail and home using its existing API."""
+"""Main-branch UI: staff can remove from detail/workbench; public cards have no management buttons using its existing API."""
 import io
+import os
 import sys
 import tempfile
 import threading
@@ -47,7 +48,7 @@ def run():
         requests = []
         try:
             with sync_playwright() as playwright:
-                browser = playwright.chromium.launch(executable_path='/usr/bin/chromium', headless=True, args=['--no-sandbox'])
+                browser = playwright.chromium.launch(executable_path=os.environ.get('CHROME_PATH',r'C:\Program Files\Google\Chrome\Application\chrome.exe'), headless=True, args=['--no-sandbox'])
 
                 def page_for(session):
                     page = browser.new_page(viewport={'width':1440, 'height':1000})
@@ -87,13 +88,14 @@ def run():
                 for page, pid in zip([a, w], home_ids):
                     page.goto(base + '/#home', wait_until='networkidle')
                     card = page.locator('.product-card').filter(has=page.get_by_role('button', name=market.product(pid)['title'], exact=True))
-                    button = card.get_by_role('button', name='下架商品', exact=True)
-                    expect(button).to_be_visible()
+                    expect(card.locator('[data-action="moderate-product"],[data-action="delist"]')).to_have_count(0)
+                    page.goto(base + '/#staff/products', wait_until='networkidle')
+                    button=page.locator('[data-action="moderate-product"][data-id="'+str(pid)+'"]')
                     button.click()
-                    assert page.url.endswith('#home')
-                    page.locator('#moderate-form [name=reason]').fill('首页核查描述不符')
+                    page.locator('#moderate-form [name=reason]').fill('工作台核查描述不符')
                     page.get_by_role('button', name='确认下架', exact=True).click()
-                    expect(card).to_have_count(0)
+                    expect(page.locator('[data-action="moderate-product"][data-id="'+str(pid)+'"]')).to_have_count(0)
+                    assert market.product(pid)['status']=='removed'
                 a.goto(base + '/#product/' + str(own), wait_until='networkidle')
                 expect(a.locator('.detail-info h1')).to_have_text('管理员自有教材')
                 a.get_by_role('button', name='下架商品', exact=True).click()
@@ -117,17 +119,17 @@ def run():
                     assert market.row('SELECT delisted_by FROM products WHERE id=?',(pid,))['delisted_by']==0
                 s.goto(base+'/#home',wait_until='networkidle')
                 card=s.locator('.product-card').filter(has=s.get_by_role('button',name='用户首页下架教材',exact=True))
-                expect(card.locator('[data-action="delist"]')).to_be_visible()
-                foreign=s.locator('.product-card').filter(has=s.get_by_role('button',name='他人的在售教材',exact=True))
-                expect(foreign.get_by_role('button',name='下架商品',exact=True)).to_have_count(0)
-                expect(s.locator('[data-action="moderate-product"]')).to_have_count(0)
+                expect(card.locator('[data-action="delist"]')).to_have_count(0)
+                expect(s.locator('.product-card [data-action="moderate-product"]')).to_have_count(0)
+                s.goto(base+'/#listings',wait_until='networkidle')
                 s.once('dialog',lambda dialog:dialog.accept())
-                card.locator('[data-action="delist"]').click()
-                expect(card).to_have_count(0)
+                s.locator('[data-action="delist"][data-id="'+str(seller_home)+'"]').click()
+                expect(s.locator('[data-action="relist"][data-id="'+str(seller_home)+'"]')).to_be_visible()
                 a.goto(base + '/#product/' + str(keep), wait_until='networkidle')
                 expect(a.locator('.detail-info h1')).to_have_text('保留展示教材')
-                Path('/tmp/zj-main-delist').mkdir(exist_ok=True)
-                a.locator('.detail-info .detail-actions').last.screenshot(path='/tmp/zj-main-delist/detail-actions.png')
+                shots=Path(os.environ.get('DELIST_SCREENSHOTS',tempfile.mkdtemp(prefix='delist-shots-')))
+                shots.mkdir(parents=True,exist_ok=True)
+                a.locator('.detail-info .detail-actions').last.screenshot(path=str(shots/'detail-actions.png'))
                 for width in [375, 390, 768, 1440]:
                     a.set_viewport_size({'width':width, 'height':900})
                     assert a.evaluate('document.documentElement.scrollWidth<=innerWidth')
@@ -136,7 +138,7 @@ def run():
                 assert not errors, errors
                 assert market.profile(seller['user']['id'])['score'] == 100
                 browser.close()
-                print('Main UI passed: admin delists own/others, user delists own only in detail/home, support permissions, guest hidden, cancel, existing APIs and four viewport widths.')
+                print('Main UI passed: admin delists own/others, user delists own in detail/listings, public cards read-only, support permissions, guest hidden, cancel, existing APIs and four viewport widths.')
         finally:
             server.shutdown()
             server.server_close()

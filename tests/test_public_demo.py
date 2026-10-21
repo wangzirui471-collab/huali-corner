@@ -34,6 +34,8 @@ class PublicDemoTests(unittest.TestCase):
                 self.assertNotIn(forbidden,raw)
             self.assertNotIn('role',raw)
             html=(output/'index.html').read_text(encoding='utf-8')
+            self.assertIn('./home.css?',html)
+            self.assertTrue((output/'home.css').is_file(),'Export must include the homepage stylesheet')
             # 演示快照必须先于主模块执行，否则 api() 拿不到 window.hualiDemoApi。
             self.assertLess(html.index('public-demo.js'),html.index('src/main.js'))
 

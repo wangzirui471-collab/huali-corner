@@ -84,6 +84,7 @@ export async function render(){
   // 点了必然 403。慢网络下首屏直接点「我的订单」即可稳定复现。
   if (!state.config.name) return;
   const rid = bumpRenderId();
+  state.homeView?.dispose();
   clearPoll();
   releaseMediaURLs();
   window.scrollTo(0, 0);
