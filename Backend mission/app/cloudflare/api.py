@@ -265,16 +265,28 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, Clou
 
         items = base[(page - 1) * limit:page * limit] if limit else base
         trusted = await self.trusted_map([p['seller_id'] for p in items])
+        # 批量取点赞数 / 我是否点赞 / 我是否收藏，避免对每个商品各查 2~3 次
+        # （24 件商品会变成 48~72 次 D1 往返，这是商品列表 ~700ms 的主因）。
+        ids = [item['id'] for item in items]
+        like_counts = {}
+        mine = set()
+        if ids:
+            placeholders = ','.join('?' * len(ids))
+            for r in await self.db.all(
+                    "SELECT product_id, COUNT(*) n FROM reactions WHERE kind='like' "
+                    "AND product_id IN (" + placeholders + ") GROUP BY product_id", tuple(ids)):
+                like_counts[r['product_id']] = r['n']
+            if uid:
+                for r in await self.db.all(
+                        "SELECT product_id, kind FROM reactions WHERE user_id=? "
+                        "AND product_id IN (" + placeholders + ") AND kind IN ('like','favorite')",
+                        (uid, *ids)):
+                    mine.add((r['product_id'], r['kind']))
         for item in items:
             item['seller_trusted'] = trusted.get(item['seller_id'], False)
-            item['likes'] = await self.db.scalar(
-                "SELECT COUNT(*) FROM reactions WHERE product_id=? AND kind='like'", (item['id'],)) or 0
-            item['liked'] = bool(uid and await self.db.first(
-                "SELECT 1 FROM reactions WHERE product_id=? AND user_id=? AND kind='like'",
-                (item['id'], uid)))
-            item['favorited'] = bool(uid and await self.db.first(
-                "SELECT 1 FROM reactions WHERE product_id=? AND user_id=? AND kind='favorite'",
-                (item['id'], uid)))
+            item['likes'] = like_counts.get(item['id'], 0)
+            item['liked'] = (item['id'], 'like') in mine
+            item['favorited'] = (item['id'], 'favorite') in mine
         return json_response(items)
 
     async def product(self, request):

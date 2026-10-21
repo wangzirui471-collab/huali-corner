@@ -6,8 +6,9 @@ import { $ } from './core/dom.js';
 import { state, loadCart, clearPoll } from './core/state.js';
 import { subscribeSession } from './core/session.js';
 import { clearAccount } from './auth/login.js';
-import { api } from './core/http.js';
+import { api, prefetch } from './core/http.js';
 import { render } from './router.js';
+import { productsURL } from './pages/home.js';
 import { closeModal } from './core/shell.js';
 import { registerActions } from './actions/index.js';
 import { registerChangeHandlers } from './actions/change.js';
@@ -28,12 +29,27 @@ subscribeSession(token => {
 });
 
 window.addEventListener('hashchange', render);
+window.addEventListener('hashchange', () => setTimeout(schedulePrefetch, 900));
 window.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeModal(); });
 // 顶栏是 sticky 的，高度随断点变化，CSS 的 --header-h 只能在运行时量出来。
 window.addEventListener('resize', () => {
   const m = document.querySelector('.market-header');
   if (m) document.documentElement.style.setProperty('--header-h', m.offsetHeight+'px');
 });
+
+// 切页后空闲预取另一页的首屏列表，让第一次切换也能直接命中缓存。
+// 只填缓存、不渲染，失败静默；跨页时 api() 的 renderId 守卫会自行放弃，不会盖错页面。
+function schedulePrefetch(){
+  const h = (location.hash || '#home').slice(1);
+  const run = () => {
+    try {
+      if (h.startsWith('community')) prefetch(productsURL());
+      else if (h.startsWith('home') || h === '') prefetch('/posts?limit=20');
+    } catch {}
+  };
+  if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 2000 });
+  else setTimeout(run, 1200);
+}
 
 (async () => {
   try{
@@ -50,6 +66,7 @@ window.addEventListener('resize', () => {
       }
     }
     await render();
+    schedulePrefetch();
   }catch(err){
     $('#app').textContent = '服务暂不可用：'+err.message;
   }
