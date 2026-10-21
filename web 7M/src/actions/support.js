@@ -9,6 +9,7 @@ import { modal, closeModal } from '../core/shell.js';
 import { state, statusNames } from '../core/state.js';
 import { field } from '../components/forms.js';
 import { ticketModal } from '../pages/support.js';
+import { setPetState, togglePetPanel } from '../components/ai-pet.js';
 
 // --- AI 宠物对话 ---------------------------------------------------------
 function petText(text){ return e(text).replace(/\n/g,'<br>'); }
@@ -33,6 +34,7 @@ async function petAsk(q){
   petAppend(petText(text),'user');
   const wait=petAppend('<span class="ai-pet-typing">正在查知识库…</span>','bot');
   if(send) send.disabled=true;
+  setPetState('review');                  // 「专注工作」＝思考中：小转动手翻资料，等接口回来
   try{
     const r=await api('/ai/chat',{question:text,history:petHistory.slice(-4)});
     const src=(r.sources||[]).slice(0,3).map((s,i)=>`[${i+1}] ${e(s.title||s.source)}`).join(' · ');
@@ -45,9 +47,11 @@ async function petAsk(q){
       ${r.notice?`<div class="ai-pet-src">${e(r.notice)}</div>`:''}`;
     petHistory.push({role:'user',content:text},{role:'assistant',content:String(r.answer||'')});
     petHistory=petHistory.slice(-4);
+    if(transfer) setPetState('wave',1800); else setPetState('idle');   // 要转人工就招手喊客服
   }catch(err){
     const msg=(err.status===429||err.status===503)?err.message:'AI 暂时不可用，请稍后再试或提交工单。';
     wait.innerHTML=`<div>${petText(msg)}</div><div class="ai-pet-transfer"><b>需要人工处理？</b><button type="button" class="btn primary" data-action="new-ticket">提交工单</button></div>`;
+    setPetState('fail',1600);             // 出错时小转晃一下，不用再额外弹提示
   }finally{
     if(send) send.disabled=false;
     log.scrollTop=log.scrollHeight;
@@ -223,12 +227,7 @@ export const clicks = {
     area.scrollIntoView({block: 'center', behavior: 'smooth'});
     toast('已插入回复框，请核对后发送');
   },
-  'ai-pet-toggle': () => {
-    const panel=$('#ai-pet-panel'); if(!panel) return;
-    panel.hidden=!panel.hidden;
-    $('#ai-pet')?.classList.toggle('is-open',!panel.hidden);
-    if(!panel.hidden) setTimeout(()=>$('#ai-pet-q')?.focus(),50);
-  },
+  'ai-pet-toggle': () => togglePetPanel(),
   'ai-pet-chip': b => petAsk(b.dataset.q),
 };
 
