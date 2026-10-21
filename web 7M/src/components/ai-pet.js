@@ -25,7 +25,7 @@ let lifeTimer = 0;
 
 // --- 标记 ---------------------------------------------------------------
 export function aiPet(){
-  return `<div class="ai-pet" id="ai-pet" data-state="idle" hidden>
+  return `<div class="ai-pet" id="ai-pet" data-state="idle">
   <button type="button" class="ai-pet-body" id="ai-pet-body" aria-label="AI 助手小转，可拖动；点一下提问">
     <span class="ai-pet-sprite" aria-hidden="true"></span>
     <span class="ai-pet-fallback" aria-hidden="true">转</span>
@@ -197,7 +197,8 @@ function scheduleLife(){
 // --- 挂载 ---------------------------------------------------------------
 export function mountPet(){
   if (petEl || !state.config?.ai) return;
-  if ($('#ai-pet')) { petEl = $('#ai-pet'); return; }
+  // 旧版本把宠物写在客服页里，缓存没刷干净时页面上会出现两只。先清干净再挂一只。
+  document.querySelectorAll('#ai-pet').forEach(el => el.remove());
 
   document.body.insertAdjacentHTML('beforeend', aiPet());
   petEl = $('#ai-pet');
@@ -214,10 +215,11 @@ export function mountPet(){
     $('#ai-pet-form')?.requestSubmit();
   });
 
-  // 图集 334KB，加载完再显形；失败就退成一个「转」字圆钮，功能不至于消失。
+  // 图集 334KB：不等它下载完才显形。元素本身是透明的，图解码好自然就画出来；
+  // 只有真的加载失败才换成「转」字圆钮，功能不至于消失。
   const img = new Image();
-  img.onload = () => { petEl.hidden = false; petEl.classList.add('is-ready'); };
-  img.onerror = () => { petEl.hidden = false; petEl.classList.add('is-fallback'); };
+  img.onload = () => petEl?.classList.add('is-ready');
+  img.onerror = () => petEl?.classList.add('is-fallback');
   img.src = ATLAS;
 
   // 第一次来提示一次可以拖，之后不再打扰。

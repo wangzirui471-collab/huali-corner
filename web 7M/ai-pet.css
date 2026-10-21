@@ -3,7 +3,7 @@
    第 0~8 行依次是：待机 / 向右 / 向左 / 挥袖 / 跳跃 / 失败 / 等待 / 专注 / 检查。 */
 
 .ai-pet{
-  --s: 1.12;              /* 显示缩放；单帧 120×147 是自然尺寸，动画都按自然像素写 */
+  --s: .68;               /* 显示缩放；单帧 120×147 是自然尺寸，动画都按自然像素写 */
   position: fixed;
   left: 0;
   top: 0;
@@ -267,11 +267,11 @@
 .ai-pet-sr{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
 @media (max-width: 850px){
-  .ai-pet{ --s: .82; }
+  .ai-pet{ --s: .66; }
   .ai-pet-panel{ width: min(340px, calc(100vw - 20px)); max-height: 68vh; }
 }
 @media (max-width: 420px){
-  .ai-pet{ --s: .72; }
+  .ai-pet{ --s: .58; }
 }
 
 @media (prefers-reduced-motion: reduce){
