@@ -4,6 +4,7 @@
 
 import { $ } from './core/dom.js';
 import { state, loadCart, clearPoll } from './core/state.js';
+import { isStaff } from './core/roles.js';
 import { subscribeSession } from './core/session.js';
 import { clearAccount } from './auth/login.js';
 import { api, prefetch } from './core/http.js';
@@ -43,14 +44,20 @@ window.addEventListener('resize', () => {
 // 只填缓存、不渲染，失败静默；跨页时 api() 的 renderId 守卫会自行放弃，不会盖错页面。
 function schedulePrefetch(){
   const h = (location.hash || '#home').slice(1);
+  // 客服/管理员：渲染后立即预热工作台数据（不阻塞渲染、失败静默），
+  // 进工作台时直接命中缓存，不用再等 /admin + /tickets 的 D1 查询。
+  if (isStaff(state.me) && !h.startsWith('staff') && !h.startsWith('admin')){
+    prefetch('/admin');
+    prefetch('/tickets');
+  }
   const run = () => {
     try {
       if (h.startsWith('community')) prefetch(productsURL());
       else if (h.startsWith('home') || h === '') prefetch('/posts?limit=20');
     } catch {}
   };
-  if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 2000 });
-  else setTimeout(run, 1200);
+  if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 1200 });
+  else setTimeout(run, 600);
 }
 
 // AI 小助手：全站通用（登录用户 + AI 开启时挂到 body，后台页隐藏）。
@@ -72,18 +79,19 @@ function syncAiPet(){
 
 (async () => {
   try{
-    state.config = await api('/config');
-    if (state.token){
-      try{
-        state.me = await api('/me');
-        loadCart();
-      }catch(err){
-        // Only an explicit authentication rejection expires the session.
-        // Network errors, proxy HTML and server failures must preserve it.
-        if (err.status !== 401) throw err;
-        clearAccount();
-      }
-    }
+    // /config 与 /me 互不依赖，并行请求，少等一个往返，首屏更快。
+    const token = state.token;
+    const mePromise = token
+      ? api('/me').then(me => ({ me })).catch(err => {
+          // 只有明确的 401 才让会话失效；网络/服务异常保留登录态。
+          if (err.status !== 401) throw err;
+          clearAccount();
+          return { me: null };
+        })
+      : Promise.resolve({ me: null });
+    const [config, meResult] = await Promise.all([api('/config'), mePromise]);
+    state.config = config;
+    if (meResult.me){ state.me = meResult.me; loadCart(); }
     await render();
     syncAiPet();
     schedulePrefetch();

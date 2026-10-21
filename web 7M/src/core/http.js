@@ -3,15 +3,18 @@
 import { state } from './state.js';
 
 // 列表首屏短 TTL 缓存（性能优化，2026-10-21）：
-// - 只缓存公开列表首屏（/products、/posts 第一页），按 token 隔离，
-//   避免换账号后看到上一个人的「已赞 / 已收藏」；
-// - 任何写操作（POST）立即清空，发布 / 点赞 / 下单后不会看到旧列表；
-// - 分页请求（offset / page>1）不缓存，避免「加载更多」追加重复或错位；
+// - 缓存公开列表 + 工作台列表的首屏，按 token 隔离，避免换账号看到别人的数据；
+// - 工作台数据变化快，用更短 TTL（10s）；公开列表 30s；
+// - 任何写操作（POST）立即清空；分页请求（offset / page>1）不缓存；
 // - 命中缓存也走「页面/账号已切换」守卫，命中后返回浅拷贝，防止调用方排序/过滤污染缓存。
+// 注意：轮询接口（/messages、/notifications、/rooms）不在此列，避免聊天/通知被缓存住。
 const LIST_TTL = 30000;
+const WORK_TTL = 10000;
 const listCache = new Map();
-const CACHEABLE = /^\/(products|posts)(\?|$)/;
+const CACHEABLE = /^\/(products|posts|admin|tickets|reconcile|support\/sessions|product\/removed|orders|my-products|credit\/history)(\?|$)/;
+const WORKBENCH = /^\/(admin|tickets|reconcile|support\/sessions|product\/removed)(\?|$)/;
 
+function ttlFor(path){ return WORKBENCH.test(path) ? WORK_TTL : LIST_TTL; }
 function cacheable(path){
   if (!CACHEABLE.test(path)) return false;
   if (/[?&]offset=/.test(path)) return false;
@@ -22,11 +25,11 @@ function cacheKey(path){ return (state.token || 'anon') + '::' + path; }
 function readList(path){
   const key = cacheKey(path), hit = listCache.get(key);
   if (!hit) return null;
-  if (Date.now() - hit.at > LIST_TTL){ listCache.delete(key); return null; }
+  if (Date.now() - hit.at > ttlFor(path)){ listCache.delete(key); return null; }
   return hit.data;
 }
 function writeList(path, data){
-  if (listCache.size >= 50) listCache.clear();  // 搜索词多时不无限增长
+  if (listCache.size >= 80) listCache.clear();  // 搜索词/工作台多时不无限增长
   listCache.set(cacheKey(path), { data: Array.isArray(data) ? data.slice() : data, at: Date.now() });
 }
 function clearList(){ listCache.clear(); }

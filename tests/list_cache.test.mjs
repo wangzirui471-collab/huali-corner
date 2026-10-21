@@ -67,6 +67,18 @@ test('cache is isolated per account token', async () => {
   assert.notDeepEqual(a, b);
 });
 
+test('workbench list is cached but polled messages are not', async () => {
+  state.token = 'staff';
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; return Response.json([]); };
+  await api('/admin');
+  await api('/admin');            // 命中缓存
+  assert.equal(calls, 1, 'workbench data should be cached');
+  await api('/messages');
+  await api('/messages');         // 轮询接口不能缓存
+  assert.equal(calls, 3, 'polled endpoints must always refetch');
+});
+
 test('prefetch fills the cache without throwing', async () => {
   state.token = '';
   let calls = 0;
