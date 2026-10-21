@@ -58,6 +58,36 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, Clou
         self.media_store = MediaStore(env.MEDIA)
         self.assets = getattr(env, 'ASSETS', None)
 
+    # ---- 服务端短 TTL 缓存（Cloudflare KV）--------------------------------
+    # 只给匿名首屏列表用：登录用户的响应带「已赞/已收藏」，不能进共享缓存。
+    # 值里存写入时间，读时判断 TTL（键固定，不会无限增长）；任何异常都 fail-open。
+
+    CACHE_TTL = 30
+
+    async def cache_get(self, key):
+        cache = getattr(self.env, 'CACHE', None)
+        if cache is None:
+            return None
+        try:
+            raw = await cache.get(key)
+            if not raw:
+                return None
+            obj = json.loads(raw)
+            if time.time() - float(obj.get('at') or 0) > self.CACHE_TTL:
+                return None
+            return obj.get('body')
+        except Exception:
+            return None
+
+    async def cache_set(self, key, body):
+        cache = getattr(self.env, 'CACHE', None)
+        if cache is None:
+            return
+        try:
+            await cache.put(key, json.dumps({'at': time.time(), 'body': body}, ensure_ascii=False))
+        except Exception:
+            pass
+
     # ---- 账号辅助 --------------------------------------------------------
 
     async def require_capacity(self):
@@ -218,6 +248,14 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, Clou
     async def products(self, request):
         query = query_of(request)
         uid, _ = await sessions.current_user_id(self.db, request)
+        # 匿名首屏走服务端 KV 缓存；登录用户响应含个人「已赞/已收藏」，不进共享缓存。
+        cache_key = None
+        if uid is None:
+            parts = urlsplit(request.url)
+            cache_key = 'products:' + parts.path + '?' + parts.query
+            cached = await self.cache_get(cache_key)
+            if cached is not None:
+                return json_response(cached)
 
         page = max(1, int(query.get('page') or 1))
         limit = max(0, int(query.get('limit') or 0))
@@ -291,6 +329,8 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, Clou
             item['likes'] = like_counts.get(item['id'], 0)
             item['liked'] = (item['id'], 'like') in mine
             item['favorited'] = (item['id'], 'favorite') in mine
+        if cache_key:
+            await self.cache_set(cache_key, items)
         return json_response(items)
 
     async def product(self, request):
