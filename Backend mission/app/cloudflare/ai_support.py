@@ -301,7 +301,8 @@ async def buy_answer(db, q):
         answer = '暂时没有找到%s的在售商品，可以换个说法，或点按钮去首页自己搜。' % label
     return {'answer': answer, 'action': 'reply',
             'links': [{'label': '去首页搜索' + label, 'action': 'pet-search', 'q': q}],
-            'products': rows, 'sources': [], 'mode': 'rule', 'latency_ms': 0}
+            'products': rows, 'sources': [], 'mode': 'rule', 'latency_ms': 0,
+            'support': support_state()}
 
 
 def strip_thinking(text):
