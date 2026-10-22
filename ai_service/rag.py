@@ -106,18 +106,6 @@ OPEN_PROMPT = """你叫小转，是「转角」校园二手平台的助手，也
 """
 
 # 情绪类不再用固定短句打发（与 Cloudflare 侧同源）。
-EMPATHY_PROMPT = """你叫小转，对方在说自己的情绪或难处，你像个朋友那样接话。
-1. 先具体地接住他说的那件事（提到他讲的细节），不要只回「抱抱」「加油」。
-2. 再给一个很小的、今天就能做的建议，或者换一个角度；不说教，不列一堆大道理。
-3. 不提平台，不说自己是客服，不提工单，不劝人转人工。
-4. 60–150 字，口语，像微信聊天。不要用 ** ## 等符号。
-5. 如果对方表现出绝望、自伤、不想活：认真对待，不轻描淡写，明确说这事值得有人陪你一起扛，
-   建议找学校心理中心或辅导员，或拨打 12356 心理援助热线。不给任何方法细节。
-
-【对方说】
-{query}
-"""
-
 SELF_HARM_WORDS = ('自杀', '不想活', '轻生', '结束生命', '自残', '活不下去',
                    '死了算了', '想死', '不想活了')
 SELF_HARM_REPLY = ('这句话我不能轻轻带过。你现在很难受，这值得有人认真陪你一起扛。\n'
@@ -384,17 +372,14 @@ def call_ollama(question, context, open_mode=False):
     return msg.get('content') or ''
 
 
-def call_api(question, context, open_mode=False, persona=None):
+def call_api(question, context, open_mode=False):
     """调用 DeepSeek 官方 OpenAI 兼容接口（默认模型 deepseek-flash）。
 
     open_mode=True 时不带知识库、用开放人格回答（闲聊/常识/没命中时用）。
-    persona='empathy' 时换成接情绪的短提示词。
     """
     if not config.API_KEY:
         raise RuntimeError('未配置 HC_AI_API_KEY')
-    if persona == 'empathy':
-        template, temp, cap = EMPATHY_PROMPT, 0.8, 300
-    elif open_mode:
+    if open_mode:
         template, temp, cap = OPEN_PROMPT, 0.7, 1000
     else:
         template, temp, cap = SYSTEM_PROMPT, 0.2, 600
@@ -645,9 +630,6 @@ def answer(question, history=None):
                 'action': 'reply', 'sources': [], 'mode': 'rule',
                 'latency_ms': int((time.time() - started) * 1000), 'support': st}
 
-    # 闲聊、表达情绪：不检索、不解释流程、不扣额度，一句接住就够。
-    # 放在 complaint 之后：「累死了，你们这平台真差」还是要走投诉路径。
-    # 轮次要结合历史才算得出来，所以交给 social_turn，而不是看 classify 的单句结论。
     # 闲聊和情绪不再分桶，交给模型按人格接话（与 Cloudflare 侧同源）。
 
     hits = retrieve(q)

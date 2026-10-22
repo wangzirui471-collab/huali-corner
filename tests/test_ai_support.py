@@ -86,6 +86,17 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(r['answer'])
         self.assertNotEqual(r['mode'], 'llm')
 
+    def test_no_references_to_deleted_social_buckets(self):
+        # 删情绪分桶时，ai_chat 的 history 构建里还留着一句
+        # `if soc in SOCIAL_REPLIES`——单测只测函数，测不到那行，
+        # 结果整个 /api/ai/chat 500，前端只显示「AI 暂时不可用」。
+        # 这条按源码扫描兜住「删了定义、忘了引用」这一类。
+        src = Path(ai.__file__).read_text(encoding='utf-8')
+        for name in ('SOCIAL_REPLIES', 'SOCIAL_INTENTS', 'SOCIAL_DEEP', 'SOCIAL_TIRED',
+                     'social_turn', 'social_kind', 'social_reply', 'EMPATHY_PROMPT',
+                     'PUBLISH_LINK'):
+            self.assertNotIn(name, src, f'仍引用已删除的 {name}')
+
     def test_links(self):
         self.assertEqual(ai.links_for('怎么发布闲置')[0]['href'], '#publish')
         self.assertIn('#orders', [l['href'] for l in ai.links_for('怎么取消订单、怎么退款')])
