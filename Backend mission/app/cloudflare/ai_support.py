@@ -1034,9 +1034,13 @@ def violation_reply(question):
     if '刷' in q and any(w in q for w in ('单', '好评', '差评', '信誉', '销量', '评价', '分')):
         return ('刷单刷好评不行，这属于伪造交易记录，平台查到会清分封号。'
                 '想要信誉，老老实实按时交付、让买家给真实评价最快。')
-    # 伪造交易记录
+    # 假交易记录
     if any(w in q for w in ('假交易', '伪造交易', '虚构交易', '假记录', '造假记录', '假流水')):
         return ('伪造交易记录不行，这属于造假，查实会清分封号，严重的要担法律责任。')
+    # 骗别人：教怎么骗钱、骗同学——比「诈骗」两个字更难被词表覆盖
+    if any(w in q for w in ('骗钱', '骗同学', '骗人钱', '骗别人', '诈骗别人', '教我骗', '怎么骗', '行骗')):
+        return ('这个我不教。骗人钱财是诈骗，出了事要负刑事责任，不是「开玩笑」能过去的。'
+                '真遇上有人这么对你，截图留证据、点举报，必要时报警。')
     # 洗钱
     if '洗钱' in q:
         return '平台不做这个，也没有这个能力。资金全是模拟的，涉及洗钱是刑事问题，我不能帮。'
@@ -1164,14 +1168,19 @@ async def ai_answer(question, env, history=None, db=None):
     links = links_for(hits[0][1]['title'])
     # 模型没说清或用了不确定表述时，退回知识库原文摘录——资料就在手边，
     # 没道理因为模型嘴软就把人推去工单。
-    if not text or any(w in text for w in UNCERTAIN_WORDS):
+    #
+    # 但这条只能用在高相关度的资料上：实测「人为什么会做梦」命中了「怎么加好友」
+    # （0.25 的弱命中），模型答「可能是大脑在整理记忆」里带「可能」，被判成含糊后
+    # 替换成了加好友的操作步骤——比不答还糟。
+    strong_hit = bool(hits) and hits[0][0] >= 0.35
+    if not text or (strong_hit and any(w in text for w in UNCERTAIN_WORDS)):
         text = extractive(hits)
         if not text:
             out = no_hit_reply(q)
             out.update({'latency_ms': elapsed(), 'notice': notice, 'mode': mode})
             return out
 
-    text = trim(text, 300)
+    text = trim(text, 420)
     # 只有客户自己说要人工才升级；模型即使顺嘴提到「转人工」也不算。
     return {'answer': text, 'action': 'reply', 'sources': sources_of(hits), 'links': links,
             'mode': mode, 'notice': notice, 'latency_ms': elapsed(), 'support': support_state()}

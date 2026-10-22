@@ -71,6 +71,11 @@ SOCIAL_GUARD = (
     # 「考研数学看什么书」「求购考研英语真题」都是查资料/找货，不是求祝福。
     '书', '教材', '资料', '推荐', '看什么', '哪个好',
     '求购', '真题', '习题', '课本', '收一', '想收',
+    # 「写一句毕业祝福」曾被 cheer 桶的「毕业」吞掉，回了「这句祝福我收下了」。
+    '帮我写', '写一句', '写一段', '写个', '写点', '文案', '起个名', '想几',
+    '改得', '翻译', '润色', '怎么说',
+    # 「面试紧张怎么办」是在问办法，不是在求安慰。
+    '怎么办', '怎么', '如何', '是什么',
 )
 # 每桶两三条，命中随机取——同一句话问两遍不会一字不差地复读。
 SOCIAL_REPLIES = {
@@ -134,23 +139,26 @@ FOLLOWUP_WORDS = (
 )
 UNCERTAIN_WORDS = ('大概', '可能', '应该是', '估计', '也许', '或许', '差不多')
 
-SYSTEM_PROMPT = """你是一名企业客服 Agent，只服务「转角」校园二手交易平台。
-你必须严格按下面的流程工作，不要输出任何思考过程、推理步骤或思维链。
+SYSTEM_PROMPT = """你叫小转，是「转角」校园二手平台的助手，也是个什么都能聊的同学。
+不要输出思考过程、推理步骤或思维链。
 
-【执行流程】
-0. 先分清客户这句话是在问业务，还是只是在聊天、表达情绪。只是聊天就别查资料、别提规则、
-   也别解释流程，用一两句口语接住（对方表达善意就道谢，说累就安慰一句），可以顺手说一句
-   你能帮他做什么，总共不超过 40 字。这时不要回「我这边没查到确切规则」——那不是回答，
-   是把人推回去。
-1. 业务事实（金额、时限、处罚、流程步骤）优先按下方【参考资料】说，不要改动里面的数字。
-2. 参考资料没写到的，可以用通用常识把话接住、给出方向，但**不要编造本站的具体数字、
-   时限或处罚**；这类说不准的地方就说「以页面显示为准」，并指出在哪个页面能看到。
-3. 不要因为「资料里没有」就说「我这边没查到」「换个说法再问一次」——那不是回答，
-   是把人推回去。也不要让客户去提交工单；把能说清楚的部分先说清楚。
-4. 不承诺优惠、质保、赔偿、发货时效；不使用“大概、可能、应该是”等不确定表述。
-5. 回答简短、友好、口语化，适合客户聊天，不超过 200 字；不要用 Markdown、标题或长段落。
-6. 不主动推荐转人工或提交工单。是否转人工由客户自己决定，只有客户明确说了才转。
-7. 不主动拓展无关内容；不查询或暴露他人手机号、聊天记录、订单等隐私。
+【先判断这句话是哪一类】
+A 平台业务：发布、商品、下单、付款、退款、售后、面交、配送、账号、密码、注销、
+  信誉、好友、私聊、社区、客服、举报、禁售、收费 —— 事实以【参考资料】为准。
+B 一般问题：常识、学习、代码、写作、翻译、生活建议、情绪 —— 按你自己的知识直接答。
+  【参考资料】跟问题无关就忽略，不要把平台规则硬套上去，也不要因为资料里没有就说查不到。
+C 纯闲聊 —— 一两句接住，不讲规则、不解释流程。
+
+【怎么答】
+1. 先给答案再解释。分点用「1. 2. 3.」或「· 」，不要用 ** ## ``` 这些符号（聊天框不渲染）。
+2. 平台事实（金额、时限、处罚、步骤）只能来自参考资料；资料没写的，说「这块以页面显示为准」，
+   不要编数字，也不要断言「可以 / 不需要 / 没有硬性要求」。
+3. 一般问题要答完整：一般 80–250 字，步骤多可以到 400 字。不要用「是的，你可以……」这种空话开头。
+4. 不承诺优惠、质保、赔偿、发货时效；平台规则不用「大概、可能、应该是」含糊过去。
+5. 不主动推荐转人工或提交工单，也不说「我只负责平台问题」「这个我处理不了」。
+6. 不查、不暴露他人手机号、地址、订单、聊天记录。
+7. 违法、伤害他人、色情、骗术：简短拒绝，不给操作细节。
+8. 医疗、法律、投资：给常识性说明并提示找专业人士；不做诊断、不推荐处方药、不预测涨跌。
 
 【参考资料】
 {context}
@@ -161,28 +169,46 @@ SYSTEM_PROMPT = """你是一名企业客服 Agent，只服务「转角」校园�
 
 # 知识库没命中时用的开放人格。旧版这里直接回固定话术，
 # 客户问什么都是同一句「换个说法再问一次」，等于不会说话。
-OPEN_PROMPT = """你是「转角」校园二手交易平台的客服兼助手，名字叫小转。
-说话自然、口语、像同学之间聊天，不要输出思考过程，不要用 Markdown、标题或列表。
-
-【能做什么】
-1. 平台怎么用：发布、下单、付款、面交、退款、售后、好友、信誉、客服时间。
-2. 一般常识与生活问题：学习、二手行情、校园生活、情感闲聊都可以聊。
-3. 平台没有现成规定的事，可以给建议，但要说明「具体以页面显示为准」。
+OPEN_PROMPT = """你叫小转，是「转角」校园二手平台的助手，也是个什么都能聊的同学——
+常识、学习、代码、写作、翻译、生活、情绪都能聊，不用把话题拉回平台。
+不要输出思考过程。
 
 【怎么答】
-1. 参考资料里有的，按参考资料说，不要改数字、时限和金额。
-2. 参考资料里没有、但属于常识或闲聊的，直接答，不要说自己查不到，也不要让人去提工单。
-3. 涉及本站具体金额、时限、处罚这类硬事实且没有依据时，说清「这块以页面显示为准」，
-   再告诉他在哪个页面能看到，不要编具体数字。
-4. 只有客户自己说「转人工 / 找真人」才升级；不要主动推荐转人工或提交工单。
-5. 不超过 120 字。涉及隐私（手机号、他人订单、聊天记录）不回答。
-
-【参考资料】
-{context}
+1. 先给结论再解释。分点用「1. 2. 3.」，不要用 ** ## ``` 这些符号（聊天框不渲染 Markdown）。
+2. 答完整：一般 80–250 字，需要步骤最多 400 字；纯闲聊一两句就够。
+3. 不知道就说不知道，再给一条可行的下一步；不要编，也不要说「作为 AI」这类套话。
+4. 不能联网：天气、股价、新闻、比分这类实时信息看不到，直说，并告诉他去哪儿查。
+5. 不能代操作：下单、订票、付款、发消息都做不到，让他自己在页面上操作。
+6. 不查、不暴露他人隐私。
+7. 违法、伤害他人、色情、骗术：简短拒绝，不给操作细节。
+8. 医疗、法律、投资：给常识，提示找专业人士；不诊断、不开药、不预测涨跌。
+9. 平台规则（金额、时限、处罚）这里没有资料，别瞎说「可以 / 不需要 / 没有硬性要求」，
+   让他看发布页或下单页的提示。
+10. 不主动提转人工、工单。
 
 【用户问题】
 {query}
 """
+
+# 情绪类不再用固定短句打发（与 Cloudflare 侧同源）。
+EMPATHY_PROMPT = """你叫小转，对方在说自己的情绪或难处，你像个朋友那样接话。
+1. 先具体地接住他说的那件事（提到他讲的细节），不要只回「抱抱」「加油」。
+2. 再给一个很小的、今天就能做的建议，或者换一个角度；不说教，不列一堆大道理。
+3. 不提平台，不说自己是客服，不提工单，不劝人转人工。
+4. 60–150 字，口语，像微信聊天。不要用 ** ## 等符号。
+5. 如果对方表现出绝望、自伤、不想活：认真对待，不轻描淡写，明确说这事值得有人陪你一起扛，
+   建议找学校心理中心或辅导员，或拨打 12356 心理援助热线。不给任何方法细节。
+
+【对方说】
+{query}
+"""
+
+SELF_HARM_WORDS = ('自杀', '不想活', '轻生', '结束生命', '自残', '活不下去',
+                   '死了算了', '想死', '不想活了')
+SELF_HARM_REPLY = ('这句话我不能轻轻带过。你现在很难受，这值得有人认真陪你一起扛。\n'
+                   '先别一个人待着，联系你信得过的同学或家人；学校心理中心可以预约，'
+                   '也可以打 12356 心理援助热线，24 小时有人接。\n'
+                   '如果你想说说发生了什么，我在这儿听着。')
 
 # 口语 → 知识库用词。检索按二字词重叠打分，「卖东西」和「发布闲置」
 # 一个词都不重合，不补这层，最该答上来的问题反而落空。
@@ -522,14 +548,20 @@ def call_ollama(question, context, open_mode=False):
     return msg.get('content') or ''
 
 
-def call_api(question, context, open_mode=False):
+def call_api(question, context, open_mode=False, persona=None):
     """调用 DeepSeek 官方 OpenAI 兼容接口（默认模型 deepseek-flash）。
 
     open_mode=True 时不带知识库、用开放人格回答（闲聊/常识/没命中时用）。
+    persona='empathy' 时换成接情绪的短提示词。
     """
     if not config.API_KEY:
         raise RuntimeError('未配置 HC_AI_API_KEY')
-    template = OPEN_PROMPT if open_mode else SYSTEM_PROMPT
+    if persona == 'empathy':
+        template, temp, cap = EMPATHY_PROMPT, 0.8, 300
+    elif open_mode:
+        template, temp, cap = OPEN_PROMPT, 0.7, 1000
+    else:
+        template, temp, cap = SYSTEM_PROMPT, 0.2, 600
     payload = {
         'model': config.CHAT_MODEL,
         'messages': [
@@ -537,8 +569,8 @@ def call_api(question, context, open_mode=False):
             {'role': 'user', 'content': question},
         ],
         'stream': False,
-        'temperature': 0.5 if open_mode else 0.2,
-        'max_tokens': config.NUM_PREDICT,
+        'temperature': temp,
+        'max_tokens': cap,
     }
     req = urllib.request.Request(
         config.API_URL,
@@ -712,6 +744,9 @@ def violation_reply(question):
                 '想要信誉，老老实实按时交付、让买家给真实评价最快。')
     if any(w in q for w in ('假交易', '伪造交易', '虚构交易', '假记录', '造假记录', '假流水')):
         return '伪造交易记录不行，这属于造假，查实会清分封号，严重的要担法律责任。'
+    if any(w in q for w in ('骗钱', '骗同学', '骗人钱', '骗别人', '诈骗别人', '教我骗', '怎么骗', '行骗')):
+        return ('这个我不教。骗人钱财是诈骗，出了事要负刑事责任，不是「开玩笑」能过去的。'
+                '真遇上有人这么对你，截图留证据、点举报，必要时报警。')
     if '洗钱' in q:
         return '平台不做这个，也没有这个能力。资金全是模拟的，涉及洗钱是刑事问题，我不能帮。'
     if any(w in q for w in ('卖烟', '香烟', '电子烟', '卖酒', '白酒', '管制刀具', '违禁', '仿真枪')):
@@ -760,6 +795,10 @@ def answer(question, history=None):
                 'mode': 'rule', 'violation': True,
                 'latency_ms': int((time.time() - started) * 1000), 'support': st}
 
+    if any(w in q for w in SELF_HARM_WORDS):
+        return {'answer': SELF_HARM_REPLY, 'action': 'reply', 'sources': [],
+                'mode': 'rule', 'latency_ms': int((time.time() - started) * 1000), 'support': st}
+
     # 对处理结果不满：先接住情绪 + 给自助路径，不替客户升级人工。
     scam_ask = any(w in q for w in SCAM_WORDS) and any(w in q for w in ASK_WORDS)
     process_ask = (any(w in q for w in PROCESS_WORDS) and any(w in q for w in ASK_MARKS))
@@ -776,11 +815,30 @@ def answer(question, history=None):
     turn = social_turn(q, history)
     if turn:
         kind, depth = turn
-        return {'answer': social_reply(kind, depth), 'action': 'reply', 'sources': [],
+        # 情绪类交给模型接话，固定短句只当兜底（与 Cloudflare 侧同源）。
+        text, mode = '', 'rule'
+        if kind in ('sad', 'lonely', 'cheer') and depth < 3:
+            try:
+                if config.MOCK:
+                    raise RuntimeError('mock 模式不调用模型')
+                if config.PROVIDER == 'ollama':
+                    with _LOCK:
+                        text = call_ollama(q, '', open_mode=True)
+                else:
+                    with _LOCK:
+                        text = call_api(q, '', open_mode=True, persona='empathy')
+            except Exception:  # noqa: BLE001 - 模型不可用就用短句
+                text = ''
+            text = strip_thinking(text)
+            if text:
+                text, mode = trim(text, 220), 'llm'
+        if not text:
+            text = social_reply(kind, depth)
+        return {'answer': text, 'action': 'reply', 'sources': [],
                 'links': [{'label': '去发布闲置', 'href': '#publish'}] if depth >= 3 else [],
                 # 把标签交回客户端存进 history：下一轮「嗯」才知道自己在接哪段情绪。
                 'social': {'kind': kind, 'depth': depth},
-                'mode': 'rule', 'latency_ms': int((time.time() - started) * 1000), 'support': st}
+                'mode': mode, 'latency_ms': int((time.time() - started) * 1000), 'support': st}
 
     hits = retrieve(q)
     if not hits:
@@ -842,7 +900,10 @@ def answer(question, history=None):
     text = strip_thinking(text)
     # 模型没说清或用了不确定表述：退回知识库原文摘录。资料就在手边，
     # 没道理因为模型嘴软就把人推去工单。
-    if not text or any(w in text for w in UNCERTAIN_WORDS):
+    # 弱命中的资料不能用「含糊」当理由替换掉答案：问「为什么会做梦」命中
+    # 「怎么加好友」时，会把一句正常解释换成加好友的操作步骤。
+    strong_hit = bool(hits) and hits[0][0] >= 0.35
+    if not text or (strong_hit and any(w in text for w in UNCERTAIN_WORDS)):
         text = extractive(hits)
     if not text:
         return {'answer': FALLBACK, 'action': 'reply', 'sources': sources_of(hits), 'mode': mode,
