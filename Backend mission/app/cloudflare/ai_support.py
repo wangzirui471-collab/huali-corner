@@ -455,19 +455,13 @@ def _strip_buy_noise(text):
     return out
 
 
-async def buy_query(question, db=None):
-    """从「我想买键盘」里取出商品关键词；不是购买意图返回 None。
-
-    关键词只保留「目录里出现过」的词：语言无关，不用维护停用词表。
-
-    原来的实现把二字词拼回去：机械键盘 → 机械械键键盘，LIKE 永远搜不到，
-    于是「有没有机械键盘」明明有货也回「暂时没有」。现在按整段取词。
-    """
+def _buy_pieces(question):
+    """购买意图里的商品词候选，不做目录校验。"""
     q = str(question or '').strip().lower()
     if any(w in q for w in BUY_GUARD):
-        return None
+        return []
     if not (any(w in q for w in BUY_PATTERNS) or BUY_REGEX.search(q)):
-        return None
+        return []
     rest = q
     for w in sorted(BUY_PATTERNS, key=len, reverse=True):
         rest = rest.replace(w, ' ')
@@ -481,6 +475,18 @@ async def buy_query(question, db=None):
         pieces.append(_strip_buy_noise(piece))
     pieces = [p for p in pieces
               if p and p not in STOP and p not in BUY_STOP and p not in BUY_NOISE and len(p) >= 2]
+    return pieces
+
+
+async def buy_query(question, db=None):
+    """从「我想买键盘」里取出商品关键词；不是购买意图返回 None。
+
+    关键词只保留「目录里出现过」的词：语言无关，不用维护停用词表。
+
+    原来的实现把二字词拼回去：机械键盘 → 机械械键键盘，LIKE 永远搜不到，
+    于是「有没有机械键盘」明明有货也回「暂时没有」。现在按整段取词。
+    """
+    pieces = _buy_pieces(question)
     if not pieces:
         return None
     kw = pieces[0][:14]
@@ -499,6 +505,24 @@ async def buy_query(question, db=None):
                     break
             return hit
     return kw if len(kw) >= 2 else None
+
+
+def no_stock_reply(question):
+    """确实来买东西，但目录里没这种货：明说没货 + 引导发求购。
+
+    以前这种情况交给模型，它答「我这边看不到实时在售商品」——既浪费一次调用，
+    又把平台的搜索和求购功能说没了。
+    """
+    pieces = _buy_pieces(question)
+    term = (pieces[0][:14] if pieces else '').strip()
+    term = term or '这个'
+    return {'answer': '暂时没有找到「%s」的在售商品。\n'
+                      '想找的话有两条路：在首页搜索框换个说法再搜一次；'
+                      '或者去「社区 → 校园求购」发一条求购，写清要什么、能接受什么成色、'
+                      '大概预算，有货的同学会来找你。' % term,
+            'action': 'reply', 'sources': [],
+            'links': [{'label': '去社区发求购', 'href': '#community'}],
+            'mode': 'rule', 'no_stock': True}
 
 
 def _detail(raw):
@@ -1014,6 +1038,15 @@ async def _answer_unguarded(question, env, history=None, db=None):
     buy = await buy_query(q, db)
     if buy:
         return await buy_answer(db, buy)
+    # 目录里没有这种货，但确实是来买东西的（说得出「买 / 收 / 求购」）：
+    # 明说没货 + 引导发求购，别让模型去猜平台上有什么。
+    # 只认 BUY_PATTERNS 这种强意图——「你们有 App 吗」只中了「有…吗」，
+    # 那不是要买东西，交给模型答。
+    if any(w in q for w in BUY_PATTERNS):
+        out = no_stock_reply(q)
+        out['latency_ms'] = elapsed()
+        out['support'] = support_state()
+        return out
 
     hits = retrieve(q)
     # 0.15 以下基本是二字词碰撞出来的噪声（「你能做我女朋友吗」曾命中

@@ -459,6 +459,17 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         for q in ['被人骗了 500 块，报警有用吗', '我被诈骗了怎么办', '买东西被骗了能维权吗']:
             self.assertIsNone(await ai.buy_query(q, db), q)
 
+    def test_no_stock_reply_names_the_item_and_points_to_wanted(self):
+        # 来买东西但目录里没货：明说没找到 + 引导发求购。
+        # 交给模型它会答「我这边看不到实时在售商品」，把平台的搜索和求购说没了。
+        out = ai.no_stock_reply('想买个台灯')
+        self.assertIn('台灯', out['answer'])
+        self.assertIn('暂时没有找到', out['answer'])
+        self.assertIn('求购', out['answer'])
+        # 弱意图（只中了「有…吗」）不走这条：那不是要买东西，交给模型答
+        self.assertFalse(any(w in '你们有 App 吗' for w in ai.BUY_PATTERNS))
+        self.assertFalse(any(w in '被人骗了 500 块，报警有用吗' for w in ai.BUY_PATTERNS))
+
     async def test_buy_search_falls_back_to_shorter_terms(self):
         db = self._memory_db()
         await db.run("INSERT INTO products(id,seller_id,title,category,price,status,data,created) "
