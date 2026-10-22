@@ -60,16 +60,17 @@ async function petAsk(q){
       ${src?`<div class="ai-pet-src">来源：${src}</div>`:''}
       ${r.notice?`<div class="ai-pet-src">${e(r.notice)}</div>`:''}`;
     paintDuty(r.support);          // 状态灯以服务端为准，避免和回答内容打架
-    // 闲聊标签跟着用户那句一起存：下一轮只说「嗯」时，后端靠它知道在接哪段情绪。
-    // 业务问答不带标签，等于告诉后端「打断重来」。
-    const soc=r.social||null;
+    // 历史只留 role/content：情绪分桶已经删掉，没有需要跨轮继承的标签了。
     petHistory.push(
-      {role:'user',content:text,social:soc&&soc.kind||undefined,depth:soc&&soc.depth||undefined},
+      {role:'user',content:text},
       {role:'assistant',content:String(r.answer||'')});
     petHistory=petHistory.slice(-4);
     if(transfer) setPetState('wave',1800); else setPetState('idle');   // 要转人工就招手喊客服
   }catch(err){
-    const msg=(err.status===429||err.status===503)?err.message:'AI 暂时不可用，请稍后再试。';
+    // 别再把所有错误盖成同一句：500 那次前端只显示「AI 暂时不可用」，
+    // 排查时看不到真因。带出状态码，控制台也留一条。
+    if(console && console.warn) console.warn('[ai]', err && err.status, err && err.message);
+    const msg=err && err.message ? err.message : 'AI 暂时不可用，请稍后再试。';
     wait.innerHTML=`<div>${petText(msg)}</div>`;
     setPetState('fail',1600);             // 出错时小转晃一下，不用再额外弹提示
   }finally{
