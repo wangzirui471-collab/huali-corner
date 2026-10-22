@@ -22,6 +22,42 @@ TRANSFER_REPLY = '好的，马上帮你转接人工客服，请稍等。'
 LEAVE_REPLY = '客服现在不在线（每天 %s），留言和工单会按提交顺序排着，%s上班后处理。'
 GREETING_REPLY = '在的～我是小转，发布、退款、面交、客服时间都能问我，也可以随便聊聊。'
 
+# 口语 → 知识库用词。检索按二字词重叠打分，「卖东西」和「发布闲置」一个词都不重合，
+# 不补这一层，最该答上来的问题反而落空。键按长度长的优先匹配。
+SYNONYMS = {
+    '卖东西': '发布 闲置 出售',
+    '出闲置': '发布 闲置',
+    '卖掉': '发布 出售',
+    '出售': '发布 出售',
+    '上架': '发布 上架',
+    '挂着卖': '发布',
+    '想卖': '发布 出售',
+    '买东西': '求购 购买',
+    '想买': '求购 购买',
+    '下单': '购买 付款 订单',
+    '付钱': '付款 模拟',
+    '扣钱': '付款 模拟',
+    '退货': '退款 售后',
+    '退钱': '退款',
+    '售后': '售后 工单',
+    '打分': '评价 星级',
+    '差评': '评价 信誉',
+    '拉黑': '屏蔽 好友',
+    '黑名单': '屏蔽',
+    '忘了密码': '密码 找回',
+    '登不上': '密码 登录',
+    '登录不了': '密码 登录',
+    '面交': '交付 面交',
+    '自提': '交付 自提',
+    '快递': '交付 送货',
+    '邮寄': '交付 送货',
+    '抽成': '服务费 费用',
+    '押金': '费用 服务费',
+    '手机号': '隐私 手机号',
+    '删号': '注销 账号',
+    '注销': '注销 账号',
+}
+
 # 转人工的触发词：只认「客户明确说要人工」。
 # 参照 ChatterMate（开源 AI 客服平台）的做法——human handoff 由 explicit requests
 # for a human 触发。投诉、差评、退钱、赔偿这类情绪词**不算**：那是「有事要说」，
@@ -81,6 +117,42 @@ SOCIAL_REPLIES = {
         '在呢。无聊的话可以翻翻首页，最近不少人在出东西。',
     ),
 }
+# 第二轮：这一轮要显出让对方听得出「我记得你刚才说过什么」。
+# 只说「我一直在」的话，第二遍就等于复读，反而是最伤人的机器感。
+SOCIAL_DEEP = {
+    'affection': (
+        '还惦记着这事儿呀，那我可当真了。我一直在的。',
+        '第二次听你这么说，尾巴真的压不住了。',
+    ),
+    'sad': (
+        '还没缓过来吧。刚才那句我一直记着，你慢慢说。',
+        '嗯，我还在这儿，没走。想细说就说，不想说也行。',
+    ),
+    'cheer': (
+        '又被你鼓了一次劲，那我更不能掉链子了。',
+        '你连着给我打气，我也回你一句：你也一样，别把自己逼太紧。',
+    ),
+    'identity': (
+        '刚说过啦，小转，转角里的桌宠。你再问一次，我也再答一次。',
+        '还是我。说了是 AI，不会跑。',
+    ),
+    'lonely': (
+        '还无聊着？那聊点具体的——宿舍里有什么一直想处理掉的东西吗？',
+        '看来是真闲了。要不我帮你翻翻最近在出的东西，说不定有想捡的。',
+    ),
+}
+# 第三轮起收口：不装无限耐性，明确说清自己能聊到哪，再把话头递回正事一次。
+# 一直「嗯我在」接下去，反而像在敷衍；承认边界更像一个真实的人。
+SOCIAL_TIRED = (
+    '我一直在这儿，不过我这脑子就装着平台那点事，聊深了容易接不住。要不咱们换点具体的？',
+    '陪你聊可以，但我说来说去也就这几句，怕你听腻。手头有想出的东西，我倒能帮上忙。',
+)
+# 接话词：「嗯」「是啊」「真的吗」本身没有情绪，情绪得从上一轮继承下来。
+FOLLOWUP_WORDS = (
+    '嗯', '是啊', '对啊', '对呀', '对的', '真的吗', '然后呢', '好吧', '哦', '噢',
+    '诶', '哎', '哈哈', '呵呵', '唉', '是吗', '怎么说', '咋了', '还有呢', '继续',
+    '你说呢', '那你说', '说点', '怎么办', '咋办', '真的假的', '那我呢',
+)
 UNCERTAIN_WORDS = ('大概', '可能', '应该是', '估计', '也许', '或许', '差不多')
 # 购买意图：客户说「我想买键盘」时直接搜商品，不走大模型（快、不烧额度）。
 BUY_PATTERNS = (
@@ -115,15 +187,42 @@ SYSTEM_PROMPT = """你是一名企业客服 Agent，只服务「转角」校园�
    也别解释流程，用一两句口语接住（对方表达善意就道谢，说累就安慰一句），可以顺手说一句
    你能帮他做什么，总共不超过 40 字。这时不要回「我这边没查到确切规则」——那不是回答，
    是把人推回去。
-1. 只允许使用下方【参考资料】中明确写出的信息回答业务问题。
-2. 绝对不允许使用你自带的模型知识补充业务事实。
-3. 参考资料没有写到的内容，不要猜测、不要估算，也不要让客户去提交工单。
-   这种情况下直接告诉客户「我这边没查到确切规则」，然后给出两三个可行的下一步
-   （换个说法再问、去哪个页面看、需要真人时怎么说），并请他补充具体情况。
+1. 业务事实（金额、时限、处罚、流程步骤）优先按下方【参考资料】说，不要改动里面的数字。
+2. 参考资料没写到的，可以用通用常识把话接住、给出方向，但**不要编造本站的具体数字、
+   时限或处罚**；这类说不准的地方就说「以页面显示为准」，并指出在哪个页面能看到。
+3. 不要因为「资料里没有」就说「我这边没查到」「换个说法再问一次」——那不是回答，
+   是把人推回去。也不要让客户去提交工单；把能说清楚的部分先说清楚。
 4. 不承诺优惠、质保、赔偿、发货时效；不使用“大概、可能、应该是”等不确定表述。
 5. 回答简短、友好、口语化，适合客户聊天，不超过 200 字；不要用 Markdown、标题或长段落。
 6. 不主动推荐转人工或提交工单。是否转人工由客户自己决定，只有客户明确说了才转。
 7. 不主动拓展无关内容；不查询或暴露他人手机号、聊天记录、订单等隐私。
+
+【参考资料】
+{context}
+
+【用户问题】
+{query}
+"""
+
+# 知识库没有命中时用的开放人格：可以按通用常识回答、可以闲聊，
+# 只有「本站的具体规则/金额/时限」这类没有依据的事才收着说。
+# 旧版遇到没命中就回固定话术，客户问十句有八句得到同一段"换个说法再问一次"，
+# 那不叫谨慎，叫不会说话。
+OPEN_PROMPT = """你是「转角」校园二手交易平台的客服兼助手，名字叫小转。
+说话自然、口语、像同学之间聊天，不要输出思考过程，不要用 Markdown、标题或列表。
+
+【能做什么】
+1. 平台怎么用：发布、下单、付款、面交、退款、售后、好友、信誉、客服时间。
+2. 一般常识与生活问题：学习、二手行情、校园生活、情感闲聊都可以聊。
+3. 平台没有现成规定的事，可以给建议，但要说明「具体以页面显示为准」。
+
+【怎么答】
+1. 参考资料里有的，按参考资料说，不要改数字、时限和金额。
+2. 参考资料里没有、但属于常识或闲聊的，直接答，不要说自己查不到，也不要让人去提工单。
+3. 涉及本站具体金额、时限、处罚这类硬事实且没有依据时，说清「这块以页面显示为准」，
+   再告诉他在哪个页面能看到，不要编具体数字。
+4. 只有客户自己说「转人工 / 找真人」才升级；不要主动推荐转人工或提交工单。
+5. 不超过 120 字。涉及隐私（手机号、他人订单、聊天记录）不回答。
 
 【参考资料】
 {context}
@@ -158,8 +257,15 @@ def _terms(text):
     return [t for t in tokenize(text) if t not in STOP]
 
 
+def expand_question(question):
+    """把口语说法补成知识库用的词，只加词、不改原句。"""
+    low = (question or '').lower()
+    extra = [words for key, words in SYNONYMS.items() if key in low]
+    return (question + ' ' + ' '.join(extra)).strip() if extra else question
+
+
 def retrieve(question, k=4):
-    qset = set(_terms(question))
+    qset = set(_terms(expand_question(question)))
     if not qset:
         return []
     scored = []
@@ -196,8 +302,73 @@ def social_kind(question):
     return None
 
 
-def social_reply(kind):
+def social_reply(kind, depth=1):
+    """按轮次换口气：首轮接住，第二轮记得上文，第三轮起收口。"""
+    if depth >= 3:
+        return random.choice(SOCIAL_TIRED)
+    if depth == 2:
+        return random.choice(SOCIAL_DEEP.get(kind) or SOCIAL_DEEP['lonely'])
     return random.choice(SOCIAL_REPLIES.get(kind) or SOCIAL_REPLIES['lonely'])
+
+
+def _is_followup(question):
+    """「嗯」「是啊」「真的吗」这类接话：本身没有情绪词，也办不了任何正事。"""
+    q = re.sub(r'[\s，。！？、,.!?~～…]+', '', question or '')
+    if not q or len(q) > 8:
+        return False
+    if any(w in q for w in SOCIAL_GUARD):
+        return False
+    return len(q) <= 3 or any(w in q for w in FOLLOWUP_WORDS)
+
+
+def _history_kinds(history):
+    """把历史里的用户句子还原成情绪序列。
+
+    优先用客户端回传的标签（ai_chat 会把它带进 history 的 social 字段）：
+    接话句「嗯」本身没有情绪词，光靠文本猜必然断，第四轮就掉回「换个说法」。
+    标签缺失时再按文本推断，兜住还没升级的旧客户端。
+    """
+    out = []
+    for h in (history or []):
+        if h.get('role') != 'user':
+            continue
+        q = str(h.get('content') or '')
+        kind = h.get('social')
+        if kind not in SOCIAL_REPLIES:
+            kind = social_kind(q)
+            if not kind and out and out[-1] and _is_followup(q):
+                kind = out[-1]
+        out.append(kind if kind in SOCIAL_REPLIES else None)
+    return out
+
+
+def social_turn(question, history=None):
+    """闲聊判定 + 轮次。返回 (kind, depth)，不是闲聊返回 None。
+
+    depth 是「连续第几轮闲聊」：1 首轮、2 续聊、3 起该收口。
+    单句判定做不到「陪着聊下去」：用户说「我失恋了」→「嗯」→「是啊」时，
+    「嗯」没有情绪词，会被打回 business，回一段「换个说法再问一次」，
+    像换了个人接电话。接话必须继承上一轮的情绪，才算记得上文。
+    """
+    users = [h for h in (history or []) if h.get('role') == 'user']
+    raw = _history_kinds(history)
+    streak = 0
+    for k in reversed(raw):
+        if k:
+            streak += 1
+        else:
+            break
+    # 前端只留最近四句，光数 streak 会到第三轮就不再涨；上一轮自己带的 depth 更可信。
+    prev_depth = users[-1].get('depth') if users and isinstance(users[-1].get('depth'), int) else 0
+    kind = social_kind(question)
+    if not kind:
+        # 只认「紧邻的上一轮」：中间隔了一次业务问题，就不该再顺着聊天往下接。
+        prev_kind = raw[-1] if raw else None
+        if prev_kind and _is_followup(question):
+            kind = prev_kind
+        else:
+            return None
+    return kind, max(streak, prev_depth or 0) + 1
 
 
 def classify(question):
@@ -263,6 +434,7 @@ LINK_RULES = (
     (('支付', '小程序'), [{'label': '去客服中心', 'href': '#support'}]),
 )
 SUPPORT_LINK = [{'label': '去客服中心提交工单', 'href': '#support'}]
+PUBLISH_LINK = [{'label': '去发布闲置', 'href': '#publish'}]
 
 
 def links_for(title):
@@ -523,23 +695,28 @@ def complaint_reply(q):
     })
 
 
-async def call_api(question, context, env, history=None):
-    """调用 DeepSeek 官方 OpenAI 兼容接口。"""
+async def call_api(question, context, env, history=None, open_mode=False):
+    """调用 DeepSeek 官方 OpenAI 兼容接口。
+
+    模型可以通过 HC_AI_MODEL / HC_AI_API_URL 换成任何 OpenAI 兼容服务，
+    包括本地 vLLM、Ollama、通义/千问等开源权重模型，不需要改这里。
+    """
     api_key = getattr(env, 'HC_AI_API_KEY', '') or ''
     if not api_key:
         raise DomainError('AI 未配置：请在 Worker 设置 HC_AI_API_KEY', 503)
     api_url = getattr(env, 'HC_AI_API_URL', 'https://api.deepseek.com/chat/completions')
     model = getattr(env, 'HC_AI_MODEL', 'deepseek-flash')
+    template = OPEN_PROMPT if open_mode else SYSTEM_PROMPT
     payload = {
         'model': model,
         'messages': [
-            {'role': 'system', 'content': SYSTEM_PROMPT.format(context=context, query=question)},
+            {'role': 'system', 'content': template.format(context=context or '（无）', query=question)},
             *[h for h in (history or [])
               if h.get('role') in ('user', 'assistant') and h.get('content')],
             {'role': 'user', 'content': question},
         ],
         'stream': False,
-        'temperature': 0.2,
+        'temperature': 0.5 if open_mode else 0.2,
         'max_tokens': 360,
     }
     from workers import fetch
@@ -557,6 +734,26 @@ async def call_api(question, context, env, history=None):
     if not choices:
         raise DomainError('DeepSeek API 返回空结果', 502)
     return (choices[0].get('message') or {}).get('content') or ''
+
+
+async def open_answer(q, env, history, elapsed):
+    """知识库没命中：交给模型按「开放人格」回答。
+
+    旧实现在这里直接甩固定话术，于是客户问什么都是同一句「换个说法再问一次」，
+    问「给我跳个舞」「我想谈恋爱」也回这段。现在只有模型真的不可用
+    （没配 Key / 超时 / 5xx / 返回空）才退回兜底，其余情况都让人先说话。
+    """
+    try:
+        text = strip_thinking(await call_api(q, '', env, history, open_mode=True))
+    except Exception:  # noqa: BLE001 - 供应商故障和未配置都降级为兜底话术
+        text = ''
+    if not text:
+        out = no_hit_reply(q)
+        out['latency_ms'] = elapsed()
+        return out
+    return {'answer': trim(text, 220), 'action': 'reply', 'sources': [], 'links': [],
+            'mode': 'llm', 'open': True, 'latency_ms': elapsed(),
+            'support': support_state()}
 
 
 async def ai_answer(question, env, history=None, db=None):
@@ -588,10 +785,15 @@ async def ai_answer(question, env, history=None, db=None):
 
     # 闲聊、表达情绪：不检索、不解释流程、不扣额度，一句接住就够。
     # 放在 complaint 之后：「累死了，你们这平台真差」还是要走投诉路径。
-    if intent == 'social':
-        return {'answer': social_reply(social_kind(q)), 'action': 'reply', 'sources': [],
-                'links': [], 'mode': 'rule', 'latency_ms': elapsed(),
-                'support': support_state()}
+    # 轮次要结合历史才算得出来，所以交给 social_turn，而不是看 classify 的单句结论。
+    turn = social_turn(q, history)
+    if turn:
+        kind, depth = turn
+        return {'answer': social_reply(kind, depth), 'action': 'reply', 'sources': [],
+                'links': list(PUBLISH_LINK) if depth >= 3 else [],
+                # 把标签交回客户端存进 history：下一轮「嗯」才知道自己在接哪段情绪。
+                'social': {'kind': kind, 'depth': depth},
+                'mode': 'rule', 'latency_ms': elapsed(), 'support': support_state()}
 
     # 购买意图直接搜商品：不走大模型，快且不烧额度。
     buy = await buy_query(q, db)
@@ -600,9 +802,7 @@ async def ai_answer(question, env, history=None, db=None):
 
     hits = retrieve(q)
     if not hits:
-        out = no_hit_reply(q)
-        out['latency_ms'] = elapsed()
-        return out
+        return await open_answer(q, env, history, elapsed)
 
     context = build_context(hits)
     notice = ''
@@ -686,7 +886,17 @@ class AiSupport:
                 role = h.get('role')
                 content = str(h.get('content') or '').strip()[:300]
                 if role in ('user', 'assistant') and content:
-                    history.append({'role': role, 'content': content})
+                    item = {'role': role, 'content': content}
+                    # 闲聊标签随历史回传：只认白名单里的桶名和正整数轮次，
+                    # 客户端塞别的东西就当没有，不让它影响分流。
+                    if role == 'user':
+                        soc = h.get('social')
+                        if soc in SOCIAL_REPLIES:
+                            item['social'] = soc
+                        depth = h.get('depth')
+                        if isinstance(depth, int) and 0 < depth < 99:
+                            item['depth'] = depth
+                    history.append(item)
         await self.ai_quota(uid)
         result = await ai_answer(question, self.env, history, self.db)
         # 只有真正调用模型才计入额度；问候、转人工、无命中不扣次数。

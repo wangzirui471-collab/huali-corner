@@ -60,7 +60,12 @@ async function petAsk(q){
       ${src?`<div class="ai-pet-src">来源：${src}</div>`:''}
       ${r.notice?`<div class="ai-pet-src">${e(r.notice)}</div>`:''}`;
     paintDuty(r.support);          // 状态灯以服务端为准，避免和回答内容打架
-    petHistory.push({role:'user',content:text},{role:'assistant',content:String(r.answer||'')});
+    // 闲聊标签跟着用户那句一起存：下一轮只说「嗯」时，后端靠它知道在接哪段情绪。
+    // 业务问答不带标签，等于告诉后端「打断重来」。
+    const soc=r.social||null;
+    petHistory.push(
+      {role:'user',content:text,social:soc&&soc.kind||undefined,depth:soc&&soc.depth||undefined},
+      {role:'assistant',content:String(r.answer||'')});
     petHistory=petHistory.slice(-4);
     if(transfer) setPetState('wave',1800); else setPetState('idle');   // 要转人工就招手喊客服
   }catch(err){

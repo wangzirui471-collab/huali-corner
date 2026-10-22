@@ -50,6 +50,63 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         self.assertLessEqual(len(r['answer']), 80)
         self.assertNotIn('顺便说一下', r['answer'])
 
+    # --- 多轮：接话要继承上一轮情绪，第三轮起收口 -------------------------
+    def test_followup_inherits_previous_emotion(self):
+        h = [{'role': 'user', 'content': '我失恋了'}, {'role': 'assistant', 'content': '先抱一下'}]
+        # 「嗯」本身没有情绪词，单句判定会打回 business；要沿用上一轮的 sad
+        self.assertEqual(ai.social_turn('嗯', h), ('sad', 2))
+        self.assertEqual(ai.social_turn('是啊', h), ('sad', 2))
+        # 没有历史时「嗯」办不了任何事，仍按业务问题走
+        self.assertIsNone(ai.social_turn('嗯', []))
+
+    def test_business_turn_breaks_the_streak(self):
+        h = [{'role': 'user', 'content': '我失恋了'}, {'role': 'assistant', 'content': '嗯，我在'},
+             {'role': 'user', 'content': '怎么退款'}, {'role': 'assistant', 'content': '未付款订单可以直接取消'}]
+        # 紧邻上一轮是业务问题，不能还顺着聊天接
+        self.assertIsNone(ai.social_turn('嗯', h))
+        self.assertEqual(ai.social_turn('我好难过', h), ('sad', 1))
+
+    def test_third_social_turn_closes_the_chat(self):
+        h = [{'role': 'user', 'content': '我失恋了'}, {'role': 'assistant', 'content': '先抱一下'},
+             {'role': 'user', 'content': '嗯'}, {'role': 'assistant', 'content': '我在这儿'}]
+        self.assertEqual(ai.social_turn('是啊', h), ('sad', 3))
+        self.assertIn(ai.social_reply('sad', 3), ai.SOCIAL_TIRED)
+        # 收口时给一条回正事的路，不再无限接话
+        self.assertNotEqual(ai.social_reply('sad', 1), ai.social_reply('sad', 3))
+
+    async def test_multi_turn_social_never_falls_back_to_rule_talk(self):
+        h = [{'role': 'user', 'content': '我失恋了'}, {'role': 'assistant', 'content': '先抱一下'}]
+        r = await ai.ai_answer('嗯', SimpleNamespace(), h)
+        self.assertEqual(r['mode'], 'rule')
+        self.assertLessEqual(len(r['answer']), 60)
+        for bad in ('换个说法', '没查到', '规则'):
+            self.assertNotIn(bad, r['answer'])
+
+    async def test_third_social_turn_offers_publish_link(self):
+        h = [{'role': 'user', 'content': '我失恋了'}, {'role': 'assistant', 'content': '先抱一下'},
+             {'role': 'user', 'content': '嗯'}, {'role': 'assistant', 'content': '我在这儿'}]
+        r = await ai.ai_answer('是啊', SimpleNamespace(), h)
+        self.assertEqual([l['href'] for l in r['links']], ['#publish'])
+
+    def test_client_tag_beats_text_guess(self):
+        # 「嗯」本身判不出情绪，客户端回传的标签直接决定桶
+        h = [{'role': 'user', 'content': '嗯', 'social': 'sad', 'depth': 1}]
+        self.assertEqual(ai.social_turn('是啊', h), ('sad', 2))
+
+    def test_depth_keeps_climbing_after_history_window(self):
+        # 前端只留四句，光数条数到第三轮就不再涨；上一轮自带的 depth 更可信，
+        # 否则收口之后又会被当成第二轮，重新开始陪聊。
+        h = [{'role': 'user', 'content': '是啊', 'social': 'sad', 'depth': 3},
+             {'role': 'assistant', 'content': '陪你聊可以，但我说来说去也就这几句。'}]
+        self.assertEqual(ai.social_turn('然后呢', h), ('sad', 4))
+
+    async def test_social_payload_carries_tag_for_next_turn(self):
+        r = await ai.ai_answer('我失恋了', SimpleNamespace())
+        self.assertEqual(r['social'], {'kind': 'sad', 'depth': 1})
+        # 业务问答不带标签，等于告诉下一轮「打断重来」
+        r2 = await ai.ai_answer('怎么退款', SimpleNamespace())
+        self.assertNotIn('social', r2)
+
     async def test_complaint_is_not_auto_escalated(self):
         # 对处理结果不满：先接住情绪 + 给自助路径，不替客户升级
         r = await ai.ai_answer('你们这平台骗子，我要投诉', SimpleNamespace())

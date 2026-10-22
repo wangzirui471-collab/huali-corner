@@ -49,6 +49,33 @@ class Handler(BaseHTTPRequestHandler):
         except (UnicodeDecodeError, json.JSONDecodeError):
             return None
 
+    def _history(self, raw):
+        """对话历史：只留最近 4 句，并放行闲聊标签（口径与 Worker 端一致）。
+
+        标签是「上一轮属于哪种闲聊」——「嗯」「是啊」这种接话本身判不出情绪，
+        不给标签的话第三轮必断，接话会被当成查询失败。
+        """
+        out = []
+        if not isinstance(raw, list):
+            return out
+        for h in raw[-4:]:
+            if not isinstance(h, dict):
+                continue
+            role = h.get('role')
+            content = str(h.get('content') or '').strip()[:300]
+            if role not in ('user', 'assistant') or not content:
+                continue
+            item = {'role': role, 'content': content}
+            if role == 'user':
+                soc = h.get('social')
+                if soc in rag.SOCIAL_REPLIES:
+                    item['social'] = soc
+                depth = h.get('depth')
+                if isinstance(depth, int) and 0 < depth < 99:
+                    item['depth'] = depth
+            out.append(item)
+        return out
+
     def do_GET(self):
         if self.path.split('?', 1)[0] != '/health':
             return self._send({'error': 'not found'}, 404)
@@ -112,8 +139,9 @@ class Handler(BaseHTTPRequestHandler):
         question = str(data.get('question') or '').strip()
         if not question:
             return self._send({'error': '缺少 question'}, 400)
+        history = self._history(data.get('history'))
         try:
-            return self._send(rag.answer(question))
+            return self._send(rag.answer(question, history))
         except Exception as exc:  # noqa: BLE001 - 边界处返回可读错误，不抛堆栈
             return self._send({'error': f'AI 服务内部错误：{type(exc).__name__}'}, 500)
 

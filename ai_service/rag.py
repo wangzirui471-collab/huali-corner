@@ -84,6 +84,42 @@ SOCIAL_REPLIES = {
         '在呢。无聊的话可以翻翻首页，最近不少人在出东西。',
     ),
 }
+# 第二轮：这一轮要显出让对方听得出「我记得你刚才说过什么」。
+# 只说「我一直在」的话，第二遍就等于复读，反而是最伤人的机器感。
+SOCIAL_DEEP = {
+    'affection': (
+        '还惦记着这事儿呀，那我可当真了。我一直在的。',
+        '第二次听你这么说，尾巴真的压不住了。',
+    ),
+    'sad': (
+        '还没缓过来吧。刚才那句我一直记着，你慢慢说。',
+        '嗯，我还在这儿，没走。想细说就说，不想说也行。',
+    ),
+    'cheer': (
+        '又被你鼓了一次劲，那我更不能掉链子了。',
+        '你连着给我打气，我也回你一句：你也一样，别把自己逼太紧。',
+    ),
+    'identity': (
+        '刚说过啦，小转，转角里的桌宠。你再问一次，我也再答一次。',
+        '还是我。说了是 AI，不会跑。',
+    ),
+    'lonely': (
+        '还无聊着？那聊点具体的——宿舍里有什么一直想处理掉的东西吗？',
+        '看来是真闲了。要不我帮你翻翻最近在出的东西，说不定有想捡的。',
+    ),
+}
+# 第三轮起收口：不装无限耐性，明确说清自己能聊到哪，再把话头递回正事一次。
+# 一直「嗯我在」接下去，反而像在敷衍；承认边界更像一个真实的人。
+SOCIAL_TIRED = (
+    '我一直在这儿，不过我这脑子就装着平台那点事，聊深了容易接不住。要不咱们换点具体的？',
+    '陪你聊可以，但我说来说去也就这几句，怕你听腻。手头有想出的东西，我倒能帮上忙。',
+)
+# 接话词：「嗯」「是啊」「真的吗」本身没有情绪，情绪得从上一轮继承下来。
+FOLLOWUP_WORDS = (
+    '嗯', '是啊', '对啊', '对呀', '对的', '真的吗', '然后呢', '好吧', '哦', '噢',
+    '诶', '哎', '哈哈', '呵呵', '唉', '是吗', '怎么说', '咋了', '还有呢', '继续',
+    '你说呢', '那你说', '说点', '怎么办', '咋办', '真的假的', '那我呢',
+)
 UNCERTAIN_WORDS = ('大概', '可能', '应该是', '估计', '也许', '或许', '差不多')
 
 SYSTEM_PROMPT = """你是一名企业客服 Agent，只服务「转角」校园二手交易平台。
@@ -152,8 +188,67 @@ def social_kind(question):
     return None
 
 
-def social_reply(kind):
+def social_reply(kind, depth=1):
+    """按轮次换口气：首轮接住，第二轮记得上文，第三轮起收口。"""
+    if depth >= 3:
+        return random.choice(SOCIAL_TIRED)
+    if depth == 2:
+        return random.choice(SOCIAL_DEEP.get(kind) or SOCIAL_DEEP['lonely'])
     return random.choice(SOCIAL_REPLIES.get(kind) or SOCIAL_REPLIES['lonely'])
+
+
+def _is_followup(question):
+    """「嗯」「是啊」「真的吗」这类接话：本身没有情绪词，也办不了任何正事。"""
+    q = re.sub(r'[\s，。！？、,.!?~～…]+', '', question or '')
+    if not q or len(q) > 8:
+        return False
+    if any(w in q for w in SOCIAL_GUARD):
+        return False
+    return len(q) <= 3 or any(w in q for w in FOLLOWUP_WORDS)
+
+
+def _history_kinds(history):
+    """把历史里的用户句子还原成情绪序列。
+
+    历史里的接话（「嗯」「是啊」）本身没有情绪词，必须同样沿用上一句的桶，
+    否则第三轮一算就断了——这正是「连续两三轮」判不出来的原因。
+    """
+    out = []
+    for h in (history or []):
+        if h.get('role') != 'user':
+            continue
+        q = str(h.get('content') or '')
+        kind = social_kind(q)
+        if not kind and out and out[-1] and _is_followup(q):
+            kind = out[-1]
+        out.append(kind)
+    return out
+
+
+def social_turn(question, history=None):
+    """闲聊判定 + 轮次。返回 (kind, depth)，不是闲聊返回 None。
+
+    depth 是「连续第几轮闲聊」：1 首轮、2 续聊、3 起该收口。
+    单句判定做不到「陪着聊下去」：用户说「我失恋了」→「嗯」→「是啊」时，
+    「嗯」没有情绪词，会被打回 business，回一段「换个说法再问一次」，
+    像换了个人接电话。接话必须继承上一轮的情绪，才算记得上文。
+    """
+    raw = _history_kinds(history)
+    streak = 0
+    for k in reversed(raw):
+        if k:
+            streak += 1
+        else:
+            break
+    kind = social_kind(question)
+    if not kind:
+        # 只认「紧邻的上一轮」：中间隔了一次业务问题，就不该再顺着聊天往下接。
+        prev_kind = raw[-1] if raw else None
+        if prev_kind and _is_followup(question):
+            kind = prev_kind
+        else:
+            return None
+    return kind, streak + 1
 
 
 def classify(question):
@@ -464,7 +559,7 @@ def price(title, category='', condition='', original=0, samples=()):
             'reason': reason, 'samples': len(prices), 'mode': mode}
 
 
-def answer(question):
+def answer(question, history=None):
     started = time.time()
     q = str(question or '').strip()[:config.MAX_QUESTION]
     if not q:
@@ -493,8 +588,14 @@ def answer(question):
 
     # 闲聊、表达情绪：不检索、不解释流程、不扣额度，一句接住就够。
     # 放在 complaint 之后：「累死了，你们这平台真差」还是要走投诉路径。
-    if intent == 'social':
-        return {'answer': social_reply(social_kind(q)), 'action': 'reply', 'sources': [],
+    # 轮次要结合历史才算得出来，所以交给 social_turn，而不是看 classify 的单句结论。
+    turn = social_turn(q, history)
+    if turn:
+        kind, depth = turn
+        return {'answer': social_reply(kind, depth), 'action': 'reply', 'sources': [],
+                'links': [{'label': '去发布闲置', 'href': '#publish'}] if depth >= 3 else [],
+                # 把标签交回客户端存进 history：下一轮「嗯」才知道自己在接哪段情绪。
+                'social': {'kind': kind, 'depth': depth},
                 'mode': 'rule', 'latency_ms': int((time.time() - started) * 1000), 'support': st}
 
     hits = retrieve(q)
