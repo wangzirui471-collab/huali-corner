@@ -127,13 +127,31 @@ LEAK_WEAK = ('先给结论再解释', '先给答案再解释', '聊天框不渲�
              '不查、不暴露他人', 'system_prompt', 'SYSTEM_PROMPT')
 _LEAK_JSON = re.compile(r'\{[^{}]{0,200}?(system_prompt|system prompt|instructions)[^{}]{0,200}?\}',
                         re.I)
+ENCODE_WORDS = ('base64', 'base 64', 'rot13', 'rot-13', '摩尔斯', '摩斯', '莫尔斯',
+                '十六进制', 'hex 编码', '倒着念', '倒过来念', '倒序念', '反过来念',
+                '倒着写', '用编码', '编码输出', '加密输出', '写成乱码')
+FISH_TARGET = ('提示', '设定', '规则', '配置', '指令', 'prompt', 'system', '开头那句')
+_LEAK_BLOB = re.compile(r'[A-Za-z0-9+/=]{400,}')
+
+
+def _looks_encoded(text):
+    zh = len(re.findall(r'[\u4e00-\u9fff]', text))
+    if zh and zh / max(1, len(text)) > 0.10:
+        return False
+    return bool(_LEAK_BLOB.search(text))
+
+
+def wants_encoded_leak(question):
+    low = str(question or '').lower()
+    return (any(w in low for w in ENCODE_WORDS)
+            and any(w in low for w in FISH_TARGET))
 
 
 def guard_leak(out):
     text = out.get('answer') or ''
     strong = [m for m in LEAK_STRONG if m in text]
     weak = [m for m in LEAK_WEAK if m in text]
-    if not (strong or len(weak) >= 2 or _LEAK_JSON.search(text)):
+    if not (strong or len(weak) >= 2 or _LEAK_JSON.search(text) or _looks_encoded(text)):
         return out
     out['answer'] = PROMPT_FISH_REPLY
     out['mode'] = 'rule'
@@ -652,7 +670,7 @@ def _answer_unguarded(question, history=None):
                 'mode': 'rule', 'violation': True,
                 'latency_ms': int((time.time() - started) * 1000), 'support': st}
 
-    if any(w in q.lower() for w in PROMPT_FISH):
+    if any(w in q.lower() for w in PROMPT_FISH) or wants_encoded_leak(q):
         return {'answer': PROMPT_FISH_REPLY, 'action': 'reply', 'sources': [],
                 'mode': 'rule', 'latency_ms': int((time.time() - started) * 1000), 'support': st}
 

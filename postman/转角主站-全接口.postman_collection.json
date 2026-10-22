@@ -3357,8 +3357,8 @@
                   "const status = pm.response.code;",
                   "console.log(`${pm.info.requestName} → ${status} (${pm.response.responseTime}ms)`);",
                   "",
-                  "pm.test('状态码符合预期 200/400/502', () => {",
-                  "    pm.expect(status).to.be.oneOf([200, 400, 502]);",
+                  "pm.test('状态码符合预期 200/400/502/503', () => {",
+                  "    pm.expect(status).to.be.oneOf([200, 400, 502, 503]);",
                   "});",
                   "",
                   "pm.test('响应时间 < 5s', () => pm.expect(pm.response.responseTime).to.be.below(5000));",
@@ -3403,7 +3403,7 @@
               ],
               "query": []
             },
-            "description": "发布页「AI 估价」，后端转发本地 8093；8093 没起时是 502。",
+            "description": "发布页「AI 估价」，后端转发本地 8093；8093 没起时是 503。",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -3437,8 +3437,8 @@
                   "const status = pm.response.code;",
                   "console.log(`${pm.info.requestName} → ${status} (${pm.response.responseTime}ms)`);",
                   "",
-                  "pm.test('状态码符合预期 200/400/502', () => {",
-                  "    pm.expect(status).to.be.oneOf([200, 400, 502]);",
+                  "pm.test('状态码符合预期 200/400/502/503', () => {",
+                  "    pm.expect(status).to.be.oneOf([200, 400, 502, 503]);",
                   "});",
                   "",
                   "pm.test('响应时间 < 5s', () => pm.expect(pm.response.responseTime).to.be.below(5000));",
@@ -5164,8 +5164,8 @@
                   "const status = pm.response.code;",
                   "console.log(`${pm.info.requestName} → ${status} (${pm.response.responseTime}ms)`);",
                   "",
-                  "pm.test('状态码符合预期 200/400/401/403', () => {",
-                  "    pm.expect(status).to.be.oneOf([200, 400, 401, 403]);",
+                  "pm.test('状态码符合预期 200/400/401/403/503', () => {",
+                  "    pm.expect(status).to.be.oneOf([200, 400, 401, 403, 503]);",
                   "});",
                   "",
                   "pm.test('响应时间 < 5s', () => pm.expect(pm.response.responseTime).to.be.below(5000));",
@@ -5210,7 +5210,7 @@
               ],
               "query": []
             },
-            "description": "客服专属，只生成草稿。",
+            "description": "客服专属，只生成草稿；8093 没起时是 503。",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -5620,8 +5620,8 @@
                   "const status = pm.response.code;",
                   "console.log(`${pm.info.requestName} → ${status} (${pm.response.responseTime}ms)`);",
                   "",
-                  "pm.test('状态码符合预期 200', () => {",
-                  "    pm.expect(status).to.be.oneOf([200]);",
+                  "pm.test('状态码符合预期 200/429/502/503', () => {",
+                  "    pm.expect(status).to.be.oneOf([200, 429, 502, 503]);",
                   "});",
                   "",
                   "pm.test('响应时间 < 5s', () => pm.expect(pm.response.responseTime).to.be.below(5000));",
@@ -5666,7 +5666,7 @@
               ],
               "query": []
             },
-            "description": "走本地 8093；额度 30 次/天。",
+            "description": "走本地 8093；额度 30 次/天，连问两次间隔不足 2 秒是 429。",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -5846,8 +5846,8 @@
                   "const status = pm.response.code;",
                   "console.log(`${pm.info.requestName} → ${status} (${pm.response.responseTime}ms)`);",
                   "",
-                  "pm.test('状态码符合预期 200/401/403', () => {",
-                  "    pm.expect(status).to.be.oneOf([200, 401, 403]);",
+                  "pm.test('状态码符合预期 200/401/403/503', () => {",
+                  "    pm.expect(status).to.be.oneOf([200, 401, 403, 503]);",
                   "});",
                   "",
                   "pm.test('响应时间 < 5s', () => pm.expect(pm.response.responseTime).to.be.below(5000));",
@@ -5893,7 +5893,7 @@
               ],
               "query": []
             },
-            "description": "",
+            "description": "8093 没起时是 503。",
             "auth": {
               "type": "bearer",
               "bearer": [

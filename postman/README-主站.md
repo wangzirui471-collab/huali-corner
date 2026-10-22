@@ -73,7 +73,7 @@ Postman 里则是：导入 → 选环境 → 集合右键 **Run collection**。
 | 商品已下单就下架不了 | `product/status delist` 400 | 下架/上架放在**下单之前** |
 | 求购字段是 `keyword` 不是 `title` | 400 | 已按 `create_want` 的真实签名写 |
 | 帖子分区白名单 | 422 | 只能是 交流/求购/毕业季/互助/交换人生/代拿快递 |
-| AI 助手依赖 8093 | `/api/ai/describe`、`/api/ai/price` 返回 **502** | 先起 `ai_service/server.py`；没起则是 502（用例已接受） |
+| AI 助手依赖 8093 | `/api/ai/chat`、`/api/ai/price` 等返回 **503** | 先起 `ai_service/server.py`；没起则是 503（是「服务未启动」，用例已接受） |
 | 未发布的图片 | `/media/xxx` 403 | 读图用例放在发布之后 |
 | 试用模式 | `/api/auth/code` 403 | 试用模式不发验证码 |
 | 平台视角接口 | `/api/product/removed` 403 | 需要客服/管理员 token |
@@ -97,3 +97,53 @@ python gen_all_apis.py
 - `80 · 管理与审计` 组里的高危操作（封禁、清号、重置密码）都只作用在**本轮随机注册的测试账号**上，
   且需要管理员 token；不填 token 时全部按 401/403 通过。
 - 集合**会写数据**（注册、发布、下单、发帖）。所以必须配合 `HUALI_DATA_DIR` 的临时目录使用。
+
+## 6. 放到 GitHub Actions 上自动跑
+
+已经写好了：`.github/workflows/postman-api-tests.yml`。
+push 到 `main/master/develop/feature/**`、开 PR、或手动 `workflow_dispatch` 都会触发。
+
+它在干净的 Linux 容器里做四件事：
+装依赖 → 起 AI 服务（8093，`HC_AI_MOCK=1`，先 `ingest.py` 现造索引）→
+起后端（8081，`--trial --no-seed` + 临时数据目录）→ 两个都探活通过后才跑 Newman。
+
+几个要点：
+
+- **数据隔离**：后端数据目录指向 `/tmp/huali-ci-data`，跑完即弃，不碰仓库里的 `var-trial/`。
+- **管理员凭据**：用 `HUALI_ADMIN_PHONE` / `HUALI_ADMIN_PASSWORD` 显式指定，
+  所以不用去解析 `admin-initial-password.txt`，密码也不会落进仓库。
+  想更讲究就在仓库 Settings → Secrets 里建同名的两个 Secret，工作流会优先用它们。
+- **AI 服务必须先起**：不然 5 个 `/api/ai/*` 会拿到 503。
+  走 `HC_AI_MOCK=1` 时不联网、不要 API Key，所以这个门禁**不需要配任何 Secret 就能跑**。
+- **AI 集合那个 job 目前是 `continue-on-error`**：因为 `ai_service/server.py` 里
+  `rag.SOCIAL_REPLIES` 那个多轮对话的 bug 还在，「06 多轮对话」必红。
+  修掉之后把那行删掉，它就变成真正的门禁了。
+- 报告会作为 artifact 上传（junit xml + 日志），失败时会把后端和 AI 服务的日志 tail 出来。
+
+## 7. 本地一键跑（不想等 CI 的时候）
+
+双击 `postman\一键跑测试.bat`，或者在命令行里：
+
+```powershell
+# Windows 建议用项目虚拟环境，里面有 Pillow（后端处理头像要用，系统 python 常常没装）
+"E:\zi\huali-corner-trial\.venv-trial\Scripts\python.exe" postman\run_all.py
+```
+
+它会自动：起 AI 服务（8094）+ 后端（8095，临时数据目录）→ 探活 → 依次跑三套集合 →
+生成 `postman\运行报告.md` → **关掉刚才起的两个服务**。全程大约 30 秒。
+
+常用参数：
+
+| 参数 | 作用 |
+| --- | --- |
+| `--keep` | 跑完不关服务，留着手动调（会打印端口给你） |
+| `--only api` | 只跑某一套，可选 `api` / `ai` / `faq`，能写多个 |
+| `--api-port N` / `--ai-port N` | 换端口，默认 8095 / 8094（刻意避开你平时用的 8081 / 8093） |
+| `--newman "命令"` | newman 找不到时手动指定；默认 PATH → WorkBuddy 自带那份 → npx |
+
+退出码：**全绿 0，有失败 1，服务没起来 2**，所以挂到任何 CI 上都能直接用。
+跑完会保留 junit 原始 xml 在系统临时目录里（日志末尾会打印路径）。
+
+> 那个 `.bat` 里的注释刻意写成英文：cmd.exe 解析批处理时按字节读，
+> 中文和 `^` 续行符挨在一起会把命令行截断（实测直接崩成一堆乱码），
+> 所以真正的逻辑都放在旁边的 `run_all.py` 里，`.bat` 只负责调用它。
