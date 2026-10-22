@@ -250,9 +250,17 @@ class CommunityApi:
     async def cf_community_messages(self,r):
         uid=await self.page_user(r)
         if r.method=='GET':
-            q=query_of(r);rid=int_param(q,'room_id');after=int_param(q,'after',False) or 0;await self.cf_community_member(uid,rid)
+            q=query_of(r);rid=int_param(q,'room_id');after=int_param(q,'after',False) or 0;before=int_param(q,'before',False) or 0;await self.cf_community_member(uid,rid)
             base="SELECT m.id,m.room_id,m.user_id,m.removed,CASE WHEN m.removed=1 THEN '消息已被移除' WHEN m.removed=2 THEN '' ELSE m.body END body,m.created,u.nickname FROM messages m JOIN users u ON u.id=m.user_id WHERE m.room_id=? AND m.removed<>3 AND NOT EXISTS(SELECT 1 FROM message_hides WHERE message_id=m.id AND user_id=?)"
-            rows=await self.db.all(base+' AND m.id>? ORDER BY m.id ASC LIMIT 200',(rid,uid,after)) if after>0 else await self.db.all('SELECT * FROM ('+base+' ORDER BY m.id DESC LIMIT 200) ORDER BY id ASC',(rid,uid))
+            if after>0:
+                rows=await self.db.all(base+' AND m.id>? ORDER BY m.id ASC LIMIT 200',(rid,uid,after))
+            elif before>0:
+                # 加载更早一页：DESC 取 200 条再翻回升序；不移动已读位点。
+                rows=await self.db.all(base+' AND m.id<? ORDER BY m.id DESC LIMIT 200',(rid,uid,before))
+                rows.reverse()
+                return json_response(rows)
+            else:
+                rows=await self.db.all('SELECT * FROM ('+base+' ORDER BY m.id DESC LIMIT 200) ORDER BY id ASC',(rid,uid))
             if rows:await self.db.run('UPDATE members SET last_read_id=MAX(last_read_id,?) WHERE room_id=? AND user_id=?',(rows[-1]['id'],rid,uid))
             return json_response(rows)
         d=await json_body(r);rid=int_param(d,'room_id');member,room=await self.cf_community_member(uid,rid);require(not member['muted'],'你在该群已被禁言',403)

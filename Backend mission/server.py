@@ -5,7 +5,7 @@ from urllib.parse import urlsplit,parse_qs,unquote
 from app.market import Market,DomainError
 from app.account.avatars import MAX_AVATAR_BYTES
 from app.seed import seed as seed_data
-from app.core.config import WEB,COLLEGES_JSON,data_dir
+from app.core.config import WEB,COLLEGES_JSON,GRADES,data_dir
 # 头像走 JSON base64 上传：编码后体积是原文件的 4/3，再留一点 JSON 外壳余量。
 # 这个上限只用在头像路由上；其余 POST 仍是下面那个 8 MiB，不扩大既有面。
 AVATAR_JSON_LIMIT=4*((MAX_AVATAR_BYTES+2)//3)+65536
@@ -28,6 +28,32 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('X-Frame-Options','DENY')
         self.send_header('Referrer-Policy','same-origin');self.send_header('Content-Security-Policy',"default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'")
         self.end_headers();self.wfile.write(body)
+    def discard_body(self,length,cap=32*1024*1024):
+        """超限请求也要先把 body 读掉，再回 413。
+
+        旧写法在读完 Content-Length 后直接 raise，连接随即关闭；浏览器 fetch
+        往往只看到「连接被重置」，用户不知道是图片太大。这里按 64KB 分块读掉
+        （最多 cap，避免被异常超大请求拖住），让客户端能正常读到 JSON 错误。
+        """
+        remaining=min(max(int(length or 0),0),cap)
+        previous=None
+        try:
+            previous=self.connection.gettimeout()
+            # 只等一小会儿：客户端可能只是「声明了 Content-Length 却没真发」，
+            # 或者发到一半断了。不能为了一条错误请求把工作线程挂满 20 秒。
+            self.connection.settimeout(2.0)
+            while remaining>0:
+                chunk=self.rfile.read(min(65536,remaining))
+                if not chunk:break
+                remaining-=len(chunk)
+        except OSError:
+            pass
+        finally:
+            try:
+                if previous is not None:self.connection.settimeout(previous)
+            except OSError:
+                pass
+
     def token(self):
         authorization=self.headers.get('Authorization','')
         return authorization[len('Bearer '):] if authorization.startswith('Bearer ') else ''
@@ -58,10 +84,16 @@ class Handler(BaseHTTPRequestHandler):
                 m.require(origin in allowed,'不允许跨站请求',403)
             data={}
             if method=='POST':
-                length=int(self.headers.get('Content-Length','0'));m.require(0<length<=8*1024*1024,'请求过大或为空',413)
-                # 头像有更严的上限：必须在读 body 之前就拒，否则 3 MB 的无用载荷
-                # 已经进了内存才报错，限速和并发额度都白吃了。
-                if p=='/api/user/avatar/upload':m.require(length<=AVATAR_JSON_LIMIT,'头像过大',413)
+                length=int(self.headers.get('Content-Length','0'))
+                # 头像有更严的上限。超限时仍要把 body 读掉再拒——直接关连接会让
+                # 浏览器只报「网络错误」，用户看不到「头像过大」这句具体提示。
+                limit=AVATAR_JSON_LIMIT if p=='/api/user/avatar/upload' else 8*1024*1024
+                if not (0<length<=limit):
+                    self.discard_body(length)
+                    # 请求体没有完整读过（客户端没发或发到一半），这条连接不能再复用。
+                    self.close_connection=True
+                    if length<=0:m.require(False,'请求过大或为空',413)
+                    m.require(False,'头像过大' if p=='/api/user/avatar/upload' else '请求过大或为空',413)
                 try:data=json.loads(self.rfile.read(length))
                 except (ValueError,UnicodeDecodeError):raise DomainError('无效JSON')
                 m.require(isinstance(data,dict),'请求需为对象')
@@ -79,10 +111,10 @@ class Handler(BaseHTTPRequestHandler):
                 directory=COLLEGES_JSON
                 colleges=json.loads(directory.read_text(encoding='utf-8'))['colleges'] if directory.exists() else []
                 if m.trial:colleges=[{'source_name':'计算机工程学院'}]
-                return self.respond({'simulation':True,'trial':m.trial,'auth_mode':'password' if m.trial else 'demo','phone_verified':False,'name':'华立转角','pilot':'计算机工程学院','campus':'广州校区','support_hours':'08:00–20:00','colleges':colleges,'buildings':['本科综合楼','行政楼','7号楼仓库','A1','A2','A3','A4','B1','B2','B3','B4','B9','C1','C2','C3','C4','C5','C6','C7','C8','D1','D2','D5','D6','G1主楼','G1副楼','G2','G3','G4主楼','G4副楼','L1','L2','L3','L4','L5','L6','L7','L8','L9','L10','L11','L12','L13','L15','L16','L17','L18'],'ai':m.ai_enabled()})
+                return self.respond({'simulation':True,'trial':m.trial,'auth_mode':'password' if m.trial else 'demo','phone_verified':False,'name':'华立转角','pilot':'计算机工程学院','campus':'广州校区','support_hours':'08:00–20:00','colleges':colleges,'grades':GRADES,'buildings':['本科综合楼','行政楼','7号楼仓库','A1','A2','A3','A4','B1','B2','B3','B4','B9','C1','C2','C3','C4','C5','C6','C7','C8','D1','D2','D5','D6','G1主楼','G1副楼','G2','G3','G4主楼','G4副楼','L1','L2','L3','L4','L5','L6','L7','L8','L9','L10','L11','L12','L13','L15','L16','L17','L18'],'ai':m.ai_enabled()})
             if p=='/api/auth/code' and method=='POST':return self.respond(m.request_code(data.get('phone')))
             if p=='/api/auth/login' and method=='POST':return self.respond(m.login_password(data.get('phone'),data.get('password')) if m.trial else m.login(data.get('phone'),data.get('code')))
-            if p=='/api/auth/register' and method=='POST':return self.respond(m.register_password(data.get('phone'),data.get('password'),data.get('nickname')))
+            if p=='/api/auth/register' and method=='POST':return self.respond(m.register_password(data.get('phone'),data.get('password'),data.get('nickname'),data.get('college'),data.get('grade'),data.get('major')))
             if p=='/api/auth/recover' and method=='POST':return self.respond(m.recover_password(data.get('phone'),data.get('recovery_code'),data.get('new_password')))
             if p=='/api/products' and method=='GET':return self.respond(m.products(self.optional_user(),query))
             if p=='/api/product' and method=='GET':return self.respond(m.product(int(query['id']),self.optional_user()))
@@ -214,7 +246,7 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/support/claim' and method=='POST':return self.respond(m.claim_support_room(u,int(data['room_id']),data.get('action','claim')))
             if p=='/api/support/close' and method=='POST':return self.respond(m.close_support_room(u,int(data['room_id'])))
             if p=='/api/support/sessions' and method=='GET':return self.respond(m.support_sessions(u))
-            if p=='/api/messages':return self.respond(m.send_message(u,int(data['room_id']),data['body'],data['key']) if method=='POST' else m.messages(u,int(query['room_id']),int(query.get('after',0))))
+            if p=='/api/messages':return self.respond(m.send_message(u,int(data['room_id']),data['body'],data['key']) if method=='POST' else m.messages(u,int(query['room_id']),int(query.get('after',0)),int(query.get('before',0))))
             if p=='/api/messages/recall' and method=='POST':return self.respond(m.recall_message(u,int(data['message_id'])))
             # 已读回执：返回本会话其他成员的已读位点，前端据此给自己的消息算「几人已读」。
             if p=='/api/messages/receipts':return self.respond(m.message_receipts(u,int(query['room_id'])))

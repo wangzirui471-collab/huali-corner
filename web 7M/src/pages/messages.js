@@ -104,6 +104,20 @@ export function appendMessages(stream, msgs, room){
   return msgs.length ? msgs[msgs.length-1].id : null;
 }
 
+// 把「更早的一页」插到消息流最前面（同样补时间分隔）。
+// 与 appendMessages 相反的方向，供「加载更早」使用。
+export function prependMessages(stream, msgs, room){
+  let html = '';
+  let last = null;
+  for (const m of msgs){
+    if (timeSep(last, m)) html += `<div class="wx-time-sep">${e(timeLabel(m.created))}</div>`;
+    html += renderMessage(m, room);
+    last = m;
+  }
+  stream.insertAdjacentHTML('afterbegin', html);
+  return msgs.length ? msgs[0].id : null;
+}
+
 // --- 左侧会话列表 --------------------------------------------------------
 // 搜索词存模块变量：轮询刷新列表时保留过滤状态，不把输入框清掉。
 let searchWord = '';
@@ -466,7 +480,10 @@ function waitForPostCard(id, timeout = 3000){
       </div>
     </header>
     <div class="wx-chat-body">
-      <div class="wx-stream" id="chat-stream"></div>
+      <div class="wx-chat-main">
+        <button type="button" class="wx-load-earlier" id="wx-load-earlier" hidden>加载更早的消息</button>
+        <div class="wx-stream" id="chat-stream"></div>
+      </div>
       <aside class="wx-members" id="wx-members" hidden></aside>
     </div>
     ${room.kind==='private' && room.blocked
@@ -698,6 +715,7 @@ function waitForPostCard(id, timeout = 3000){
 
   // --- 消息拉取（首次全量最近 200 条，之后增量轮询） ----------------------
   state.messageCursor = 0;
+  state.messageOldest = 0;
   const seen = new Set();
   let pulling = null;
   const pullNew = () => {
@@ -713,6 +731,10 @@ function waitForPostCard(id, timeout = 3000){
       const atBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 80;
       appendMessages(stream, fresh, room);
       state.messageCursor = Math.max(state.messageCursor, ...fresh.map(m => m.id));
+      // 首批一次给 200 条：说明前面还有历史，露出「加载更早」入口。
+      if (!state.messageOldest) state.messageOldest = fresh[0].id;
+      const earlierBtn = $('#wx-load-earlier');
+      if (earlierBtn && msgs.length >= 200) earlierBtn.hidden = false;
       // 真实消息到了：把对应的乐观气泡摘掉，避免同一句出现两次。
       for (const m of fresh){
         if (m.user_id !== state.me.id) continue;
@@ -752,6 +774,28 @@ function waitForPostCard(id, timeout = 3000){
   try{ await pullNew(); }catch(err){ toast(err.message); return; }
   stream.scrollTop = stream.scrollHeight;
   pullReceipts();
+
+  // 「加载更早」：按 before 游标往前翻一页，插入到顶部并保持当前阅读位置。
+  const earlierBtn = $('#wx-load-earlier');
+  if (earlierBtn) earlierBtn.addEventListener('click', async () => {
+    if (!state.messageOldest || earlierBtn.disabled) return;
+    earlierBtn.disabled = true;
+    const before = state.messageOldest;
+    const prevHeight = stream.scrollHeight;
+    const prevTop = stream.scrollTop;
+    try{
+      const older = await api('/messages?room_id='+room.id+'&before='+before);
+      const fresh = older.filter(m => !seen.has(m.id));
+      if (fresh.length){
+        fresh.forEach(m => seen.add(m.id));
+        prependMessages(stream, fresh, room);
+        state.messageOldest = fresh[0].id;
+        stream.scrollTop = prevTop + (stream.scrollHeight - prevHeight);
+      }
+      if (older.length < 200) earlierBtn.hidden = true;
+    }catch(err){ toast(err.message); }
+    finally{ earlierBtn.disabled = false; }
+  });
 
   // 用户侧的「猜你想问」只在新会话（还没有任何消息）时展示；
   // 一旦聊起来就收起，把输入区还给正常对话。

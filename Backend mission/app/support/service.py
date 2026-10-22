@@ -514,8 +514,20 @@ class SupportService(ValidationMixin):
         sql+=' ORDER BY a.id DESC LIMIT ?';args.append(limit)
         return self.rows(sql,tuple(args))
 
+    @staticmethod
+    def _csv_cell(value):
+        """CSV 单元格转义。
+
+        加 BOM 只解决中文乱码；理由/昵称里以 = + - @ 开头的文本会被 Excel/WPS
+        当成公式执行（CSV 注入）。需求 11.2 要求「公式注入防护」，这里统一前置
+        单引号，和线上 Cloudflare 侧 cf_staff_export 的 safe() 保持同一口径。
+        """
+        if type(value) in (int,float):return value
+        text='' if value is None else str(value)
+        return "'"+text if text.startswith(('=','+','-','@','\t','\r')) else text
+
     def audit_csv(self,u,**kw):
-        """导出 CSV。加 BOM，否则 Excel 打开中文是乱码。"""
+        """导出 CSV。加 BOM（否则 Excel 打开中文是乱码）+ 公式注入防护。"""
         import csv, io
         rows=self.audit_log(u,limit=1000,**kw)
         buffer=io.StringIO(newline='')
@@ -524,9 +536,10 @@ class SupportService(ValidationMixin):
         import datetime
         for r in rows:
             stamp=datetime.datetime.fromtimestamp(r['created']).strftime('%Y-%m-%d %H:%M:%S') if r['created'] else ''
-            writer.writerow([r['id'],stamp,r['actor'],r.get('actor_name') or '',
-                             r['type'],r['target'] or '',r['delta'] if r['delta'] is not None else '',
-                             r['reason'] or '',r['ticket_id'] or ''])
+            writer.writerow([self._csv_cell(r['id']),self._csv_cell(stamp),self._csv_cell(r['actor']),
+                             self._csv_cell(r.get('actor_name') or ''),self._csv_cell(r['type']),
+                             self._csv_cell(r['target'] or ''),self._csv_cell(r['delta'] if r['delta'] is not None else ''),
+                             self._csv_cell(r['reason'] or ''),self._csv_cell(r['ticket_id'] or '')])
         return ('\ufeff'+buffer.getvalue()).encode('utf-8')
 
     @staticmethod

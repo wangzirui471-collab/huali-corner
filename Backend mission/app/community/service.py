@@ -258,7 +258,7 @@ class CommunityService(ValidationMixin):
     def member(self,u,r):
         m=self.row('SELECT * FROM members WHERE room_id=? AND user_id=?',(r,u))
         self.require(m is not None,'请先加入该群或会话',403);return m
-    def messages(self,u,r,after=0):
+    def messages(self,u,r,after=0,before=0):
         self.member(u,r)
         # removed 取值：0=正常 1=被管理员移除 2=发送者撤回。
         # 移除的消息正文就地替换成提示语；撤回的正文清空（原文不能留在接口里），
@@ -276,6 +276,12 @@ class CommunityService(ValidationMixin):
         hidden='AND NOT EXISTS(SELECT 1 FROM message_hides h WHERE h.message_id=m.id AND h.user_id=?)'
         if after>0:
             rows=self.rows(sql.replace('{{cond}}','m.room_id=? AND m.id>? AND m.removed<>3 '+hidden).replace('{{order}}','ASC').replace('{{limit}}','200'),(r,int(after),u))
+        elif before>0:
+            # 「加载更早」：取比游标更早的一页，再翻回升序交给前端。
+            # 不移动已读位点——本来就是读过的历史，往回拨只会让未读数复活。
+            rows=self.rows(sql.replace('{{cond}}','m.room_id=? AND m.id<? AND m.removed<>3 '+hidden).replace('{{order}}','DESC').replace('{{limit}}','200'),(r,int(before),u))
+            rows.reverse()
+            return rows
         else:
             rows=self.rows('''SELECT * FROM (SELECT m.id,m.room_id,m.user_id,m.removed,
                 CASE WHEN m.removed=1 THEN '消息已被移除' WHEN m.removed=2 THEN '' ELSE m.body END body,

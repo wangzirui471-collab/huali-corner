@@ -20,7 +20,7 @@ PROFILE_WRITABLE = frozenset({
     'nickname', 'major', 'bio', 'degree_level', 'study_status', 'profile_version',
 })
 PROFILE_SELECT = '''
-    SELECT id,nickname,college,major,education,bio,role,score,status,
+    SELECT id,nickname,college,major,grade,education,bio,role,score,status,
            degree_level,study_status,profile_version,avatar_upload_id
     FROM users WHERE id=?
 '''
@@ -31,6 +31,7 @@ class UserProfileDTO(TypedDict):
     nickname: str
     college: str
     major: str
+    grade: str
     education: str
     bio: str
     role: str
@@ -64,6 +65,7 @@ def user_profile_dto(row: sqlite3.Row) -> UserProfileDTO:
         'nickname': row['nickname'],
         'college': row['college'],
         'major': row['major'],
+        'grade': row['grade'],
         'education': row['education'],
         'bio': row['bio'],
         'role': row['role'],

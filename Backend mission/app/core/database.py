@@ -44,7 +44,7 @@ from urllib.parse import urlparse
 _WRITE = threading.RLock()
 
 SQLITE_SCHEMA = '''
-CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,phone TEXT UNIQUE,nickname TEXT NOT NULL,college TEXT DEFAULT '计算机工程学院',major TEXT DEFAULT '',education TEXT DEFAULT '本科',bio TEXT DEFAULT '',role TEXT DEFAULT 'user',score INTEGER DEFAULT 100 CHECK(score BETWEEN 0 AND 100),status TEXT DEFAULT 'active');
+CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,phone TEXT UNIQUE,nickname TEXT NOT NULL,college TEXT DEFAULT '计算机工程学院',major TEXT DEFAULT '',grade TEXT NOT NULL DEFAULT '',education TEXT DEFAULT '本科',bio TEXT DEFAULT '',role TEXT DEFAULT 'user',score INTEGER DEFAULT 100 CHECK(score BETWEEN 0 AND 100),status TEXT DEFAULT 'active');
 CREATE TABLE IF NOT EXISTS otp(phone TEXT PRIMARY KEY,digest TEXT,expires REAL,attempts INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INTEGER,expires REAL);
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY,user_id INTEGER,
 #   · 保留字 key / type 用反引号引用
 #   · 带 UNIQUE/PRIMARY KEY 的文本列用 VARCHAR（MySQL 对 TEXT 建唯一索引在严格模式下受限）
 MYSQL_SCHEMA = '''
-CREATE TABLE IF NOT EXISTS users(id INT PRIMARY KEY AUTO_INCREMENT,phone VARCHAR(32) NOT NULL UNIQUE,nickname VARCHAR(64) NOT NULL,college VARCHAR(64) DEFAULT '计算机工程学院',major VARCHAR(64) DEFAULT '',education VARCHAR(32) DEFAULT '本科',bio TEXT,role VARCHAR(32) DEFAULT 'user',score INT DEFAULT 100 CHECK (score BETWEEN 0 AND 100),status VARCHAR(32) DEFAULT 'active',last_login DOUBLE DEFAULT 0,degree_level VARCHAR(16) NOT NULL DEFAULT 'unspecified',study_status VARCHAR(16) NOT NULL DEFAULT 'unspecified',profile_version INT NOT NULL DEFAULT 0,avatar_upload_id VARCHAR(64) NULL);
+CREATE TABLE IF NOT EXISTS users(id INT PRIMARY KEY AUTO_INCREMENT,phone VARCHAR(32) NOT NULL UNIQUE,nickname VARCHAR(64) NOT NULL,college VARCHAR(64) DEFAULT '计算机工程学院',major VARCHAR(64) DEFAULT '',education VARCHAR(32) DEFAULT '本科',bio TEXT,role VARCHAR(32) DEFAULT 'user',score INT DEFAULT 100 CHECK (score BETWEEN 0 AND 100),status VARCHAR(32) DEFAULT 'active',grade VARCHAR(16) NOT NULL DEFAULT '',last_login DOUBLE DEFAULT 0,degree_level VARCHAR(16) NOT NULL DEFAULT 'unspecified',study_status VARCHAR(16) NOT NULL DEFAULT 'unspecified',profile_version INT NOT NULL DEFAULT 0,avatar_upload_id VARCHAR(64) NULL);
 CREATE TABLE IF NOT EXISTS otp(phone VARCHAR(32) NOT NULL PRIMARY KEY,digest TEXT,expires DOUBLE,attempts INT DEFAULT 0);
 CREATE TABLE IF NOT EXISTS sessions(token VARCHAR(128) NOT NULL PRIMARY KEY,user_id INT,expires DOUBLE);
 CREATE TABLE IF NOT EXISTS settings(`key` VARCHAR(64) NOT NULL PRIMARY KEY,value TEXT NOT NULL);
@@ -374,6 +374,10 @@ class Store:
                     c.execute('ALTER TABLE products ADD COLUMN delisted_by INTEGER DEFAULT 0')
                 if 'last_login' not in [x[1] for x in c.execute('PRAGMA table_info(users)')]:
                     c.execute('ALTER TABLE users ADD COLUMN last_login REAL DEFAULT 0')
+                # 注册时选择的年级（2022级…2026级）。线上 D1 早就有这一列，
+                # 本地 SQLite/MySQL 一直缺，导致网页注册填了年级却存不下来。
+                if 'grade' not in [x[1] for x in c.execute('PRAGMA table_info(users)')]:
+                    c.execute("ALTER TABLE users ADD COLUMN grade TEXT NOT NULL DEFAULT ''")
                 if 'moderation' not in [x[1] for x in c.execute('PRAGMA table_info(messages)')]:
                     c.execute('ALTER TABLE messages ADD COLUMN moderation TEXT')
                 if 'moderation' not in [x[1] for x in c.execute('PRAGMA table_info(posts)')]:
@@ -421,7 +425,8 @@ class Store:
                 c.executescript(MYSQL_SCHEMA)
                 # CREATE TABLE IF NOT EXISTS 不会给已存在的表补列，老 MySQL 库要单独 ALTER。
                 # MySQL 没有 ADD COLUMN IF NOT EXISTS，重复执行靠异常兜住（列已存在即视为完成）。
-                for ddl in ('ALTER TABLE comments ADD COLUMN removed INT DEFAULT 0',):
+                for ddl in ('ALTER TABLE comments ADD COLUMN removed INT DEFAULT 0',
+                            "ALTER TABLE users ADD COLUMN grade VARCHAR(16) NOT NULL DEFAULT ''",):
                     try:
                         c.execute(ddl)
                     except Exception:

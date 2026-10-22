@@ -10,6 +10,7 @@ import time
 ROUNDS=600000
 import hashlib, re, secrets, time
 from ..core.errors import ValidationMixin, DomainError
+from ..core.config import COLLEGES, GRADES
 from ..core.session_policy import SESSION_TTL
 from .credit import is_trusted, star_badge
 
@@ -102,12 +103,26 @@ class AccountService(ValidationMixin):
         # Failed-attempt accounting must survive the domain error/transaction rollback.
         c.commit()
         self.require(False,'账号、密码或恢复码不正确',401)
-    def register_password(self,phone,password,nickname):
+    def register_password(self,phone,password,nickname,college=None,grade=None,major=None):
+        """注册普通账号。
+
+        学院/年级/专业是注册页的必填项（见 web 7M/src/auth/login.js），
+        这里必须一并落库——旧实现只收三个参数，前端填完就被丢掉，
+        用户档案里专业为空、年级根本不存在。字段仍保持可选：
+        命令行建号与既有接口调用不传这三项时按默认值处理，不强行拦。
+        """
         self._trial_only();phone=self._phone(phone);self._password(password)
-        nickname=self.text(nickname,24,'昵称');salt,digest,rounds,recovery_digest,recovery=self._new_credential(password)
+        nickname=self.text(nickname,24,'昵称')
+        college=(college or '').strip() or '计算机工程学院'
+        grade=(grade or '').strip()
+        major=(major or '').strip()
+        self.require(college in COLLEGES,'请选择正确的学院')
+        if grade:self.require(grade in GRADES,'请选择正确的年级')
+        self.require(len(major)<=24,'专业不超过24字')
+        salt,digest,rounds,recovery_digest,recovery=self._new_credential(password)
         with self.tx() as c:
             self.require(not c.execute('SELECT 1 FROM users WHERE phone=?',(phone,)).fetchone(),'此账号已注册，请登录或使用恢复码',409)
-            uid=c.execute("INSERT INTO users(phone,nickname,college,role) VALUES(?,?,'计算机工程学院','user')",(phone,nickname)).lastrowid
+            uid=c.execute("INSERT INTO users(phone,nickname,college,major,grade,role) VALUES(?,?,?,?,?,'user')",(phone,nickname,college,major,grade)).lastrowid
             c.execute('INSERT INTO password_credentials VALUES(?,?,?,?,?)',(uid,salt,digest,rounds,recovery_digest))
             token=self._session(c,uid)
         return self._trial_result(uid,token,recovery)
