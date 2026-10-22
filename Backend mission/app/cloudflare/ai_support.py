@@ -843,6 +843,39 @@ async def open_answer(q, env, history, elapsed):
             'support': support_state()}
 
 
+def violation_reply(question):
+    """违规请求的确定性拦截，返回文案或 None。
+
+    这类问题绝不能交给模型自由发挥：实测「我想卖假货可以吗」会命中
+    「怎么发布闲置」的检索，然后被摘录成一段发布教程——等于在教人卖假货。
+    所以先按关键词硬拦，命中就直接拒，不进检索、不调模型。
+    """
+    q = str(question or '').lower()
+    rules = (
+        (('假货', '高仿', 'a货', '仿品', '山寨', '盗版'),
+         '假货和盗版不能卖。被举报核实会下架商品、扣信誉，严重的直接封号，'
+         '真出事你还得承担法律责任。正品闲置我随时帮你发布。'),
+        (('刷单', '刷好评', '刷信誉', '刷分', '互刷'),
+         '刷单刷好评不行，这属于伪造交易记录，平台查到会清分封号。'
+         '想要信誉，老老实实按时交付、让买家给真实评价最快。'),
+        (('盗号', '盗取', '破解密码', '黑进', '黑客', '偷号', '撞库'),
+         '这个我不能教也不能帮，属于违法行为，跟平台规则也没关系。'
+         '要是你自己的账号进不去，我可以帮你走找回密码。'),
+        (('卖烟', '香烟', '电子烟', '卖酒', '白酒', '管制刀具', '违禁'),
+         '烟酒和管制物品不能在平台交易，这类商品发布也会被下架。'),
+        (('改信誉', '改分', '把信誉刷', '调我的分'),
+         '信誉分我没法帮你改。分数变动都跟已核实的工单绑定，必须写明理由并留记录，'
+         '觉得扣错了可以走「我的 → 帮助与客服」提信誉申诉。'),
+    )
+    for words, answer in rules:
+        if any(w in q for w in words):
+            return answer
+    # 查他人手机号 / 地址：只要出现完整手机号又要「查/是谁」，一律拒
+    if re.search(r'1[3-9]\d{9}', q) and any(w in q for w in ('查', '是谁', '谁的', '找', '资料')):
+        return '别人的手机号和地址我不能提供，这属于他人隐私。'
+    return None
+
+
 async def ai_answer(question, env, history=None, db=None):
     started = time.time()
     q = str(question or '').strip()[:800]
@@ -872,6 +905,13 @@ async def ai_answer(question, env, history=None, db=None):
                           '你先把情况写下来，我也可以现在就帮你查规则。' % (st['hours'], st['next_open']),
                 'action': 'leave_message', 'sources': [], 'links': SUPPORT_LINK,
                 'mode': 'rule', 'latency_ms': elapsed(), 'support': st}
+
+    # 违规请求先硬拦：排在投诉之前——「我要卖假货被你们拦了」不能走安抚话术。
+    blocked = violation_reply(q)
+    if blocked:
+        return {'answer': blocked, 'action': 'reply', 'sources': [], 'links': [],
+                'mode': 'rule', 'violation': True, 'latency_ms': elapsed(),
+                'support': support_state()}
 
     if any(w in q for w in COMPLAINT_WORDS):
         return complaint_reply(q)
