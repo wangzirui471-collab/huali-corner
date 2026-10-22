@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "转角主站 · 全接口（8081 试用）",
-    "description": "覆盖 Backend mission/server.py 里 handle_request 的全部 /api/* 路由。按业务域分 8 组，共 129 个请求。\n\n跑之前：\n1) 用 --trial 启动后端（默认 8081）；\n2) 环境里填 baseUrl；\n3) 想跑管理端/客服端用例，先建一个客服账号并登录，把 token 填进 staffToken，否则这些用例会按「401/403 被拒」断言（也算是权限基线的验证）。\n\n数据：注册号随机生成，商品/订单/工单都是测试用的，跑完 90 组会下架测试商品。",
+    "description": "覆盖 Backend mission/server.py 里 handle_request 的全部 /api/* 路由。按业务域分 10 组，共 130 个请求。\n\n怎么跑（Postman 界面里）：右上角环境选「转角」→ 集合上点 Run → Run 整个集合。\n**不要只点单个请求的 Send**：token 是前面登录请求写进集合变量的，单独发一个必 401。\n\n跑之前：\n1) 用 --trial 启动后端（默认 8081）；\n2) 环境里确认 baseUrl；\n3) 管理端/客服端用例需要 adminPhone/adminPassword，填不对也只按 401/403 通过。\n\n数据：注册号随机生成，商品/订单/工单都是测试用的，跑完 90 组会下架测试商品。",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [

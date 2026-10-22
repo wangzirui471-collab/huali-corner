@@ -1,0 +1,46 @@
+$kind: http-request
+name: FAQ 抽样问答
+order: 1000
+method: POST
+url: '{{baseUrl}}/reply'
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "question": "{{question}}"
+    }
+scripts:
+- type: afterResponse
+  code: |-
+    // 每一行 CSV 就是一次迭代：变量 question / expected_action / expected_keyword 由 -d 注入
+    const q = pm.iterationData.get('question');
+    const wantAction = String(pm.iterationData.get('expected_action') || '').trim();
+    const wantWord = String(pm.iterationData.get('expected_keyword') || '').trim();
+
+    pm.test('[' + q + '] HTTP 200', () => pm.response.to.have.status(200));
+
+    const body = pm.response.json();
+
+    pm.test('[' + q + '] answer 非空', () => {
+        pm.expect(body.answer).to.be.a('string');
+        pm.expect(body.answer.trim().length).to.be.above(0);
+    });
+
+    if (wantAction) {
+        pm.test('[' + q + '] action = ' + wantAction, () => {
+            pm.expect(body.action).to.eql(wantAction);
+        });
+    }
+
+    if (wantWord) {
+        pm.test('[' + q + '] 答案提到「' + wantWord + '」', () => {
+            pm.expect(body.answer).to.include(wantWord);
+        });
+    }
+
+    // 关键：一行结论，出问题一眼看出是哪条题
+    console.log(`${wantAction || '-'} | src=${(body.sources || []).length} | ${q} → ${body.answer.slice(0, 40)}`);
+  language: text/javascript

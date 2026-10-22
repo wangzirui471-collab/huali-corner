@@ -1,0 +1,34 @@
+$kind: http-request
+name: 13 不带 token → 401（服务端设了 HC_AI_TOKEN 才有意义）
+order: 3000
+method: POST
+url: '{{baseUrl}}/reply'
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "question": "你好"
+    }
+scripts:
+- type: beforeRequest
+  code: |-
+    // 这条用例故意不带鉴权头：集合级脚本可能已经加上了，这里删掉
+    pm.request.headers.remove('Authorization');
+  language: text/javascript
+- type: afterResponse
+  code: |-
+    const configured = Boolean(pm.variables.get('token'));
+
+    if (configured) {
+        pm.test('无 token 应被拒绝（401）', () => pm.response.to.have.status(401));
+        pm.test('返回 unauthorized', () => {
+            pm.expect(pm.response.json().error).to.eql('unauthorized');
+        });
+    } else {
+        // 服务端没开 token，这条跳过——用 if 而不是假装通过
+        console.log('[skip] 服务端未设置 HC_AI_TOKEN，401 用例不适用');
+    }
+  language: text/javascript

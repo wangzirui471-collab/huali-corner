@@ -1,0 +1,23 @@
+$kind: http-request
+name: 08 描述缺 title → 400（参数校验）
+order: 2000
+method: POST
+url: '{{baseUrl}}/describe'
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: json
+  content: '{}'
+scripts:
+- type: afterResponse
+  code: |-
+    pm.test('状态码 400', () => pm.response.to.have.status(400));
+
+    const body = pm.response.json();
+
+    pm.test('错误信息指明缺少 title', () => {
+        pm.expect(body.error).to.be.a('string');
+        pm.expect(body.error).to.include('title');
+    });
+  language: text/javascript

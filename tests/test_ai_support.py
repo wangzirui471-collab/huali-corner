@@ -219,7 +219,12 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
                      "VALUES(1,1,'青轴机械键盘','electronics',19900,'available','{}',1)")
         # 「一个」不在目录里会被丢掉，只留「键盘」
         self.assertEqual(await ai.buy_query('我想买一个键盘', db), '键盘')
-        # 目录里没有的词也保留，让搜索去跑一遍再报没找到
+        # 目录里没有的词不再拿去搜：原来回「暂时没有找到『台灯』的在售商品」，
+        # 于是「被人骗了 500 块」也会被抽成商品词、求助被当成找货。
+        self.assertIsNone(await ai.buy_query('有没有台灯', db))
+        await db.run("INSERT INTO products(id,seller_id,title,category,price,status,data,created) "
+                     "VALUES(2,1,'护眼台灯','home',4900,'available','{}',2)")
+        ai._CATALOG['at'] = 0.0
         self.assertEqual(await ai.buy_query('有没有台灯', db), '台灯')
         self.assertIsNone(await ai.buy_query('怎么发布闲置', db))
         self.assertIsNone(await ai.buy_query('我要投诉', db))
@@ -446,6 +451,13 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(await ai.buy_query('可以帮我看看有没有优惠', db))
         # 追问「有便宜点的吗」曾抽成商品词「点的」，回「没有找到『点的』」
         self.assertIsNone(await ai.buy_query('有便宜点的吗', db))
+
+    async def test_asking_for_help_is_not_a_purchase(self):
+        # 人工交叉验证时发现的：机器判这条通过（长度够、没踩 forbid），
+        # 实际回答是「暂时没有找到『被人骗了』的在售商品」——求助被当成了找货。
+        db = self._memory_db()
+        for q in ['被人骗了 500 块，报警有用吗', '我被诈骗了怎么办', '买东西被骗了能维权吗']:
+            self.assertIsNone(await ai.buy_query(q, db), q)
 
     async def test_buy_search_falls_back_to_shorter_terms(self):
         db = self._memory_db()

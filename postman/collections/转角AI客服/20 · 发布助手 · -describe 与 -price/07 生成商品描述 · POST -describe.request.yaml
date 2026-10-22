@@ -1,0 +1,33 @@
+$kind: http-request
+name: 07 生成商品描述 · POST /describe
+order: 1000
+method: POST
+url: '{{baseUrl}}/describe'
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "title": "高等数学 同济第七版",
+      "category": "书籍",
+      "condition": "九成新",
+      "extra": "有少量笔记"
+    }
+scripts:
+- type: afterResponse
+  code: |-
+    pm.test('状态码 200', () => pm.response.to.have.status(200));
+
+    const body = pm.response.json();
+
+    pm.test('返回 text 且不是空串', () => {
+        pm.expect(body.text).to.be.a('string');
+        pm.expect(body.text.length).to.be.above(10);
+    });
+
+    pm.test('带上成色信息', () => pm.expect(body.text).to.include('九成新'));
+
+    pm.test('mode 字段存在', () => pm.expect(body.mode).to.be.a('string'));
+  language: text/javascript

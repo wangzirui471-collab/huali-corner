@@ -1,0 +1,21 @@
+$kind: collection
+name: 转角AI客服 · 数据驱动回归
+description: |-
+  一个请求 + 一份 CSV，跑遍所有 FAQ 抽样。
+  用法：newman run "转角AI客服 · 数据驱动回归.postman_collection.json" -d faq-cases.csv -e "转角-本地8093.postman_environment.json"
+  CSV 必须是 UTF-8，否则中文会乱码。
+variables:
+- key: baseUrl
+  value: http://127.0.0.1:8093
+- key: token
+  value: ''
+scripts:
+- type: http:beforeRequest
+  code: |-
+    const token = pm.variables.get('token');
+    if (token) {
+        pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });
+    }
+    const base = String(pm.variables.get('baseUrl') || '').replace(/\/+$/, '');
+    if (base) { pm.variables.set('baseUrl', base); }
+  language: text/javascript

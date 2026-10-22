@@ -1,0 +1,31 @@
+$kind: http-request
+name: 10 估价无样本 → 走规则兜底
+order: 4000
+method: POST
+url: '{{baseUrl}}/price'
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "title": "宿舍台灯",
+      "original_price": 4900
+    }
+scripts:
+- type: afterResponse
+  code: |-
+    pm.test('状态码 200', () => pm.response.to.have.status(200));
+
+    const body = pm.response.json();
+
+    pm.test('没有样本也能给出区间', () => {
+        pm.expect(body.low).to.be.above(0);
+        pm.expect(body.high).to.be.at.least(body.low);
+    });
+
+    pm.test('样本数为 0', () => pm.expect(body.samples).to.eql(0));
+
+    pm.test('mode 标注为规则', () => pm.expect(body.mode).to.be.a('string').and.not.empty);
+  language: text/javascript

@@ -1,0 +1,38 @@
+$kind: http-request
+name: 06 多轮对话（history 透传）
+order: 5000
+method: POST
+url: '{{baseUrl}}/reply'
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "question": "那大概多久能到账",
+      "history": [
+        { "role": "user", "content": "你好" },
+        { "role": "assistant", "content": "在的～我是小转，有什么可以帮你？" },
+        { "role": "user", "content": "怎么退款" },
+        { "role": "assistant", "content": "未付款可以直接取消，已付款未交付可以申请取消并走模拟退款。" }
+      ]
+    }
+scripts:
+- type: afterResponse
+  code: |-
+    pm.test('状态码 200', () => pm.response.to.have.status(200));
+
+    const body = pm.response.json();
+
+    pm.test('action 合法', () => pm.expect(body.action).to.be.oneOf(['reply', 'transfer']));
+
+    pm.test('answer 非空', () => {
+        pm.expect(body.answer).to.be.a('string');
+        pm.expect(body.answer.trim().length).to.be.above(0);
+    });
+
+    pm.test('多轮时也要带在线状态', () => {
+        pm.expect(body.support).to.be.an('object');
+    });
+  language: text/javascript

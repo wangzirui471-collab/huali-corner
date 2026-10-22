@@ -1,0 +1,39 @@
+$kind: http-request
+name: 02 打招呼（问候分流，不检索不花钱）
+order: 1000
+method: POST
+url: '{{baseUrl}}/reply'
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "question": "你好"
+    }
+scripts:
+- type: afterResponse
+  code: |-
+    pm.test('状态码 200', () => pm.response.to.have.status(200));
+
+    const body = pm.response.json();
+
+    pm.test('action = reply（不转人工）', () => pm.expect(body.action).to.eql('reply'));
+
+    pm.test('mode = rule（问候走规则，不调用模型）', () => pm.expect(body.mode).to.eql('rule'));
+
+    pm.test('sources 为空（不查知识库）', () => {
+        pm.expect(body.sources).to.be.an('array').that.is.empty;
+    });
+
+    pm.test('answer 有内容', () => {
+        pm.expect(body.answer).to.be.a('string');
+        pm.expect(body.answer.length).to.be.above(2);
+    });
+
+    pm.test('返回客服在线状态（support）', () => {
+        pm.expect(body.support).to.be.an('object');
+        pm.expect(body.support.hours).to.be.a('string');
+    });
+  language: text/javascript

@@ -1,0 +1,20 @@
+$kind: http-request
+name: 11 未知路径 → 404
+order: 1000
+method: POST
+url: '{{baseUrl}}/not-exist'
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: json
+  content: '{}'
+scripts:
+- type: afterResponse
+  code: |-
+    pm.test('状态码 404', () => pm.response.to.have.status(404));
+
+    const body = pm.response.json();
+
+    pm.test('错误体是可读 JSON', () => pm.expect(body.error).to.eql('not found'));
+  language: text/javascript

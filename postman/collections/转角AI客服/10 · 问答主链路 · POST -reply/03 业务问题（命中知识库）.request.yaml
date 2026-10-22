@@ -1,0 +1,43 @@
+$kind: http-request
+name: 03 业务问题（命中知识库）
+order: 2000
+method: POST
+url: '{{baseUrl}}/reply'
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "question": "怎么退款"
+    }
+scripts:
+- type: afterResponse
+  code: |-
+    pm.test('状态码 200', () => pm.response.to.have.status(200));
+
+    const body = pm.response.json();
+
+    pm.test('action = reply', () => pm.expect(body.action).to.eql('reply'));
+
+    pm.test('命中知识库（sources 非空）', () => {
+        pm.expect(body.sources).to.be.an('array').that.is.not.empty;
+    });
+
+    pm.test('第一条来源有标题且分数过阈值', () => {
+        const top = body.sources[0];
+        pm.expect(top.title).to.be.a('string').and.not.empty;
+        pm.expect(top.score).to.be.above(0.11);   // 服务端 HC_AI_MIN_SCORE 默认 0.12
+        pm.collectionVariables.set('faqTitle', top.title);
+    });
+
+    pm.test('answer 不是空话', () => {
+        pm.expect(body.answer).to.be.a('string');
+        pm.expect(body.answer.length).to.be.above(10);
+    });
+
+    pm.test('响应时间可接受', () => {
+        pm.expect(pm.response.responseTime).to.be.below(Number(pm.collectionVariables.get('maxLatencyMs')));
+    });
+  language: text/javascript

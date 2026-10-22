@@ -147,3 +147,40 @@ push 到 `main/master/develop/feature/**`、开 PR、或手动 `workflow_dispatc
 > 那个 `.bat` 里的注释刻意写成英文：cmd.exe 解析批处理时按字节读，
 > 中文和 `^` 续行符挨在一起会把命令行截断（实测直接崩成一堆乱码），
 > 所以真正的逻辑都放在旁边的 `run_all.py` 里，`.bat` 只负责调用它。
+
+## 8. 在 Postman 界面里跑（不是在命令行）
+
+之前集合只写成了 `postman/*.postman_collection.json`，那是 **Newman 用的 2.1 格式**，
+Postman 12 的「打开文件夹」（Local View）**不认**——它只扫
+`postman/collections/<集合名>/` 下「一个请求一个 `*.request.yaml`」的目录树（Collection Schema 3.0）。
+所以在软件左侧根本看不到它们（之前只有一个空的「转角后端API」）。
+
+现在两份同时存在，由 `tools/to_postman_files.py` 从 json 生成 yaml：
+
+| 格式 | 位置 | 给谁用 |
+| --- | --- | --- |
+| 2.1 单文件 | `postman/转角主站-全接口.postman_collection.json` | Newman / GitHub Actions |
+| 3.0 目录树 | `postman/collections/转角主站-全接口/*.request.yaml` | Postman 界面 |
+
+**在界面里跑的步骤：**
+
+1. 切回 Postman 窗口，左侧应出现三套集合（它监听文件变化）；
+   没出现就 `File → Open Folder` 重新选一次 `huali-corner-trial`。
+2. 右上角环境选择器选「**转角**」（`baseUrl` 已填 `http://127.0.0.1:8081`）。
+3. 在集合上点 **Run** → Run，跑整条链路（130 个请求按 order 顺序执行）。
+4. **不要只点单个请求的 Send**——token 是「00 · 准备」里登录请求写进集合变量的，
+   单独发一个必 401。
+
+**两条常见报错，其实是同一件事：**
+
+| 现象 | 原因 |
+| --- | --- |
+| `401` + `{"error":"请先登录"}` | 路径写错了。`/api/user/login` **不存在**，正确的是 `/api/auth/login`。未知路径会被兜底鉴权当成「未登录」返回 401，所以看起来像密码错误 |
+| `Cannot read properties of undefined (reading 'token')` | 上一步 401 了，响应体里只有 `error` 没有 `token`，脚本却按成功去取 → TypeError |
+
+**改动怎么同步（很重要）：**
+
+- 接口变了 → 改 `tools/gen_all_apis.py` 的 ITEMS → 跑 `gen_all_apis.py` → 跑 `to_postman_files.py`
+- **不要手改 `collections/` 下的 yaml**：转换时整个目录会重建，手改会被覆盖
+- 反过来，在 Postman 界面里改的请求也只会写进 yaml，json 不会跟着变，Newman 跑的还是旧的——
+  所以把 `gen_all_apis.py` 当成唯一源头

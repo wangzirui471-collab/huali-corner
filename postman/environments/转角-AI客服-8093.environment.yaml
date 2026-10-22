@@ -1,0 +1,14 @@
+name: 转角-本地8093
+values:
+- key: baseUrl
+  value: http://127.0.0.1:8093
+  enabled: true
+  type: default
+- key: token
+  value: ''
+  enabled: true
+  type: secret
+- key: maxLatencyMs
+  value: '15000'
+  enabled: true
+  type: default

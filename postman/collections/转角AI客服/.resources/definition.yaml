@@ -1,0 +1,32 @@
+$kind: collection
+name: 转角AI客服 · 接口自动化
+description: |-
+  针对本地 AI 客服服务（ai_service/server.py，默认 127.0.0.1:8093）的接口自动化用例。
+
+  用法：Postman 里 Import 本文件 → 右上角选环境「转角-本地8093」→ Collection Runner 或 newman 跑。
+  覆盖：健康检查、问答主链路（问候/业务/转人工/兜底/多轮）、发布助手（描述/估价）、容错与鉴权。
+variables:
+- key: baseUrl
+  value: http://127.0.0.1:8093
+- key: token
+  value: ''
+- key: maxLatencyMs
+  value: '15000'
+- key: aiMode
+  value: ''
+- key: faqTitle
+  value: ''
+scripts:
+- type: http:beforeRequest
+  code: |-
+    // —— 集合级前置脚本：每个请求发送前都会执行 ——
+    // 1) 配了 token 才注入鉴权头（服务端没设 HC_AI_TOKEN 时不加，加了也无害）
+    const token = pm.variables.get('token');
+    if (token) {
+        pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });
+    }
+    // 2) baseUrl 末尾斜杠统一去掉，避免拼出 //health 这种路径
+    const base = String(pm.variables.get('baseUrl') || '').replace(/\/+$/, '');
+    if (base) { pm.variables.set('baseUrl', base); }
+    console.log('[→] ' + pm.request.method + ' ' + base + (pm.request.url.getPath ? pm.request.url.getPath() : ''));
+  language: text/javascript

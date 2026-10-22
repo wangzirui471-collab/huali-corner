@@ -1,0 +1,33 @@
+$kind: http-request
+name: 04 明确要求转人工
+order: 3000
+method: POST
+url: '{{baseUrl}}/reply'
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "question": "我要转人工"
+    }
+scripts:
+- type: afterResponse
+  code: |-
+    pm.test('状态码 200', () => pm.response.to.have.status(200));
+
+    const body = pm.response.json();
+
+    pm.test('action = transfer（只认明确要求）', () => {
+        pm.expect(body.action).to.eql('transfer');
+    });
+
+    pm.test('话术里提到人工', () => {
+        pm.expect(body.answer).to.match(/人工/);
+    });
+
+    pm.test('转人工不查知识库', () => {
+        pm.expect(body.sources).to.be.an('array').that.is.empty;
+    });
+  language: text/javascript

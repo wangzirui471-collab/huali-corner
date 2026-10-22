@@ -1,0 +1,18 @@
+$kind: http-request
+name: 14 重新载入知识库 · POST /reload
+order: 4000
+method: POST
+url: '{{baseUrl}}/reload'
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: json
+  content: '{}'
+scripts:
+- type: afterResponse
+  code: |-
+    pm.test('状态码 200', () => pm.response.to.have.status(200));
+
+    pm.test('ok 为 true', () => pm.expect(pm.response.json().ok).to.eql(true));
+  language: text/javascript

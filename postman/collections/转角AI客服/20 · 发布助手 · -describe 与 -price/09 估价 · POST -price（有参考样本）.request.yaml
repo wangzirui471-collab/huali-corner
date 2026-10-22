@@ -1,0 +1,40 @@
+$kind: http-request
+name: 09 估价 · POST /price（有参考样本）
+order: 3000
+method: POST
+url: '{{baseUrl}}/price'
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "title": "高等数学 同济第七版",
+      "category": "书籍",
+      "condition": "九成新",
+      "original_price": 5900,
+      "samples": [1200, 1500, 1000]
+    }
+scripts:
+- type: afterResponse
+  code: |-
+    pm.test('状态码 200', () => pm.response.to.have.status(200));
+
+    const body = pm.response.json();
+
+    pm.test('价格区间合法（low ≤ suggest ≤ high）', () => {
+        pm.expect(body.low).to.be.a('number').and.above(0);
+        pm.expect(body.high).to.be.at.least(body.low);
+        pm.expect(body.suggest).to.be.within(body.low, body.high);
+    });
+
+    pm.test('样本数量被采纳（3 条）', () => pm.expect(body.samples).to.eql(3));
+
+    pm.test('给出理由', () => {
+        pm.expect(body.reason).to.be.a('string').and.not.empty;
+    });
+
+        // 金额单位是「分」——顺手断言一下不会冒出一万块
+    pm.test('估价不超过原价', () => pm.expect(body.high).to.be.below(5900));
+  language: text/javascript

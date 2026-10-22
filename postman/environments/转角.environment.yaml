@@ -1,4 +1,24 @@
+# 本地试用后端（--trial 模式，默认 8081）
+#
+# 用法：Postman 右上角环境选择器选「转角」，然后在集合上点 Run 跑整条链路。
+# 注意：单个请求点 Send 基本都会 401——token 是前面「00 · 准备」里的登录请求
+#      写到集合变量里的，必须按顺序跑整个集合（或用 Collection Runner）。
+#
+# adminPhone / adminPassword：只影响「06b 管理员-客服登录」和「80 组」。
+#   试用模式的管理员密码是每次部署随机生成的，忘了就重置：
+#   python "Backend mission\manage_trial.py" --help
+#   填不对也不会让集合变红——那几条用例把 401/403 也算作通过。
 name: 转角
 values:
   - key: baseUrl
+    value: 'http://127.0.0.1:8081'
+    enabled: true
+    type: default
+  - key: adminPhone
+    value: '19065322759'
+    enabled: true
+    type: default
+  - key: adminPassword
     value: ''
+    enabled: true
+    type: default

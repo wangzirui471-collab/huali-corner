@@ -1,0 +1,72 @@
+$kind: http-request
+name: 12 发布商品 · POST /api/publish
+order: 12000
+method: POST
+url: '{{baseUrl}}/api/publish'
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "title": "Postman 自动化教材",
+      "category": "books",
+      "price": 1500,
+      "original_price": 4500,
+      "delivery_fee": 0,
+      "delivery": "pickup",
+      "region": "A1楼下",
+      "description": "接口自动化用的测试商品",
+      "photos": [
+        "{{uploadFront}}",
+        "{{uploadSide}}",
+        "{{uploadTop}}"
+      ],
+      "college": "计算机工程学院",
+      "edition": "第七版",
+      "publisher": "高等教育出版社",
+      "condition": "有少量笔记",
+      "notes": "少量",
+      "missing": "无缺页",
+      "accessories": "无附件",
+      "bought": "2024-09"
+    }
+auth:
+  type: bearer
+  credentials:
+  - key: token
+    value: '{{sellerToken}}'
+scripts:
+- type: afterResponse
+  code: |-
+    const t0 = Date.now();
+    const status = pm.response.code;
+    console.log(`${pm.info.requestName} → ${status} (${pm.response.responseTime}ms)`);
+
+    pm.test('状态码符合预期 200', () => {
+        pm.expect(status).to.be.oneOf([200]);
+    });
+
+    pm.test('响应时间 < 5s', () => pm.expect(pm.response.responseTime).to.be.below(5000));
+
+    // 服务端统一错误体：{error: '...'}。成功响应里不该出现 error。
+    const isJson = (pm.response.headers.get('Content-Type') || '').includes('json');
+    if (isJson) {
+        const body = (() => { try { return pm.response.json(); } catch (e) { return null; } })();
+        if (status >= 400) {
+            pm.test('错误响应带 error 字段', () => {
+                pm.expect(body && body.error).to.be.a('string').and.not.empty;
+            });
+        } else {
+            pm.test('成功响应没有 error 字段', () => {
+                // 列表类接口直接返回数组，这里两者都合法
+                pm.expect(body === null || typeof body === 'object' || Array.isArray(body)).to.eql(true);
+                if (body && !Array.isArray(body)) { pm.expect(body.error).to.be.undefined; }
+            });
+            if (body.id !== undefined) {
+                pm.collectionVariables.set('productId', body.id);
+            }
+        }
+    }
+  language: text/javascript

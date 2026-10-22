@@ -1,0 +1,33 @@
+$kind: http-request
+name: 01 健康检查 · GET /health
+order: 1000
+method: GET
+url: '{{baseUrl}}/health'
+scripts:
+- type: afterResponse
+  code: |-
+    pm.test('状态码 200', () => pm.response.to.have.status(200));
+
+    const body = pm.response.json();
+
+    pm.test('ok 为 true', () => pm.expect(body.ok).to.eql(true));
+
+    pm.test('知识库已索引（chunks > 0）', () => {
+        pm.expect(body.chunks).to.be.a('number');
+        pm.expect(body.chunks).to.be.above(0);
+    });
+
+    pm.test('运行模式是 mock 或 llm', () => {
+        pm.expect(body.mode).to.be.oneOf(['mock', 'llm']);
+    });
+
+    pm.test('provider / model 非空', () => {
+        pm.expect(body.provider).to.be.a('string').and.not.empty;
+        pm.expect(body.model).to.be.a('string').and.not.empty;
+    });
+
+    // 把状态存进集合变量，后续用例可以直接引用
+    pm.collectionVariables.set('aiMode', body.mode);
+    pm.collectionVariables.set('aiChunks', body.chunks);
+    console.log('[health] mode=' + body.mode + ' chunks=' + body.chunks + ' provider=' + body.provider);
+  language: text/javascript

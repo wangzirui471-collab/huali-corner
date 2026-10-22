@@ -43,3 +43,8 @@ Backend mission/.wrangler/
 Backend mission/node_modules/
 _ui_messages.png
 d1out.json
+
+# Postman 里误导入/实验留下的集合备份，只是本机排查用，不进仓库
+postman/_backup/
+# 每次跑完覆盖的临时报告，不想让它反复出现在 diff 里就打开下面这行
+# postman/运行报告.md

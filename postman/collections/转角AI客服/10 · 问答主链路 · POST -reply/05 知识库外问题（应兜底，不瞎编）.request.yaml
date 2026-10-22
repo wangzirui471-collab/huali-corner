@@ -1,0 +1,32 @@
+$kind: http-request
+name: 05 知识库外问题（应兜底，不瞎编）
+order: 4000
+method: POST
+url: '{{baseUrl}}/reply'
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "question": "转角平台在纳斯达克的股票代码是多少"
+    }
+scripts:
+- type: afterResponse
+  code: |-
+    pm.test('状态码 200', () => pm.response.to.have.status(200));
+
+    const body = pm.response.json();
+
+    pm.test('仍是 reply，不擅自升级工单', () => pm.expect(body.action).to.eql('reply'));
+
+    pm.test('没有命中资料', () => {
+        pm.expect(body.sources).to.be.an('array');
+        pm.expect(body.sources.length).to.eql(0);
+    });
+
+    pm.test('回答承认没查到 / 给下一步，而不是编答案', () => {
+        pm.expect(body.answer).to.match(/转人工|没查到|没有确切|换个说法/);
+    });
+  language: text/javascript

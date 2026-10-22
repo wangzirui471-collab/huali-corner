@@ -1,0 +1,35 @@
+$kind: http-request
+name: 01 健康检查 · GET /api/health
+order: 1000
+method: GET
+url: '{{baseUrl}}/api/health'
+scripts:
+- type: afterResponse
+  code: |-
+    const t0 = Date.now();
+    const status = pm.response.code;
+    console.log(`${pm.info.requestName} → ${status} (${pm.response.responseTime}ms)`);
+
+    pm.test('状态码符合预期 200', () => {
+        pm.expect(status).to.be.oneOf([200]);
+    });
+
+    pm.test('响应时间 < 5s', () => pm.expect(pm.response.responseTime).to.be.below(5000));
+
+    // 服务端统一错误体：{error: '...'}。成功响应里不该出现 error。
+    const isJson = (pm.response.headers.get('Content-Type') || '').includes('json');
+    if (isJson) {
+        const body = (() => { try { return pm.response.json(); } catch (e) { return null; } })();
+        if (status >= 400) {
+            pm.test('错误响应带 error 字段', () => {
+                pm.expect(body && body.error).to.be.a('string').and.not.empty;
+            });
+        } else {
+            pm.test('成功响应没有 error 字段', () => {
+                // 列表类接口直接返回数组，这里两者都合法
+                pm.expect(body === null || typeof body === 'object' || Array.isArray(body)).to.eql(true);
+                if (body && !Array.isArray(body)) { pm.expect(body.error).to.be.undefined; }
+            });
+        }
+    }
+  language: text/javascript

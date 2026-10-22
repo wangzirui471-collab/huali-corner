@@ -1,0 +1,22 @@
+$kind: http-request
+name: 12 非法 JSON → 400
+order: 2000
+method: POST
+url: '{{baseUrl}}/reply'
+headers:
+- key: Content-Type
+  value: application/json
+body:
+  type: json
+  content: "{\n  \"question\": "
+scripts:
+- type: afterResponse
+  code: |-
+    pm.test('状态码 400', () => pm.response.to.have.status(400));
+
+    const body = pm.response.json();
+
+    pm.test('给出错误提示而不是崩溃', () => {
+        pm.expect(body.error).to.be.a('string').and.not.empty;
+    });
+  language: text/javascript

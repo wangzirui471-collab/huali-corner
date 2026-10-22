@@ -1,0 +1,84 @@
+$kind: collection
+name: 转角主站 · 全接口（8081 试用）
+description: |-
+  覆盖 Backend mission/server.py 里 handle_request 的全部 /api/* 路由。按业务域分 10 组，共 130 个请求。
+
+  怎么跑（Postman 界面里）：右上角环境选「转角」→ 集合上点 Run → Run 整个集合。
+  **不要只点单个请求的 Send**：token 是前面登录请求写进集合变量的，单独发一个必 401。
+
+  跑之前：
+  1) 用 --trial 启动后端（默认 8081）；
+  2) 环境里确认 baseUrl；
+  3) 管理端/客服端用例需要 adminPhone/adminPassword，填不对也只按 401/403 通过。
+
+  数据：注册号随机生成，商品/订单/工单都是测试用的，跑完 90 组会下架测试商品。
+variables:
+- key: baseUrl
+  value: http://127.0.0.1:8081
+- key: pwd
+  value: Postman#2026
+- key: adminPhone
+  value: ''
+- key: adminPassword
+  value: ''
+- key: sellerPhone
+  value: ''
+- key: buyerPhone
+  value: ''
+- key: tempPhone
+  value: ''
+- key: sellerToken
+  value: ''
+- key: buyerToken
+  value: ''
+- key: staffToken
+  value: ''
+- key: tempToken
+  value: ''
+- key: sellerId
+  value: ''
+- key: buyerId
+  value: ''
+- key: tempId
+  value: ''
+- key: profileVersion
+  value: '0'
+- key: uploadFront
+  value: ''
+- key: uploadSide
+  value: ''
+- key: uploadTop
+  value: ''
+- key: avatarUploadId
+  value: ''
+- key: productId
+  value: ''
+- key: orderId
+  value: ''
+- key: ticketId
+  value: ''
+- key: postId
+  value: ''
+- key: commentId
+  value: ''
+- key: messageId
+  value: ''
+- key: wantId
+  value: ''
+- key: roomId
+  value: ''
+scripts:
+- type: http:beforeRequest
+  code: |-
+    // 注册前给三个账号各生成一个随机手机号（139 开头，11 位）
+    function genPhone() {
+        return '139' + String(Math.floor(10000000 + Math.random() * 89999999));
+    }
+    for (const key of ['sellerPhone', 'buyerPhone', 'tempPhone']) {
+        if (!pm.collectionVariables.get(key)) {
+            pm.collectionVariables.set(key, genPhone());
+        }
+    }
+    // 下单要的「未来交付时间」：两小时后的秒级时间戳
+    pm.collectionVariables.set('appointment', String(Math.floor(Date.now() / 1000) + 7200));
+  language: text/javascript
