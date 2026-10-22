@@ -92,6 +92,9 @@ SOCIAL_GUARD = (
     '发布', '上架', '下架', '退款', '退货', '售后', '订单', '支付', '付款',
     '价格', '多少钱', '便宜', '卖', '买', '运费', '面交', '工单', '举报',
     '注销', '密码', '账号', '信誉', '客服', '人工', '在哪',
+    # 「考研」「考试」在 cheer 桶里，但「考研数学看什么书」是查资料不是求祝福，
+    # 带上这些词就按业务走，别用一句「一定行」把人打发了。
+    '书', '教材', '资料', '推荐', '看什么', '哪个好',
 )
 # 每桶两三条，命中随机取——同一句话问两遍不会一字不差地复读。
 SOCIAL_REPLIES = {
@@ -222,7 +225,11 @@ OPEN_PROMPT = """你是「转角」校园二手交易平台的客服兼助手，
 3. 涉及本站具体金额、时限、处罚这类硬事实且没有依据时，说清「这块以页面显示为准」，
    再告诉他在哪个页面能看到，不要编具体数字。
 4. 只有客户自己说「转人工 / 找真人」才升级；不要主动推荐转人工或提交工单。
+   也不要说「我只负责交易问题」这类把人推回去的话——你是这个站的助手，什么都能聊。
 5. 不超过 120 字。涉及隐私（手机号、他人订单、聊天记录）不回答。
+6. 不帮客户查别人的手机号、地址、订单、聊天记录；不教盗号、刷单、伪造评价、
+   卖假货或违禁品；遇到这类请求直接说不可以，并说明这违反平台规则或法律，
+   不要给「变通办法」。
 
 【参考资料】
 {context}
@@ -549,6 +556,65 @@ async def buy_answer(db, q):
             'support': support_state()}
 
 
+# --- 推荐书目：在「站内在售」里挑，不让模型背书名 -------------------------
+# 「推荐几本书」如果交给模型自由发挥，它会给《代码大全》《人月神话》这类
+# 站里根本没有的书，客户照着找一圈发现买不到。这里改成直接查在售书籍。
+RECOMMEND_PATTERNS = ('推荐', '有什么书', '看什么书', '有哪些书', '买什么书',
+                      '什么书好', '求推荐', '有啥书', '有没有', '有吗', '有木有')
+BOOK_WORDS = ('书', '教材', '资料', '课本', '小说', '专业书', '习题', '真题', '读物')
+# 剥掉量词和客套：不能按二字词拼——「数据结构」会被拼成「数据据结结构」，一件都搜不到。
+RECOMMEND_NOISE = re.compile(r'(几本|一本|两本|三本|那本|这本|一些|给我|帮我|一下|能看懂|'
+                             r'好懂|入门|适合|比较|有没|有没有|的|吧|呢|啊|吗)')
+
+
+def recommend_query(question):
+    """返回搜索关键词（可能为空串，表示「给点推荐但没说方向」）；不是推荐返回 None。"""
+    q = str(question or '').strip().lower()
+    if not any(w in q for w in RECOMMEND_PATTERNS):
+        return None
+    # 说「推荐一本…」时常常不带「书」字（推荐一本数据结构的），量词也算书目意图；
+    # 但「推荐个客服」不能被拐成荐书，所以要求要么有书类词、要么有书量词。
+    if not (any(w in q for w in BOOK_WORDS) or any(w in q for w in ('一本', '两本', '几本', '本书'))):
+        return None
+    rest = q
+    for w in RECOMMEND_PATTERNS + BOOK_WORDS:
+        rest = rest.replace(w, '')
+    rest = RECOMMEND_NOISE.sub('', rest)
+    rest = re.sub(r'[，。！？、,.!?~～;；:：\s]+', '', rest)
+    return '' if rest in ('本', '几', '个', '点') else rest[:14]
+
+
+async def recommend_books(db, kw, limit=4):
+    if kw:
+        rows = await buy_search(db, kw, limit)
+        if rows:
+            return rows
+    # 没给方向，或者关键词一件都没搜到：退回「最新上架的几本书」
+    rows = await db.all(
+        'SELECT p.id,p.title,p.price,p.data,u.nickname FROM products p '
+        "JOIN users u ON u.id=p.seller_id WHERE p.status='available' AND p.category='books' "
+        'ORDER BY p.id DESC LIMIT ?', (limit,))
+    return [{'id': r['id'], 'title': r['title'], 'price': r['price'],
+             'url': _photos_url(_detail(r['data']).get('photos')),
+             'nickname': r['nickname']} for r in rows]
+
+
+async def recommend_answer(db, kw):
+    rows = await recommend_books(db, kw)
+    if not rows:
+        return {'answer': '这会儿书架上没有在售的书了，可以点按钮去首页搜搜，或者发个求购让卖家找你。',
+                'action': 'reply',
+                'links': [{'label': '去首页搜书', 'action': 'pet-search', 'q': '书'}],
+                'products': [], 'sources': [], 'mode': 'rule', 'latency_ms': 0,
+                'support': support_state()}
+    lead = ('这几本现在就在架上，点卡片看详情：' if kw
+            else '没说要哪方面的话，先看看这几本刚上架的：')
+    return {'answer': lead, 'action': 'reply',
+            'links': [{'label': '去首页搜更多书', 'action': 'pet-search', 'q': kw or '书'}],
+            'products': rows, 'sources': [], 'mode': 'rule', 'latency_ms': 0,
+            'support': support_state()}
+
+
 # --- 发布助手：AI 写描述 / AI 估价 ----------------------------------------
 # 借鉴 Campus_Marketplace（校园二手开源项目）的 AI 工具：描述生成 + 估价。
 # 与客服问答分开：不走知识库提示词，失败时按规则兜底，绝不让发布卡住。
@@ -794,6 +860,13 @@ async def ai_answer(question, env, history=None, db=None):
                 # 把标签交回客户端存进 history：下一轮「嗯」才知道自己在接哪段情绪。
                 'social': {'kind': kind, 'depth': depth},
                 'mode': 'rule', 'latency_ms': elapsed(), 'support': support_state()}
+
+    # 推荐书目直接查在售书籍：比让模型背书名靠谱，客户点开就能买。
+    rec = recommend_query(q)
+    if rec is not None and db is not None:
+        out = await recommend_answer(db, rec)
+        out['latency_ms'] = elapsed()
+        return out
 
     # 购买意图直接搜商品：不走大模型，快且不烧额度。
     buy = await buy_query(q, db)

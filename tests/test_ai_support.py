@@ -228,3 +228,60 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
     def test_knowledge_only_customer_faq(self):
         sources = {c['source'] for c in ai.KNOWLEDGE}
         self.assertEqual(sources, {'ai_service\\knowledge\\faq.md'})
+
+    # --- 2026-10-22：不再「遇事不决就甩固定话术」的回归 ---------------------
+
+    def test_synonym_maps_sell_to_publish(self):
+        # 「卖东西」和 FAQ 的「怎么发布闲置」零词重合，靠同义词补上
+        hits = ai.retrieve('想卖东西')
+        self.assertTrue(hits, '「想卖东西」应该命中发布相关的 FAQ')
+        self.assertIn('发布', hits[0][1]['title'])
+
+    def test_recommend_intent_detected(self):
+        self.assertEqual(ai.recommend_query('推荐几本书'), '')
+        self.assertTrue(ai.recommend_query('推荐一本数据结构的书'))
+        # 不带书类语义的「推荐」不算书目推荐，别把客服问题拐走
+        self.assertIsNone(ai.recommend_query('推荐个客服给我'))
+
+    async def test_recommend_answers_with_listings_not_book_names(self):
+        class FakeDB:
+            async def all(self, sql, args=()):
+                return [{'id': 1, 'title': '计算机网络（第八版）', 'price': 1200,
+                         'data': '{"photos":[{"url":"/media/p1"}]}', 'nickname': '林致远'}]
+
+        r = await ai.ai_answer('推荐几本书', SimpleNamespace(), None, FakeDB())
+        self.assertEqual(r['mode'], 'rule')
+        self.assertEqual(r['products'][0]['title'], '计算机网络（第八版）')
+        self.assertEqual(r['links'][0]['action'], 'pet-search')
+
+    async def test_no_hit_goes_to_open_mode_not_fallback(self):
+        captured = {}
+        original = ai.call_api
+
+        async def fake(q, ctx, env, history=None, open_mode=False):
+            captured['open'] = open_mode
+            captured['ctx'] = ctx
+            return '好呀，我给你转个圈——不过我跳得不太标准。'
+
+        ai.call_api = fake
+        try:
+            r = await ai.ai_answer('给我跳个舞', SimpleNamespace())
+        finally:
+            ai.call_api = original
+        self.assertTrue(captured['open'], '知识库没命中应该走开放人格')
+        self.assertEqual(captured['ctx'], '')
+        self.assertNotEqual(r['answer'], ai.FALLBACK)
+        self.assertTrue(r.get('open'))
+
+    async def test_no_hit_still_falls_back_when_model_unavailable(self):
+        original = ai.call_api
+
+        async def boom(*a, **k):
+            raise RuntimeError('DeepSeek 503')
+
+        ai.call_api = boom
+        try:
+            r = await ai.ai_answer('给我跳个舞', SimpleNamespace())
+        finally:
+            ai.call_api = original
+        self.assertEqual(r['answer'], ai.FALLBACK)
