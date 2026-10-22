@@ -1026,17 +1026,9 @@ class AiSupport:
                 role = h.get('role')
                 content = str(h.get('content') or '').strip()[:300]
                 if role in ('user', 'assistant') and content:
-                    item = {'role': role, 'content': content}
-                    # 闲聊标签随历史回传：只认白名单里的桶名和正整数轮次，
-                    # 客户端塞别的东西就当没有，不让它影响分流。
-                    if role == 'user':
-                        soc = h.get('social')
-                        if soc in SOCIAL_REPLIES:
-                            item['social'] = soc
-                        depth = h.get('depth')
-                        if isinstance(depth, int) and 0 < depth < 99:
-                            item['depth'] = depth
-                    history.append(item)
+                    # 只留 role/content。以前还要把「闲聊桶 + 轮次」带着走，
+                    # 那是情绪分桶的产物；桶删了，历史里也没有需要继承的标签。
+                    history.append({'role': role, 'content': content})
         await self.ai_quota(uid)
         result = await ai_answer(question, self.env, history, self.db)
         # 只有真正调用模型才计入额度；问候、转人工、无命中不扣次数。
