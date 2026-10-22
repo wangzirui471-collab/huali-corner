@@ -29,10 +29,14 @@ export function dutyNow(){
 }
 
 // 面板标题下面那行小字：在线/已下班 + 服务时间。
-export function paintDuty(){
+// 优先用接口返回的 support（服务端按 UTC+8 算，客户电脑时钟不准也不会矛盾），
+// 没拿到就按本地时间估。
+export function paintDuty(server){
   const el = $('#ai-pet-duty');
   if (!el) return;
-  const { online, hours } = dutyNow();
+  const local = dutyNow();
+  const online = server && typeof server.online === 'boolean' ? server.online : local.online;
+  const hours = (server && server.hours) || local.hours;
   el.textContent = (online ? '客服在线 · ' : '客服已下班 · ') + hours;
   el.dataset.online = String(online);
 }
@@ -58,7 +62,7 @@ export function aiPet(){
       <button type="button" class="ai-pet-close" id="ai-pet-close" aria-label="收起对话">×</button>
     </header>
     <div class="ai-pet-log" id="ai-pet-log">
-      <div class="ai-pet-msg bot">我是小转。发布、退款、面交、客服时间都可以问我；答不准的会建议你提交工单。</div>
+      <div class="ai-pet-msg bot">我是小转。发布、退款、面交、好友、客服时间都可以问我；查不到的我会告诉你下一步怎么走，要人工直接说「转人工」。</div>
     </div>
     <div class="ai-pet-chips" aria-label="常见问题">
       <button type="button" data-action="ai-pet-chip" data-q="怎么发布闲置？">怎么发布</button>

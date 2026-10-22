@@ -9,7 +9,7 @@ import { modal, closeModal } from '../core/shell.js';
 import { state, statusNames } from '../core/state.js';
 import { field } from '../components/forms.js';
 import { ticketModal } from '../pages/support.js';
-import { setPetState, togglePetPanel } from '../components/ai-pet.js';
+import { setPetState, togglePetPanel, paintDuty } from '../components/ai-pet.js';
 
 // --- AI 宠物对话 ---------------------------------------------------------
 function petText(text){ return e(text).replace(/\n/g,'<br>'); }
@@ -59,6 +59,7 @@ async function petAsk(q){
       ${card}
       ${src?`<div class="ai-pet-src">来源：${src}</div>`:''}
       ${r.notice?`<div class="ai-pet-src">${e(r.notice)}</div>`:''}`;
+    paintDuty(r.support);          // 状态灯以服务端为准，避免和回答内容打架
     petHistory.push({role:'user',content:text},{role:'assistant',content:String(r.answer||'')});
     petHistory=petHistory.slice(-4);
     if(transfer) setPetState('wave',1800); else setPetState('idle');   // 要转人工就招手喊客服
