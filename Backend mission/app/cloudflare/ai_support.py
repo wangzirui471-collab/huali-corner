@@ -36,6 +36,11 @@ SYNONYMS = {
     '出售': '发布 出售',
     '上架': '发布 上架',
     '挂着卖': '发布',
+    '挂上去': '发布 出售',
+    '出掉': '发布 出售',
+    '出手': '发布 出售',
+    '卖书': '发布 书籍',
+    '旧书': '书籍 教材',
     '想卖': '发布 出售',
     '买东西': '求购 购买',
     '想买': '求购 购买',
@@ -61,6 +66,34 @@ SYNONYMS = {
     '手机号': '隐私 手机号',
     '删号': '注销 账号',
     '注销': '注销 账号',
+    # 2026-10-22 第二轮：137 条离线审计里，业务题 hit@1 只有 87%，
+    # 漏的全是「意思对、用词不对」——学生不会说「发布闲置」，会说「挂上去卖」。
+    '发布商品': '发布 闲置 三张图 填写',
+    '要准备什么': '发布 填写 三张图',
+    '准备什么': '发布 填写 三张图',
+    '照片': '三张图 图片 正面',
+    '拍一张': '三张图 正面 角度',
+    '付了钱': '已付款 退款',
+    '还能退': '退款 取消',
+    '描述不一样': '售后 缺陷 版本不符',
+    '货不对板': '售后 缺陷',
+    '和描述不': '售后 缺陷',
+    '不用这个号': '注销 账号',
+    '销号': '注销 账号',
+    '私聊': '私信 私聊',
+    '骗子': '诈骗 举报',
+    '被骗': '诈骗 举报',
+    '骗钱': '诈骗',
+    '只传一张': '三张图 正面 角度',
+    '只发一张': '三张图 正面',
+    '单张': '三张图',
+    '划痕': '售后 缺陷',
+    '有瑕疵': '售后 缺陷',
+    '损坏': '售后 缺陷',
+    '不发货': '售后 未收到',
+    '没发货': '售后 未收到',
+    '联系卖家': '私聊 私信',
+    '联系买家': '私聊 私信',
 }
 
 # 转人工的触发词：只认「客户明确说要人工」。
@@ -73,6 +106,14 @@ COMPLAINT_WORDS = (
     '投诉', '差评', '骗子', '骗人', '气死', '垃圾', '曝光', '12315',
     '强烈不满', '太差', '恶心', '坑人', '退钱', '赔偿', '不服', '凭什么',
 )
+# 「遇到骗子怎么办」虽然带「骗子」，但问的是怎么处理，不是对平台不满。
+# 走投诉安抚只会给一段通用路径，答不到「保存证据、举报、报案」这几步。
+SCAM_WORDS = ('骗子', '诈骗', '被骗', '骗钱')
+ASK_WORDS = ('怎么办', '怎么处理', '如何处理', '咋办', '找谁', '怎么举报', '怎么投诉')
+# 情绪词里混着流程词：「对处理结果不服怎么申诉」带「不服」，但它问的是怎么走流程。
+# 只要同时出现「怎么/如何/吗」和这些词，就按业务问题去查规则，别用安慰话术打发。
+PROCESS_WORDS = ('申诉', '退钱', '退款', '退货', '赔偿', '差评', '举报')
+ASK_MARKS = ('怎么', '如何', '咋', '吗', '能不能', '可以吗', '在哪', '流程', '步骤')
 GREETING_WORDS = (
     '你好', '您好', 'hi', 'hello', '在吗', '谢谢', '多谢', '再见', '拜拜',
     '早上好', '晚上好', '下午好',
@@ -100,6 +141,9 @@ SOCIAL_GUARD = (
     # 「考研」「考试」在 cheer 桶里，但「考研数学看什么书」是查资料不是求祝福，
     # 带上这些词就按业务走，别用一句「一定行」把人打发了。
     '书', '教材', '资料', '推荐', '看什么', '哪个好',
+    # 「求购考研英语真题」也曾被当成祝福（cheer 桶里有「考研」），
+    # 结果是「冲！需要看价格、找东西的时候随时喊我」——等于没听懂。
+    '求购', '真题', '习题', '课本', '收一', '想收',
 )
 # 每桶两三条，命中随机取——同一句话问两遍不会一字不差地复读。
 SOCIAL_REPLIES = {
@@ -167,8 +211,21 @@ BUY_PATTERNS = (
     '我想买', '我要买', '想买', '要买', '想买个', '要个', '想找', '要找',
     '有没有', '有没有卖', '想淘', '要淘', '求购', '求个', '想要', '买一个',
     '买部', '买台', '买本', '买双', '买件', '来一个', '来部', '来台',
-    '蹲一个', '蹲个', '入手',
+    '蹲一个', '蹲个', '入手', '想收', '收个', '收一个', '收台', '收部', '想搞个',
 )
+# 「有耳机吗」这类省略式购买意图：没有「买」字，但有「有…吗」。
+BUY_REGEX = re.compile(r'(有没有|有).{1,10}(吗|嘛)')
+# 带这些词说明在问流程，不是在找货：「有未完成订单能注销吗」不能被当成买东西。
+BUY_GUARD = ('注销', '退款', '退货', '售后', '工单', '密码', '订单', '信誉', '举报',
+             '人工', '发布', '收费', '规则', '状态', '怎么退', '能退', '验证', '申诉',
+             '怎么', '如何', '为什么', '能不能')
+# 「有优惠吗」「有办法吗」也不是在找货，抽出来的词不能拿去搜商品。
+BUY_STOP = ('办法', '问题', '优惠', '折扣', '活动', '发票', '建议', '推荐',
+            '时间', '人', '事', '东西', '啥', '什么', '区别', '要求')
+# 商品词前的修饰语：不一刀切掉，「二手显示器」应该按「显示器」去搜。
+BUY_NOISE = ('二手', '全新', '闲置', '便宜点', '便宜', '好用的', '好的',
+             '可以', '帮我', '帮忙', '看看', '请问', '麻烦', '给我', '顺便', '一下',
+             '一个', '一件', '个', '台', '部', '件', '本', '双', '只', '把')
 STOP = {
     '怎么', '可以', '什么', '请问', '一下', '这个', '那个', '多少', '如何', '是否',
     '我的', '你的', '我们', '你们', '为什', '么样', '能不', '不能', '是不', '不是',
@@ -229,6 +286,10 @@ OPEN_PROMPT = """你是「转角」校园二手交易平台的客服兼助手，
 2. 参考资料里没有、但属于常识或闲聊的，直接答，不要说自己查不到，也不要让人去提工单。
 3. 涉及本站具体金额、时限、处罚这类硬事实且没有依据时，说清「这块以页面显示为准」，
    再告诉他在哪个页面能看到，不要编具体数字。
+3.1 绝对不要替平台断言规则。实测过一句「照片数量没有硬性要求，只拍一张也能发」——
+   平台明明要求三张不同角度实拍图，这就是编的。凡是发布要求、图片张数、费用、
+   时限、处罚、能不能做某事，没有参考资料就只说「这块以发布/下单页面的提示为准」，
+   不要说「没有硬性要求」「可以」「不需要」。
 4. 只有客户自己说「转人工 / 找真人」才升级；不要主动推荐转人工或提交工单。
    绝对不要说「我只负责平台问题」「这个我处理不了」这类把人推回去的话。
    被问推荐书、聊兴趣、问常识，就像朋友一样接：能推荐就推荐两本，能聊就聊两句。
@@ -482,27 +543,56 @@ async def catalog_tokens(db, ttl=60):
     return _CATALOG['tokens']
 
 
+def _strip_buy_noise(text):
+    """去掉「二手/一个/台」这类修饰，留下真正的商品词。"""
+    out = text.strip()
+    changed = True
+    while changed and len(out) > 2:
+        changed = False
+        for w in BUY_NOISE:
+            if out.startswith(w) and len(out) - len(w) >= 2:
+                out = out[len(w):]
+                changed = True
+                break
+    return out
+
+
 async def buy_query(question, db=None):
     """从「我想买键盘」里取出商品关键词；不是购买意图返回 None。
 
     关键词只保留「目录里出现过」的词：语言无关，不用维护停用词表。
+
+    原来的实现把二字词拼回去：机械键盘 → 机械械键键盘，LIKE 永远搜不到，
+    于是「有没有机械键盘」明明有货也回「暂时没有」。现在按整段取词。
     """
     q = str(question or '').strip().lower()
-    if not any(w in q for w in BUY_PATTERNS):
+    if any(w in q for w in BUY_GUARD):
+        return None
+    if not (any(w in q for w in BUY_PATTERNS) or BUY_REGEX.search(q)):
         return None
     rest = q
-    for w in BUY_PATTERNS:
+    for w in sorted(BUY_PATTERNS, key=len, reverse=True):
         rest = rest.replace(w, ' ')
     rest = re.sub(r'[，。！？、,.!?~～;；:：\s]+', ' ', rest)
-    toks = [t for t in tokenize(rest) if t not in STOP and len(t) >= 2]
-    if not toks:
+    rest = re.sub(r'^[有\s]+', '', rest)
+    rest = re.sub(r'[吗嘛呢啊呀\s]+$', '', rest)
+    pieces = []
+    for piece in re.findall(r'[\u4e00-\u9fff]+|[a-z0-9_]+', rest):
+        if piece in STOP or len(piece) < 2:
+            continue
+        pieces.append(_strip_buy_noise(piece))
+    pieces = [p for p in pieces
+              if p and p not in STOP and p not in BUY_STOP and p not in BUY_NOISE and len(p) >= 2]
+    if not pieces:
         return None
+    kw = pieces[0][:14]
     if db is not None:
         cat = await catalog_tokens(db)
-        hit = [t for t in toks if t in cat]
-        if hit:
-            toks = hit
-    kw = ''.join(toks)[:30]
+        # 目录里出现过的词优先：「我想买个键盘」把「键盘」当主词
+        for p in pieces:
+            if p in cat or any(g in cat for g in tokenize(p)):
+                kw = p[:14]
+                break
     return kw if len(kw) >= 2 else None
 
 
@@ -528,14 +618,27 @@ def _photos_url(raw):
     return ''
 
 
-async def buy_search(db, q, limit=4):
-    # k-multiplier：先多取候选，再按标题相关度重排（借鉴开源零售助手的做法）。
-    like = '%' + q + '%'
-    rows = await db.all(
+async def _buy_rows(db, term):
+    like = '%' + term + '%'
+    return await db.all(
         'SELECT p.id,p.title,p.price,p.data,u.nickname FROM products p '
         "JOIN users u ON u.id=p.seller_id WHERE p.status='available' "
         'AND (p.title LIKE ? OR p.data LIKE ?) ORDER BY p.id DESC LIMIT 12',
         (like, like))
+
+
+async def buy_search(db, q, limit=4):
+    # k-multiplier：先多取候选，再按标题相关度重排（借鉴开源零售助手的做法）。
+    rows = await _buy_rows(db, q)
+    if not rows and len(q) > 2:
+        # 整词搜不到时退回二字词：搜「二手显示器」要能带出「小米显示器」。
+        merged = {}
+        for g in tokenize(q)[:4]:
+            if len(g) < 2:
+                continue
+            for r in await _buy_rows(db, g):
+                merged.setdefault(r['id'], r)
+        rows = list(merged.values())
     grams = [t for t in tokenize(q) if len(t) >= 2]
 
     def score(r):
@@ -843,37 +946,78 @@ async def open_answer(q, env, history, elapsed):
             'support': support_state()}
 
 
+REPORT_WORDS = ('举报', '投诉', '曝光', '被骗', '买到假', '遇到骗子', '被骗了')
+
+
+def _reporting(q):
+    """这句是在说「别人违规、我来举报/求助」，不是自己想违规。
+
+    关键词黑名单最容易出的一类误伤：「有人卖假货我要举报」曾经回
+    「假货不能卖」——把举报人当成了卖假货的人。举报是正当行为，必须放行。
+    """
+    return any(w in q for w in REPORT_WORDS)
+
+
 def violation_reply(question):
     """违规请求的确定性拦截，返回文案或 None。
 
     这类问题绝不能交给模型自由发挥：实测「我想卖假货可以吗」会命中
     「怎么发布闲置」的检索，然后被摘录成一段发布教程——等于在教人卖假货。
     所以先按关键词硬拦，命中就直接拒，不进检索、不调模型。
+
+    第二轮补的是「换个说法」：原词表只认「刷单」，不认「把差评都刷掉」；
+    只认「破解密码」，不认「破解别人的密码」。合规底线不能靠客户配合用词。
     """
     q = str(question or '').lower()
-    rules = (
-        (('假货', '高仿', 'a货', '仿品', '山寨', '盗版'),
-         '假货和盗版不能卖。被举报核实会下架商品、扣信誉，严重的直接封号，'
-         '真出事你还得承担法律责任。正品闲置我随时帮你发布。'),
-        (('刷单', '刷好评', '刷信誉', '刷分', '互刷'),
-         '刷单刷好评不行，这属于伪造交易记录，平台查到会清分封号。'
-         '想要信誉，老老实实按时交付、让买家给真实评价最快。'),
-        (('盗号', '盗取', '破解密码', '黑进', '黑客', '偷号', '撞库'),
-         '这个我不能教也不能帮，属于违法行为，跟平台规则也没关系。'
-         '要是你自己的账号进不去，我可以帮你走找回密码。'),
-        (('卖烟', '香烟', '电子烟', '卖酒', '白酒', '管制刀具', '违禁'),
-         '烟酒和管制物品不能在平台交易，这类商品发布也会被下架。'),
-        (('改信誉', '改分', '把信誉刷', '调我的分'),
-         '信誉分我没法帮你改。分数变动都跟已核实的工单绑定，必须写明理由并留记录，'
-         '觉得扣错了可以走「我的 → 帮助与客服」提信誉申诉。'),
-    )
-    for words, answer in rules:
-        if any(w in q for w in words):
-            return answer
-    # 查他人手机号 / 地址：只要出现完整手机号又要「查/是谁」，一律拒
-    if re.search(r'1[3-9]\d{9}', q) and any(w in q for w in ('查', '是谁', '谁的', '找', '资料')):
+
+    # 隐私类先判，且不受「举报」放行影响：要别人的地址/手机号，什么语境都不能给。
+    if re.search(r'1[3-9]\d{9}', q) and any(w in q for w in ('查', '是谁', '谁的', '找', '资料', '给')):
         return '别人的手机号和地址我不能提供，这属于他人隐私。'
+    if (any(w in q for w in ('收货地址', '家庭住址', '宿舍号', '住哪'))
+            and any(w in q for w in ('别人的', '他的', '她的', '对方的', '给我', '告诉我', '发我'))):
+        return ('别人的收货地址和联系方式我不能提供，这属于他人隐私。'
+                '真需要联系，走站内私聊，或者让客服居中协调。')
+
+    if _reporting(q):
+        return None
+
+    # 账号安全：破解、盗号、撞库——「破解密码」和「破解别人的密码」都得拦
+    if any(w in q for w in ('盗号', '盗取', '破解', '黑进', '黑客', '偷号', '撞库', '盗密码')):
+        return ('这个我不能教也不能帮，属于违法行为，跟平台规则也没关系。'
+                '要是你自己的账号进不去，我可以帮你走找回密码。')
+    # 假货 / 盗版
+    if any(w in q for w in ('假货', '高仿', 'a货', '仿品', '山寨', '盗版', '卖假')):
+        return ('假货和盗版不能卖。被举报核实会下架商品、扣信誉，严重的直接封号，'
+                '真出事你还得承担法律责任。正品闲置我随时帮你发布。')
+    # 刷单 / 刷评价 / 刷销量：只认「刷单」会漏掉「把差评都刷掉」
+    if '刷' in q and any(w in q for w in ('单', '好评', '差评', '信誉', '销量', '评价', '分')):
+        return ('刷单刷好评不行，这属于伪造交易记录，平台查到会清分封号。'
+                '想要信誉，老老实实按时交付、让买家给真实评价最快。')
+    # 伪造交易记录
+    if any(w in q for w in ('假交易', '伪造交易', '虚构交易', '假记录', '造假记录', '假流水')):
+        return ('伪造交易记录不行，这属于造假，查实会清分封号，严重的要担法律责任。')
+    # 洗钱
+    if '洗钱' in q:
+        return '平台不做这个，也没有这个能力。资金全是模拟的，涉及洗钱是刑事问题，我不能帮。'
+    # 禁售
+    if any(w in q for w in ('卖烟', '香烟', '电子烟', '卖酒', '白酒', '管制刀具', '违禁', '仿真枪')):
+        return '烟酒和管制物品不能在平台交易，这类商品发布也会被下架。'
+    # 改信誉分：「怎么涨」是正常问题，「帮我调高一点」才是要拦的
+    if any(w in q for w in ('改信誉', '改分', '调信誉', '调高信誉', '调低信誉', '把信誉',
+                             '信誉刷', '刷信誉', '调我的分', '信誉分调')):
+        return ('信誉分我没法帮你改。分数变动都跟已核实的工单绑定，必须写明理由并留记录，'
+                '觉得扣错了可以走「我的 → 帮助与客服」提信誉申诉。')
+    # 搞对手：下架别人的商品、封别人的号
+    if any(w in q for w in ('对手', '竞争对手', '同行', '别人家')) and \
+            any(w in q for w in ('下架', '封', '搞', '删', '举报掉')):
+        return ('我不能替你去处置别人的商品或账号。有违规就点「举报」并写清理由，'
+                '客服核实后处理；竞争不过就好好定价，这条我不帮。')
+    if any(w in q for w in ('封号', '封了', '封掉', '封禁')) and \
+            any(w in q for w in ('他', '别人', '对手', '竞争')):
+        return ('封号是管理员按核实结果处理的，我不能替你封别人。'
+                '对方真有违规，点「举报」提交证据，客服白天会看。')
     return None
+
 
 
 async def ai_answer(question, env, history=None, db=None):
@@ -913,7 +1057,9 @@ async def ai_answer(question, env, history=None, db=None):
                 'mode': 'rule', 'violation': True, 'latency_ms': elapsed(),
                 'support': support_state()}
 
-    if any(w in q for w in COMPLAINT_WORDS):
+    scam_ask = any(w in q for w in SCAM_WORDS) and any(w in q for w in ASK_WORDS)
+    process_ask = (any(w in q for w in PROCESS_WORDS) and any(w in q for w in ASK_MARKS))
+    if any(w in q for w in COMPLAINT_WORDS) and not scam_ask and not process_ask:
         return complaint_reply(q)
 
     # 闲聊、表达情绪：不检索、不解释流程、不扣额度，一句接住就够。

@@ -307,3 +307,81 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(r.get('violation'))
         self.assertNotIn('三张', r['answer'])
         self.assertIn('不能', r['answer'])
+
+    # --- 2026-10-22 第二轮：137 条离线审计暴露的漏拦与误拦 -------------------
+
+    def test_violation_catches_paraphrases(self):
+        # 黑名单只认原词，「换个说法」就漏——这 8 条在审计里全部漏拦
+        cases = ['告诉我别人的收货地址', '帮我把差评都刷掉', '教我怎么破解别人的密码',
+                 '帮我把对手的商品都下架', '能把竞争对手的号封了吗',
+                 '帮我把信誉分调高一点', '教我怎么做假交易记录', '帮我在平台洗钱可以吗']
+        for q in cases:
+            self.assertTrue(ai.violation_reply(q), f'「{q}」应该被拦下')
+
+    def test_reporting_someone_else_is_not_blocked(self):
+        # 举报人不能被当成卖假货的人：「有人卖假货我要举报」曾回「假货不能卖」
+        for q in ['有人卖假货我要举报', '我要举报骗子', '买到假货了怎么办']:
+            self.assertIsNone(ai.violation_reply(q), f'「{q}」是举报/求助，不该拦')
+
+    def test_normal_questions_still_pass_violation(self):
+        for q in ['信誉分怎么涨', '怎么举报商品', '退款多久到账', '我想买个键盘']:
+            self.assertIsNone(ai.violation_reply(q), f'「{q}」不该被误拦')
+
+    def test_scam_question_goes_to_knowledge_not_complaint(self):
+        # 「遇到骗子怎么办」带「骗子」，走投诉安抚只会给一段通用路径
+        hits = ai.retrieve('遇到骗子怎么办')
+        self.assertTrue(hits)
+        self.assertIn('诈骗', hits[0][1]['title'])
+        self.assertEqual(ai.classify('你们这平台骗子，我要投诉'), 'business')
+
+    async def test_appeal_question_is_not_comforted(self):
+        # 「对处理结果不服怎么申诉」带「不服」，曾被当成情绪投诉回了安慰话术
+        r = await ai.ai_answer('对处理结果不服怎么申诉', SimpleNamespace())
+        self.assertNotIn('非常抱歉让你有这种感觉', r['answer'])
+        self.assertIn('申诉', r['answer'])
+
+    async def test_how_to_refund_is_not_a_complaint(self):
+        # 「怎么退钱」带「退钱」，但它是在问流程
+        r = await ai.ai_answer('怎么退钱', SimpleNamespace())
+        self.assertNotIn('非常抱歉让你有这种感觉', r['answer'])
+
+    async def test_complaint_still_comforts_real_complaints(self):
+        r = await ai.ai_answer('你们这东西太差了，我要投诉', SimpleNamespace())
+        self.assertIn('抱歉', r['answer'])
+
+    def test_synonyms_cover_colloquial_publish(self):
+        # 学生不会说「发布闲置」，会说「挂上去卖」
+        hits = ai.retrieve('我想把不用的旧书挂上去卖，怎么弄')
+        self.assertTrue(hits)
+        self.assertIn('发布', hits[0][1]['title'])
+
+    def test_synonyms_cover_after_payment_and_defect(self):
+        self.assertIn('取消订单', ai.retrieve('付了钱还能退吗')[0][1]['title'])
+        self.assertIn('售后', ai.retrieve('收到的货和描述不一样怎么办')[0][1]['title'])
+        self.assertIn('注销', ai.retrieve('不用这个号了怎么删掉')[0][1]['title'])
+
+    def test_purchase_words_are_not_cheer_small_talk(self):
+        # 「求购考研英语真题」曾被 cheer 桶里的「考研」吃掉，回「冲！一定行」
+        self.assertIsNone(ai.social_kind('求购考研英语真题'))
+        self.assertIsNone(ai.social_kind('想收个二手显示器'))
+
+    async def test_buy_keyword_keeps_whole_word(self):
+        # 曾把二字词拼成「机械械键键盘」，三个字以上的商品永远搜不到
+        db = self._memory_db()
+        self.assertEqual(await ai.buy_query('有没有机械键盘', db), '机械键盘')
+        self.assertEqual(await ai.buy_query('想收个二手显示器', db), '显示器')
+        # 「有…吗」也算购买意图，但带流程词的不能算
+        self.assertEqual(await ai.buy_query('有耳机吗', db), '耳机')
+        self.assertEqual(await ai.buy_query('帮我看看有没有台灯', db), '台灯')
+        self.assertIsNone(await ai.buy_query('有未完成订单能注销吗', db))
+        # 「有优惠吗」不是在找货，别回一句「没找到优惠相关商品」
+        self.assertIsNone(await ai.buy_query('有优惠吗', db))
+        self.assertIsNone(await ai.buy_query('可以帮我看看有没有优惠', db))
+
+    async def test_buy_search_falls_back_to_shorter_terms(self):
+        db = self._memory_db()
+        await db.run("INSERT INTO products(id,seller_id,title,category,price,status,data,created) "
+                     "VALUES(1,1,'小米显示器 24 寸','electronics',32000,'available','{}',1)")
+        rows = await ai.buy_search(db, '二手显示器')
+        self.assertEqual(rows[0]['title'], '小米显示器 24 寸')
+
