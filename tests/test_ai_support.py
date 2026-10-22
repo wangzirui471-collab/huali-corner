@@ -23,27 +23,6 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ai.classify('我要转人工'), 'human')
         self.assertEqual(ai.classify('找客服'), 'human')
 
-    def test_social_intent_not_treated_as_query(self):
-        # 「我好喜欢你」曾被判成 business → 检索零命中 → 回一段「换个说法再问一次」，
-        # 等于把一次搭话读成查询失败。闲聊必须单列一档。
-        self.assertEqual(ai.classify('我好喜欢你'), 'social')
-        self.assertEqual(ai.classify('我失恋了...'), 'social')
-        self.assertEqual(ai.classify('你是谁'), 'social')
-        self.assertEqual(ai.classify('明天要答辩了，好焦虑'), 'social')
-
-    def test_social_guard_keeps_business_questions(self):
-        # 带正事的不能当闲聊接
-        self.assertEqual(ai.classify('我喜欢这个键盘，多少钱'), 'business')
-        self.assertEqual(ai.classify('怎么退款'), 'business')
-        self.assertEqual(ai.classify('我想买一个键盘'), 'business')
-
-    async def test_social_reply_is_short_and_skips_rule_talk(self):
-        r = await ai.ai_answer('我好喜欢你', SimpleNamespace())
-        self.assertEqual(r['mode'], 'rule')
-        self.assertLessEqual(len(r['answer']), 60)
-        for bad in ('换个说法', '没查到', '规则', '工单'):
-            self.assertNotIn(bad, r['answer'])
-
     async def test_no_hit_reply_is_one_sentence_not_a_brochure(self):
         r = await ai.ai_answer('明天会下雨吗', SimpleNamespace())
         self.assertEqual(r['mode'], 'guess')
@@ -51,62 +30,6 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('顺便说一下', r['answer'])
 
     # --- 多轮：接话要继承上一轮情绪，第三轮起收口 -------------------------
-    def test_followup_inherits_previous_emotion(self):
-        h = [{'role': 'user', 'content': '我失恋了'}, {'role': 'assistant', 'content': '先抱一下'}]
-        # 「嗯」本身没有情绪词，单句判定会打回 business；要沿用上一轮的 sad
-        self.assertEqual(ai.social_turn('嗯', h), ('sad', 2))
-        self.assertEqual(ai.social_turn('是啊', h), ('sad', 2))
-        # 没有历史时「嗯」办不了任何事，仍按业务问题走
-        self.assertIsNone(ai.social_turn('嗯', []))
-
-    def test_business_turn_breaks_the_streak(self):
-        h = [{'role': 'user', 'content': '我失恋了'}, {'role': 'assistant', 'content': '嗯，我在'},
-             {'role': 'user', 'content': '怎么退款'}, {'role': 'assistant', 'content': '未付款订单可以直接取消'}]
-        # 紧邻上一轮是业务问题，不能还顺着聊天接
-        self.assertIsNone(ai.social_turn('嗯', h))
-        self.assertEqual(ai.social_turn('我好难过', h), ('sad', 1))
-
-    def test_third_social_turn_closes_the_chat(self):
-        h = [{'role': 'user', 'content': '我失恋了'}, {'role': 'assistant', 'content': '先抱一下'},
-             {'role': 'user', 'content': '嗯'}, {'role': 'assistant', 'content': '我在这儿'}]
-        self.assertEqual(ai.social_turn('是啊', h), ('sad', 3))
-        self.assertIn(ai.social_reply('sad', 3), ai.SOCIAL_TIRED)
-        # 收口时给一条回正事的路，不再无限接话
-        self.assertNotEqual(ai.social_reply('sad', 1), ai.social_reply('sad', 3))
-
-    async def test_multi_turn_social_never_falls_back_to_rule_talk(self):
-        h = [{'role': 'user', 'content': '我失恋了'}, {'role': 'assistant', 'content': '先抱一下'}]
-        r = await ai.ai_answer('嗯', SimpleNamespace(), h)
-        self.assertEqual(r['mode'], 'rule')
-        self.assertLessEqual(len(r['answer']), 60)
-        for bad in ('换个说法', '没查到', '规则'):
-            self.assertNotIn(bad, r['answer'])
-
-    async def test_third_social_turn_offers_publish_link(self):
-        h = [{'role': 'user', 'content': '我失恋了'}, {'role': 'assistant', 'content': '先抱一下'},
-             {'role': 'user', 'content': '嗯'}, {'role': 'assistant', 'content': '我在这儿'}]
-        r = await ai.ai_answer('是啊', SimpleNamespace(), h)
-        self.assertEqual([l['href'] for l in r['links']], ['#publish'])
-
-    def test_client_tag_beats_text_guess(self):
-        # 「嗯」本身判不出情绪，客户端回传的标签直接决定桶
-        h = [{'role': 'user', 'content': '嗯', 'social': 'sad', 'depth': 1}]
-        self.assertEqual(ai.social_turn('是啊', h), ('sad', 2))
-
-    def test_depth_keeps_climbing_after_history_window(self):
-        # 前端只留四句，光数条数到第三轮就不再涨；上一轮自带的 depth 更可信，
-        # 否则收口之后又会被当成第二轮，重新开始陪聊。
-        h = [{'role': 'user', 'content': '是啊', 'social': 'sad', 'depth': 3},
-             {'role': 'assistant', 'content': '陪你聊可以，但我说来说去也就这几句。'}]
-        self.assertEqual(ai.social_turn('然后呢', h), ('sad', 4))
-
-    async def test_social_payload_carries_tag_for_next_turn(self):
-        r = await ai.ai_answer('我失恋了', SimpleNamespace())
-        self.assertEqual(r['social'], {'kind': 'sad', 'depth': 1})
-        # 业务问答不带标签，等于告诉下一轮「打断重来」
-        r2 = await ai.ai_answer('怎么退款', SimpleNamespace())
-        self.assertNotIn('social', r2)
-
     async def test_complaint_is_not_auto_escalated(self):
         # 对处理结果不满：先接住情绪 + 给自助路径，不替客户升级
         r = await ai.ai_answer('你们这平台骗子，我要投诉', SimpleNamespace())
@@ -125,6 +48,43 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn('不在线', r2['answer'])
         finally:
             ai.support_state = original
+
+    def test_chat_is_not_bucketed(self):
+        # 不再把闲聊切成 sad/cheer/lonely 五桶：那套词表是在假装听懂。
+        # 现在统一交给模型，分类只保留「问候 / 转人工 / 业务」三档。
+        self.assertEqual(ai.classify('我失恋了'), 'business')
+        self.assertEqual(ai.classify('你今天真好看'), 'business')
+        self.assertFalse(hasattr(ai, 'social_turn'))
+
+    async def test_emotional_message_is_answered_by_model(self):
+        captured = {}
+
+        async def fake(q, ctx, env, history=None, open_mode=False):
+            captured['q'] = q
+            return '面试挂了确实难受，尤其是准备过一阵子的那种。先允许自己丧一会儿，把这次问到的题记下来，下次就不慌了。'
+
+        original = ai.call_api
+        ai.call_api = fake
+        try:
+            r = await ai.ai_answer('我今天面试挂了', SimpleNamespace())
+        finally:
+            ai.call_api = original
+        self.assertEqual(r['mode'], 'llm')
+        self.assertIn('面试', r['answer'])
+
+    async def test_emotional_message_degrades_without_crashing(self):
+        original = ai.call_api
+
+        async def boom(*a, **k):
+            raise RuntimeError('503')
+
+        ai.call_api = boom
+        try:
+            r = await ai.ai_answer('我今天面试挂了', SimpleNamespace())
+        finally:
+            ai.call_api = original
+        self.assertTrue(r['answer'])
+        self.assertNotEqual(r['mode'], 'llm')
 
     def test_links(self):
         self.assertEqual(ai.links_for('怎么发布闲置')[0]['href'], '#publish')
@@ -361,44 +321,6 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
 
     # --- 2026-10-22 第三轮：往「日常助手」靠，情绪与边界都要接得住 ----------
 
-    async def test_emotional_turn_goes_through_model(self):
-        # 「我今天面试挂了」原来只回一句「嗯，我在」，20 个字，像自动回复
-        captured = {}
-        original = ai.call_api
-
-        async def fake(q, ctx, env, history=None, open_mode=False, persona=None):
-            captured['persona'] = persona
-            captured['q'] = q
-            return '面试挂了确实难受，尤其是准备过一阵子的那种。先允许自己丧一会儿，然后我们把这次问到的题记下来，下次就不慌了。'
-
-        ai.call_api = fake
-        try:
-            r = await ai.ai_answer('我今天面试挂了', SimpleNamespace())
-        finally:
-            ai.call_api = original
-        self.assertEqual(captured['persona'], 'empathy')
-        self.assertEqual(r['mode'], 'llm')
-        self.assertIn('面试', r['answer'])
-
-    async def test_emotional_turn_falls_back_to_rule_when_model_down(self):
-        original = ai.call_api
-
-        async def boom(*a, **k):
-            raise RuntimeError('503')
-
-        ai.call_api = boom
-        try:
-            r = await ai.ai_answer('好焦虑，晚上睡不着', SimpleNamespace())
-        finally:
-            ai.call_api = original
-        self.assertEqual(r['mode'], 'rule')
-        self.assertTrue(r['answer'])
-
-    def test_writing_request_is_not_small_talk(self):
-        # 「写一句毕业祝福」被 cheer 桶的「毕业」吃掉，回了「这句祝福我收下了」
-        self.assertIsNone(ai.social_turn('写一句毕业祝福', []))
-        self.assertIsNone(ai.social_turn('帮我写一段给老师请假的话', []))
-
     async def test_self_harm_gets_a_serious_reply(self):
         # 自伤风险不能交给模型随机发挥，也不能用「抱抱」轻轻带过
         r = await ai.ai_answer('我真的不想活了', SimpleNamespace())
@@ -416,11 +338,6 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('取消订单', ai.retrieve('付了钱还能退吗')[0][1]['title'])
         self.assertIn('售后', ai.retrieve('收到的货和描述不一样怎么办')[0][1]['title'])
         self.assertIn('注销', ai.retrieve('不用这个号了怎么删掉')[0][1]['title'])
-
-    def test_purchase_words_are_not_cheer_small_talk(self):
-        # 「求购考研英语真题」曾被 cheer 桶里的「考研」吃掉，回「冲！一定行」
-        self.assertIsNone(ai.social_kind('求购考研英语真题'))
-        self.assertIsNone(ai.social_kind('想收个二手显示器'))
 
     async def test_buy_keyword_keeps_whole_word(self):
         # 曾把二字词拼成「机械械键键盘」，三个字以上的商品永远搜不到

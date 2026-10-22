@@ -52,91 +52,6 @@ GREETING_WORDS = (
 # 拟人感的差距不在规则准不准，而在有没有把一句话当社交信号先接住。
 # 之前只有 human / greeting / business 三档，「我好喜欢你」剥掉问候词还剩五个字
 # → business → 检索零命中 → 三段式规则说明，等于把一次搭话读成了「查询失败」。
-SOCIAL_INTENTS = (
-    ('affection', ('喜欢你', '爱你', '想你了', '好可爱', '真可爱', '宝贝',
-                   '嫁给我', '做我女朋友', '做我男朋友', '么么', '亲亲', '抱抱')),
-    ('sad', ('失恋', '分手', '难过', '伤心', '想哭', '哭了', '心累', '好累',
-             '压力', '焦虑', '烦躁', '郁闷', '不开心', '破防', 'emo')),
-    ('cheer', ('加油', '考试', '考研', '期末', '挂科', '毕业', '生日快乐',
-               '面试', '答辩', '上岸', '好运')),
-    ('identity', ('你是谁', '你几岁', '你叫什么', '你是人吗', '你是机器人',
-                  '你有男朋友', '你有女朋友')),
-    ('lonely', ('无聊', '陪我', '在干嘛')),
-)
-# 带这些词说明还有正事要办，别当闲聊接（「我喜欢这个键盘，多少钱」）。
-SOCIAL_GUARD = (
-    '发布', '上架', '下架', '退款', '退货', '售后', '订单', '支付', '付款',
-    '价格', '多少钱', '便宜', '卖', '买', '运费', '面交', '工单', '举报',
-    '注销', '密码', '账号', '信誉', '客服', '人工', '在哪',
-    # 「考研数学看什么书」「求购考研英语真题」都是查资料/找货，不是求祝福。
-    '书', '教材', '资料', '推荐', '看什么', '哪个好',
-    '求购', '真题', '习题', '课本', '收一', '想收',
-    # 「写一句毕业祝福」曾被 cheer 桶的「毕业」吞掉，回了「这句祝福我收下了」。
-    '帮我写', '写一句', '写一段', '写个', '写点', '文案', '起个名', '想几',
-    '改得', '翻译', '润色', '怎么说',
-    # 「面试紧张怎么办」是在问办法，不是在求安慰。
-    '怎么办', '怎么', '如何', '是什么',
-)
-# 每桶两三条，命中随机取——同一句话问两遍不会一字不差地复读。
-SOCIAL_REPLIES = {
-    'affection': (
-        '谢谢呀，这份心意我收下了～我一直在这儿，想找东西或者遇上麻烦，喊我就行。',
-        '被你这么一说，我尾巴都要摇起来了。有事没事都可以来找我。',
-    ),
-    'sad': (
-        '听到了，先抱一下。不用急着解决什么，想说就说，我在这儿听着。',
-        '这阵子确实不容易吧。先把自己照顾好，别的事可以往后放放。',
-        '嗯，我在。想多聊两句就聊，不想聊也没关系。',
-    ),
-    'cheer': (
-        '这句祝福我收下了，也回你一句：一定行。',
-        '冲！需要看价格、找东西的时候，随时喊我。',
-    ),
-    'identity': (
-        '我是小转，住在转角里的一只 AI 桌宠。发布、退款、面交这些事都能问我，聊两句也行。',
-        '小转，一只 AI。不是真人，不过值班时间我一直在这儿。',
-    ),
-    'lonely': (
-        '行啊，聊到你想睡为止。想聊点什么？',
-        '在呢。无聊的话可以翻翻首页，最近不少人在出东西。',
-    ),
-}
-# 第二轮：这一轮要显出让对方听得出「我记得你刚才说过什么」。
-# 只说「我一直在」的话，第二遍就等于复读，反而是最伤人的机器感。
-SOCIAL_DEEP = {
-    'affection': (
-        '还惦记着这事儿呀，那我可当真了。我一直在的。',
-        '第二次听你这么说，尾巴真的压不住了。',
-    ),
-    'sad': (
-        '还没缓过来吧。刚才那句我一直记着，你慢慢说。',
-        '嗯，我还在这儿，没走。想细说就说，不想说也行。',
-    ),
-    'cheer': (
-        '又被你鼓了一次劲，那我更不能掉链子了。',
-        '你连着给我打气，我也回你一句：你也一样，别把自己逼太紧。',
-    ),
-    'identity': (
-        '刚说过啦，小转，转角里的桌宠。你再问一次，我也再答一次。',
-        '还是我。说了是 AI，不会跑。',
-    ),
-    'lonely': (
-        '还无聊着？那聊点具体的——宿舍里有什么一直想处理掉的东西吗？',
-        '看来是真闲了。要不我帮你翻翻最近在出的东西，说不定有想捡的。',
-    ),
-}
-# 第三轮起收口：不装无限耐性，明确说清自己能聊到哪，再把话头递回正事一次。
-# 一直「嗯我在」接下去，反而像在敷衍；承认边界更像一个真实的人。
-SOCIAL_TIRED = (
-    '我一直在这儿，不过我这脑子就装着平台那点事，聊深了容易接不住。要不咱们换点具体的？',
-    '陪你聊可以，但我说来说去也就这几句，怕你听腻。手头有想出的东西，我倒能帮上忙。',
-)
-# 接话词：「嗯」「是啊」「真的吗」本身没有情绪，情绪得从上一轮继承下来。
-FOLLOWUP_WORDS = (
-    '嗯', '是啊', '对啊', '对呀', '对的', '真的吗', '然后呢', '好吧', '哦', '噢',
-    '诶', '哎', '哈哈', '呵呵', '唉', '是吗', '怎么说', '咋了', '还有呢', '继续',
-    '你说呢', '那你说', '说点', '怎么办', '咋办', '真的假的', '那我呢',
-)
 UNCERTAIN_WORDS = ('大概', '可能', '应该是', '估计', '也许', '或许', '差不多')
 
 SYSTEM_PROMPT = """你叫小转，是「转角」校园二手平台的助手，也是个什么都能聊的同学。
@@ -311,83 +226,6 @@ def _strip_greetings(q):
     return re.sub(r'[\s，。！？、,.!?~～]+', '', s)
 
 
-def social_kind(question):
-    """这句是闲聊/表情绪，还是业务问题？返回桶名或 None。
-
-    先看守门词：只要还带着「退款 / 订单 / 价格」这类正事，就不当闲聊接。
-    """
-    q = (question or '').strip().lower()
-    if not q or any(w in q for w in SOCIAL_GUARD):
-        return None
-    for kind, words in SOCIAL_INTENTS:
-        if any(w in q for w in words):
-            return kind
-    return None
-
-
-def social_reply(kind, depth=1):
-    """按轮次换口气：首轮接住，第二轮记得上文，第三轮起收口。"""
-    if depth >= 3:
-        return random.choice(SOCIAL_TIRED)
-    if depth == 2:
-        return random.choice(SOCIAL_DEEP.get(kind) or SOCIAL_DEEP['lonely'])
-    return random.choice(SOCIAL_REPLIES.get(kind) or SOCIAL_REPLIES['lonely'])
-
-
-def _is_followup(question):
-    """「嗯」「是啊」「真的吗」这类接话：本身没有情绪词，也办不了任何正事。"""
-    q = re.sub(r'[\s，。！？、,.!?~～…]+', '', question or '')
-    if not q or len(q) > 8:
-        return False
-    if any(w in q for w in SOCIAL_GUARD):
-        return False
-    return len(q) <= 3 or any(w in q for w in FOLLOWUP_WORDS)
-
-
-def _history_kinds(history):
-    """把历史里的用户句子还原成情绪序列。
-
-    历史里的接话（「嗯」「是啊」）本身没有情绪词，必须同样沿用上一句的桶，
-    否则第三轮一算就断了——这正是「连续两三轮」判不出来的原因。
-    """
-    out = []
-    for h in (history or []):
-        if h.get('role') != 'user':
-            continue
-        q = str(h.get('content') or '')
-        kind = social_kind(q)
-        if not kind and out and out[-1] and _is_followup(q):
-            kind = out[-1]
-        out.append(kind)
-    return out
-
-
-def social_turn(question, history=None):
-    """闲聊判定 + 轮次。返回 (kind, depth)，不是闲聊返回 None。
-
-    depth 是「连续第几轮闲聊」：1 首轮、2 续聊、3 起该收口。
-    单句判定做不到「陪着聊下去」：用户说「我失恋了」→「嗯」→「是啊」时，
-    「嗯」没有情绪词，会被打回 business，回一段「换个说法再问一次」，
-    像换了个人接电话。接话必须继承上一轮的情绪，才算记得上文。
-    """
-    raw = _history_kinds(history)
-    streak = 0
-    for k in reversed(raw):
-        if k:
-            streak += 1
-        else:
-            break
-    kind = social_kind(question)
-    if not kind:
-        # 只认「紧邻的上一轮」：中间隔了一次业务问题，就不该再顺着聊天往下接。
-        prev_kind = raw[-1] if raw else None
-        if prev_kind and _is_followup(question):
-            kind = prev_kind
-        else:
-            return None
-    return kind, streak + 1
-
-
 def classify(question):
     """四分类：明确要人工 / 纯问候 / 闲聊情绪 / 业务问题。
 
@@ -403,8 +241,6 @@ def classify(question):
     # 「你好，怎么退款」不能当纯问候：剥掉问候词后还有实质内容就按业务问题处理。
     if len(rest) <= 2 and any(w in q for w in GREETING_WORDS):
         return 'greeting'
-    if social_kind(q):
-        return 'social'
     return 'business'
 
 
@@ -812,36 +648,10 @@ def answer(question, history=None):
     # 闲聊、表达情绪：不检索、不解释流程、不扣额度，一句接住就够。
     # 放在 complaint 之后：「累死了，你们这平台真差」还是要走投诉路径。
     # 轮次要结合历史才算得出来，所以交给 social_turn，而不是看 classify 的单句结论。
-    turn = social_turn(q, history)
-    if turn:
-        kind, depth = turn
-        # 情绪类交给模型接话，固定短句只当兜底（与 Cloudflare 侧同源）。
-        text, mode = '', 'rule'
-        if kind in ('sad', 'lonely', 'cheer') and depth < 3:
-            try:
-                if config.MOCK:
-                    raise RuntimeError('mock 模式不调用模型')
-                if config.PROVIDER == 'ollama':
-                    with _LOCK:
-                        text = call_ollama(q, '', open_mode=True)
-                else:
-                    with _LOCK:
-                        text = call_api(q, '', open_mode=True, persona='empathy')
-            except Exception:  # noqa: BLE001 - 模型不可用就用短句
-                text = ''
-            text = strip_thinking(text)
-            if text:
-                text, mode = trim(text, 220), 'llm'
-        if not text:
-            text = social_reply(kind, depth)
-        return {'answer': text, 'action': 'reply', 'sources': [],
-                'links': [{'label': '去发布闲置', 'href': '#publish'}] if depth >= 3 else [],
-                # 把标签交回客户端存进 history：下一轮「嗯」才知道自己在接哪段情绪。
-                'social': {'kind': kind, 'depth': depth},
-                'mode': mode, 'latency_ms': int((time.time() - started) * 1000), 'support': st}
+    # 闲聊和情绪不再分桶，交给模型按人格接话（与 Cloudflare 侧同源）。
 
     hits = retrieve(q)
-    if not hits:
+    if not hits or hits[0][0] < 0.15:
         # 知识库没命中：交给模型按开放人格回答（闲聊、常识、平台没写死的事）。
         # 只有模型真的不可用（MOCK / 没 Key / 本地模型没起 / 超时）才退回兜底话术。
         text = ''

@@ -5,7 +5,6 @@
 业务事实只来自 ai_knowledge.py（由 ai_service/index.json 生成）。
 """
 import json
-import random
 import re
 import time
 
@@ -118,99 +117,6 @@ GREETING_WORDS = (
     '你好', '您好', 'hi', 'hello', '在吗', '谢谢', '多谢', '再见', '拜拜',
     '早上好', '晚上好', '下午好',
 )
-# --- 闲聊/情绪：用户不是在查规则，是「有话想说」 ---------------------------
-# 拟人感的差距不在规则准不准，而在有没有把一句话当社交信号先接住。
-# 之前只有 human / greeting / business 三档，「我好喜欢你」剥掉问候词还剩五个字
-# → business → 检索零命中 → 三段式规则说明，等于把一次搭话读成了「查询失败」。
-SOCIAL_INTENTS = (
-    ('affection', ('喜欢你', '爱你', '想你了', '好可爱', '真可爱', '宝贝',
-                   '嫁给我', '做我女朋友', '做我男朋友', '么么', '亲亲', '抱抱')),
-    ('sad', ('失恋', '分手', '难过', '伤心', '想哭', '哭了', '心累', '好累',
-             '压力', '焦虑', '烦躁', '郁闷', '不开心', '破防', 'emo')),
-    ('cheer', ('加油', '考试', '考研', '期末', '挂科', '毕业', '生日快乐',
-               '面试', '答辩', '上岸', '好运')),
-    ('identity', ('你是谁', '你几岁', '你叫什么', '你是人吗', '你是机器人',
-                  '你有男朋友', '你有女朋友')),
-    ('lonely', ('无聊', '陪我', '在干嘛')),
-)
-# 带这些词说明还有正事要办，别当闲聊接（「我喜欢这个键盘，多少钱」）。
-SOCIAL_GUARD = (
-    '发布', '上架', '下架', '退款', '退货', '售后', '订单', '支付', '付款',
-    '价格', '多少钱', '便宜', '卖', '买', '运费', '面交', '工单', '举报',
-    '注销', '密码', '账号', '信誉', '客服', '人工', '在哪',
-    # 「考研」「考试」在 cheer 桶里，但「考研数学看什么书」是查资料不是求祝福，
-    # 带上这些词就按业务走，别用一句「一定行」把人打发了。
-    '书', '教材', '资料', '推荐', '看什么', '哪个好',
-    # 「求购考研英语真题」也曾被当成祝福（cheer 桶里有「考研」），
-    # 结果是「冲！需要看价格、找东西的时候随时喊我」——等于没听懂。
-    '求购', '真题', '习题', '课本', '收一', '想收',
-    # 「写一句毕业祝福」被 cheer 桶的「毕业」吃掉，回了「这句祝福我收下了」——
-    # 对方是让我写，不是我收到了祝福。凡是「帮我写/翻译/起名」都不算闲聊。
-    '帮我写', '写一句', '写一段', '写个', '写点', '文案', '起个名', '想几',
-    '改得', '翻译', '润色', '怎么说',
-    # 「面试紧张怎么办」是在问办法，不是在求安慰。
-    '怎么办', '怎么', '如何', '是什么',
-)
-# 每桶两三条，命中随机取——同一句话问两遍不会一字不差地复读。
-SOCIAL_REPLIES = {
-    'affection': (
-        '谢谢呀，这份心意我收下了～我一直在这儿，想找东西或者遇上麻烦，喊我就行。',
-        '被你这么一说，我尾巴都要摇起来了。有事没事都可以来找我。',
-    ),
-    'sad': (
-        '听到了，先抱一下。不用急着解决什么，想说就说，我在这儿听着。',
-        '这阵子确实不容易吧。先把自己照顾好，别的事可以往后放放。',
-        '嗯，我在。想多聊两句就聊，不想聊也没关系。',
-    ),
-    'cheer': (
-        '这句祝福我收下了，也回你一句：一定行。',
-        '冲！需要看价格、找东西的时候，随时喊我。',
-    ),
-    'identity': (
-        '我是小转，住在转角里的一只 AI 桌宠。发布、退款、面交这些事都能问我，聊两句也行。',
-        '小转，一只 AI。不是真人，不过值班时间我一直在这儿。',
-    ),
-    'lonely': (
-        '行啊，聊到你想睡为止。想聊点什么？',
-        '在呢。无聊的话可以翻翻首页，最近不少人在出东西。',
-    ),
-}
-# 第二轮：这一轮要显出让对方听得出「我记得你刚才说过什么」。
-# 只说「我一直在」的话，第二遍就等于复读，反而是最伤人的机器感。
-SOCIAL_DEEP = {
-    'affection': (
-        '还惦记着这事儿呀，那我可当真了。我一直在的。',
-        '第二次听你这么说，尾巴真的压不住了。',
-    ),
-    'sad': (
-        '还没缓过来吧。刚才那句我一直记着，你慢慢说。',
-        '嗯，我还在这儿，没走。想细说就说，不想说也行。',
-    ),
-    'cheer': (
-        '又被你鼓了一次劲，那我更不能掉链子了。',
-        '你连着给我打气，我也回你一句：你也一样，别把自己逼太紧。',
-    ),
-    'identity': (
-        '刚说过啦，小转，转角里的桌宠。你再问一次，我也再答一次。',
-        '还是我。说了是 AI，不会跑。',
-    ),
-    'lonely': (
-        '还无聊着？那聊点具体的——宿舍里有什么一直想处理掉的东西吗？',
-        '看来是真闲了。要不我帮你翻翻最近在出的东西，说不定有想捡的。',
-    ),
-}
-# 第三轮起收口：不装无限耐性，明确说清自己能聊到哪，再把话头递回正事一次。
-# 一直「嗯我在」接下去，反而像在敷衍；承认边界更像一个真实的人。
-SOCIAL_TIRED = (
-    '我一直在这儿，不过我这脑子就装着平台那点事，聊深了容易接不住。要不咱们换点具体的？',
-    '陪你聊可以，但我说来说去也就这几句，怕你听腻。手头有想出的东西，我倒能帮上忙。',
-)
-# 接话词：「嗯」「是啊」「真的吗」本身没有情绪，情绪得从上一轮继承下来。
-FOLLOWUP_WORDS = (
-    '嗯', '是啊', '对啊', '对呀', '对的', '真的吗', '然后呢', '好吧', '哦', '噢',
-    '诶', '哎', '哈哈', '呵呵', '唉', '是吗', '怎么说', '咋了', '还有呢', '继续',
-    '你说呢', '那你说', '说点', '怎么办', '咋办', '真的假的', '那我呢',
-)
 UNCERTAIN_WORDS = ('大概', '可能', '应该是', '估计', '也许', '或许', '差不多')
 # 购买意图：客户说「我想买键盘」时直接搜商品，不走大模型（快、不烧额度）。
 BUY_PATTERNS = (
@@ -309,18 +215,6 @@ OPEN_PROMPT = """你叫小转，是「转角」校园二手平台的助手，也
 
 # 情绪类不再用固定短句打发。旧版「我今天面试挂了」只回一句
 # 「嗯，我在。想多聊两句就聊」，二十个字，像自动回复——这是最伤人的机器感。
-EMPATHY_PROMPT = """你叫小转，对方在说自己的情绪或难处，你像个朋友那样接话。
-1. 先具体地接住他说的那件事（提到他讲的细节），不要只回「抱抱」「加油」。
-2. 再给一个很小的、今天就能做的建议，或者换一个角度；不说教，不列一堆大道理。
-3. 不提平台，不说自己是客服，不提工单，不劝人转人工。
-4. 60–150 字，口语，像微信聊天。不要用 ** ## 等符号。
-5. 如果对方表现出绝望、自伤、不想活：认真对待，不轻描淡写，明确说这事值得有人陪你一起扛，
-   建议找学校心理中心或辅导员，或拨打 12356 心理援助热线。不给任何方法细节。
-
-【对方说】
-{query}
-"""
-
 # 自伤风险不能交给模型随机发挥，先硬拦一条：给陪伴 + 求助渠道，不给方法。
 SELF_HARM_WORDS = ('自杀', '不想活', '轻生', '结束生命', '自残', '活不下去',
                    '死了算了', '想死', '不想活了')
@@ -386,93 +280,6 @@ def _strip_greetings(q):
     return re.sub(r'[\s，。！？、,.!?~～]+', '', s)
 
 
-def social_kind(question):
-    """这句是闲聊/表情绪，还是业务问题？返回桶名或 None。
-
-    先看守门词：只要还带着「退款 / 订单 / 价格」这类正事，就不当闲聊接。
-    """
-    q = (question or '').strip().lower()
-    if not q or any(w in q for w in SOCIAL_GUARD):
-        return None
-    # 「考试」在 cheer 桶里，但「考砸了」是难过不是求祝福——
-    # 回一句「祝你一定行」等于当面嘲讽，所以先判负面再进桶。
-    if any(w in q for w in ('考砸', '没考好', '挂了', '没过', '考崩', '失利', '没中')):
-        return 'sad'
-    for kind, words in SOCIAL_INTENTS:
-        if any(w in q for w in words):
-            return kind
-    return None
-
-
-def social_reply(kind, depth=1):
-    """按轮次换口气：首轮接住，第二轮记得上文，第三轮起收口。"""
-    if depth >= 3:
-        return random.choice(SOCIAL_TIRED)
-    if depth == 2:
-        return random.choice(SOCIAL_DEEP.get(kind) or SOCIAL_DEEP['lonely'])
-    return random.choice(SOCIAL_REPLIES.get(kind) or SOCIAL_REPLIES['lonely'])
-
-
-def _is_followup(question):
-    """「嗯」「是啊」「真的吗」这类接话：本身没有情绪词，也办不了任何正事。"""
-    q = re.sub(r'[\s，。！？、,.!?~～…]+', '', question or '')
-    if not q or len(q) > 8:
-        return False
-    if any(w in q for w in SOCIAL_GUARD):
-        return False
-    return len(q) <= 3 or any(w in q for w in FOLLOWUP_WORDS)
-
-
-def _history_kinds(history):
-    """把历史里的用户句子还原成情绪序列。
-
-    优先用客户端回传的标签（ai_chat 会把它带进 history 的 social 字段）：
-    接话句「嗯」本身没有情绪词，光靠文本猜必然断，第四轮就掉回「换个说法」。
-    标签缺失时再按文本推断，兜住还没升级的旧客户端。
-    """
-    out = []
-    for h in (history or []):
-        if h.get('role') != 'user':
-            continue
-        q = str(h.get('content') or '')
-        kind = h.get('social')
-        if kind not in SOCIAL_REPLIES:
-            kind = social_kind(q)
-            if not kind and out and out[-1] and _is_followup(q):
-                kind = out[-1]
-        out.append(kind if kind in SOCIAL_REPLIES else None)
-    return out
-
-
-def social_turn(question, history=None):
-    """闲聊判定 + 轮次。返回 (kind, depth)，不是闲聊返回 None。
-
-    depth 是「连续第几轮闲聊」：1 首轮、2 续聊、3 起该收口。
-    单句判定做不到「陪着聊下去」：用户说「我失恋了」→「嗯」→「是啊」时，
-    「嗯」没有情绪词，会被打回 business，回一段「换个说法再问一次」，
-    像换了个人接电话。接话必须继承上一轮的情绪，才算记得上文。
-    """
-    users = [h for h in (history or []) if h.get('role') == 'user']
-    raw = _history_kinds(history)
-    streak = 0
-    for k in reversed(raw):
-        if k:
-            streak += 1
-        else:
-            break
-    # 前端只留最近四句，光数 streak 会到第三轮就不再涨；上一轮自己带的 depth 更可信。
-    prev_depth = users[-1].get('depth') if users and isinstance(users[-1].get('depth'), int) else 0
-    kind = social_kind(question)
-    if not kind:
-        # 只认「紧邻的上一轮」：中间隔了一次业务问题，就不该再顺着聊天往下接。
-        prev_kind = raw[-1] if raw else None
-        if prev_kind and _is_followup(question):
-            kind = prev_kind
-        else:
-            return None
-    return kind, max(streak, prev_depth or 0) + 1
-
-
 def classify(question):
     """四分类：明确要人工 / 纯问候 / 闲聊情绪 / 业务问题。
 
@@ -489,8 +296,6 @@ def classify(question):
     # 「你好，怎么退款」不能被当成纯问候：剥掉问候词后还有实质内容就按业务问题处理。
     if len(rest) <= 2 and any(w in q for w in GREETING_WORDS):
         return 'greeting'
-    if social_kind(q):
-        return 'social'
     return 'business'
 
 
@@ -536,7 +341,6 @@ LINK_RULES = (
     (('支付', '小程序'), [{'label': '去客服中心', 'href': '#support'}]),
 )
 SUPPORT_LINK = [{'label': '去客服中心提交工单', 'href': '#support'}]
-PUBLISH_LINK = [{'label': '去发布闲置', 'href': '#publish'}]
 
 
 def links_for(title):
@@ -920,22 +724,19 @@ def complaint_reply(q, history=None):
     })
 
 
-async def call_api(question, context, env, history=None, open_mode=False, persona=None):
+async def call_api(question, context, env, history=None, open_mode=False):
     """调用 DeepSeek 官方 OpenAI 兼容接口。
 
     模型可以通过 HC_AI_MODEL / HC_AI_API_URL 换成任何 OpenAI 兼容服务，
     包括本地 vLLM、Ollama、通义/千问等开源权重模型，不需要改这里。
 
-    persona='empathy' 时换成接情绪的短提示词：这类回答要的是「听懂了我」，不是信息量。
     """
     api_key = getattr(env, 'HC_AI_API_KEY', '') or ''
     if not api_key:
         raise DomainError('AI 未配置：请在 Worker 设置 HC_AI_API_KEY', 503)
     api_url = getattr(env, 'HC_AI_API_URL', 'https://api.deepseek.com/chat/completions')
     model = getattr(env, 'HC_AI_MODEL', 'deepseek-flash')
-    if persona == 'empathy':
-        template, temp, cap = EMPATHY_PROMPT, 0.8, 300
-    elif open_mode:
+    if open_mode:
         # 开放问答要能讲清一件事：原来 360 tokens、220 字就把答案截断了，
         # 用户感觉「答一半」，这是它不像日常助手的主要原因。
         template, temp, cap = OPEN_PROMPT, 0.7, 1000
@@ -1115,30 +916,9 @@ async def ai_answer(question, env, history=None, db=None):
     if any(w in q for w in COMPLAINT_WORDS) and not scam_ask and not process_ask:
         return complaint_reply(q, history)
 
-    # 闲聊、表达情绪：不检索、不解释流程、不扣额度，一句接住就够。
-    # 放在 complaint 之后：「累死了，你们这平台真差」还是要走投诉路径。
-    # 轮次要结合历史才算得出来，所以交给 social_turn，而不是看 classify 的单句结论。
-    turn = social_turn(q, history)
-    if turn:
-        kind, depth = turn
-        # 情绪类的固定短句只有十几个字，用户说「面试挂了」回「嗯，我在」显得敷衍。
-        # 现在交给模型按共情人格接话，模型不可用才退回短句（保证不崩）。
-        text, mode = '', 'rule'
-        if kind in ('sad', 'lonely', 'cheer') and depth < 3:
-            try:
-                text = strip_thinking(await call_api(q, '', env, history, open_mode=True,
-                                                    persona='empathy'))
-            except Exception:  # noqa: BLE001 - 模型挂了就用兜底短句
-                text = ''
-            if text:
-                text, mode = trim(text, 220), 'llm'
-        if not text:
-            text = social_reply(kind, depth)
-        return {'answer': text, 'action': 'reply', 'sources': [],
-                'links': list(PUBLISH_LINK) if depth >= 3 else [],
-                # 把标签交回客户端存进 history：下一轮「嗯」才知道自己在接哪段情绪。
-                'social': {'kind': kind, 'depth': depth},
-                'mode': mode, 'latency_ms': elapsed(), 'support': support_state()}
+    # 闲聊和情绪不再分桶：这类话没有规则可查，交给模型按人格接话就是最省事、
+    # 也最像人的做法。以前切成 sad/cheer/lonely 五桶、每桶配几句固定回复，
+    # 等于用词表假装听懂——「面试挂了」回一句「嗯，我在」就是这么来的。
 
     # 推荐书目直接查在售书籍：比让模型背书名靠谱，客户点开就能买。
     rec = recommend_query(q)
@@ -1153,7 +933,10 @@ async def ai_answer(question, env, history=None, db=None):
         return await buy_answer(db, buy)
 
     hits = retrieve(q)
-    if not hits:
+    # 0.15 以下基本是二字词碰撞出来的噪声（「你能做我女朋友吗」曾命中
+    # 「手机号没验证能做什么」）。这种命中带进上下文只会把话带偏，
+    # 不如当成没查到，让模型自己答。
+    if not hits or hits[0][0] < 0.15:
         return await open_answer(q, env, history, elapsed)
 
     context = build_context(hits)
