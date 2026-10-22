@@ -75,6 +75,35 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/reload':
             rag.reload_index()
             return self._send({'ok': True})
+        if path == '/describe':
+            data = self._read_json()
+            if not isinstance(data, dict):
+                return self._send({'error': '请求体必须是 JSON'}, 400)
+            title = str(data.get('title') or '').strip()
+            if not title:
+                return self._send({'error': '缺少 title'}, 400)
+            try:
+                return self._send(rag.describe(
+                    title, str(data.get('category') or '')[:20],
+                    str(data.get('condition') or '')[:20], str(data.get('extra') or '')[:300]))
+            except Exception as exc:  # noqa: BLE001 - 边界处返回可读错误
+                return self._send({'error': f'AI 服务内部错误：{type(exc).__name__}'}, 500)
+        if path == '/price':
+            data = self._read_json()
+            if not isinstance(data, dict):
+                return self._send({'error': '请求体必须是 JSON'}, 400)
+            title = str(data.get('title') or '').strip()
+            if not title:
+                return self._send({'error': '缺少 title'}, 400)
+            raw = data.get('samples')
+            samples = [int(p) for p in raw[:60] if str(p).lstrip('-').isdigit()] if isinstance(raw, list) else []
+            try:
+                return self._send(rag.price(
+                    title, str(data.get('category') or '')[:20],
+                    str(data.get('condition') or '')[:20],
+                    int(data.get('original_price') or 0), samples))
+            except Exception as exc:  # noqa: BLE001 - 边界处返回可读错误
+                return self._send({'error': f'AI 服务内部错误：{type(exc).__name__}'}, 500)
         if path != '/reply':
             return self._send({'error': 'not found'}, 404)
         data = self._read_json()

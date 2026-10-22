@@ -183,6 +183,8 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/ticket/reply' and method=='POST':return self.respond(m.reply_ticket(u,int(data['id']),data))
             if p=='/api/ai/reply' and method=='POST':return self.respond(m.ai_reply(u,int(data['ticket_id'])))
             if p=='/api/ai/chat' and method=='POST':return self.respond(m.ai_chat(u,data.get('question','')))
+            if p=='/api/ai/describe' and method=='POST':return self.respond(m.ai_describe(u,data))
+            if p=='/api/ai/price' and method=='POST':return self.respond(m.ai_price(u,data))
             if p=='/api/admin/ai':
                 return self.respond(m.ai_admin_update(u,data) if method=='POST' else m.ai_admin_get(u))
             if p=='/api/admin/ai/reload' and method=='POST':return self.respond(m.ai_reload(u))

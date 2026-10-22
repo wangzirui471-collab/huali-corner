@@ -23,6 +23,33 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ai.classify('我要转人工'), 'human')
         self.assertEqual(ai.classify('找客服'), 'human')
 
+    def test_social_intent_not_treated_as_query(self):
+        # 「我好喜欢你」曾被判成 business → 检索零命中 → 回一段「换个说法再问一次」，
+        # 等于把一次搭话读成查询失败。闲聊必须单列一档。
+        self.assertEqual(ai.classify('我好喜欢你'), 'social')
+        self.assertEqual(ai.classify('我失恋了...'), 'social')
+        self.assertEqual(ai.classify('你是谁'), 'social')
+        self.assertEqual(ai.classify('明天要答辩了，好焦虑'), 'social')
+
+    def test_social_guard_keeps_business_questions(self):
+        # 带正事的不能当闲聊接
+        self.assertEqual(ai.classify('我喜欢这个键盘，多少钱'), 'business')
+        self.assertEqual(ai.classify('怎么退款'), 'business')
+        self.assertEqual(ai.classify('我想买一个键盘'), 'business')
+
+    async def test_social_reply_is_short_and_skips_rule_talk(self):
+        r = await ai.ai_answer('我好喜欢你', SimpleNamespace())
+        self.assertEqual(r['mode'], 'rule')
+        self.assertLessEqual(len(r['answer']), 60)
+        for bad in ('换个说法', '没查到', '规则', '工单'):
+            self.assertNotIn(bad, r['answer'])
+
+    async def test_no_hit_reply_is_one_sentence_not_a_brochure(self):
+        r = await ai.ai_answer('明天会下雨吗', SimpleNamespace())
+        self.assertEqual(r['mode'], 'guess')
+        self.assertLessEqual(len(r['answer']), 80)
+        self.assertNotIn('顺便说一下', r['answer'])
+
     async def test_complaint_is_not_auto_escalated(self):
         # 对处理结果不满：先接住情绪 + 给自助路径，不替客户升级
         r = await ai.ai_answer('你们这平台骗子，我要投诉', SimpleNamespace())
@@ -47,6 +74,21 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('#orders', [l['href'] for l in ai.links_for('怎么取消订单、怎么退款')])
         self.assertEqual(ai.links_for('怎么注销账号')[0]['href'], '#me')
         self.assertEqual(ai.links_for('客服什么时候在线、怎么找人工')[0]['href'], '#support')
+
+    def test_publish_helpers(self):
+        # 估价 JSON：模型回「元」，解析层只负责校验与截断
+        self.assertEqual(ai.parse_price_json('{"low": 30, "high": 45, "reason": "成色一般"}'),
+                         (30, 45, '成色一般'))
+        self.assertIsNone(ai.parse_price_json('没有 JSON'))
+        self.assertIsNone(ai.parse_price_json('{"low": 50, "high": 10}'))
+        self.assertIsNone(ai.parse_price_json('{"low": 0, "high": 10}'))
+        # 兜底介绍不依赖模型
+        self.assertIn('功能正常', ai.fallback_description('数据结构 第二版', '近乎全新'))
+        # 提示词要把同类在售价和原价折算成元带给模型
+        p = ai.build_price_prompt('机械键盘', 'electronics', '近乎全新', 50000, [30000, 40000])
+        self.assertIn('300 元', p)
+        self.assertIn('400 元', p)
+        self.assertIn('500 元', p)
 
     def _memory_db(self):
         import sqlite3

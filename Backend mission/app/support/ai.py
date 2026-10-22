@@ -71,6 +71,50 @@ def suggest(question):
     return data
 
 
+def _post(path, payload):
+    """POST 到本地 AI 服务，返回解析后的 JSON。"""
+    body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+    req = urllib.request.Request(
+        _url() + path,
+        data=body,
+        method='POST',
+        headers={'Content-Type': 'application/json'},
+    )
+    token = os.environ.get('HC_AI_TOKEN', '')
+    if token:
+        req.add_header('Authorization', 'Bearer ' + token)
+    timeout = float(os.environ.get('HC_AI_TIMEOUT', '120'))
+    try:
+        with _NO_PROXY.open(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode('utf-8'))
+    except urllib.error.HTTPError as exc:
+        if exc.code == 401:
+            raise DomainError('AI 服务鉴权失败，请检查 HC_AI_TOKEN', 503) from None
+        raise DomainError(f'AI 服务返回错误（{exc.code}）', 502) from None
+    except Exception:  # noqa: BLE001 - 连不上就是本地服务没起
+        raise DomainError('AI 服务未启动：请先运行 python ai_service/server.py', 503) from None
+
+
+def describe(payload):
+    """发布页「AI 帮我写」：把标题/分类/成色发给本地 AI 服务生成介绍。"""
+    if not enabled():
+        raise DomainError('AI 客服未启用', 503)
+    data = _post('/describe', payload)
+    if not isinstance(data, dict) or not data.get('text'):
+        raise DomainError('AI 服务返回格式不正确', 502)
+    return data
+
+
+def price(payload):
+    """发布页「AI 估价」：本地 AI 服务给区间（含同类在售样本）。"""
+    if not enabled():
+        raise DomainError('AI 客服未启用', 503)
+    data = _post('/price', payload)
+    if not isinstance(data, dict) or not data.get('low'):
+        raise DomainError('AI 服务返回格式不正确', 502)
+    return data
+
+
 def reload_index():
     """让本地 AI 服务重新读取 index.json（改完 FAQ 后不用重启）。"""
     req = urllib.request.Request(

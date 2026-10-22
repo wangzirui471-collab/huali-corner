@@ -217,6 +217,43 @@ class SupportService(ValidationMixin):
         self._ai_log(u,'customer',result)
         return result
 
+    def ai_describe(self,u,d):
+        """发布页「AI 帮我写」：登录用户可用，按普通用户额度限流。"""
+        self.require(self.ai_enabled(),'AI 客服已关闭',503)
+        title=self.text(d.get('title'),80,'标题')
+        self.ai_quota(u)
+        from .ai import describe
+        result=describe({'title':title,
+                         'category':str(d.get('category') or '')[:20],
+                         'condition':str(d.get('condition') or '')[:20],
+                         'extra':str(d.get('extra') or '')[:300]})
+        if result.get('mode')=='llm':
+            self.ai_count(u)
+            self._ai_log(u,'describe',result)
+        return result
+
+    def ai_price(self,u,d):
+        """发布页「AI 估价」：同类在售价 + 成色给区间。"""
+        self.require(self.ai_enabled(),'AI 客服已关闭',503)
+        title=self.text(d.get('title'),80,'标题')
+        category=str(d.get('category') or '')[:20]
+        raw=str(d.get('original_price') or '').strip()
+        original=int(raw) if raw.isdigit() else 0
+        self.ai_quota(u)
+        like='%'+title[:12]+'%'
+        rows=self.rows('SELECT p.price FROM products p JOIN users u ON u.id=p.seller_id '
+                       "WHERE p.status='available' AND (p.category=? OR p.title LIKE ?) LIMIT 60",
+                       (category,like))
+        samples=[int(r['price'] or 0) for r in rows if int(r['price'] or 0)>0]
+        from .ai import price
+        result=price({'title':title,'category':category,
+                      'condition':str(d.get('condition') or '')[:20],
+                      'original_price':original,'samples':samples})
+        if result.get('mode')=='llm':
+            self.ai_count(u)
+            self._ai_log(u,'price',result)
+        return result
+
     def ai_usage_summary(self,days=7):
         days=max(1,min(int(days or 7),90))
         since=time.strftime('%Y-%m-%d', time.gmtime(time.time()-(days-1)*86400+8*3600))

@@ -1,7 +1,7 @@
 'use strict';
 // 事件层 · 逛逛、筛选、收藏、取货清单、出价、上下架
 
-import { toast } from '../core/dom.js';
+import { toast, $ } from '../core/dom.js';
 import { state, saveCart } from '../core/state.js';
 import { api } from '../core/http.js';
 import { go, render } from '../core/nav.js';
@@ -10,6 +10,43 @@ import { field } from '../components/forms.js';
 import { needLogin } from '../auth/login.js';
 
 export const clicks = {
+  // 发布页「AI 帮我写」：按标题/分类/成色生成商品介绍，填进介绍框。
+  'ai-describe': async b => {
+    const form = b.closest('form'); if (!form) return;
+    const title = String(form.title?.value || '').trim();
+    if (!title){ toast('先填商品标题，AI 才好写介绍'); return; }
+    const cat = form.querySelector('input[name=category]:checked')?.value || '';
+    const extra = ['edition','publisher','author','notes','course']
+      .map(k => form[k]?.value ? k + ':' + form[k].value : '').filter(Boolean).join(' ');
+    b.disabled = true; const label = b.textContent; b.textContent = '正在写…';
+    try{
+      const r = await api('/ai/describe', {title, category: cat, condition: form.condition?.value || '', extra});
+      form.description.value = r.text || '';
+      toast(r.mode === 'mock' ? 'AI 服务忙，先按模板写了一段，发布前请核对' : '已生成介绍，发布前请核对');
+    }catch(err){ toast(err.message || '生成失败，请手动填写'); }
+    finally{ b.disabled = false; b.textContent = label; }
+  },
+  // 发布页「AI 估价」：同类在售价 + 成色给区间，按中位数填入价格。
+  'ai-price': async b => {
+    const form = b.closest('form'); if (!form) return;
+    const title = String(form.title?.value || '').trim();
+    if (!title){ toast('先填商品标题'); return; }
+    const cat = form.querySelector('input[name=category]:checked')?.value || '';
+    const hint = $('#ai-price-hint');
+    b.disabled = true; const label = b.textContent; b.textContent = '估价中…';
+    try{
+      const r = await api('/ai/price', {title, category: cat, condition: form.condition?.value || '',
+        original_price: form.original_price?.value ? Math.round(Number(form.original_price.value) * 100) : null});
+      if (hint){
+        hint.hidden = false;
+        hint.textContent = '建议 ¥' + (r.low / 100).toFixed(2) + '—¥' + (r.high / 100).toFixed(2)
+          + '（参考 ' + r.samples + ' 件同类在售）：' + (r.reason || '');
+      }
+      if (form.price && r.suggest) form.price.value = (r.suggest / 100).toFixed(2);
+      toast('已按建议价填入，可自行调整');
+    }catch(err){ toast(err.message || '估价失败'); }
+    finally{ b.disabled = false; b.textContent = label; }
+  },
   'market-channel': b => { state.filter.category = b.dataset.value; state.filter.q = ''; state.freeShelf = false; state.homeLimit = 40; go('home'); },
   'market-shortcut': b => { state.filter.category = b.dataset.value; state.filter.q = b.dataset.q || ''; state.freeShelf = false; state.homeLimit = 40; go('home'); },
   'free-shelf': () => { state.filter.category = ''; state.filter.q = ''; state.freeShelf = true; state.homeLimit = 40; go('home'); },

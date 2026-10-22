@@ -2796,3 +2796,14 @@ button.me-notice { width: 100%; text-align: left; cursor: pointer; border: 0; fo
   .community-feed .post-actions { margin: 14px -16px 0; padding: 8px 10px; }
   .group-card, .side-forum-card { padding: 20px 16px; }
 }
+
+/* 发布页 AI 助手按钮：小号、贴着字段，不抢「确认发布」 */
+.ai-assist{
+  align-self: flex-start; margin-top: 6px; padding: 4px 10px;
+  font-size: 12px; font-weight: 650; color: #7a5c07;
+  background: #fff6d8; border: 1px solid #f0e2ae; border-radius: 999px;
+  cursor: pointer; font-family: inherit;
+}
+.ai-assist:hover{ background: #ffefb8; }
+.ai-assist:disabled{ opacity: .6; cursor: wait; }
+.ai-price-hint{ display: block; margin-top: 6px; font-size: 12px; color: #1f9d55; line-height: 1.5; }
