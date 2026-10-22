@@ -243,7 +243,7 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         # 不带书类语义的「推荐」不算书目推荐，别把客服问题拐走
         self.assertIsNone(ai.recommend_query('推荐个客服给我'))
 
-    async def test_recommend_answers_with_listings_not_book_names(self):
+    async def test_recommend_answers_with_listings(self):
         class FakeDB:
             async def all(self, sql, args=()):
                 return [{'id': 1, 'title': '计算机网络（第八版）', 'price': 1200,
@@ -252,6 +252,8 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         r = await ai.ai_answer('推荐几本书', SimpleNamespace(), None, FakeDB())
         self.assertEqual(r['mode'], 'rule')
         self.assertEqual(r['products'][0]['title'], '计算机网络（第八版）')
+        # 书名要写进正文，卡片不渲染的客户端也能看懂
+        self.assertIn('计算机网络（第八版）', r['answer'])
         self.assertEqual(r['links'][0]['action'], 'pet-search')
 
     async def test_no_hit_goes_to_open_mode_not_fallback(self):

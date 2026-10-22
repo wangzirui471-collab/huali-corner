@@ -21,6 +21,11 @@ FALLBACK = '这个我这儿没有确切答案，不想瞎编一个给你。换�
 TRANSFER_REPLY = '好的，马上帮你转接人工客服，请稍等。'
 LEAVE_REPLY = '客服现在不在线（每天 %s），留言和工单会按提交顺序排着，%s上班后处理。'
 GREETING_REPLY = '在的～我是小转，发布、退款、面交、客服时间都能问我，也可以随便聊聊。'
+# 「谢谢」被当成纯问候回一句「在的～我是小转」很怪，单独给一句。
+THANKS_WORDS = ('谢谢', '多谢', '感谢', '谢了', 'thx', 'thanks')
+THANKS_REPLY = '不客气～有需要随时喊我。'
+BYE_WORDS = ('再见', '拜拜', '先走了', '下线了')
+BYE_REPLY = '好嘞，回见～东西没挑完的话，随时回来招呼我。'
 
 # 口语 → 知识库用词。检索按二字词重叠打分，「卖东西」和「发布闲置」一个词都不重合，
 # 不补这一层，最该答上来的问题反而落空。键按长度长的优先匹配。
@@ -303,6 +308,10 @@ def social_kind(question):
     q = (question or '').strip().lower()
     if not q or any(w in q for w in SOCIAL_GUARD):
         return None
+    # 「考试」在 cheer 桶里，但「考砸了」是难过不是求祝福——
+    # 回一句「祝你一定行」等于当面嘲讽，所以先判负面再进桶。
+    if any(w in q for w in ('考砸', '没考好', '挂了', '没过', '考崩', '失利', '没中')):
+        return 'sad'
     for kind, words in SOCIAL_INTENTS:
         if any(w in q for w in words):
             return kind
@@ -607,9 +616,13 @@ async def recommend_answer(db, kw):
                 'links': [{'label': '去首页搜书', 'action': 'pet-search', 'q': '书'}],
                 'products': [], 'sources': [], 'mode': 'rule', 'latency_ms': 0,
                 'support': support_state()}
-    lead = ('这几本现在就在架上，点卡片看详情：' if kw
-            else '没说要哪方面的话，先看看这几本刚上架的：')
-    return {'answer': lead, 'action': 'reply',
+    # 书名要写进正文：卡片不渲染时（小程序、旧客户端）也不至于只看到一句空话。
+    names = '、'.join('《%s》' % r['title'] for r in rows[:3])
+    if kw:
+        answer = '和「%s」有关的，架上这几本可以看看：%s。点卡片看详情。' % (kw, names)
+    else:
+        answer = '没说要哪方面的话，先看看这几本刚上架的：%s。点卡片看详情。' % names
+    return {'answer': answer, 'action': 'reply',
             'links': [{'label': '去首页搜更多书', 'action': 'pet-search', 'q': kw or '书'}],
             'products': rows, 'sources': [], 'mode': 'rule', 'latency_ms': 0,
             'support': support_state()}
@@ -832,7 +845,13 @@ async def ai_answer(question, env, history=None, db=None):
 
     intent = classify(q)
     if intent == 'greeting':
-        return {'answer': GREETING_REPLY, 'action': 'reply', 'sources': [], 'links': [],
+        # 致谢和道别都被剥成空串落到 greeting，回「在的～我是小转」很怪，
+        # 按原话分三种回法。
+        low = q.lower()
+        answer = (THANKS_REPLY if any(w in low for w in THANKS_WORDS)
+                  else BYE_REPLY if any(w in low for w in BYE_WORDS)
+                  else GREETING_REPLY)
+        return {'answer': answer, 'action': 'reply', 'sources': [], 'links': [],
                 'mode': 'rule', 'latency_ms': elapsed(), 'support': support_state()}
 
     # 客户明确要人工才升级。在线就转，不在线就是「留言排队」，不是转人工失败。
