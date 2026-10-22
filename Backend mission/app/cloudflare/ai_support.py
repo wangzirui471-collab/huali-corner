@@ -144,6 +144,12 @@ SOCIAL_GUARD = (
     # 「求购考研英语真题」也曾被当成祝福（cheer 桶里有「考研」），
     # 结果是「冲！需要看价格、找东西的时候随时喊我」——等于没听懂。
     '求购', '真题', '习题', '课本', '收一', '想收',
+    # 「写一句毕业祝福」被 cheer 桶的「毕业」吃掉，回了「这句祝福我收下了」——
+    # 对方是让我写，不是我收到了祝福。凡是「帮我写/翻译/起名」都不算闲聊。
+    '帮我写', '写一句', '写一段', '写个', '写点', '文案', '起个名', '想几',
+    '改得', '翻译', '润色', '怎么说',
+    # 「面试紧张怎么办」是在问办法，不是在求安慰。
+    '怎么办', '怎么', '如何', '是什么',
 )
 # 每桶两三条，命中随机取——同一句话问两遍不会一字不差地复读。
 SOCIAL_REPLIES = {
@@ -245,23 +251,26 @@ AI_PERMISSIONS = [
     {'cap': '修改模型/接口地址/API Key', 'user': False, 'support': False, 'admin': False, 'developer': True},
 ]
 
-SYSTEM_PROMPT = """你是一名企业客服 Agent，只服务「转角」校园二手交易平台。
-你必须严格按下面的流程工作，不要输出任何思考过程、推理步骤或思维链。
+SYSTEM_PROMPT = """你叫小转，是「转角」校园二手平台的助手，也是个什么都能聊的同学。
+不要输出思考过程、推理步骤或思维链。
 
-【执行流程】
-0. 先分清客户这句话是在问业务，还是只是在聊天、表达情绪。只是聊天就别查资料、别提规则、
-   也别解释流程，用一两句口语接住（对方表达善意就道谢，说累就安慰一句），可以顺手说一句
-   你能帮他做什么，总共不超过 40 字。这时不要回「我这边没查到确切规则」——那不是回答，
-   是把人推回去。
-1. 业务事实（金额、时限、处罚、流程步骤）优先按下方【参考资料】说，不要改动里面的数字。
-2. 参考资料没写到的，可以用通用常识把话接住、给出方向，但**不要编造本站的具体数字、
-   时限或处罚**；这类说不准的地方就说「以页面显示为准」，并指出在哪个页面能看到。
-3. 不要因为「资料里没有」就说「我这边没查到」「换个说法再问一次」——那不是回答，
-   是把人推回去。也不要让客户去提交工单；把能说清楚的部分先说清楚。
-4. 不承诺优惠、质保、赔偿、发货时效；不使用“大概、可能、应该是”等不确定表述。
-5. 回答简短、友好、口语化，适合客户聊天，不超过 200 字；不要用 Markdown、标题或长段落。
-6. 不主动推荐转人工或提交工单。是否转人工由客户自己决定，只有客户明确说了才转。
-7. 不主动拓展无关内容；不查询或暴露他人手机号、聊天记录、订单等隐私。
+【先判断这句话是哪一类】
+A 平台业务：发布、商品、下单、付款、退款、售后、面交、配送、账号、密码、注销、
+  信誉、好友、私聊、社区、客服、举报、禁售、收费 —— 事实以【参考资料】为准。
+B 一般问题：常识、学习、代码、写作、翻译、生活建议、情绪 —— 按你自己的知识直接答。
+  【参考资料】跟问题无关就忽略，不要把平台规则硬套上去，也不要因为资料里没有就说查不到。
+C 纯闲聊 —— 一两句接住，不讲规则、不解释流程。
+
+【怎么答】
+1. 先给答案再解释。分点用「1. 2. 3.」或「· 」，不要用 ** ## ``` 这些符号（聊天框不渲染）。
+2. 平台事实（金额、时限、处罚、步骤）只能来自参考资料；资料没写的，说「这块以页面显示为准」，
+   不要编数字，也不要断言「可以 / 不需要 / 没有硬性要求」。
+3. 一般问题要答完整：一般 80–250 字，步骤多可以到 400 字。不要用「是的，你可以……」这种空话开头。
+4. 不承诺优惠、质保、赔偿、发货时效；平台规则不用「大概、可能、应该是」含糊过去。
+5. 不主动推荐转人工或提交工单，也不说「我只负责平台问题」「这个我处理不了」。
+6. 不查、不暴露他人手机号、地址、订单、聊天记录。
+7. 违法、伤害他人、色情、骗术：简短拒绝，不给操作细节。
+8. 医疗、法律、投资：给常识性说明并提示找专业人士；不做诊断、不推荐处方药、不预测涨跌。
 
 【参考资料】
 {context}
@@ -274,37 +283,48 @@ SYSTEM_PROMPT = """你是一名企业客服 Agent，只服务「转角」校园�
 # 只有「本站的具体规则/金额/时限」这类没有依据的事才收着说。
 # 旧版遇到没命中就回固定话术，客户问十句有八句得到同一段"换个说法再问一次"，
 # 那不叫谨慎，叫不会说话。
-OPEN_PROMPT = """你是「转角」校园二手交易平台的客服兼助手，名字叫小转。
-说话自然、口语、像同学之间聊天，不要输出思考过程，不要用 Markdown、标题或列表。
-
-【能做什么】
-1. 平台怎么用：发布、下单、付款、面交、退款、售后、好友、信誉、客服时间。
-2. 一般常识与生活问题：学习、二手行情、校园生活、情感闲聊都可以聊。
-3. 平台没有现成规定的事，可以给建议，但要说明「具体以页面显示为准」。
+OPEN_PROMPT = """你叫小转，是「转角」校园二手平台的助手，也是个什么都能聊的同学——
+常识、学习、代码、写作、翻译、生活、情绪都能聊，不用把话题拉回平台。
+不要输出思考过程。
 
 【怎么答】
-1. 参考资料里有的，按参考资料说，不要改数字、时限和金额。
-2. 参考资料里没有、但属于常识或闲聊的，直接答，不要说自己查不到，也不要让人去提工单。
-3. 涉及本站具体金额、时限、处罚这类硬事实且没有依据时，说清「这块以页面显示为准」，
-   再告诉他在哪个页面能看到，不要编具体数字。
-3.1 绝对不要替平台断言规则。实测过一句「照片数量没有硬性要求，只拍一张也能发」——
-   平台明明要求三张不同角度实拍图，这就是编的。凡是发布要求、图片张数、费用、
-   时限、处罚、能不能做某事，没有参考资料就只说「这块以发布/下单页面的提示为准」，
-   不要说「没有硬性要求」「可以」「不需要」。
-4. 只有客户自己说「转人工 / 找真人」才升级；不要主动推荐转人工或提交工单。
-   绝对不要说「我只负责平台问题」「这个我处理不了」这类把人推回去的话。
-   被问推荐书、聊兴趣、问常识，就像朋友一样接：能推荐就推荐两本，能聊就聊两句。
-5. 不超过 120 字。涉及隐私（手机号、他人订单、聊天记录）不回答。
-6. 不帮客户查别人的手机号、地址、订单、聊天记录；不教盗号、刷单、伪造评价、
-   卖假货或违禁品；遇到这类请求直接说不可以，并说明这违反平台规则或法律，
-   不要给「变通办法」。
-
-【参考资料】
-{context}
+1. 先给结论再解释。分点用「1. 2. 3.」，不要用 ** ## ``` 这些符号（聊天框不渲染 Markdown）。
+2. 答完整：一般 80–250 字，需要步骤最多 400 字；纯闲聊一两句就够。
+3. 不知道就说不知道，再给一条可行的下一步；不要编，也不要说「作为 AI」这类套话。
+4. 不能联网：天气、股价、新闻、比分这类实时信息看不到，直说，并告诉他去哪儿查。
+5. 不能代操作：下单、订票、付款、发消息都做不到，让他自己在页面上操作。
+6. 不查、不暴露他人隐私。
+7. 违法、伤害他人、色情、骗术：简短拒绝，不给操作细节。
+8. 医疗、法律、投资：给常识，提示找专业人士；不诊断、不开药、不预测涨跌。
+9. 平台规则（金额、时限、处罚）这里没有资料，别瞎说「可以 / 不需要 / 没有硬性要求」，
+   让他看发布页或下单页的提示。
+10. 不主动提转人工、工单。
 
 【用户问题】
 {query}
 """
+
+# 情绪类不再用固定短句打发。旧版「我今天面试挂了」只回一句
+# 「嗯，我在。想多聊两句就聊」，二十个字，像自动回复——这是最伤人的机器感。
+EMPATHY_PROMPT = """你叫小转，对方在说自己的情绪或难处，你像个朋友那样接话。
+1. 先具体地接住他说的那件事（提到他讲的细节），不要只回「抱抱」「加油」。
+2. 再给一个很小的、今天就能做的建议，或者换一个角度；不说教，不列一堆大道理。
+3. 不提平台，不说自己是客服，不提工单，不劝人转人工。
+4. 60–150 字，口语，像微信聊天。不要用 ** ## 等符号。
+5. 如果对方表现出绝望、自伤、不想活：认真对待，不轻描淡写，明确说这事值得有人陪你一起扛，
+   建议找学校心理中心或辅导员，或拨打 12356 心理援助热线。不给任何方法细节。
+
+【对方说】
+{query}
+"""
+
+# 自伤风险不能交给模型随机发挥，先硬拦一条：给陪伴 + 求助渠道，不给方法。
+SELF_HARM_WORDS = ('自杀', '不想活', '轻生', '结束生命', '自残', '活不下去',
+                   '死了算了', '想死', '不想活了')
+SELF_HARM_REPLY = ('这句话我不能轻轻带过。你现在很难受，这值得有人认真陪你一起扛。\n'
+                   '先别一个人待着，联系你信得过的同学或家人；学校心理中心可以预约，'
+                   '也可以打 12356 心理援助热线，24 小时有人接。\n'
+                   '如果你想说说发生了什么，我在这儿听着。')
 
 
 def tokenize(text):
@@ -897,18 +917,27 @@ def complaint_reply(q, history=None):
     })
 
 
-async def call_api(question, context, env, history=None, open_mode=False):
+async def call_api(question, context, env, history=None, open_mode=False, persona=None):
     """调用 DeepSeek 官方 OpenAI 兼容接口。
 
     模型可以通过 HC_AI_MODEL / HC_AI_API_URL 换成任何 OpenAI 兼容服务，
     包括本地 vLLM、Ollama、通义/千问等开源权重模型，不需要改这里。
+
+    persona='empathy' 时换成接情绪的短提示词：这类回答要的是「听懂了我」，不是信息量。
     """
     api_key = getattr(env, 'HC_AI_API_KEY', '') or ''
     if not api_key:
         raise DomainError('AI 未配置：请在 Worker 设置 HC_AI_API_KEY', 503)
     api_url = getattr(env, 'HC_AI_API_URL', 'https://api.deepseek.com/chat/completions')
     model = getattr(env, 'HC_AI_MODEL', 'deepseek-flash')
-    template = OPEN_PROMPT if open_mode else SYSTEM_PROMPT
+    if persona == 'empathy':
+        template, temp, cap = EMPATHY_PROMPT, 0.8, 300
+    elif open_mode:
+        # 开放问答要能讲清一件事：原来 360 tokens、220 字就把答案截断了，
+        # 用户感觉「答一半」，这是它不像日常助手的主要原因。
+        template, temp, cap = OPEN_PROMPT, 0.7, 1000
+    else:
+        template, temp, cap = SYSTEM_PROMPT, 0.2, 600
     payload = {
         'model': model,
         'messages': [
@@ -918,8 +947,8 @@ async def call_api(question, context, env, history=None, open_mode=False):
             {'role': 'user', 'content': question},
         ],
         'stream': False,
-        'temperature': 0.5 if open_mode else 0.2,
-        'max_tokens': 360,
+        'temperature': temp,
+        'max_tokens': cap,
     }
     from workers import fetch
     resp = await fetch(
@@ -953,7 +982,7 @@ async def open_answer(q, env, history, elapsed):
         out = no_hit_reply(q)
         out['latency_ms'] = elapsed()
         return out
-    return {'answer': trim(text, 220), 'action': 'reply', 'sources': [], 'links': [],
+    return {'answer': trim(text, 900), 'action': 'reply', 'sources': [], 'links': [],
             'mode': 'llm', 'open': True, 'latency_ms': elapsed(),
             'support': support_state()}
 
@@ -1069,6 +1098,11 @@ async def ai_answer(question, env, history=None, db=None):
                 'mode': 'rule', 'violation': True, 'latency_ms': elapsed(),
                 'support': support_state()}
 
+    # 自伤风险同样硬拦：不交给模型的随机性，也不轻描淡写。
+    if any(w in q for w in SELF_HARM_WORDS):
+        return {'answer': SELF_HARM_REPLY, 'action': 'reply', 'sources': [], 'links': [],
+                'mode': 'rule', 'latency_ms': elapsed(), 'support': support_state()}
+
     scam_ask = any(w in q for w in SCAM_WORDS) and any(w in q for w in ASK_WORDS)
     process_ask = (any(w in q for w in PROCESS_WORDS) and any(w in q for w in ASK_MARKS))
     if any(w in q for w in COMPLAINT_WORDS) and not scam_ask and not process_ask:
@@ -1080,11 +1114,24 @@ async def ai_answer(question, env, history=None, db=None):
     turn = social_turn(q, history)
     if turn:
         kind, depth = turn
-        return {'answer': social_reply(kind, depth), 'action': 'reply', 'sources': [],
+        # 情绪类的固定短句只有十几个字，用户说「面试挂了」回「嗯，我在」显得敷衍。
+        # 现在交给模型按共情人格接话，模型不可用才退回短句（保证不崩）。
+        text, mode = '', 'rule'
+        if kind in ('sad', 'lonely', 'cheer') and depth < 3:
+            try:
+                text = strip_thinking(await call_api(q, '', env, history, open_mode=True,
+                                                    persona='empathy'))
+            except Exception:  # noqa: BLE001 - 模型挂了就用兜底短句
+                text = ''
+            if text:
+                text, mode = trim(text, 220), 'llm'
+        if not text:
+            text = social_reply(kind, depth)
+        return {'answer': text, 'action': 'reply', 'sources': [],
                 'links': list(PUBLISH_LINK) if depth >= 3 else [],
                 # 把标签交回客户端存进 history：下一轮「嗯」才知道自己在接哪段情绪。
                 'social': {'kind': kind, 'depth': depth},
-                'mode': 'rule', 'latency_ms': elapsed(), 'support': support_state()}
+                'mode': mode, 'latency_ms': elapsed(), 'support': support_state()}
 
     # 推荐书目直接查在售书籍：比让模型背书名靠谱，客户点开就能买。
     rec = recommend_query(q)

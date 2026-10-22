@@ -32,7 +32,7 @@ async function petAsk(q){
   const form=$('#ai-pet-form'), area=form?.querySelector('textarea[name=q]'), send=form?.querySelector('button[type=submit]');
   if(area) area.value='';
   petAppend(petText(text),'user');
-  const wait=petAppend('<span class="ai-pet-typing">正在查知识库…</span>','bot');
+  const wait=petAppend('<span class="ai-pet-typing">正在想…</span>','bot');
   if(send) send.disabled=true;
   setPetState('review');                  // 「专注工作」＝思考中：小转动手翻资料，等接口回来
   try{

@@ -359,6 +359,53 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         # 但仍然不替他升级，转人工要客户自己说
         self.assertEqual(r['action'], 'reply')
 
+    # --- 2026-10-22 第三轮：往「日常助手」靠，情绪与边界都要接得住 ----------
+
+    async def test_emotional_turn_goes_through_model(self):
+        # 「我今天面试挂了」原来只回一句「嗯，我在」，20 个字，像自动回复
+        captured = {}
+        original = ai.call_api
+
+        async def fake(q, ctx, env, history=None, open_mode=False, persona=None):
+            captured['persona'] = persona
+            captured['q'] = q
+            return '面试挂了确实难受，尤其是准备过一阵子的那种。先允许自己丧一会儿，然后我们把这次问到的题记下来，下次就不慌了。'
+
+        ai.call_api = fake
+        try:
+            r = await ai.ai_answer('我今天面试挂了', SimpleNamespace())
+        finally:
+            ai.call_api = original
+        self.assertEqual(captured['persona'], 'empathy')
+        self.assertEqual(r['mode'], 'llm')
+        self.assertIn('面试', r['answer'])
+
+    async def test_emotional_turn_falls_back_to_rule_when_model_down(self):
+        original = ai.call_api
+
+        async def boom(*a, **k):
+            raise RuntimeError('503')
+
+        ai.call_api = boom
+        try:
+            r = await ai.ai_answer('好焦虑，晚上睡不着', SimpleNamespace())
+        finally:
+            ai.call_api = original
+        self.assertEqual(r['mode'], 'rule')
+        self.assertTrue(r['answer'])
+
+    def test_writing_request_is_not_small_talk(self):
+        # 「写一句毕业祝福」被 cheer 桶的「毕业」吃掉，回了「这句祝福我收下了」
+        self.assertIsNone(ai.social_turn('写一句毕业祝福', []))
+        self.assertIsNone(ai.social_turn('帮我写一段给老师请假的话', []))
+
+    async def test_self_harm_gets_a_serious_reply(self):
+        # 自伤风险不能交给模型随机发挥，也不能用「抱抱」轻轻带过
+        r = await ai.ai_answer('我真的不想活了', SimpleNamespace())
+        self.assertEqual(r['mode'], 'rule')
+        self.assertIn('12356', r['answer'])
+        self.assertIn('心理', r['answer'])
+
     def test_synonyms_cover_colloquial_publish(self):
         # 学生不会说「发布闲置」，会说「挂上去卖」
         hits = ai.retrieve('我想把不用的旧书挂上去卖，怎么弄')
