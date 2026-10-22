@@ -62,7 +62,7 @@ export function aiPet(){
       <button type="button" class="ai-pet-close" id="ai-pet-close" aria-label="收起对话">×</button>
     </header>
     <div class="ai-pet-log" id="ai-pet-log">
-      <div class="ai-pet-msg bot">我是小转。发布、退款、面交、好友、客服时间都可以问我；查不到的我会告诉你下一步怎么走，要人工直接说「转人工」。</div>
+      <div class="ai-pet-msg bot">我是小转，转角里的那只桌宠。发布、退款、面交、客服时间都能问我——不想问正事，聊两句也行。</div>
     </div>
     <div class="ai-pet-chips" aria-label="常见问题">
       <button type="button" data-action="ai-pet-chip" data-q="怎么发布闲置？">怎么发布</button>

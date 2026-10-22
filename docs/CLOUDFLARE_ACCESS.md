@@ -94,6 +94,12 @@ notifications 12、users 7、password_credentials 7、products 6、rooms 6、com
 ledger 4、reactions 4、tickets 4、ticket_messages 4、nominations 3、offers 2、posts 2、
 orders 1、settings 1、wants 1。
 
+> 迁移之后 schema.sql 又长大了：AI 客服接入 DeepSeek 时加了 `ai_usage`，后台 AI 设置又加了
+> `ai_settings`，加上 `room_pins`/`message_hides` 等，当前共 **33 张表**。
+> 在线备份（`staff_api.py` 的 `BACKUP_TABLES`）必须逐张覆盖，测试
+> `test_backup_table_list_covers_every_schema_table` 会静态比对，缺表就红。
+> 2026-10-22 修过一个真实的漏表：清单停在 32 张，后台点备份直接 503。
+
 处理过的两个坑：
 
 1. `core/database.py` 里的 `SQLITE_SCHEMA` 是旧版，缺 `users.last_login / degree_level /

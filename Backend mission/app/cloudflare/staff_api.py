@@ -16,6 +16,17 @@ STAFF = ('support', 'admin', 'developer')
 RANK = {'user': 0, 'support': 1, 'admin': 2, 'developer': 3}
 NAMES = {'user': '普通用户', 'support': '客服', 'admin': '平台管理员', 'developer': '开发者'}
 
+# 备份覆盖的应用表清单。schema.sql 每加一张表，这里就必须补上：
+# cf_staff_backup 里 `found <= set(BACKUP_TABLES)` 会拦住缺表的备份（宁可 503，
+# 也不能悄悄漏一张表交付），tests/test_cloudflare_staff.py 还会静态比对 schema.sql，
+# 迁移加表忘了补清单时测试先红，不会等到线上点备份才发现。
+BACKUP_TABLES = ['ai_settings', 'ai_usage', 'audit', 'auth_attempts', 'blocks', 'comments',
+                 'friendships', 'ledger', 'members', 'message_hides', 'messages', 'nominations',
+                 'notifications', 'offers', 'order_changes', 'order_notes', 'orders', 'otp',
+                 'password_credentials', 'posts', 'products', 'reactions', 'reviews', 'room_pins',
+                 'rooms', 'sessions', 'settings', 'ticket_messages', 'tickets', 'uploads',
+                 'user_avatar_uploads', 'users', 'wants']
+
 
 def text(value, limit, label):
     require(isinstance(value, str) and 0 < len(value.strip()) <= limit, label+'需填写且长度有效')
@@ -487,7 +498,7 @@ class StaffApi:
         uid, _ = await self.cf_staff_actor(request, admin=True)
         import zipfile
         # Only project tables, all read inside one D1 batch snapshot. Hard bounds fail explicitly.
-        tables = ['audit','auth_attempts','blocks','comments','friendships','ledger','members','message_hides','messages','nominations','notifications','offers','order_changes','order_notes','orders','otp','password_credentials','posts','products','reactions','reviews','room_pins','rooms','sessions','settings','ticket_messages','tickets','uploads','user_avatar_uploads','users','wants']
+        tables = BACKUP_TABLES
         results = await self.db.batch([("SELECT name,sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%'", ())]+[(f'SELECT * FROM "{table}" LIMIT 10001', ()) for table in tables])
         schema = [dict(r) for r in results[0].results]; snapshot = {table: [dict(r) for r in result.results] for table, result in zip(tables, results[1:])}
         require(all(len(rows) <= 10000 for rows in snapshot.values()), '数据量超出在线备份上限，请使用 Cloudflare D1/R2 导出工具', 413)
