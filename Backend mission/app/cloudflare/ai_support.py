@@ -221,7 +221,8 @@ BUY_GUARD = ('注销', '退款', '退货', '售后', '工单', '密码', '订单
              '怎么', '如何', '为什么', '能不能')
 # 「有优惠吗」「有办法吗」也不是在找货，抽出来的词不能拿去搜商品。
 BUY_STOP = ('办法', '问题', '优惠', '折扣', '活动', '发票', '建议', '推荐',
-            '时间', '人', '事', '东西', '啥', '什么', '区别', '要求')
+            '时间', '人', '事', '东西', '啥', '什么', '区别', '要求',
+            '点的', '便宜的', '贵点的', '便宜点', '贵点', '点')
 # 商品词前的修饰语：不一刀切掉，「二手显示器」应该按「显示器」去搜。
 BUY_NOISE = ('二手', '全新', '闲置', '便宜点', '便宜', '好用的', '好的',
              '可以', '帮我', '帮忙', '看看', '请问', '麻烦', '给我', '顺便', '一下',
@@ -873,12 +874,23 @@ def no_hit_reply(q):
     })
 
 
-def complaint_reply(q):
-    """对处理结果不满：先接住情绪 + 给自助路径，不替客户升级。"""
-    body = ('非常抱歉让你有这种感觉。你先别急，这类事有两条路可以走：\n'
-            '· 如果是订单问题，去「我的 → 订单」申请售后，客服核实后处理；\n'
-            '· 如果你要举报某个商品、帖子或消息，在对应页面点「举报」，客服 08:00—20:00 核实。\n'
-            '你把情况说清楚，我也可以先帮你查规则。需要真人处理的话，直接跟我说「转人工」。')
+def complaint_reply(q, history=None):
+    """对处理结果不满：先接住情绪 + 给自助路径，不替客户升级。
+
+    第二轮不能一字不差地再念一遍同一段——多轮实测里「你骗子」→「我要投诉」
+    两次回答完全相同，像自动回复。第二次改为承认「你说了两遍」并给出转人工的入口，
+    但仍然不由我替他升级。
+    """
+    prior = sum(1 for h in (history or []) if h.get('role') == 'user'
+                and any(w in str(h.get('content') or '') for w in COMPLAINT_WORDS))
+    if prior:
+        body = ('你已经说第二遍了，我记下了。要我直接叫人工客服，说一句「转人工」就行；'
+                '想快点有结果，也可以去「我的 → 订单」提售后，客服 08:00—20:00 会看。')
+    else:
+        body = ('非常抱歉让你有这种感觉。你先别急，这类事有两条路可以走：\n'
+                '· 如果是订单问题，去「我的 → 订单」申请售后，客服核实后处理；\n'
+                '· 如果你要举报某个商品、帖子或消息，在对应页面点「举报」，客服 08:00—20:00 核实。\n'
+                '你把情况说清楚，我也可以先帮你查规则。需要真人处理的话，直接跟我说「转人工」。')
     return _support_payload({
         'answer': body, 'action': 'reply', 'sources': [], 'links': SUPPORT_LINK,
         'mode': 'rule', 'latency_ms': 0,
@@ -1060,7 +1072,7 @@ async def ai_answer(question, env, history=None, db=None):
     scam_ask = any(w in q for w in SCAM_WORDS) and any(w in q for w in ASK_WORDS)
     process_ask = (any(w in q for w in PROCESS_WORDS) and any(w in q for w in ASK_MARKS))
     if any(w in q for w in COMPLAINT_WORDS) and not scam_ask and not process_ask:
-        return complaint_reply(q)
+        return complaint_reply(q, history)
 
     # 闲聊、表达情绪：不检索、不解释流程、不扣额度，一句接住就够。
     # 放在 complaint 之后：「累死了，你们这平台真差」还是要走投诉路径。

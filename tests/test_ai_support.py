@@ -349,6 +349,16 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         r = await ai.ai_answer('你们这东西太差了，我要投诉', SimpleNamespace())
         self.assertIn('抱歉', r['answer'])
 
+    async def test_second_complaint_does_not_repeat_verbatim(self):
+        # 多轮实测：「你骗子」→「我要投诉」两次回答一字不差，像自动回复
+        h = [{'role': 'user', 'content': '你们这平台骗子'},
+             {'role': 'assistant', 'content': '非常抱歉让你有这种感觉。'}]
+        r = await ai.ai_answer('我要投诉', SimpleNamespace(), h)
+        self.assertNotIn('非常抱歉让你有这种感觉', r['answer'])
+        self.assertIn('第二遍', r['answer'])
+        # 但仍然不替他升级，转人工要客户自己说
+        self.assertEqual(r['action'], 'reply')
+
     def test_synonyms_cover_colloquial_publish(self):
         # 学生不会说「发布闲置」，会说「挂上去卖」
         hits = ai.retrieve('我想把不用的旧书挂上去卖，怎么弄')
@@ -377,6 +387,8 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         # 「有优惠吗」不是在找货，别回一句「没找到优惠相关商品」
         self.assertIsNone(await ai.buy_query('有优惠吗', db))
         self.assertIsNone(await ai.buy_query('可以帮我看看有没有优惠', db))
+        # 追问「有便宜点的吗」曾抽成商品词「点的」，回「没有找到『点的』」
+        self.assertIsNone(await ai.buy_query('有便宜点的吗', db))
 
     async def test_buy_search_falls_back_to_shorter_terms(self):
         db = self._memory_db()

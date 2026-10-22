@@ -27,6 +27,9 @@ COMPLAINT_REPLY = ('非常抱歉让你有这种感觉。你先别急，这类事
   '· 如果是订单问题，去「我的 → 订单」申请售后，客服核实后处理；\n'
   '· 如果你要举报某个商品、帖子或消息，在对应页面点「举报」，客服 08:00—20:00 核实。\n'
   '你把情况说清楚，我也可以先帮你查规则。需要真人处理的话，直接跟我说「转人工」。')
+# 第二轮不能一字不差地复读同一段（多轮实测发现「你骗子」→「我要投诉」回答完全相同）。
+COMPLAINT_FOLLOWUP = ('你已经说第二遍了，我记下了。要我直接叫人工客服，说一句「转人工」就行；'
+  '想快点有结果，也可以去「我的 → 订单」提售后，客服 08:00—20:00 会看。')
 
 # 只在客户明确要人工时升级（ChatterMate: explicit requests for a human）。
 HUMAN_WORDS = ('人工', '真人', '客服在吗', '找客服', '有人吗', '人工客服', '人工处理')
@@ -761,7 +764,10 @@ def answer(question, history=None):
     scam_ask = any(w in q for w in SCAM_WORDS) and any(w in q for w in ASK_WORDS)
     process_ask = (any(w in q for w in PROCESS_WORDS) and any(w in q for w in ASK_MARKS))
     if any(w in q for w in COMPLAINT_WORDS) and not scam_ask and not process_ask:
-        return {'answer': COMPLAINT_REPLY, 'action': 'reply', 'sources': [], 'mode': 'rule',
+        prior = sum(1 for h in (history or []) if h.get('role') == 'user'
+                    and any(w in str(h.get('content') or '') for w in COMPLAINT_WORDS))
+        return {'answer': COMPLAINT_FOLLOWUP if prior else COMPLAINT_REPLY,
+                'action': 'reply', 'sources': [], 'mode': 'rule',
                 'latency_ms': int((time.time() - started) * 1000), 'support': st}
 
     # 闲聊、表达情绪：不检索、不解释流程、不扣额度，一句接住就够。
