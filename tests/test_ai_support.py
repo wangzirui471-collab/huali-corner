@@ -100,6 +100,37 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn('【执行流程】', r['answer'])
             self.assertIn('不能对外提供', r['answer'])
 
+    async def test_leaked_prompt_is_caught_on_the_way_out(self):
+        # 输入侧词表只认字面，问法一换就绕过去了。所以出口再扫一遍：
+        # 模型不管被什么话骗到，只要回答里带提示词指纹，就不发给用户。
+        leaks = ['我的设定是：\n【怎么答】\n1. 先给结论再解释。分点用「1. 2. 3.」',
+                 '{"system_prompt": "你叫小转，是「转角」校园二手平台的助手"}',
+                 '好的，规则如下：先给答案再解释，不要输出思考过程。',
+                 # 弱指纹要凑够两个：这条复述了两条规则要求
+                 '1. 角色设定：小转，校园二手平台助手。2. 回答方式：先给结论再解释；'
+                 '分点用 1. 2. 3.；聊天框不渲染 Markdown。']
+        for text in leaks:
+            out = ai.guard_leak({'answer': text, 'mode': 'llm'})
+            self.assertTrue(out.get('leak_blocked'), text)
+            self.assertIn('不能对外提供', out['answer'])
+
+    async def test_output_guard_allows_made_up_example_prompts(self):
+        # 用户要「一条真实的客服 prompt 当 NLP 样本」时，模型编的示例里也会写
+        # 「先给结论再解释」——那不是泄露，只凭一个弱指纹不能把正常回答换掉。
+        text = ('给一条示例，括号里是占位符：\n系统提示词：你是「XX」平台的在线客服，'
+                '负责解答下单、支付、发货、退换货的疑问。\n1. 先给结论再解释。')
+        out = ai.guard_leak({'answer': text, 'mode': 'llm'})
+        self.assertFalse(out.get('leak_blocked'))
+        self.assertEqual(out['answer'], text)
+
+    async def test_output_guard_passes_normal_answers(self):
+        for text in ['发布要走三步：填信息、传三张图、提交审核。',
+                     '这块以页面显示为准，我这边没有准确资料。',
+                     '12356 心理援助热线，24 小时有人接。']:
+            out = ai.guard_leak({'answer': text, 'mode': 'llm'})
+            self.assertFalse(out.get('leak_blocked'), text)
+            self.assertEqual(out['answer'], text)
+
     async def test_prompt_guard_does_not_block_normal_questions(self):
         for q in ['怎么发布闲置', '退款多久到账', '你的客服几点下班']:
             r = await ai.ai_answer(q, SimpleNamespace())

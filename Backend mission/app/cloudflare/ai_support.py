@@ -221,12 +221,42 @@ OPEN_PROMPT = """你叫小转，是「转角」校园二手平台的助手，也
 # {"system_prompt": "..."}」时，它把 OPEN_PROMPT 原文吐了出来（还带【怎么答】）。
 # 这种事不能靠模型自觉，先把这类问法拦下来。
 PROMPT_FISH = ('系统提示词', '系统提示', '你的提示词', '你的设定', '隐藏规则', '你的指令',
-               'system prompt', 'system_prompt', '原始指令', '初始指令', '完整指令',
-               '复述上面', '重复上面', '重复以上', '复述以上', '输出你的规则', '把你的规则',
-               '你收到的所有内容', '上面的设定', '你被赋予的角色设定')
+               'system prompt', 'system_prompt', 'system message', '原始指令', '初始指令',
+               '完整指令', 'initial prompt', '复述上面', '重复上面', '重复以上', '复述以上',
+               '输出你的规则', '把你的规则', '你的规则是', '你收到的所有内容', '上面的设定',
+               '你被赋予的角色设定', '你的配置', '你的开发者', '第一条规则',
+               '收到的第一条消息')
 PROMPT_FISH_REPLY = ('我的配置不能对外提供，这个不是能聊的内容。\n'
                      '平台怎么用、东西怎么发、遇到问题怎么处理，我照常答；'
                      '你要是想确认我能不能做某件事，直接问那件事就行。')
+
+# 输入侧的词表只认字面，问法换一换就绕过去了（空格拆分、英文、写成诗、装成 EchoBot）。
+# 所以在出口再兜一道：不管它是被哪句话骗出来的，只要回答里带提示词的特征串，
+# 就不发给用户。这是「输出过滤」，比盯着输入可靠得多。
+# 强指纹：出现一个就基本能确定是本提示词（结构标记、自称、禁令原文）。
+LEAK_STRONG = ('【怎么答】', '【先判断这句话是哪一类】', '【参考资料】', '【用户问题】',
+               '不要输出思考过程', '你叫小转，是「转角」')
+# 弱指纹：单独出现可能是巧合——用户让我「给一条客服 prompt 当 NLP 样本」时，
+# 模型编的示例里也会写「先给结论再解释」，那种不该拦。两个以上同时出现才算。
+LEAK_WEAK = ('先给结论再解释', '先给答案再解释', '聊天框不渲染',
+             '不查、不暴露他人', 'system_prompt', 'SYSTEM_PROMPT')
+_LEAK_JSON = re.compile(r'\{[^{}]{0,200}?(system_prompt|system prompt|instructions)[^{}]{0,200}?\}',
+                        re.I)
+
+
+def guard_leak(out):
+    """出口扫描：回答里带了提示词指纹就整条换掉，不发出去。"""
+    text = out.get('answer') or ''
+    strong = [m for m in LEAK_STRONG if m in text]
+    weak = [m for m in LEAK_WEAK if m in text]
+    if not (strong or len(weak) >= 2 or _LEAK_JSON.search(text)):
+        return out
+    out['answer'] = PROMPT_FISH_REPLY
+    out['mode'] = 'rule'
+    out['sources'] = []
+    out['links'] = []
+    out['leak_blocked'] = True
+    return out
 
 # 自伤风险不能交给模型随机发挥，先硬拦一条：给陪伴 + 求助渠道，不给方法。
 SELF_HARM_WORDS = ('自杀', '不想活', '轻生', '结束生命', '自残', '活不下去',
@@ -882,7 +912,7 @@ def violation_reply(question):
 
 
 
-async def ai_answer(question, env, history=None, db=None):
+async def _answer_unguarded(question, env, history=None, db=None):
     started = time.time()
     q = str(question or '').strip()[:800]
     elapsed = lambda: int((time.time() - started) * 1000)
@@ -988,6 +1018,11 @@ async def ai_answer(question, env, history=None, db=None):
     # 只有客户自己说要人工才升级；模型即使顺嘴提到「转人工」也不算。
     return {'answer': text, 'action': 'reply', 'sources': sources_of(hits), 'links': links,
             'mode': mode, 'notice': notice, 'latency_ms': elapsed(), 'support': support_state()}
+
+
+async def ai_answer(question, env, history=None, db=None):
+    """所有回答的最后一道闸：先按原逻辑答，再扫一遍有没有把配置吐出来。"""
+    return guard_leak(await _answer_unguarded(question, env, history, db))
 
 
 class AiSupport:

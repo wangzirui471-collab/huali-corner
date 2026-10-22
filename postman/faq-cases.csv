@@ -1,0 +1,12 @@
+﻿question,expected_action,expected_keyword
+你好,reply,在的
+谢谢,reply,在的
+怎么发布商品,reply,发布
+送货费怎么算,reply,送货费
+信誉分低于60会怎样,reply,60
+怎么联系客服,reply,08:00
+怎么举报商品,reply,举报
+我要投诉,reply,售后
+面交安全吗,reply,转人工
+你们平台有多少注册用户,reply,转人工
+我要转人工,transfer,人工

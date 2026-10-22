@@ -1,0 +1,85 @@
+{
+  "info": {
+    "name": "转角AI客服 · 数据驱动回归",
+    "description": "一个请求 + 一份 CSV，跑遍所有 FAQ 抽样。\n用法：newman run \"转角AI客服 · 数据驱动回归.postman_collection.json\" -d faq-cases.csv -e \"转角-本地8093.postman_environment.json\"\nCSV 必须是 UTF-8，否则中文会乱码。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8093" },
+    { "key": "token", "value": "" }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const token = pm.variables.get('token');",
+          "if (token) {",
+          "    pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "}",
+          "const base = String(pm.variables.get('baseUrl') || '').replace(/\\/+$/, '');",
+          "if (base) { pm.variables.set('baseUrl', base); }"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "FAQ 抽样问答",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// 每一行 CSV 就是一次迭代：变量 question / expected_action / expected_keyword 由 -d 注入",
+              "const q = pm.iterationData.get('question');",
+              "const wantAction = String(pm.iterationData.get('expected_action') || '').trim();",
+              "const wantWord = String(pm.iterationData.get('expected_keyword') || '').trim();",
+              "",
+              "pm.test('[' + q + '] HTTP 200', () => pm.response.to.have.status(200));",
+              "",
+              "const body = pm.response.json();",
+              "",
+              "pm.test('[' + q + '] answer 非空', () => {",
+              "    pm.expect(body.answer).to.be.a('string');",
+              "    pm.expect(body.answer.trim().length).to.be.above(0);",
+              "});",
+              "",
+              "if (wantAction) {",
+              "    pm.test('[' + q + '] action = ' + wantAction, () => {",
+              "        pm.expect(body.action).to.eql(wantAction);",
+              "    });",
+              "}",
+              "",
+              "if (wantWord) {",
+              "    pm.test('[' + q + '] 答案提到「' + wantWord + '」', () => {",
+              "        pm.expect(body.answer).to.include(wantWord);",
+              "    });",
+              "}",
+              "",
+              "// 关键：一行结论，出问题一眼看出是哪条题",
+              "console.log(`${wantAction || '-'} | src=${(body.sources || []).length} | ${q} → ${body.answer.slice(0, 40)}`);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"question\": \"{{question}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/reply",
+          "host": ["{{baseUrl}}"],
+          "path": ["reply"]
+        },
+        "description": "问题文本来自 CSV 的 question 列。"
+      }
+    }
+  ]
+}

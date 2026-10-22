@@ -1,0 +1,642 @@
+{
+  "info": {
+    "name": "转角AI客服 · 接口自动化",
+    "description": "针对本地 AI 客服服务（ai_service/server.py，默认 127.0.0.1:8093）的接口自动化用例。\n\n用法：Postman 里 Import 本文件 → 右上角选环境「转角-本地8093」→ Collection Runner 或 newman 跑。\n覆盖：健康检查、问答主链路（问候/业务/转人工/兜底/多轮）、发布助手（描述/估价）、容错与鉴权。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8093" },
+    { "key": "token", "value": "" },
+    { "key": "maxLatencyMs", "value": "15000" },
+    { "key": "aiMode", "value": "" },
+    { "key": "faqTitle", "value": "" }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// —— 集合级前置脚本：每个请求发送前都会执行 ——",
+          "// 1) 配了 token 才注入鉴权头（服务端没设 HC_AI_TOKEN 时不加，加了也无害）",
+          "const token = pm.variables.get('token');",
+          "if (token) {",
+          "    pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "}",
+          "// 2) baseUrl 末尾斜杠统一去掉，避免拼出 //health 这种路径",
+          "const base = String(pm.variables.get('baseUrl') || '').replace(/\\/+$/, '');",
+          "if (base) { pm.variables.set('baseUrl', base); }",
+          "console.log('[→] ' + pm.request.method + ' ' + base + (pm.request.url.getPath ? pm.request.url.getPath() : ''));"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "00 · 连通性（先确认服务活着）",
+      "item": [
+        {
+          "name": "01 健康检查 · GET /health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('ok 为 true', () => pm.expect(body.ok).to.eql(true));",
+                  "",
+                  "pm.test('知识库已索引（chunks > 0）', () => {",
+                  "    pm.expect(body.chunks).to.be.a('number');",
+                  "    pm.expect(body.chunks).to.be.above(0);",
+                  "});",
+                  "",
+                  "pm.test('运行模式是 mock 或 llm', () => {",
+                  "    pm.expect(body.mode).to.be.oneOf(['mock', 'llm']);",
+                  "});",
+                  "",
+                  "pm.test('provider / model 非空', () => {",
+                  "    pm.expect(body.provider).to.be.a('string').and.not.empty;",
+                  "    pm.expect(body.model).to.be.a('string').and.not.empty;",
+                  "});",
+                  "",
+                  "// 把状态存进集合变量，后续用例可以直接引用",
+                  "pm.collectionVariables.set('aiMode', body.mode);",
+                  "pm.collectionVariables.set('aiChunks', body.chunks);",
+                  "console.log('[health] mode=' + body.mode + ' chunks=' + body.chunks + ' provider=' + body.provider);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "不需要鉴权。返回索引条数、运行模式、模型名——所有下游用例的前提。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 · 问答主链路 · POST /reply",
+      "item": [
+        {
+          "name": "02 打招呼（问候分流，不检索不花钱）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('action = reply（不转人工）', () => pm.expect(body.action).to.eql('reply'));",
+                  "",
+                  "pm.test('mode = rule（问候走规则，不调用模型）', () => pm.expect(body.mode).to.eql('rule'));",
+                  "",
+                  "pm.test('sources 为空（不查知识库）', () => {",
+                  "    pm.expect(body.sources).to.be.an('array').that.is.empty;",
+                  "});",
+                  "",
+                  "pm.test('answer 有内容', () => {",
+                  "    pm.expect(body.answer).to.be.a('string');",
+                  "    pm.expect(body.answer.length).to.be.above(2);",
+                  "});",
+                  "",
+                  "pm.test('返回客服在线状态（support）', () => {",
+                  "    pm.expect(body.support).to.be.an('object');",
+                  "    pm.expect(body.support.hours).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"你好\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reply",
+              "host": ["{{baseUrl}}"],
+              "path": ["reply"]
+            },
+            "description": "问候语应被规则分流：秒回、不检索、不花 token。"
+          }
+        },
+        {
+          "name": "03 业务问题（命中知识库）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('action = reply', () => pm.expect(body.action).to.eql('reply'));",
+                  "",
+                  "pm.test('命中知识库（sources 非空）', () => {",
+                  "    pm.expect(body.sources).to.be.an('array').that.is.not.empty;",
+                  "});",
+                  "",
+                  "pm.test('第一条来源有标题且分数过阈值', () => {",
+                  "    const top = body.sources[0];",
+                  "    pm.expect(top.title).to.be.a('string').and.not.empty;",
+                  "    pm.expect(top.score).to.be.above(0.11);   // 服务端 HC_AI_MIN_SCORE 默认 0.12",
+                  "    pm.collectionVariables.set('faqTitle', top.title);",
+                  "});",
+                  "",
+                  "pm.test('answer 不是空话', () => {",
+                  "    pm.expect(body.answer).to.be.a('string');",
+                  "    pm.expect(body.answer.length).to.be.above(10);",
+                  "});",
+                  "",
+                  "pm.test('响应时间可接受', () => {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(Number(pm.collectionVariables.get('maxLatencyMs')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"怎么退款\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reply",
+              "host": ["{{baseUrl}}"],
+              "path": ["reply"]
+            },
+            "description": "退款属于 FAQ 覆盖范围：必须命中资料，答案不能空。"
+          }
+        },
+        {
+          "name": "04 明确要求转人工",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('action = transfer（只认明确要求）', () => {",
+                  "    pm.expect(body.action).to.eql('transfer');",
+                  "});",
+                  "",
+                  "pm.test('话术里提到人工', () => {",
+                  "    pm.expect(body.answer).to.match(/人工/);",
+                  "});",
+                  "",
+                  "pm.test('转人工不查知识库', () => {",
+                  "    pm.expect(body.sources).to.be.an('array').that.is.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"我要转人工\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reply",
+              "host": ["{{baseUrl}}"],
+              "path": ["reply"]
+            },
+            "description": "产品规则：只有用户明确要真人时才升级，投诉/情绪不自动转。"
+          }
+        },
+        {
+          "name": "05 知识库外问题（应兜底，不瞎编）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('仍是 reply，不擅自升级工单', () => pm.expect(body.action).to.eql('reply'));",
+                  "",
+                  "pm.test('没有命中资料', () => {",
+                  "    pm.expect(body.sources).to.be.an('array');",
+                  "    pm.expect(body.sources.length).to.eql(0);",
+                  "});",
+                  "",
+                  "pm.test('回答承认没查到 / 给下一步，而不是编答案', () => {",
+                  "    pm.expect(body.answer).to.match(/转人工|没查到|没有确切|换个说法/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"转角平台在纳斯达克的股票代码是多少\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reply",
+              "host": ["{{baseUrl}}"],
+              "path": ["reply"]
+            },
+            "description": "这是最容易回归的一条：一旦模型开始自由发挥，这条会红。"
+          }
+        },
+        {
+          "name": "06 多轮对话（history 透传）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('action 合法', () => pm.expect(body.action).to.be.oneOf(['reply', 'transfer']));",
+                  "",
+                  "pm.test('answer 非空', () => {",
+                  "    pm.expect(body.answer).to.be.a('string');",
+                  "    pm.expect(body.answer.trim().length).to.be.above(0);",
+                  "});",
+                  "",
+                  "pm.test('多轮时也要带在线状态', () => {",
+                  "    pm.expect(body.support).to.be.an('object');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"那大概多久能到账\",\n  \"history\": [\n    { \"role\": \"user\", \"content\": \"你好\" },\n    { \"role\": \"assistant\", \"content\": \"在的～我是小转，有什么可以帮你？\" },\n    { \"role\": \"user\", \"content\": \"怎么退款\" },\n    { \"role\": \"assistant\", \"content\": \"未付款可以直接取消，已付款未交付可以申请取消并走模拟退款。\" }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reply",
+              "host": ["{{baseUrl}}"],
+              "path": ["reply"]
+            },
+            "description": "服务端只保留最近 4 句，且非法角色会被丢弃——这里验证带历史时不报错。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "20 · 发布助手 · /describe 与 /price",
+      "item": [
+        {
+          "name": "07 生成商品描述 · POST /describe",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('返回 text 且不是空串', () => {",
+                  "    pm.expect(body.text).to.be.a('string');",
+                  "    pm.expect(body.text.length).to.be.above(10);",
+                  "});",
+                  "",
+                  "pm.test('带上成色信息', () => pm.expect(body.text).to.include('九成新'));",
+                  "",
+                  "pm.test('mode 字段存在', () => pm.expect(body.mode).to.be.a('string'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"高等数学 同济第七版\",\n  \"category\": \"书籍\",\n  \"condition\": \"九成新\",\n  \"extra\": \"有少量笔记\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/describe",
+              "host": ["{{baseUrl}}"],
+              "path": ["describe"]
+            },
+            "description": "发布页「AI 帮我写描述」的后端接口。"
+          }
+        },
+        {
+          "name": "08 描述缺 title → 400（参数校验）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 400', () => pm.response.to.have.status(400));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('错误信息指明缺少 title', () => {",
+                  "    pm.expect(body.error).to.be.a('string');",
+                  "    pm.expect(body.error).to.include('title');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/describe",
+              "host": ["{{baseUrl}}"],
+              "path": ["describe"]
+            },
+            "description": "负向用例：不传必填项不能被 500 吃掉。"
+          }
+        },
+        {
+          "name": "09 估价 · POST /price（有参考样本）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('价格区间合法（low ≤ suggest ≤ high）', () => {",
+                  "    pm.expect(body.low).to.be.a('number').and.above(0);",
+                  "    pm.expect(body.high).to.be.at.least(body.low);",
+                  "    pm.expect(body.suggest).to.be.within(body.low, body.high);",
+                  "});",
+                  "",
+                  "pm.test('样本数量被采纳（3 条）', () => pm.expect(body.samples).to.eql(3));",
+                  "",
+                  "pm.test('给出理由', () => {",
+                  "    pm.expect(body.reason).to.be.a('string').and.not.empty;",
+                  "});",
+                  "",
+                  "    // 金额单位是「分」——顺手断言一下不会冒出一万块",
+                  "pm.test('估价不超过原价', () => pm.expect(body.high).to.be.below(5900));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"高等数学 同济第七版\",\n  \"category\": \"书籍\",\n  \"condition\": \"九成新\",\n  \"original_price\": 5900,\n  \"samples\": [1200, 1500, 1000]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/price",
+              "host": ["{{baseUrl}}"],
+              "path": ["price"]
+            },
+            "description": "金额单位是分（5900 = 59 元），不要写成 59。"
+          }
+        },
+        {
+          "name": "10 估价无样本 → 走规则兜底",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('没有样本也能给出区间', () => {",
+                  "    pm.expect(body.low).to.be.above(0);",
+                  "    pm.expect(body.high).to.be.at.least(body.low);",
+                  "});",
+                  "",
+                  "pm.test('样本数为 0', () => pm.expect(body.samples).to.eql(0));",
+                  "",
+                  "pm.test('mode 标注为规则', () => pm.expect(body.mode).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"宿舍台灯\",\n  \"original_price\": 4900\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/price",
+              "host": ["{{baseUrl}}"],
+              "path": ["price"]
+            },
+            "description": "没有同类在售价时不能 500，要退化成规则估算。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "30 · 容错与鉴权",
+      "item": [
+        {
+          "name": "11 未知路径 → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 404', () => pm.response.to.have.status(404));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('错误体是可读 JSON', () => pm.expect(body.error).to.eql('not found'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/not-exist",
+              "host": ["{{baseUrl}}"],
+              "path": ["not-exist"]
+            },
+            "description": "路由兜底：不能抛堆栈。"
+          }
+        },
+        {
+          "name": "12 非法 JSON → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 400', () => pm.response.to.have.status(400));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('给出错误提示而不是崩溃', () => {",
+                  "    pm.expect(body.error).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": ",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reply",
+              "host": ["{{baseUrl}}"],
+              "path": ["reply"]
+            },
+            "description": "故意发半截 JSON，验证服务端容错。"
+          }
+        },
+        {
+          "name": "13 不带 token → 401（服务端设了 HC_AI_TOKEN 才有意义）",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// 这条用例故意不带鉴权头：集合级脚本可能已经加上了，这里删掉",
+                  "pm.request.headers.remove('Authorization');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const configured = Boolean(pm.variables.get('token'));",
+                  "",
+                  "if (configured) {",
+                  "    pm.test('无 token 应被拒绝（401）', () => pm.response.to.have.status(401));",
+                  "    pm.test('返回 unauthorized', () => {",
+                  "        pm.expect(pm.response.json().error).to.eql('unauthorized');",
+                  "    });",
+                  "} else {",
+                  "    // 服务端没开 token，这条跳过——用 if 而不是假装通过",
+                  "    console.log('[skip] 服务端未设置 HC_AI_TOKEN，401 用例不适用');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"你好\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reply",
+              "host": ["{{baseUrl}}"],
+              "path": ["reply"]
+            },
+            "description": "条件断言示范：环境没配 token 时不假装通过，只在 console 里说明跳过。"
+          }
+        },
+        {
+          "name": "14 重新载入知识库 · POST /reload",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('状态码 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test('ok 为 true', () => pm.expect(pm.response.json().ok).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reload",
+              "host": ["{{baseUrl}}"],
+              "path": ["reload"]
+            },
+            "description": "改完 faq.md + 重跑 ingest 后，用它热载入索引，不用重启进程。"
+          }
+        }
+      ]
+    }
+  ]
+}
