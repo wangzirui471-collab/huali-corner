@@ -307,3 +307,23 @@ button.ai-pet-link{ cursor: pointer; font-family: inherit; }
 .ai-pet-prod-txt{ display: flex; flex-direction: column; min-width: 0; }
 .ai-pet-prod-txt b{ font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ai-pet-prod-txt small{ font-size: 11px; color: #d8451f; font-weight: 650; }
+
+/* 客服状态灯：面板标题下的小字。在线=绿，已下班=灰，一眼看得出现在能不能找人。 */
+.ai-pet-head small#ai-pet-duty::before{
+  content: ''; display: inline-block; width: 6px; height: 6px;
+  border-radius: 50%; margin-right: 5px; vertical-align: 1px;
+  background: #b9b9c0;
+}
+.ai-pet-head small#ai-pet-duty[data-online="true"]{ color: #1f9d55; }
+.ai-pet-head small#ai-pet-duty[data-online="true"]::before{ background: #1f9d55; }
+.ai-pet-head small#ai-pet-duty[data-online="false"]{ color: #8a8a93; }
+
+/* 客服已下班时的留言卡：说明「消息会排着，上班后处理」，不给跳转按钮，
+   因为在线客服入口这时候点了也没人。 */
+.ai-pet-offline{
+  margin-top: 8px; padding: 10px; border: 1px solid #e3e6ea; border-radius: 10px;
+  background: #f7f8fa; font-size: 12px; line-height: 1.6;
+}
+.ai-pet-offline b{ display: block; margin-bottom: 2px; color: #4a4f57; }
+.ai-pet-offline p{ margin: 0 0 8px; color: #6b6f77; }
+.ai-pet-offline .btn{ font-size: 12px; }

@@ -17,6 +17,26 @@ const ATLAS = '/assets/ai-pet/xiaozhuan-atlas.webp';
 const POS_KEY = 'hc-pet-pos';
 const HINT_KEY = 'hc-pet-hinted';
 
+// 客服在不在线。按北京时间算，与后端 support_state()、消息页 supportOnDuty() 同一口径。
+// 后端只回当前状态，面板上的状态灯由前端自己算，省一次请求。
+export function dutyNow(){
+  const raw = String(state.config?.support_hours || '08:00–20:00').replace('—', '–').replace('-', '–');
+  const [a, b] = raw.split('–').map(s => s.trim());
+  const toMin = s => { const [h, m] = s.split(':').map(Number); return h * 60 + (m || 0); };
+  const now = new Date();
+  const cur = now.getHours() * 60 + now.getMinutes();
+  return { online: cur >= toMin(a) && cur < toMin(b), hours: raw };
+}
+
+// 面板标题下面那行小字：在线/已下班 + 服务时间。
+export function paintDuty(){
+  const el = $('#ai-pet-duty');
+  if (!el) return;
+  const { online, hours } = dutyNow();
+  el.textContent = (online ? '客服在线 · ' : '客服已下班 · ') + hours;
+  el.dataset.online = String(online);
+}
+
 let petEl = null;
 let drag = null;
 let lastDragEnd = 0;
@@ -34,7 +54,7 @@ export function aiPet(){
   <section class="ai-pet-panel" id="ai-pet-panel" hidden aria-label="AI 助手小转">
     <header class="ai-pet-head">
       <span class="ai-pet-avatar"><img src="/assets/ai-pet/xiaozhuan-avatar.png" alt=""></span>
-      <div><b>小转</b><small>转角的 AI 助手 · 不确定会引导提交工单</small></div>
+      <div><b>小转</b><small id="ai-pet-duty">客服在线 · 08:00–20:00</small></div>
       <button type="button" class="ai-pet-close" id="ai-pet-close" aria-label="收起对话">×</button>
     </header>
     <div class="ai-pet-log" id="ai-pet-log">
@@ -135,6 +155,7 @@ export function togglePetPanel(open){
   if (show){
     placePanel();
     setPetState('wave', 900);
+    paintDuty();                       // 每次打开都刷新客服在线状态
     setTimeout(() => $('#ai-pet-q')?.focus(), 60);
   }else{
     setPetState('idle');

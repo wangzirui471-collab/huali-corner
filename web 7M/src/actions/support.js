@@ -42,19 +42,29 @@ async function petAsk(q){
       ? `<button type="button" class="ai-pet-link" data-action="${e(l.action)}" data-q="${e(l.q||'')}">${e(l.label)} →</button>`
       : `<a class="ai-pet-link" href="${e(l.href)}">${e(l.label)} →</a>`).join('');
     const prods=(r.products||[]).map(p=>`<a class="ai-pet-prod" href="#product/${p.id}"><span class="ai-pet-prod-img" style="background-image:url('${e(p.url||'')}')"></span><span class="ai-pet-prod-txt"><b>${e(p.title)}</b><small>¥${money(p.price)}${p.nickname?' · '+e(p.nickname):''}</small></span></a>`).join('');
-    const transfer=r.action==='transfer';
+    const transfer=r.action==='transfer';        // 客户明说要人工，且客服在线
+    const offline=r.action==='leave_message';    // 客户明说要人工，但客服已下班
+    const st=r.support||{};
+    const hours=st.hours||'08:00–20:00';
+    let card='';
+    if(transfer){
+      card=`<div class="ai-pet-transfer"><b>要人工处理？</b><p>先提交一张工单说明情况，再从工单页点「联系在线客服」，客服就知道在聊哪件事。</p><button type="button" class="btn primary" data-action="new-ticket">提交工单</button></div>`;
+    }else if(offline){
+      // 已下班：留言排队，不给「联系在线客服」——点了也没人接。
+      card=`<div class="ai-pet-offline"><b>客服已下班（每天 ${hours}）</b><p>留言和工单会按提交顺序排着，${e(st.next_open||'明天 08:00')}上班后处理。你现在写下来，明天不用重新说一遍。</p><button type="button" class="btn primary" data-action="new-ticket">提交工单留言</button></div>`;
+    }
     wait.innerHTML=`<div>${petText(r.answer)}</div>
       ${links?`<div class="ai-pet-links">${links}</div>`:''}
       ${prods?`<div class="ai-pet-prods">${prods}</div>`:''}
+      ${card}
       ${src?`<div class="ai-pet-src">来源：${src}</div>`:''}
-      ${transfer?`<div class="ai-pet-transfer"><b>需要人工处理？</b><p>退款、投诉、账号安全建议提交工单，客服 08:00—20:00 处理。</p><button type="button" class="btn primary" data-action="new-ticket">提交工单</button></div>`:''}
       ${r.notice?`<div class="ai-pet-src">${e(r.notice)}</div>`:''}`;
     petHistory.push({role:'user',content:text},{role:'assistant',content:String(r.answer||'')});
     petHistory=petHistory.slice(-4);
     if(transfer) setPetState('wave',1800); else setPetState('idle');   // 要转人工就招手喊客服
   }catch(err){
-    const msg=(err.status===429||err.status===503)?err.message:'AI 暂时不可用，请稍后再试或提交工单。';
-    wait.innerHTML=`<div>${petText(msg)}</div><div class="ai-pet-transfer"><b>需要人工处理？</b><button type="button" class="btn primary" data-action="new-ticket">提交工单</button></div>`;
+    const msg=(err.status===429||err.status===503)?err.message:'AI 暂时不可用，请稍后再试。';
+    wait.innerHTML=`<div>${petText(msg)}</div>`;
     setPetState('fail',1600);             // 出错时小转晃一下，不用再额外弹提示
   }finally{
     if(send) send.disabled=false;
