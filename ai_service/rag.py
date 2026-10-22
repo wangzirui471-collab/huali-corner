@@ -130,11 +130,11 @@ SYSTEM_PROMPT = """你是一名企业客服 Agent，只服务「转角」校园�
    也别解释流程，用一两句口语接住（对方表达善意就道谢，说累就安慰一句），可以顺手说一句
    你能帮他做什么，总共不超过 40 字。这时不要回「我这边没查到确切规则」——那不是回答，
    是把人推回去。
-1. 只允许使用下方【参考资料】中明确写出的信息回答业务问题。
-2. 绝对不允许使用你自带的模型知识补充业务事实。
-3. 参考资料没有写到的内容，不要猜测、不要估算，也不要让客户去提交工单。
-   这种情况下直接告诉客户「我这边没查到确切规则」，然后给出两三个可行的下一步
-   （换个说法再问、去哪个页面看、需要真人时怎么说），并请他补充具体情况。
+1. 业务事实（金额、时限、处罚、流程步骤）优先按下方【参考资料】说，不要改动里面的数字。
+2. 参考资料没写到的，可以用通用常识把话接住、给出方向，但**不要编造本站的具体数字、
+   时限或处罚**；这类说不准的地方就说「以页面显示为准」，并指出在哪个页面能看到。
+3. 不要因为「资料里没有」就说「我这边没查到」「换个说法再问一次」——那不是回答，
+   是把人推回去。也不要让客户去提交工单；把能说清楚的部分先说清楚。
 4. 不承诺优惠、质保、赔偿、发货时效；不使用“大概、可能、应该是”等不确定表述。
 5. 回答简短、友好、口语化，适合客户聊天，不超过 200 字；不要用 Markdown、标题或长段落。
 6. 不主动推荐转人工或提交工单。是否转人工由客户自己决定，只有客户明确说了才转。
@@ -146,6 +146,74 @@ SYSTEM_PROMPT = """你是一名企业客服 Agent，只服务「转角」校园�
 【用户问题】
 {query}
 """
+
+# 知识库没命中时用的开放人格。旧版这里直接回固定话术，
+# 客户问什么都是同一句「换个说法再问一次」，等于不会说话。
+OPEN_PROMPT = """你是「转角」校园二手交易平台的客服兼助手，名字叫小转。
+说话自然、口语、像同学之间聊天，不要输出思考过程，不要用 Markdown、标题或列表。
+
+【能做什么】
+1. 平台怎么用：发布、下单、付款、面交、退款、售后、好友、信誉、客服时间。
+2. 一般常识与生活问题：学习、二手行情、校园生活、情感闲聊都可以聊。
+3. 平台没有现成规定的事，可以给建议，但要说明「具体以页面显示为准」。
+
+【怎么答】
+1. 参考资料里有的，按参考资料说，不要改数字、时限和金额。
+2. 参考资料里没有、但属于常识或闲聊的，直接答，不要说自己查不到，也不要让人去提工单。
+3. 涉及本站具体金额、时限、处罚这类硬事实且没有依据时，说清「这块以页面显示为准」，
+   再告诉他在哪个页面能看到，不要编具体数字。
+4. 只有客户自己说「转人工 / 找真人」才升级；不要主动推荐转人工或提交工单。
+5. 不超过 120 字。涉及隐私（手机号、他人订单、聊天记录）不回答。
+
+【参考资料】
+{context}
+
+【用户问题】
+{query}
+"""
+
+# 口语 → 知识库用词。检索按二字词重叠打分，「卖东西」和「发布闲置」
+# 一个词都不重合，不补这层，最该答上来的问题反而落空。
+SYNONYMS = {
+    '卖东西': '发布 闲置 出售',
+    '出闲置': '发布 闲置',
+    '卖掉': '发布 出售',
+    '出售': '发布 出售',
+    '上架': '发布 上架',
+    '挂着卖': '发布',
+    '想卖': '发布 出售',
+    '买东西': '求购 购买',
+    '想买': '求购 购买',
+    '下单': '购买 付款 订单',
+    '付钱': '付款 模拟',
+    '扣钱': '付款 模拟',
+    '退货': '退款 售后',
+    '退钱': '退款',
+    '售后': '售后 工单',
+    '打分': '评价 星级',
+    '差评': '评价 信誉',
+    '拉黑': '屏蔽 好友',
+    '黑名单': '屏蔽',
+    '忘了密码': '密码 找回',
+    '登不上': '密码 登录',
+    '登录不了': '密码 登录',
+    '面交': '交付 面交',
+    '自提': '交付 自提',
+    '快递': '交付 送货',
+    '邮寄': '交付 送货',
+    '抽成': '服务费 费用',
+    '押金': '费用 服务费',
+    '手机号': '隐私 手机号',
+    '删号': '注销 账号',
+    '注销': '注销 账号',
+}
+
+
+def expand_question(question):
+    """把口语说法补成知识库用的词，只加词、不改原句。"""
+    low = (question or '').lower()
+    extra = [words for key, words in SYNONYMS.items() if key in low]
+    return (question + ' ' + ' '.join(extra)).strip() if extra else question
 
 # 本地 Ollama 不能走系统代理
 _NO_PROXY = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -313,7 +381,7 @@ def retrieve(question, k=None):
             qvec = ollama_embed(question)
         except Exception:  # noqa: BLE001 - 查询向量失败就退关键词
             qvec = None
-    qset = set(_terms(question))
+    qset = set(_terms(expand_question(question)))
     if not qset and not qvec:
         return []
     scored = []
@@ -383,16 +451,17 @@ def extractive(hits):
     return trim(answer, 260) if len(answer) >= 12 else ''
 
 
-def call_ollama(question, context):
+def call_ollama(question, context, open_mode=False):
+    template = OPEN_PROMPT if open_mode else SYSTEM_PROMPT
     payload = {
         'model': config.OLLAMA_MODEL,
         'messages': [
-            {'role': 'system', 'content': SYSTEM_PROMPT.format(context=context, query=question)},
+            {'role': 'system', 'content': template.format(context=context or '（无）', query=question)},
             {'role': 'user', 'content': question},
         ],
         'stream': False,
         'options': {
-            'temperature': 0.2,
+            'temperature': 0.5 if open_mode else 0.2,
             'top_p': 0.9,
             'num_ctx': config.NUM_CTX,
             'num_predict': config.NUM_PREDICT,
@@ -410,18 +479,22 @@ def call_ollama(question, context):
     return msg.get('content') or ''
 
 
-def call_api(question, context):
-    """调用 DeepSeek 官方 OpenAI 兼容接口（默认模型 deepseek-flash）。"""
+def call_api(question, context, open_mode=False):
+    """调用 DeepSeek 官方 OpenAI 兼容接口（默认模型 deepseek-flash）。
+
+    open_mode=True 时不带知识库、用开放人格回答（闲聊/常识/没命中时用）。
+    """
     if not config.API_KEY:
         raise RuntimeError('未配置 HC_AI_API_KEY')
+    template = OPEN_PROMPT if open_mode else SYSTEM_PROMPT
     payload = {
         'model': config.CHAT_MODEL,
         'messages': [
-            {'role': 'system', 'content': SYSTEM_PROMPT.format(context=context, query=question)},
+            {'role': 'system', 'content': template.format(context=context or '（无）', query=question)},
             {'role': 'user', 'content': question},
         ],
         'stream': False,
-        'temperature': 0.2,
+        'temperature': 0.5 if open_mode else 0.2,
         'max_tokens': config.NUM_PREDICT,
     }
     req = urllib.request.Request(
@@ -600,8 +673,28 @@ def answer(question, history=None):
 
     hits = retrieve(q)
     if not hits:
-        return {'answer': FALLBACK, 'action': 'reply', 'sources': [], 'mode': 'guess',
-                'latency_ms': int((time.time() - started) * 1000), 'support': st}
+        # 知识库没命中：交给模型按开放人格回答（闲聊、常识、平台没写死的事）。
+        # 只有模型真的不可用（MOCK / 没 Key / 本地模型没起 / 超时）才退回兜底话术。
+        text = ''
+        try:
+            if config.MOCK:
+                raise RuntimeError('mock 模式不调用模型')
+            if config.PROVIDER == 'ollama':
+                with _LOCK:
+                    text = call_ollama(q, '', open_mode=True)
+            else:
+                if not config.API_KEY:
+                    raise RuntimeError('未配置 HC_AI_API_KEY')
+                with _LOCK:
+                    text = call_api(q, '', open_mode=True)
+        except Exception:  # noqa: BLE001 - 模型不可用就退回兜底
+            text = ''
+        text = strip_thinking(text)
+        if not text:
+            return {'answer': FALLBACK, 'action': 'reply', 'sources': [], 'mode': 'guess',
+                    'latency_ms': int((time.time() - started) * 1000), 'support': st}
+        return {'answer': trim(text, 220), 'action': 'reply', 'sources': [], 'mode': 'llm',
+                'open': True, 'latency_ms': int((time.time() - started) * 1000), 'support': st}
 
     context = build_context(hits)
     notice = ''
