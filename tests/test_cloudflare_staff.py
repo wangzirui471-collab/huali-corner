@@ -240,6 +240,18 @@ class StaffTests(CloudCase):
         r=await self.post('/api/backup',{}); self.assertEqual(r.status,404)
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM audit WHERE type='backup'").fetchone()[0],0)
 
+    def test_backup_table_list_covers_every_schema_table(self):
+        # 运行时的「备份表清单需随数据库迁移更新」守卫能拦住缺表备份，
+        # 但得真点一次备份才发现。这里静态比对 schema.sql：
+        # 以后迁移加表忘了补 BACKUP_TABLES，测试先红。
+        import re
+        from pathlib import Path
+        from app.cloudflare.staff_api import BACKUP_TABLES
+        schema = (Path(__file__).resolve().parents[1] / 'Backend mission' / 'app' / 'cloudflare' / 'schema.sql').read_text(encoding='utf-8')
+        created = set(re.findall(r'CREATE TABLE IF NOT EXISTS (\w+)', schema))
+        self.assertEqual(created - set(BACKUP_TABLES), set(), 'schema.sql 有表没进备份清单')
+        self.assertEqual(set(BACKUP_TABLES) - created, set(), '备份清单里有 schema.sql 不存在的表')
+
 if __name__=='__main__':
     import unittest
     unittest.main()

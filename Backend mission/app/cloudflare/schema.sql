@@ -1,13 +1,17 @@
 CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,actor INTEGER,target INTEGER,type TEXT,delta INTEGER,reason TEXT,ticket_id INTEGER,created REAL);
 CREATE TABLE IF NOT EXISTS auth_attempts(phone TEXT PRIMARY KEY,attempts INTEGER NOT NULL,reset_at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS blocks(user_id INTEGER,target INTEGER,PRIMARY KEY(user_id,target));
-CREATE TABLE IF NOT EXISTS comments(id INTEGER PRIMARY KEY,post_id INTEGER,user_id INTEGER,body TEXT,created REAL, parent_id INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS comments(id INTEGER PRIMARY KEY,post_id INTEGER,user_id INTEGER,body TEXT,created REAL, parent_id INTEGER DEFAULT 0, removed INTEGER DEFAULT 0);
+-- 好友关系：friend_api.py 的好友门禁与 community/service.py 的 is_friend 都要查它。
+-- 本地 schema（app/core/database.py）一直有这张表，云端漏了会导致私聊发消息 500。
+-- 定义与本地 SQLite 版逐字一致（三处 schema 必须同步）。
+CREATE TABLE IF NOT EXISTS friendships(id INTEGER PRIMARY KEY,requester INTEGER NOT NULL,target INTEGER NOT NULL,message TEXT DEFAULT '',want_id INTEGER DEFAULT 0,status TEXT DEFAULT 'pending',created REAL,decided REAL,UNIQUE(requester,target));
 CREATE TABLE IF NOT EXISTS ledger(id INTEGER PRIMARY KEY,order_id INTEGER,kind TEXT,amount INTEGER,created REAL,UNIQUE(order_id,kind));
 CREATE TABLE IF NOT EXISTS members(room_id INTEGER,user_id INTEGER,muted INTEGER DEFAULT 0,role TEXT DEFAULT 'member', last_read_id INTEGER DEFAULT 0,PRIMARY KEY(room_id,user_id));
 CREATE TABLE IF NOT EXISTS message_hides(user_id INTEGER,message_id INTEGER,created REAL,PRIMARY KEY(user_id,message_id));
 CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY,room_id INTEGER,user_id INTEGER,body TEXT,created REAL,request_key TEXT,removed INTEGER DEFAULT 0, moderation TEXT,UNIQUE(user_id,room_id,request_key));
 CREATE TABLE IF NOT EXISTS nominations(id INTEGER PRIMARY KEY,user_id INTEGER,room_id INTEGER,reason TEXT,status TEXT DEFAULT 'pending',created REAL);
-CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY,user_id INTEGER,kind TEXT,order_id INTEGER,ticket_id INTEGER,body TEXT,read_at REAL,created REAL, post_id INTEGER);
+CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY,user_id INTEGER,kind TEXT,order_id INTEGER,ticket_id INTEGER,body TEXT,read_at REAL,created REAL, post_id INTEGER, product_id INTEGER);
 CREATE TABLE IF NOT EXISTS offers(id INTEGER PRIMARY KEY,product_id INTEGER,buyer_id INTEGER,amount INTEGER,status TEXT DEFAULT 'pending',created REAL, accepted_at REAL);
 CREATE TABLE IF NOT EXISTS order_changes(id INTEGER PRIMARY KEY,order_id INTEGER,proposer INTEGER,appointment REAL,address TEXT,status TEXT DEFAULT 'pending',created REAL);
 CREATE TABLE IF NOT EXISTS order_notes(id INTEGER PRIMARY KEY,order_id INTEGER,user_id INTEGER,body TEXT,created REAL);
@@ -32,6 +36,6 @@ CREATE TABLE IF NOT EXISTS user_avatar_uploads(
             digest TEXT NOT NULL,
             created_at REAL NOT NULL
         );
-CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,phone TEXT UNIQUE,nickname TEXT NOT NULL,college TEXT DEFAULT '计算机工程学院',major TEXT DEFAULT '',education TEXT DEFAULT '本科',bio TEXT DEFAULT '',role TEXT DEFAULT 'user',score INTEGER DEFAULT 100 CHECK(score BETWEEN 0 AND 100), status TEXT DEFAULT 'active', last_login REAL DEFAULT 0, degree_level TEXT NOT NULL DEFAULT 'unspecified', study_status TEXT NOT NULL DEFAULT 'unspecified', profile_version INTEGER NOT NULL DEFAULT 0, avatar_upload_id TEXT);
+CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,phone TEXT UNIQUE,nickname TEXT NOT NULL,college TEXT DEFAULT '计算机工程学院',major TEXT DEFAULT '',education TEXT DEFAULT '本科',bio TEXT DEFAULT '',role TEXT DEFAULT 'user',score INTEGER DEFAULT 100 CHECK(score BETWEEN 0 AND 100), status TEXT DEFAULT 'active', last_login REAL DEFAULT 0, degree_level TEXT NOT NULL DEFAULT 'unspecified', study_status TEXT NOT NULL DEFAULT 'unspecified', profile_version INTEGER NOT NULL DEFAULT 0, avatar_upload_id TEXT, grade TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS wants(id INTEGER PRIMARY KEY,user_id INTEGER,keyword TEXT,budget INTEGER,description TEXT,status TEXT DEFAULT 'open',created REAL);
 CREATE INDEX IF NOT EXISTS user_avatar_uploads_owner ON user_avatar_uploads(user_id);

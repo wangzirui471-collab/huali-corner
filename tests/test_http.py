@@ -18,7 +18,10 @@ class HttpTests(unittest.TestCase):
             with urllib.request.urlopen(urllib.request.Request(self.base+path,data=json.dumps(data).encode() if data is not None else None,headers=h)) as r:return r.status,r.read(),r.headers
         except urllib.error.HTTPError as e:return e.code,e.read(),e.headers
     def test_public_home_api_and_no_cache(self):
-        status,body,h=self.req('/');self.assertEqual(status,200);self.assertIn('华立转角',body.decode())
+        # 断言精确到 <title> 整段：这个文件曾被双重编码污染成乱码，
+        # 只查「华立转角」这种松匹配反而查不出来，标题对不上立刻红。
+        status,body,h=self.req('/');self.assertEqual(status,200)
+        self.assertIn('<title>转角 · 校园二手好物集</title>',body.decode('utf-8'))
         status,body,h=self.req('/api/products');self.assertEqual(status,200);self.assertIsInstance(json.loads(body),list)
         self.assertEqual(h['Cache-Control'],'no-store')
     def test_core_asset_types_ignore_incorrect_windows_registry_mappings(self):

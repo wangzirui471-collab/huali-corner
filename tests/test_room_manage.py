@@ -17,7 +17,9 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'Backend mission'))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from app.market import Market, DomainError
+from chat_fixture import private_chat
 
 
 class RoomManageTests(unittest.TestCase):
@@ -40,8 +42,8 @@ class RoomManageTests(unittest.TestCase):
     # 置顶：写库后 rooms() 立刻返回 pinned=true；
     # 取消置顶再 rooms() 回去要降回 false。
     def test_pin_toggle_round_trip(self):
-        room = self.m.private_room(self.a, self.b)['id']
-        self.m.say = lambda *a, **k: None  # placeholder, 用真正的 say
+        # 私聊发送有好友门禁，前置先建好友关系。
+        room = private_chat(self.m, self.a, self.b)
         self.say(self.a, room, 'hi', 'kp1')
         self.say(self.b, room, 'hello', 'kp2')
 
@@ -70,7 +72,7 @@ class RoomManageTests(unittest.TestCase):
     # 这是"删除"和"撤回"的根本区别——撤回让所有人看到撤回提示，
     # 删除只抹自己眼里的。
     def test_clear_room_only_affects_self(self):
-        room = self.m.private_room(self.a, self.b)['id']
+        room = private_chat(self.m, self.a, self.b)
         self.say(self.a, room, '1', 'kc1')
         self.say(self.b, room, '2', 'kc2')
         self.say(self.a, room, '3', 'kc3')
@@ -111,7 +113,7 @@ class RoomManageTests(unittest.TestCase):
 
     # 屏蔽 toggle：enabled=True 写入，enabled=False 删除，与 rooms() 里的 blocked 联动。
     def test_block_toggle_and_rooms_reflect(self):
-        room = self.m.private_room(self.a, self.b)['id']
+        room = private_chat(self.m, self.a, self.b)
         self.say(self.a, room, '看一下', 'kb1')
         self.m.block(self.a, self.b, True)
         self.assertTrue(next(r for r in self.m.rooms(self.a)['joined'] if r['id'] == room)['blocked'])
