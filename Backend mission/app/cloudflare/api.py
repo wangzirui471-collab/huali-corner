@@ -74,7 +74,10 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, AiSu
             if not raw:
                 return None
             obj = json.loads(raw)
-            if time.time() - float(obj.get('at') or 0) > self.CACHE_TTL:
+            # 用 >= 而不是 >：TTL=0 的语义是「一条都不缓存」，写成 > 时，
+            # 同一毫秒内连写带读（本机 time.time() 精度约 1ms）会被当成还有效，
+            # 拿到已删除的旧数据。生产 TTL=30 时两者等价。
+            if time.time() - float(obj.get('at') or 0) >= self.CACHE_TTL:
                 return None
             return obj.get('body')
         except Exception:
