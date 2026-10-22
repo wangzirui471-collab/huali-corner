@@ -230,7 +230,8 @@ OPEN_PROMPT = """你是「转角」校园二手交易平台的客服兼助手，
 3. 涉及本站具体金额、时限、处罚这类硬事实且没有依据时，说清「这块以页面显示为准」，
    再告诉他在哪个页面能看到，不要编具体数字。
 4. 只有客户自己说「转人工 / 找真人」才升级；不要主动推荐转人工或提交工单。
-   也不要说「我只负责交易问题」这类把人推回去的话——你是这个站的助手，什么都能聊。
+   绝对不要说「我只负责平台问题」「这个我处理不了」这类把人推回去的话。
+   被问推荐书、聊兴趣、问常识，就像朋友一样接：能推荐就推荐两本，能聊就聊两句。
 5. 不超过 120 字。涉及隐私（手机号、他人订单、聊天记录）不回答。
 6. 不帮客户查别人的手机号、地址、订单、聊天记录；不教盗号、刷单、伪造评价、
    卖假货或违禁品；遇到这类请求直接说不可以，并说明这违反平台规则或法律，
@@ -569,11 +570,13 @@ async def buy_answer(db, q):
 # 「推荐几本书」如果交给模型自由发挥，它会给《代码大全》《人月神话》这类
 # 站里根本没有的书，客户照着找一圈发现买不到。这里改成直接查在售书籍。
 RECOMMEND_PATTERNS = ('推荐', '有什么书', '看什么书', '有哪些书', '买什么书',
-                      '什么书好', '求推荐', '有啥书', '有没有', '有吗', '有木有')
+                      '什么书好', '求推荐', '有啥书', '有没有', '有吗', '有木有',
+                      '有什么', '有哪些')
 BOOK_WORDS = ('书', '教材', '资料', '课本', '小说', '专业书', '习题', '真题', '读物')
 # 剥掉量词和客套：不能按二字词拼——「数据结构」会被拼成「数据据结结构」，一件都搜不到。
 RECOMMEND_NOISE = re.compile(r'(几本|一本|两本|三本|那本|这本|一些|给我|帮我|一下|能看懂|'
-                             r'好懂|入门|适合|比较|有没|有没有|的|吧|呢|啊|吗)')
+                             r'好懂|入门|适合|比较|有没|有没有|好看|有意思|经典|热门|最近|我想学|想学|学习|'
+                             r'本书|本|的|吧|呢|啊|吗)')
 
 
 def recommend_query(question):
@@ -594,10 +597,11 @@ def recommend_query(question):
 
 
 async def recommend_books(db, kw, limit=4):
+    """返回 (rows, matched)。matched=False 表示关键词一件没对上，退回最新上架。"""
     if kw:
         rows = await buy_search(db, kw, limit)
         if rows:
-            return rows
+            return rows, True
     # 没给方向，或者关键词一件都没搜到：退回「最新上架的几本书」
     rows = await db.all(
         'SELECT p.id,p.title,p.price,p.data,u.nickname FROM products p '
@@ -605,11 +609,11 @@ async def recommend_books(db, kw, limit=4):
         'ORDER BY p.id DESC LIMIT ?', (limit,))
     return [{'id': r['id'], 'title': r['title'], 'price': r['price'],
              'url': _photos_url(_detail(r['data']).get('photos')),
-             'nickname': r['nickname']} for r in rows]
+             'nickname': r['nickname']} for r in rows], False
 
 
 async def recommend_answer(db, kw):
-    rows = await recommend_books(db, kw)
+    rows, matched = await recommend_books(db, kw)
     if not rows:
         return {'answer': '这会儿书架上没有在售的书了，可以点按钮去首页搜搜，或者发个求购让卖家找你。',
                 'action': 'reply',
@@ -618,8 +622,12 @@ async def recommend_answer(db, kw):
                 'support': support_state()}
     # 书名要写进正文：卡片不渲染时（小程序、旧客户端）也不至于只看到一句空话。
     names = '、'.join('《%s》' % r['title'] for r in rows[:3])
-    if kw:
+    if kw and matched:
         answer = '和「%s」有关的，架上这几本可以看看：%s。点卡片看详情。' % (kw, names)
+    elif kw:
+        # 关键词没对上时绝不能说「有关的」，否则等于指着无关的书骗人。
+        answer = ('架上暂时没有和「%s」对得上的，这几本是刚上架的，可以先看看：%s。'
+                  '要更准的话，点下面按钮去首页自己搜。' % (kw, names))
     else:
         answer = '没说要哪方面的话，先看看这几本刚上架的：%s。点卡片看详情。' % names
     return {'answer': answer, 'action': 'reply',
