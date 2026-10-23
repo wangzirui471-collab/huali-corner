@@ -11,10 +11,14 @@
 import { $ } from '../core/dom.js';
 import { state } from '../core/state.js';
 import { isOwner } from '../core/roles.js';
+import {
+  currentSkin, getScale, getLife, getHidden, setHidden,
+  applySkinVars, applySkinFrame, actHasFlip, stopFrames,
+} from './pet-skins.js';
+import { openPetSettings, onPetPrefChange } from './pet-settings.js';
 
-const SPRITE_W = 120;          // 单帧宽（与 ai-pet.css 里的 --pet-cell-w 一致）
+const SPRITE_W = 120;          // 旧图集的单帧宽，只在图集还没接管尺寸前兜底
 const SPRITE_H = 147;
-const ATLAS = '/assets/ai-pet/xiaozhuan-atlas.webp';
 const POS_KEY = 'hc-pet-pos';
 const SIZE_KEY = 'hc-pet-panel-size';
 const HINT_KEY = 'hc-pet-hinted';
@@ -66,15 +70,18 @@ export function aiPet(){
   <div class="ai-pet-hint" id="ai-pet-hint" hidden>按住我可以拖到任意位置</div>
   <section class="ai-pet-panel" id="ai-pet-panel" hidden aria-label="AI 助手小转">
     <header class="ai-pet-head" id="ai-pet-head">
-      <span class="ai-pet-avatar"><img src="/assets/ai-pet/xiaozhuan-avatar.png" alt=""></span>
-      <div><b>小转</b><small id="ai-pet-duty">客服在线 · 08:00–20:00</small></div>
+      <span class="ai-pet-avatar"><img id="ai-pet-avatar" src="/assets/ai-pet/xiaozhuan-avatar.png" alt=""></span>
+      <div><b id="ai-pet-name">小转</b><small id="ai-pet-duty">客服在线 · 08:00–20:00</small></div>
+      <button type="button" class="ai-pet-gear" id="ai-pet-set" aria-label="桌宠设置" title="桌宠设置：换形象、大小、须知">
+        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M2.6 4.4h10.8M2.6 8h10.8M2.6 11.6h10.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="5.6" cy="4.4" r="1.7" fill="currentColor"/><circle cx="10.4" cy="8" r="1.7" fill="currentColor"/><circle cx="6.2" cy="11.6" r="1.7" fill="currentColor"/></svg>
+      </button>
       <button type="button" class="ai-pet-max" id="ai-pet-max" aria-label="放大对话窗口" title="放大 / 还原（双击标题也可以）">
         <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <button type="button" class="ai-pet-close" id="ai-pet-close" aria-label="收起对话">×</button>
     </header>
     <div class="ai-pet-log" id="ai-pet-log">
-      <div class="ai-pet-msg bot">我是小转，转角里的那只桌宠。发布、退款、面交、客服时间都能问我——不想问正事，聊两句也行。</div>
+      <div class="ai-pet-msg bot">我是转角的桌宠。发布、退款、面交、客服时间都能问我——不想问正事，聊两句也行。</div>
     </div>
     <div class="ai-pet-chips" aria-label="常见问题">
       <button type="button" data-action="ai-pet-chip" data-q="怎么发布闲置？">怎么发布</button>
@@ -114,7 +121,7 @@ export function aiPet(){
     </div>` : ''}
     <form id="ai-pet-form" class="ai-pet-form">
       <label class="ai-pet-sr" for="ai-pet-q">输入问题</label>
-      <textarea id="ai-pet-q" name="q" maxlength="300" rows="1" placeholder="问问小转，例如：怎么发布？" required></textarea>
+      <textarea id="ai-pet-q" name="q" maxlength="300" rows="1" placeholder="问问我，例如：怎么发布？" required></textarea>
       <button type="submit" class="ai-pet-send">发送</button>
     </form>
     <p class="ai-pet-note">${state.config?.ai_local
@@ -133,11 +140,19 @@ export function aiPet(){
 }
 
 // --- 状态 ---------------------------------------------------------------
+// 动作名 → 皮肤里的一段帧序列。帧数、行号、快慢都由皮肤声明，
+// 这里只负责「换动作」和「播完回待机」。
 export function setPetState(name, holdMs){
   if (!petEl) return;
   clearTimeout(stateTimer);
-  petEl.dataset.state = name || 'idle';
-  if (holdMs) stateTimer = setTimeout(() => { if (petEl) petEl.dataset.state = 'idle'; }, holdMs);
+  const act = name || 'idle';
+  petEl.dataset.state = act;
+  const skin = currentSkin();
+  if (skin){
+    petEl.classList.toggle('is-flip', actHasFlip(skin, act));
+    applySkinFrame(petEl.querySelector('.ai-pet-sprite'), skin, act);
+  }
+  if (holdMs) stateTimer = setTimeout(() => setPetState('idle'), holdMs);
 }
 
 // --- 位置 ---------------------------------------------------------------
@@ -430,11 +445,35 @@ function bindDrag(body){
 function scheduleLife(){
   clearTimeout(lifeTimer);
   lifeTimer = setTimeout(() => {
-    if (petEl && !drag && !petEl.classList.contains('is-open')){
-      setPetState(Math.random() < .6 ? 'wave' : 'jump', 900);
+    if (getLife() && petEl && !drag && !petEl.classList.contains('is-open')){
+      setPetState(Math.random() < .6 ? 'wave' : 'jump', 1100);
     }
     scheduleLife();
   }, 11000 + Math.random() * 9000);
+}
+
+// --- 皮肤 ---------------------------------------------------------------
+// 换皮肤时只改 CSS 变量和名字头像，元素本身不重建——重建会丢拖动绑定和面板状态。
+function applySkin(){
+  if (!petEl) return;
+  const skin = currentSkin();
+  if (!skin) return;
+  applySkinVars(petEl, skin, getScale());
+  const avatar = $('#ai-pet-avatar');
+  if (avatar) avatar.src = skin.avatar;
+  const name = $('#ai-pet-name');
+  if (name) name.textContent = skin.name;
+  const body = $('#ai-pet-body');
+  if (body) body.setAttribute('aria-label', `AI 助手${skin.name}，可拖动；点一下提问`);
+  petEl.hidden = getHidden();
+
+  // 图集（或用户上传的图）能不能解码，决定用精灵还是降级成字钮。
+  const probe = new Image();
+  probe.onload = () => petEl?.classList.add('is-ready');
+  probe.onerror = () => petEl?.classList.add('is-fallback');
+  probe.src = skin.atlas;
+  petEl.classList.remove('is-ready');
+  setPetState('idle');
 }
 
 // --- 挂载 ---------------------------------------------------------------
@@ -447,10 +486,33 @@ export function mountPet(){
   document.body.insertAdjacentHTML('beforeend', aiPet());
   petEl = $('#ai-pet');
   const body = $('#ai-pet-body');
+  // 先把皮肤贴上去再定位：桌宠的宽高由皮肤的格子尺寸算出来，
+  // 顺序反了会按上一只的尺寸夹位置，换宠物后可能半个身子在屏幕外。
+  applySkin();
   restorePos();
   bindDrag(body);
   bindPanelResize($('#ai-pet-panel'));
   $('#ai-pet-close')?.addEventListener('click', () => togglePetPanel(false));
+  $('#ai-pet-set')?.addEventListener('click', () => openPetSettings('pet'));
+
+  // 设置面板每改一项就回调：换皮肤、调大小、显示隐藏、复位位置。
+  onPetPrefChange(what => {
+    if (!petEl) return;
+    if (what === 'position'){
+      try{ localStorage.removeItem(POS_KEY); }catch(_){ }
+      restorePos();
+      placePanel();
+      return;
+    }
+    if (what === 'show'){
+      petEl.hidden = getHidden();
+      if (!petEl.hidden) { restorePos(); setPetState('wave', 900); }
+      return;
+    }
+    if (what === 'scale'){ applySkin(); return; }
+    if (what === 'life'){ scheduleLife(); return; }
+    if (what === 'skin'){ applySkin(); return; }
+  });
 
   // 放大 / 还原：标题栏右上角的按钮，或双击标题栏空白处。
   $('#ai-pet-max')?.addEventListener('click', () => {
@@ -481,12 +543,8 @@ export function mountPet(){
     $('#ai-pet-form')?.requestSubmit();
   });
 
-  // 图集 334KB：不等它下载完才显形。元素本身是透明的，图解码好自然就画出来；
-  // 只有真的加载失败才换成「转」字圆钮，功能不至于消失。
-  const img = new Image();
-  img.onload = () => petEl?.classList.add('is-ready');
-  img.onerror = () => petEl?.classList.add('is-fallback');
-  img.src = ATLAS;
+  // 皮肤（图集地址、帧尺寸、色调）走 CSS 变量，图解码好之前元素是透明的，
+  // 解码失败才降级成字钮，功能不至于消失。
 
   // 第一次来提示一次可以拖，之后不再打扰。
   try{

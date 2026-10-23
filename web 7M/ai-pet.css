@@ -1,15 +1,23 @@
 /* AI 助手「小转」：全站悬浮桌宠 + 对话面板
-   图集：assets/ai-pet/xiaozhuan-atlas.webp，8 列 × 9 行，单帧 120×147。
-   第 0~8 行依次是：待机 / 向右 / 向左 / 挥袖 / 跳跃 / 失败 / 等待 / 专注 / 检查。 */
+   图集默认是 assets/ai-pet/xiaozhuan-atlas.webp（8 列 × 9 行，单帧 120×147）。
+   换皮肤时由 pet-skins.js 改写下面这组变量——尺寸、图集、色调都不再写死，
+   所以就着一份 CSS 能跑任意一只宠物。帧动画也搬到了 JS（见 applySkinFrame），
+   因为每只宠物的行数和帧数都不一样，用 @keyframes 就得一只抄一套。 */
 
 .ai-pet{
-  --s: .68;               /* 显示缩放；单帧 120×147 是自然尺寸，动画都按自然像素写 */
+  --pet-cell-w: 120px;    /* 单帧尺寸 */
+  --pet-cell-h: 147px;
+  --pet-atlas-w: 960px;   /* 整张图集尺寸，等于 cell × 列/行 */
+  --pet-atlas-h: 1323px;
+  --pet-s: .68;           /* 显示缩放，由 JS 按「显示高度 100px」算出来 */
+  --pet-atlas: url('/assets/ai-pet/xiaozhuan-atlas.webp');
+  --pet-tint: none;       /* 没有独立素材的皮肤用调色区分 */
   position: fixed;
   left: 0;
   top: 0;
   z-index: 60;            /* 高于导航(40)，低于弹窗(100) */
-  --pet-w: calc(120px * var(--s));
-  --pet-h: calc(147px * var(--s));
+  --pet-w: calc(var(--pet-cell-w) * var(--pet-s));
+  --pet-h: calc(var(--pet-cell-h) * var(--pet-s));
 }
 .ai-pet[hidden]{ display: none; }
 
@@ -38,14 +46,29 @@
   position: absolute;
   left: 0;
   top: 0;
-  width: 120px;
-  height: 147px;
-  background-image: url('/assets/ai-pet/xiaozhuan-atlas.webp');
+  width: var(--pet-cell-w);
+  height: var(--pet-cell-h);
+  background-image: var(--pet-atlas);
   background-repeat: no-repeat;
-  background-size: 960px 1323px;
+  background-size: var(--pet-atlas-w) var(--pet-atlas-h);
   background-position: 0 0;
-  transform: scale(var(--s));
+  filter: var(--pet-tint);
+  transform: scale(var(--pet-s));
   transform-origin: 0 0;
+}
+
+/* 图集里没有单独的「向左」动作时，把向右那段水平翻过来用。
+   翻转后图形落在 x<0 一侧，靠 left 平移到原位。 */
+.ai-pet.is-flip .ai-pet-sprite{
+  left: var(--pet-w);
+  transform: scale(calc(-1 * var(--pet-s)), var(--pet-s));
+}
+
+/* 自定义桌宠只有一张图，没有帧序列，用呼吸动效让它看起来是活的。 */
+.ai-pet.is-custom .ai-pet-sprite{ animation: pet-breathe 3.6s ease-in-out infinite; }
+@keyframes pet-breathe{
+  0%, 100%{ transform: scale(var(--pet-s)) translateY(0); }
+  50%{ transform: scale(calc(var(--pet-s) * 1.03)) translateY(calc(-1px * var(--pet-s) * 3)); }
 }
 
 /* 图集加载失败时的降级：一个小圆钮，功能不丢 */
@@ -66,32 +89,10 @@
 .ai-pet.is-fallback .ai-pet-fallback{ display: block; }
 
 /* --- 动作状态 ---------------------------------------------------------- */
-.ai-pet[data-state="idle"] .ai-pet-sprite{ animation: pet-idle 1.32s steps(6) infinite; }
-@keyframes pet-idle{ from{ background-position: 0 0; } to{ background-position: -720px 0; } }
-
-.ai-pet[data-state="right"] .ai-pet-sprite{ animation: pet-right .72s steps(8) infinite; }
-@keyframes pet-right{ from{ background-position: 0 -147px; } to{ background-position: -960px -147px; } }
-
-.ai-pet[data-state="left"] .ai-pet-sprite{ animation: pet-left .72s steps(8) infinite; }
-@keyframes pet-left{ from{ background-position: 0 -294px; } to{ background-position: -960px -294px; } }
-
-.ai-pet[data-state="wave"] .ai-pet-sprite{ animation: pet-wave .72s steps(4) 1; }
-@keyframes pet-wave{ from{ background-position: 0 -441px; } to{ background-position: -480px -441px; } }
-
-.ai-pet[data-state="jump"] .ai-pet-sprite{ animation: pet-jump .7s steps(5) 1; }
-@keyframes pet-jump{ from{ background-position: 0 -588px; } to{ background-position: -600px -588px; } }
-
-.ai-pet[data-state="fail"] .ai-pet-sprite{ animation: pet-fail 1.1s steps(8) 1; }
-@keyframes pet-fail{ from{ background-position: 0 -735px; } to{ background-position: -960px -735px; } }
-
-.ai-pet[data-state="waiting"] .ai-pet-sprite{ animation: pet-wait 1.1s steps(6) infinite; }
-@keyframes pet-wait{ from{ background-position: 0 -882px; } to{ background-position: -720px -882px; } }
-
-.ai-pet[data-state="review"] .ai-pet-sprite{ animation: pet-review 1s steps(6) infinite; }
-@keyframes pet-review{ from{ background-position: 0 -1029px; } to{ background-position: -720px -1029px; } }
-
-.ai-pet[data-state="running"] .ai-pet-sprite{ animation: pet-run .8s steps(6) infinite; }
-@keyframes pet-run{ from{ background-position: 0 -1176px; } to{ background-position: -720px -1176px; } }
+/* 帧序列由 applySkinFrame 用 background-position 驱动（见 pet-skins.js）。
+   这里只保留状态本身，方便调试时看面板当前在做什么动作。 */
+.ai-pet[data-state="right"] .ai-pet-sprite,
+.ai-pet[data-state="run"] .ai-pet-sprite{ will-change: background-position; }
 
 /* --- 首次提示 ---------------------------------------------------------- */
 .ai-pet-hint{
@@ -204,6 +205,23 @@
 .ai-pet-avatar img{ width: 100%; height: 100%; object-fit: cover; }
 .ai-pet-head b{ display: block; font-size: 14px; color: #1a1a1a; }
 .ai-pet-head small{ display: block; margin-top: 2px; font-size: 11px; color: #8a8a93; }
+/* 齿轮把「放大」推到右边：先占住 margin-left:auto，后者紧跟其后 */
+.ai-pet-gear{
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #f5f5f7;
+  color: #6b6f77;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.ai-pet-gear:hover{ background: #eeeef2; color: #4d5158; }
+.ai-pet-gear + .ai-pet-max{ margin-left: 0; }
+
 .ai-pet-max{
   margin-left: auto;
   width: 28px;
@@ -449,3 +467,245 @@ button.ai-pet-link{ cursor: pointer; font-family: inherit; }
 
 /* 办公 / 工作快捷行按页签显隐：.ai-pet-chips 的 display:flex 会盖掉 [hidden] */
 .ai-pet-chips[hidden]{ display: none !important; }
+
+/* ======================================================================
+   桌宠设置面板 + 用户须知
+   布局按桌面端设置的习惯：左边一列分区，右边一组一组卡片。
+   手机上没有横向空间，分区折到顶部变成标签行。
+   ====================================================================== */
+
+.ps-layer{ position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: 24px; }
+.ps-layer[hidden]{ display: none; }
+.ps-backdrop{ position: absolute; inset: 0; background: #26332555; backdrop-filter: blur(3px); }
+
+.ps-sheet{
+  position: relative;
+  display: grid;
+  grid-template-columns: 172px minmax(0, 1fr);
+  width: min(880px, 100%);
+  height: min(640px, 88vh);
+  height: min(640px, 88dvh);
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 30px 100px #1b2b2333;
+  overflow: hidden;
+}
+
+.ps-nav{
+  background: #fafbf7;
+  border-right: 1px solid var(--line, #e8e9e1);
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ps-nav header{ font-size: 13px; font-weight: 800; letter-spacing: .4px; padding: 4px 10px 14px; color: #272c28; }
+.ps-nav button{
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 9px;
+  font-size: 13px;
+  color: #6f7568;
+  transition: background .15s, color .15s;
+}
+.ps-nav button:hover{ background: #f1f3ea; }
+.ps-nav button.active{ background: #fff0e8; color: #d15730; font-weight: 700; }
+
+.ps-body{ position: relative; min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+.ps-panes{ overflow-y: auto; padding: 26px 28px 30px; }
+.ps-x{
+  position: absolute; top: 12px; right: 12px; z-index: 3;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: #f5f5f7; color: #6b6f77; font-size: 17px; line-height: 1;
+  display: grid; place-items: center;
+}
+.ps-x:hover{ background: #ededf1; color: #3f4349; }
+
+.ps-pane[hidden]{ display: none; }
+.ps-head h3{ font-size: 19px; margin: 0 0 6px; letter-spacing: -.3px; }
+.ps-head p{ font-size: 12px; color: #7d8279; line-height: 1.8; margin: 0 0 18px; max-width: 58ch; }
+
+/* 一组设置 = 一张卡片，卡片里每项是「标题/说明 + 右侧控件」 */
+.ps-card{
+  border: 1px solid #eaebe3;
+  border-radius: 13px;
+  background: #fff;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.ps-row{
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 15px 18px;
+  border-bottom: 1px solid #f2f3ec;
+}
+.ps-row:last-child{ border-bottom: 0; }
+.ps-row-txt{ flex: 1; min-width: 0; }
+.ps-row-txt b{ display: block; font-size: 13px; font-weight: 650; color: #2b312c; margin-bottom: 4px; }
+.ps-row-txt small{ display: block; font-size: 11px; color: #8b9184; line-height: 1.75; }
+.ps-ctl{ flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+.ps-ctl .btn{ font-size: 12px; padding: 8px 14px; }
+.ps-hint{ font-size: 11px; color: #9aa08f; }
+.ps-row-file{ cursor: pointer; }
+
+/* 桌宠选择：一行一张卡，选中态给勾和橙边 */
+.ps-skins{ display: grid; gap: 8px; padding: 12px; }
+.ps-skin{
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 11px 14px;
+  border: 1px solid #eceee5;
+  border-radius: 11px;
+  background: #fdfdfa;
+  text-align: left;
+  transition: border-color .15s, background .15s, transform .12s;
+}
+.ps-skin:hover{ border-color: #d9dfcd; background: #fff; }
+.ps-skin.is-on{ border-color: #ed7046; background: #fff8f3; }
+.ps-skin-pic{
+  width: 46px; height: 46px; flex-shrink: 0;
+  border-radius: 10px;
+  background: #f3f4ec center/contain no-repeat;
+  display: grid; place-items: center;
+  color: #a6ac9a; font-size: 20px;
+  overflow: hidden;
+}
+.ps-skin-pic img{ width: 100%; height: 100%; object-fit: contain; }
+.ps-skin-pic.is-empty{ border: 1px dashed #cfd6c4; background: #fafbf6; }
+.ps-skin-txt{ flex: 1; min-width: 0; }
+.ps-skin-txt b{ display: block; font-size: 13.5px; margin-bottom: 3px; }
+.ps-skin-txt small{ display: block; font-size: 11px; color: #8e9487; line-height: 1.6; }
+.ps-tick{ color: #ed7046; font-weight: 800; opacity: 0; transition: opacity .15s; }
+.ps-skin.is-on .ps-tick{ opacity: 1; }
+
+/* 开关：纯 CSS，避免为一个开关引入库 */
+.ps-switch{ position: relative; display: inline-block; width: 42px; height: 24px; flex-shrink: 0; }
+.ps-switch input{ position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.ps-switch i{
+  position: absolute; inset: 0;
+  background: #d7dccc;
+  border-radius: 999px;
+  transition: background .18s;
+}
+.ps-switch i::after{
+  content: '';
+  position: absolute; top: 3px; left: 3px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px #0002;
+  transition: transform .18s;
+}
+.ps-switch input:checked + i{ background: #ed7046; }
+.ps-switch input:checked + i::after{ transform: translateX(18px); }
+.ps-switch input:focus-visible + i{ box-shadow: 0 0 0 3px #ed704680; }
+/* 视觉层必须让开点击：它盖在 input 上面，pointer-events 不关的话
+   命中测试会落在 i 上，键盘/自动化点不到真正的复选框。 */
+.ps-switch i{ pointer-events: none; }
+
+/* 滑块尽量朴素：范围由 JS 夹在 60–160% */
+.ps-ctl input[type="range"]{
+  width: 170px;
+  accent-color: #ed7046;
+  cursor: pointer;
+}
+
+/* --- 用户须知 --------------------------------------------------------- */
+.pn-layer{ position: fixed; inset: 0; z-index: 130; display: grid; place-items: center; padding: 24px; }
+.pn-layer[hidden]{ display: none; }
+.pn-backdrop{ position: absolute; inset: 0; background: #1e2a2144; backdrop-filter: blur(3px); }
+.pn-sheet{
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(600px, 100%);
+  max-height: min(760px, 90vh);
+  max-height: min(760px, 90dvh);
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 30px 100px #1b2b2333;
+  overflow: hidden;
+}
+.pn-head{
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid #f0f1ea;
+  background: #fff;
+}
+.pn-head b{ display: block; font-size: 16px; letter-spacing: -.2px; }
+.pn-head small{ display: block; font-size: 11px; color: #949a8b; margin-top: 5px; }
+.pn-x{
+  margin-left: auto; width: 28px; height: 28px; border-radius: 50%;
+  background: #f5f5f7; color: #6b6f77; font-size: 16px; line-height: 1;
+  display: grid; place-items: center; flex-shrink: 0;
+}
+.pn-body{
+  padding: 20px 24px 8px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.95;
+  color: #3d443d;
+  overscroll-behavior: contain;
+}
+.pn-body h4{
+  font-size: 13.5px;
+  margin: 22px 0 8px;
+  color: #23291f;
+  padding-left: 9px;
+  border-left: 3px solid #ed7046;
+  line-height: 1.5;
+}
+.pn-body h4:first-of-type{ margin-top: 12px; }
+.pn-body p{ margin: 0 0 9px; }
+.pn-body b{ color: #1f251c; }
+.pn-lead{ color: #5d6459; }
+.pn-foot{
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 22px;
+  border-top: 1px solid #f0f1ea;
+  background: #fcfdf8;
+}
+.pn-foot small{ font-size: 11px; color: #9aa08f; flex: 1; }
+.pn-foot .btn{ font-size: 12px; padding: 10px 18px; }
+
+/* --- 窄屏 ------------------------------------------------------------- */
+@media (max-width: 720px){
+  .ps-layer{ padding: 0; }
+  .ps-sheet{
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    width: 100%;
+    height: 100dvh;
+    border-radius: 0;
+  }
+  .ps-nav{
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 6px;
+    padding: 10px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line, #e8e9e1);
+    scrollbar-width: none;
+  }
+  .ps-nav::-webkit-scrollbar{ display: none; }
+  .ps-nav header{ display: none; }
+  .ps-nav button{ flex-shrink: 0; padding: 8px 14px; border-radius: 999px; background: #f4f5ee; }
+  .ps-nav button.active{ background: #fff0e8; }
+  .ps-panes{ padding: 18px 16px 26px; }
+  .ps-x{ top: 8px; right: 10px; }
+  .ps-head h3{ font-size: 17px; padding-right: 36px; }
+  .ps-row{ gap: 10px; padding: 13px 14px; }
+  /* 手机上按钮和开关仍与文字同行：换行后按钮会掉到说明下面，
+     看起来像「这条设置没做完」。只有滑块和文件选择占满整行。 */
+  .ps-row .ps-ctl input[type="range"]{ width: 108px; }
+  .ps-row-file{ flex-wrap: wrap; }
+  .ps-row-file .ps-ctl{ width: 100%; justify-content: flex-start; }
+  .ps-skins{ padding: 10px; }
+  .ps-skin{ padding: 10px; gap: 10px; }
+  .ps-skin-pic{ width: 40px; height: 40px; }
+  .pn-layer{ padding: 0; }
+  .pn-sheet{ width: 100%; height: 100dvh; max-height: none; border-radius: 0; }
+  .pn-body{ font-size: 12.5px; padding: 16px 18px 8px; }
+  .pn-head{ padding: 16px 18px 13px; }
+}
