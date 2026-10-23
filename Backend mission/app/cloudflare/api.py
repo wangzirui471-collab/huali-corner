@@ -256,6 +256,9 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, AiSu
             'grades': GRADES,
             'buildings': BUILDINGS,
             'ai': await self.cf_ai_available(),
+            # Worker 跑不了开源权重，永远云端；字段与本地 /api/config 对齐，
+            # 前端据此把隐私提示切成「发送给第三方 AI」（见 docs/CONTEXT-2026-10-23.md）。
+            'ai_local': False,
         })
 
     # ---- 商品 ------------------------------------------------------------
