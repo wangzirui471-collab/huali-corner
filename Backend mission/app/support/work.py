@@ -168,8 +168,8 @@ def _users(m, u, a):
     rows = m.rows(sql, tuple(args))
     items = [{'title': r['nickname'], 'meta': '%s · %s · %s · %s分' % (
         ROLE_LABELS.get(r['role'], r['role']), r['status'], _mask(r['phone']), r['score'])} for r in rows]
-    return {'answer': '找到 %d 个账号（手机号已打码）。' % len(rows), 'items': items,
-            'data': [dict(r) for r in rows]}
+    return {'answer': '找到 %d 个账号（手机号已打码，需要全号请查用户详情）。' % len(rows), 'items': items,
+            'data': [dict(r, phone=_mask(r['phone'])) for r in rows]}
 
 
 def _user_detail(m, u, a):

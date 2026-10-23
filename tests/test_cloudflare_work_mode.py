@@ -92,6 +92,14 @@ class WorkModeTests(CloudCase):
             self.assertIn('items', body, tool)
             self.assertIn(needle, body['answer'] + json.dumps(body['items'], ensure_ascii=False), tool)
 
+    async def test_users_list_masks_phone_in_data(self):
+        """列表接口的 data 也不能带全号，要全号只能走用户详情 + pii_view 审计。"""
+        result = await self.call('users', {'q': '测试'})
+        self.assertEqual(result.status, 200, result.body)
+        phones = [row['phone'] for row in result.body['data']]
+        self.assertTrue(phones)
+        self.assertTrue(all('****' in str(p) for p in phones), phones)
+
     async def test_user_detail_masks_phone_and_logs_reveal(self):
         result = await self.call('user_detail', {'id': 2})
         self.assertEqual(result.status, 200, result.body)

@@ -107,7 +107,7 @@ cd E:\zi\huali-corner-trial
 | 发布 3 件宿舍好物演示商品 | demo_publish（多步，预览不落库） |
 
 评测用**固定 planner 桩**，不依赖网络和模型，适合 CI；真实模型的规划质量用线上 `/plan` 手工抽检。
-线上同构行为另有 `tests/test_cloudflare_work_mode.py`（24 项，内存 D1）覆盖：
+线上同构行为另有 `tests/test_cloudflare_work_mode.py`（25 项，内存 D1）覆盖：
 proposal 不落库、confirm 才执行、无效/过期/他人 token、owner 保护、多步与演示商品闭环。
 
 ## 6. 故意没采用的
