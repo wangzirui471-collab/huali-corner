@@ -74,7 +74,7 @@ class MediaStore:
             raise DomainError('资源不存在', 404)
         body = await stored.arrayBuffer()
         raw = bytes(body.to_py()) if hasattr(body, 'to_py') else bytes(body)
-        return raw, CONTENT_TYPE
+        return raw, ('image/png' if key.endswith('.png') else CONTENT_TYPE)
 
     async def put_pet_image(self, content, owner_id):
         """桌宠形象：原样存，不做头像那套方形裁剪/重编码。
@@ -88,7 +88,8 @@ class MediaStore:
         png = content[:8] == b'\x89PNG\r\n\x1a\n'
         if not (webp or png):
             raise DomainError('只支持 PNG / WebP 图片', 400)
-        key = self.key_for('pet', owner_id, content)
+        digest = hashlib.sha256(content).hexdigest()[:32]
+        key = 'media/pet/%d/%s.%s' % (int(owner_id), digest, 'webp' if webp else 'png')
         written = await self._bucket.put(key, content, {
             'httpMetadata': {'contentType': 'image/webp' if webp else 'image/png'},
             'customMetadata': {'owner': str(int(owner_id)), 'scope': 'pet'},
