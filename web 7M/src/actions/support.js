@@ -167,8 +167,13 @@ async function petWork(q){
     const r = await api('/ai/work/chat', {question: text}, {global: true, timeout: 60000});
     const rows = (r.items || []).map(it => `<div class="ai-pet-row"><b>${e(it.title)}</b>${it.meta ? `<small>${e(it.meta)}</small>` : ''}</div>`).join('');
     const p = r.proposal;
+    // 演示商品入库前把预览标题列出来，owner 确认时知道自己要发布什么。
+    const demoRows = p && p.tool === 'demo_publish'
+      ? (p.args?.items || []).slice(0, 5).map(it => `<div class="ai-pet-row"><b>${e(it.title)}</b><small>¥${money(it.price)} · ${e(it.condition)}</small></div>`).join('')
+      : '';
     wait.innerHTML = `<div>${petText(r.answer)}</div>
       ${rows ? `<div class="ai-pet-rows">${rows}</div>` : ''}
+      ${demoRows ? `<div class="ai-pet-rows">${demoRows}</div>` : ''}
       ${p ? `<div class="ai-pet-action"><b>待执行</b><p>${e(p.summary)}</p><p class="muted">不可逆操作，需要再次确认。</p><button type="button" class="btn primary" data-action="ai-work-confirm" data-token="${e(r.token || '')}">确认执行</button></div>` : ''}
       ${r.tool ? `<div class="ai-pet-src">工具：${e(r.tool)}</div>` : ''}`;
     setPetState('idle');

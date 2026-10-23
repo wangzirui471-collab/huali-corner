@@ -46,7 +46,8 @@
 
 ## 4. 工具 schema 与权限
 
-每个工具在 `app/support/work.py` 的 `TOOLS` 里声明：
+每个工具在 `app/support/work.py`（本地）与 `app/cloudflare/work_mode.py`（线上）
+的 `TOOLS` 里声明，两处保持一致：
 
 ```python
 'product_bulk_moderate': {
@@ -58,9 +59,31 @@
 ```
 
 - `risk=read`：直接执行；
-- `risk=write/danger`：`_validate` 校验目标 → 生成 proposal + HMAC token（10 分钟）→ 确认后 `_execute`；
+- `risk=write/danger`：`_validate` 校验目标 → 生成 proposal（10 分钟过期）→ 确认后执行；
 - 所有工具 owner-only；`messages` 读也写 `chat_view` 审计；
 - 手机号默认打码，`reveal=true` 看全号并写 `pii_view`。
+
+### 4.1 提案存储：本地 HMAC vs 线上作业表
+
+| | 本地（SQLite） | 线上（Cloudflare D1） |
+| --- | --- | --- |
+| proposal 载体 | HMAC 签名 token（payload+签名） | `ai_office_jobs` 行（随机作业号） |
+| 密钥/状态 | 进程内随机密钥，重启即失效 | D1 行状态，多 isolate 一致 |
+| 确认时校验 | 验签 + 过期 + uid 匹配 | 同 batch 内复查 actor/state/参数 + owner 活跃 |
+| 执行原子性 | 同步事务 | `guarded_batch`：守卫不满足整批回滚 |
+
+线上确认走 `cf_staff_commit(uid, guard, args, statements, ('owner',))`：
+先在同一事务里验证「作业仍 pending、参数未被改、owner 仍活跃」，再执行业务写入，
+最后把作业标记 completed——重复确认返回同一回执，不会执行两次。
+
+D1 没有交互式事务，所以每个写工具的「判断」都写进 SQL 守卫的 WHERE 里
+（参照 `app/cloudflare/d1.py` 的文档与 `cf_staff_*` 系列计划）；超过 100 个
+绑定参数的集合用 `json_each` 传（D1 单语句上限 100）。
+
+### 4.2 多步衔接：预览项不经过模型
+
+`demo_generate` → `demo_publish` 的两步链路里，商品结构化字段由后端从
+上一步结果直接注入下一步参数，不让模型转抄（抄错一件就是脏数据）。
 
 ## 5. 评测
 
@@ -69,7 +92,7 @@ cd E:\zi\huali-corner-trial
 .venv-trial\Scripts\python.exe tests\eval_work_agent.py
 ```
 
-当前 8 条用例全部通过（工具选择 + 写操作只出 proposal）：
+当前 9 条用例全部通过（工具选择 + 写操作只出 proposal + 演示商品闭环）：
 
 | 用例 | 期望工具 |
 | --- | --- |
@@ -81,8 +104,11 @@ cd E:\zi\huali-corner-trial
 | 把宿舍好物全部下架 | product_bulk_moderate（多步） |
 | 封禁 小陈同学 | user_ban |
 | 把小陈同学降为客服 | user_role |
+| 发布 3 件宿舍好物演示商品 | demo_publish（多步，预览不落库） |
 
 评测用**固定 planner 桩**，不依赖网络和模型，适合 CI；真实模型的规划质量用线上 `/plan` 手工抽检。
+线上同构行为另有 `tests/test_cloudflare_work_mode.py`（24 项，内存 D1）覆盖：
+proposal 不落库、confirm 才执行、无效/过期/他人 token、owner 保护、多步与演示商品闭环。
 
 ## 6. 故意没采用的
 

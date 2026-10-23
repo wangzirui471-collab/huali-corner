@@ -22,6 +22,7 @@
 鉴权时可以先按前缀做归属判断，不必先取对象。
 """
 import hashlib
+import re
 
 from ..core.errors import DomainError
 
@@ -74,6 +75,24 @@ class MediaStore:
         body = await stored.arrayBuffer()
         raw = bytes(body.to_py()) if hasattr(body, 'to_py') else bytes(body)
         return raw, CONTENT_TYPE
+
+    async def put_backup(self, payload, name):
+        """工作模式备份落盘：backups/ 前缀的私有 zip，不经图片重编码。
+
+        与管理台下载共用 cf_staff_backup_archive 的打包结果；这里只负责
+        存成对象，下载仍走管理台（备份含账号与私密媒体，不开放公网直链）。
+        """
+        require_name = re.fullmatch(r'[0-9A-Za-z._-]{1,80}', str(name))
+        if not require_name:
+            raise DomainError('备份文件名不合法', 400)
+        key = 'backups/%s' % require_name
+        written = await self._bucket.put(key, payload, {
+            'httpMetadata': {'contentType': 'application/zip'},
+            'customMetadata': {'scope': 'backup'},
+        })
+        if written is None:
+            raise DomainError('备份保存失败，请稍后重试', 503)
+        return key
 
     async def delete(self, key):
         if not key.startswith('media/'):

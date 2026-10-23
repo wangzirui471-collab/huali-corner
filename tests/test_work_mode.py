@@ -132,6 +132,63 @@ class WorkModeTests(unittest.TestCase):
         self.assertIsNotNone(r.get('token'))
         self.assertEqual(self.m.role_of(self.target), 'user')
 
+    def test_demo_generate_preview_then_publish(self):
+        r = self.m.work_call(self.owner, 'demo_generate', {'prompt': '宿舍好物', 'count': 3})
+        self.assertEqual(len(r['data']['items']), 3)
+        self.assertTrue(r['items'])
+        before = int(self.m.row("SELECT COUNT(*) n FROM products WHERE data LIKE '%virtual%'")['n'])
+        p = self.m.work_call(self.owner, 'demo_publish', {'items': r['data']['items']})
+        self.assertIsNotNone(p.get('token'))
+        self.assertEqual(p['proposal']['tool'], 'demo_publish')
+        # proposal 阶段不落库
+        self.assertEqual(int(self.m.row("SELECT COUNT(*) n FROM products WHERE data LIKE '%virtual%'")['n']), before)
+        out = self.m.work_confirm(self.owner, p['token'])
+        self.assertTrue(out['ok'])
+        self.assertEqual(int(self.m.row("SELECT COUNT(*) n FROM products WHERE data LIKE '%virtual%'")['n']), before + 3)
+
+    def test_agent_chains_demo_generate_to_publish(self):
+        import app.support.ai as ai
+        original = ai.plan
+
+        def fake(question, tools, history=None):
+            if not history:
+                return {'tool': 'demo_generate', 'args': {'prompt': '宿舍好物', 'count': 2}}
+            return {'tool': 'demo_publish', 'args': {}}
+
+        ai.plan = fake
+        try:
+            r = self.m.work_chat(self.owner, '发布 2 件宿舍好物演示商品')
+            self.assertEqual((r.get('proposal') or {}).get('tool'), 'demo_publish')
+            self.assertEqual(len(r['proposal']['args']['items']), 2)
+            self.assertIsNotNone(r.get('token'))
+        finally:
+            ai.plan = original
+
+
+    def test_rule_fallback_publishes_demo(self):
+        """模型不可用时，规则兜底也要能出「预览 + 确认卡」，且不落库。"""
+        import app.support.ai as ai
+        original = ai.plan
+
+        def boom(*a, **k):
+            raise RuntimeError('model down')
+
+        ai.plan = boom
+        try:
+            before = int(self.m.row("SELECT COUNT(*) n FROM products WHERE data LIKE '%virtual%'")['n'])
+            r = self.m.work_chat(self.owner, '发布 3 件宿舍好物演示商品')
+            self.assertEqual((r.get('proposal') or {}).get('tool'), 'demo_publish')
+            items = r['proposal']['args']['items']
+            self.assertEqual(len(items), 3)
+            self.assertTrue(all('title' in i and i['price'] > 0 for i in items))
+            self.assertIsNotNone(r.get('token'))
+            self.assertEqual(int(self.m.row("SELECT COUNT(*) n FROM products WHERE data LIKE '%virtual%'")['n']), before)
+            out = self.m.work_confirm(self.owner, r['token'])
+            self.assertTrue(out['ok'])
+            self.assertEqual(int(self.m.row("SELECT COUNT(*) n FROM products WHERE data LIKE '%virtual%'")['n']), before + 3)
+        finally:
+            ai.plan = original
+
 
 if __name__ == '__main__':
     unittest.main()

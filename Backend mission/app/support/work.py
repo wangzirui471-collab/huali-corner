@@ -104,6 +104,9 @@ TOOLS = {
                           'params': {'target': '用户 id', 'body': '通知内容'}},
     'ai_settings': {'title': 'AI 设置', 'risk': 'danger', 'desc': '开关 AI / 调整每日额度',
                     'params': {'enabled': 'true/false', 'daily_limit': '1-500', 'staff_daily_limit': '1-500'}},
+    'demo_generate': {'title': '生成演示商品预览', 'risk': 'read',
+                      'desc': '按主题生成演示商品预览（不写入数据库），确认后用 demo_publish 入库',
+                      'params': {'prompt': '主题词', 'count': '1-10'}},
     'demo_publish': {'title': '发布演示商品', 'risk': 'write', 'desc': '把预览项批量入库（virtual）',
                      'params': {'items': 'ai/office/generate 返回的 items'}},
 }
@@ -484,6 +487,21 @@ def _sellers(m, u, a):
             'data': [dict(r) for r in rows]}
 
 
+def _demo_generate(m, u, a):
+    """生成演示商品预览：规则生成、不写库；确认后用 demo_publish 入库。"""
+    from . import office
+    prompt = str(a.get('prompt') or '').strip()[:16] or '校园好物'
+    try:
+        count = max(1, min(int(a.get('count') or 5), 10))
+    except (TypeError, ValueError):
+        count = 5
+    items = office.generate(prompt, count)
+    rows = [{'title': it['title'], 'meta': '¥%.2f · %s' % (it['price'] / 100, it['condition'])}
+            for it in items]
+    return {'answer': '已生成 %d 件「%s」演示商品预览（尚未入库）。说「确认入库」或点确认后才会写入。' % (len(items), prompt),
+            'items': rows, 'data': {'items': items, 'prompt': prompt}}
+
+
 READ = {
     'overview': _overview, 'users': _users, 'user_detail': _user_detail,
     'products': _products, 'product_detail': _product_detail,
@@ -492,7 +510,7 @@ READ = {
     'audit': _audit, 'stats': _stats,
     'rooms': _rooms, 'messages': _messages, 'moderation': _moderation,
     'credit': _credit, 'offers': _offers, 'posts': _posts,
-    'ledger': _ledger, 'sellers': _sellers,
+    'ledger': _ledger, 'sellers': _sellers, 'demo_generate': _demo_generate,
 }
 
 
@@ -739,6 +757,10 @@ def _validate(m, u, name, args):
     if name == 'product_batch_delist':
         if not m.row('SELECT id FROM users WHERE id=?', (int(args.get('seller') or 0),)):
             raise DomainError('卖家不存在', 404)
+    if name == 'demo_publish':
+        from . import office
+        if not office.clean_items(args.get('items')):
+            raise DomainError('商品数据不合法，请先生成预览再入库', 400)
     if name == 'content_remove':
         if args.get('kind') not in ('post', 'comment'):
             raise DomainError('内容类型必须是 post 或 comment', 400)
@@ -822,6 +844,7 @@ def agent(m, u, question):
     # ReAct 风格多步循环：规划 → 执行读工具 → 观察结果回到规划器；
     # 写工具立即转确认卡；最多 3 步；模型不可用退回规则路由。
     observations = []
+    demo_items = None
     last = None
     for _ in range(3):
         try:
@@ -836,23 +859,48 @@ def agent(m, u, question):
             break
         if tool not in TOOLS:
             break
-        result = call(m, u, tool, p.get('args') or {})
+        args = p.get('args') or {}
+        # 「生成预览 → 确认入库」的衔接：预览项由后端传递，不经模型转抄。
+        if tool == 'demo_publish' and not args.get('items') and demo_items:
+            args = dict(args, items=demo_items)
+        if tool == 'demo_publish' and not args.get('items'):
+            return {'answer': '还没有可入库的预览项。请说「发布 3 件宿舍好物演示商品」，我先出预览再给确认卡。',
+                    'items': [], 'proposal': None, 'mode': 'rule'}
+        result = call(m, u, tool, args)
         if result.get('proposal'):
             return result
         last = result
-        observations.append({'tool': tool, 'args': p.get('args') or {},
+        if tool == 'demo_generate':
+            demo_items = (result.get('data') or {}).get('items')
+        observations.append({'tool': tool, 'args': args,
                              'answer': str(result.get('answer') or '')[:300],
                              'items': [str(i.get('title')) for i in (result.get('items') or [])][:8]})
     if last:
         return last
 
+    # 规则兜底也让「生成预览 → 确认入库」闭环：先出预览项，再直接给确认卡，
+    # 预览标题会显示在确认卡里，owner 看到清单后才点确认。
+    if '演示' in q and any(w in q for w in ('发布', '入库', '上架')):
+        hit = re.search(r'(\d+)\s*件', q)
+        count = max(1, min(int(hit.group(1)), 10)) if hit else 5
+        preview = _demo_generate(m, u, {'prompt': _keyword(q) or '校园好物', 'count': count})
+        return call(m, u, 'demo_publish', {'items': (preview.get('data') or {}).get('items') or []})
+
     rules = (
+        (('演示商品',), 'demo_generate', lambda: {'prompt': _keyword(q) or '校园好物', 'count': 5}),
         (('用户', '账号', '成员', '谁'), 'users', lambda: {'q': _keyword(q)}),
         (('商品', '在售', '下架'), 'products', lambda: {'q': _keyword(q)}),
         (('订单', '成交', '退款'), 'orders', lambda: {'days': 7}),
         (('工单', '待处理', '处理中', '复核'), 'tickets', lambda: {'status': 'open' if '待处理' in q else ''}),
         (('审计', '操作记录'), 'audit', lambda: {'days': 7}),
         (('趋势', '统计'), 'stats', lambda: {'days': 7}),
+        (('会话', '聊天'), 'rooms', lambda: {}),
+        (('举报', '治理', '审核'), 'moderation', lambda: {}),
+        (('信誉', '低分'), 'credit', lambda: {}),
+        (('议价', '出价', '还价'), 'offers', lambda: {}),
+        (('帖子', '社区', '评论'), 'posts', lambda: {'q': _keyword(q)}),
+        (('账本', '流水', '资金'), 'ledger', lambda: {}),
+        (('排行', '卖家'), 'sellers', lambda: {'days': 7}),
     )
     for words, tool, args_fn in rules:
         if any(w in q for w in words):
