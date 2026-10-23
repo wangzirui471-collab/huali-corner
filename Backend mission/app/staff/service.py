@@ -14,8 +14,8 @@ import time
 
 from ..core.errors import ValidationMixin
 
-ROLE_NAMES = {'user': '普通用户', 'support': '客服', 'admin': '平台管理员', 'developer': '开发者'}
-STAFF_ROLES = ('support', 'admin', 'developer')
+ROLE_NAMES = {'user': '普通用户', 'support': '客服', 'admin': '平台管理员', 'developer': '开发者', 'owner': '平台所有者'}
+STAFF_ROLES = ('support', 'admin', 'developer', 'owner')
 
 
 class StaffService(ValidationMixin):
@@ -27,7 +27,7 @@ class StaffService(ValidationMixin):
         rows = self.rows(
             """SELECT u.id,u.phone,u.nickname,u.role,u.status,u.last_login,
                       (SELECT COUNT(*) FROM sessions s WHERE s.user_id=u.id AND s.expires>?) sessions
-               FROM users u WHERE u.role IN ('support','admin','developer') ORDER BY u.role DESC, u.id""",
+               FROM users u WHERE u.role IN ('support','admin','developer','owner') ORDER BY u.role DESC, u.id""",
             (now,))
         for r in rows:
             r['role_name'] = ROLE_NAMES.get(r['role'], r['role'])
@@ -176,9 +176,11 @@ class StaffService(ValidationMixin):
         target = int(d['target'])
         new_role = d.get('role')
         self.require(new_role in self.ROLE_RANK, '未知角色', 400)
+        self.require(new_role != 'owner', '所有者只能由运维在数据库设置，不能通过后台任命', 403)
         self.require(target != u, '不能调整自己的角色；请让另一位开发者操作', 403)
         actor = self.profile(u); a_rank = self.ROLE_RANK[actor['role']]
         t = self.profile(target); t_rank = self.ROLE_RANK[t['role']]
+        self.require(t['role'] != 'owner', '所有者账号不能被后台降级', 403)
         n_rank = self.ROLE_RANK[new_role]
         if a_rank == 2:
             self.require(new_role in ('user', 'support'), '管理员只能设置或废除客服', 403)

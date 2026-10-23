@@ -1,20 +1,42 @@
 """客服模块：工单受理与处理、信誉调整、订单评价。"""
-import json, os, time
+import asyncio, json, os, time
 from pathlib import Path
 from ..core.errors import ValidationMixin, DomainError
 
 # AI 客服权限矩阵：前端展示与后端校验共用同一份口径。
 AI_PERMISSIONS = [
-    {'cap': '客服页 AI 宠物（提问）', 'user': True, 'support': True, 'admin': True, 'developer': True},
-    {'cap': '工单页 AI 建议回复', 'user': False, 'support': True, 'admin': True, 'developer': True},
-    {'cap': '查看自己的今日额度', 'user': True, 'support': True, 'admin': True, 'developer': True},
-    {'cap': '查看全部用量与来源统计', 'user': False, 'support': False, 'admin': True, 'developer': True},
-    {'cap': '开启/关闭 AI、调整每日额度', 'user': False, 'support': False, 'admin': True, 'developer': True},
-    {'cap': '重载知识库（本地）', 'user': False, 'support': False, 'admin': True, 'developer': True},
-    {'cap': '修改模型/接口地址/API Key', 'user': False, 'support': False, 'admin': False, 'developer': True},
+    {'cap': '客服页 AI 宠物（提问）', 'user': True, 'support': True, 'admin': True, 'developer': True, 'owner': True},
+    {'cap': '工单页 AI 建议回复', 'user': False, 'support': True, 'admin': True, 'developer': True, 'owner': True},
+    {'cap': '查看自己的今日额度', 'user': True, 'support': True, 'admin': True, 'developer': True, 'owner': True},
+    {'cap': '查看全部用量与来源统计', 'user': False, 'support': False, 'admin': True, 'developer': True, 'owner': True},
+    {'cap': '开启/关闭 AI、调整每日额度', 'user': False, 'support': False, 'admin': True, 'developer': True, 'owner': True},
+    {'cap': '重载知识库（本地）', 'user': False, 'support': False, 'admin': True, 'developer': True, 'owner': True},
+    {'cap': '修改模型/接口地址/API Key', 'user': False, 'support': False, 'admin': False, 'developer': True, 'owner': True},
 ]
 
 from ..account.credit import GOOD_REVIEW, AWARD_PER_REVIEW, AWARD_DAILY_CAP, AWARD_MONTHLY_CAP, AWARD_REASON_PREFIX, day_start, month_start, suggest_penalty, VIOLATION_BASE, VIOLATION_LABEL
+
+
+class _LocalDb:
+    """把本地同步 SQLite（Database.row/rows/execute）包成 Worker D1 的
+    async 接口（first/all/run/scalar），让 cloudflare/ai_support.py 的
+    ai_answer 能原样跑在本地试用版上。ai_answer 的规则路径只读不写。"""
+
+    def __init__(self, svc):
+        self._svc = svc
+
+    async def first(self, sql, params=()):
+        return self._svc.row(sql, params)
+
+    async def all(self, sql, params=()):
+        return self._svc.rows(sql, params)
+
+    async def scalar(self, sql, params=()):
+        row = self._svc.row(sql, params)
+        return next(iter(row.values()), None) if row else None
+
+    async def run(self, sql, params=()):
+        return self._svc.execute(sql, params)
 
 
 class SupportService(ValidationMixin):
@@ -156,6 +178,11 @@ class SupportService(ValidationMixin):
     def ai_enabled(self):
         return bool(self.ai_settings()['enabled']) and os.environ.get('HC_AI_ENABLED', '1') == '1'
 
+    def ai_local(self):
+        """AI 是否跑在本机开源模型上；前端据此把「发送给第三方」换成「不出本机」。"""
+        from .ai import local
+        return local()
+
     @staticmethod
     def _ai_day():
         return time.strftime('%Y-%m-%d', time.gmtime(time.time() + 8 * 3600))
@@ -207,13 +234,26 @@ class SupportService(ValidationMixin):
         return result
 
     def ai_chat(self,u,q):
-        """客户侧 AI 小助手：登录用户可用，按普通用户额度限流。"""
+        """客户侧 AI 小助手：登录用户可用，按普通用户额度限流。
+
+        规则层（问候 / 转人工 / 违规拦截 / 导购四连 / 购买意图 / 售后选单 /
+        知识库检索）走 Worker 同一份 ai_answer：确定、快、不烧额度——本地
+        试用版和线上从此一个脑子。只有规则没接住的开放问题，才通过 fallback
+        回落本机 LLM（support/ai.py 的 suggest）。db 是同步 SQLite，包一层
+        async 接口即可；ai_answer 这条路径只读（first/all），不写库。
+        """
         self.require(self.ai_enabled(),'AI 客服已关闭，请转人工客服',503)
         question=self.text(q,300,'问题')
         self.ai_quota(u)
+        from ..cloudflare.ai_support import ai_answer
         from .ai import suggest
-        result=suggest(question)
-        self.ai_count(u)
+        def fallback(text):
+            r=suggest(text) or {}
+            return str(r.get('answer') or '')
+        result=asyncio.run(ai_answer(question,None,[],_LocalDb(self),u,None,fallback=fallback))
+        # 只有真正调用模型才计入额度；问候、导购、售后选单等规则回答不扣次数。
+        if result.get('mode')=='llm':
+            self.ai_count(u)
         self._ai_log(u,'customer',result)
         return result
 
@@ -312,6 +352,66 @@ class SupportService(ValidationMixin):
         from .ai import reload_index
         reload_index()
         return {'ok':True}
+
+    # --- 所有者办公助手（本地版） -----------------------------------------
+    def ai_office(self,u,q,mode='query'):
+        self.require(self.is_owner(u),'仅平台所有者可使用办公助手',403)
+        from . import office
+        return office.answer(self,self.text(q,300,'问题'),'draft' if mode=='draft' else 'query')
+
+    def ai_office_confirm(self,u,kind,target,role=None):
+        self.require(self.is_owner(u),'仅平台所有者可执行',403)
+        from . import office
+        kind=str(kind or ''); target=int(target or 0); role=str(role or '')
+        self.require(kind in ('role','disable','revoke'),'未知操作')
+        t=self.row('SELECT id,nickname,role,status FROM users WHERE id=?',(target,))
+        self.require(t,'账号不存在',404)
+        self.require(t['role']!='owner','所有者账号不能通过助手调整',403)
+        self.require(target!=u,'不能对自己执行此操作',403)
+        now=time.time()
+        with self.tx() as c:
+            if kind=='role':
+                self.require(role in ('user','support','admin','developer'),'目标角色无效')
+                self.require(t['role']!=role,'角色没有变化')
+                c.execute('UPDATE users SET role=? WHERE id=?',(role,target))
+                c.execute('DELETE FROM sessions WHERE user_id=?',(target,))
+                msg='已将「%s」调整为%s' % (t['nickname'],office.ROLE_LABELS.get(role,role))
+            elif kind=='disable':
+                c.execute("UPDATE users SET status='disabled' WHERE id=?",(target,))
+                c.execute('DELETE FROM sessions WHERE user_id=?',(target,))
+                c.execute("UPDATE products SET status='removed' WHERE seller_id=? AND status='available'",(target,))
+                msg='已注销「%s」并撤销其所有会话' % t['nickname']
+            else:
+                c.execute('DELETE FROM sessions WHERE user_id=?',(target,))
+                msg='已强制「%s」下线' % t['nickname']
+            c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',
+                      (u,target,'ai_office_'+kind,msg,now))
+        return {'ok':True,'message':msg}
+
+    def ai_office_generate(self,u,prompt,count=5):
+        self.require(self.is_owner(u),'仅平台所有者可生成演示商品',403)
+        from . import office
+        return {'items':office.generate(prompt,count),'mode':'rule'}
+
+    def ai_office_publish(self,u,items):
+        self.require(self.is_owner(u),'仅平台所有者可发布演示商品',403)
+        from . import office
+        clean=office.clean_items(items)
+        self.require(clean,'商品数据不合法')
+        now=time.time();ids=[]
+        with self.tx() as c:
+            for idx,item in enumerate(clean):
+                data={'description':item['description'],'condition':item['condition'],'virtual':True,
+                      'photos':[{'url':office.photo_for(item['category'],idx),'angle':'front'}]}
+                pid=c.execute(
+                    'INSERT INTO products(seller_id,title,category,price,delivery_fee,delivery,region,status,data,created) '
+                    'VALUES(?,?,?,?,?,?,?,?,?,?)',
+                    (u,item['title'],item['category'],item['price'],0,'pickup','校内面交','available',
+                     json.dumps(data,ensure_ascii=False),now)).lastrowid
+                ids.append(pid)
+            c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',
+                      (u,None,'ai_office_publish','生成演示商品 %d 件' % len(ids),now))
+        return {'ok':True,'count':len(ids),'ids':ids}
 
     def check_conflict(self,u,t):
         if t.get('product_id'):
@@ -428,6 +528,7 @@ class SupportService(ValidationMixin):
         with self.tx() as c:
             user=c.execute('SELECT role,status FROM users WHERE id=?',(target,)).fetchone()
             self.require(user,'用户不存在',404)
+            self.require(user['role'] != 'owner','所有者账号不能被封禁',403)
             self.require(user['role'] not in ('admin','developer'),'不能封禁管理员或开发者',403)
             now=time.time()
             if not banned:

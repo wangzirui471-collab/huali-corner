@@ -42,7 +42,7 @@ function confirmForm(op, title, body, okText, attrs = '') {
 
 export const clicks = {
   'staff-create': () => {
-    const roles = state.me?.role === 'developer'
+    const roles = ['developer','owner'].includes(state.me?.role)
       ? [['support', '客服（日常处置）'], ['admin', '管理员（授权与改判）'], ['developer', '开发者（最高权限）']]
       : [['support', '客服（日常处置）']];
     modal(`<h2>新建运营账号</h2>

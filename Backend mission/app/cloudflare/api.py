@@ -50,6 +50,7 @@ from .ai_support import AiSupport, AI_ROUTES
 from .auth_api import AuthApi, AUTH_ROUTES
 from .friend_api import FriendApi, FRIEND_ROUTES
 from ..core.config import COLLEGES, GRADES
+from ..core.recommend import recommend_order
 
 
 class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, AiSupport, CloudRules, ReadPages):
@@ -314,6 +315,9 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, AiSu
             base.sort(key=lambda p: p['price'] + (p['delivery_fee'] if p['delivery'] == 'delivery' else 0))
         now = time.time()
         base.sort(key=lambda p: 0 if (p.get('promoted_until') or 0) > now else 1)
+        if query.get('rec'):
+            # 「小转推荐」：不是按时间倒序堆最新，而是按「看得见好坏」的程度排。
+            base = recommend_order(base, now)
 
         items = base[(page - 1) * limit:page * limit] if limit else base
         trusted = await self.trusted_map([p['seller_id'] for p in items])

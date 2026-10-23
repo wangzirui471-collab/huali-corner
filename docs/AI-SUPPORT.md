@@ -137,6 +137,15 @@ ai_service（127.0.0.1:8093）
 | AI-09 | 宠物入口 | 客服页右下角宠物可见；点击打开对话；快捷问题有回答；兜底时「提交工单」可打开工单弹窗 |
 | AI-10 | 外接 API | 设置 Key 后 `mode=llm`；未设置时自动摘录并标注；401/额度 429 有可读提示 |
 
+## 7.1 本地与线上的办公助手差异
+
+- **线上 Worker**：`app/cloudflare/ai_support.py` + `office_data.py`，查询用确定性 SQL，
+  自由问答/起草走模型；owner 可用 `HC_AI_MODEL_OWNER` 指定更强模型。
+- **本地 Python**：`app/support/office.py` 提供同一组接口契约
+  （`/api/ai/office`、`/confirm`、`/generate`、`/publish`），
+  查询与商品生成用确定性规则，不调用模型——离线可用、不烧额度、结果可复现。
+- 两端都是 owner 专用；账号动作只返回 proposal，浏览器二次确认后才执行，并写审计。
+
 ## 8. 局限与下一步
 
 - 依赖 DeepSeek API 可用性与余额；Key 失效时自动退回知识库摘录。

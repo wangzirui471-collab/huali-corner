@@ -115,9 +115,10 @@ push 到 `main/master/develop/feature/**`、开 PR、或手动 `workflow_dispatc
   想更讲究就在仓库 Settings → Secrets 里建同名的两个 Secret，工作流会优先用它们。
 - **AI 服务必须先起**：不然 5 个 `/api/ai/*` 会拿到 503。
   走 `HC_AI_MOCK=1` 时不联网、不要 API Key，所以这个门禁**不需要配任何 Secret 就能跑**。
-- **AI 集合那个 job 目前是 `continue-on-error`**：因为 `ai_service/server.py` 里
-  `rag.SOCIAL_REPLIES` 那个多轮对话的 bug 还在，「06 多轮对话」必红。
-  修掉之后把那行删掉，它就变成真正的门禁了。
+- **AI 集合那个 job 是真门禁**（没有 `continue-on-error`）：`ai_service/server.py` 的
+  `_history()` 曾引用已删除的 `rag.SOCIAL_REPLIES`，带 history 的 `/reply` 会 500、
+  连接被掐断，前端表现就是第二句发不出去。已于 2026-10-23 用
+  `getattr(rag, 'SOCIAL_REPLIES', {})` 兜底修掉，现在 14 个请求 / 50 条断言全绿。
 - 报告会作为 artifact 上传（junit xml + 日志），失败时会把后端和 AI 服务的日志 tail 出来。
 
 ## 7. 本地一键跑（不想等 CI 的时候）

@@ -172,6 +172,28 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .market-search button:hover { background: #303237; }
 
+/* 搜索框右侧的「小转AI」入口：品牌色描边 + 火花图标。
+   和黑色底的「搜索」按钮并排时不打架，也不抢「发布闲置」主按钮的戏。 */
+.header-ai {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 46px;
+  padding: 0 17px;
+  border-radius: var(--r-pill);
+  border: 1.5px solid var(--brand-lo);
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background .2s var(--ease), border-color .2s var(--ease), transform .2s var(--ease);
+}
+.header-ai:hover { background: #fff1c4; border-color: var(--brand); }
+.header-ai:active { transform: scale(.97); }
+.header-ai .icon { width: 17px; height: 17px; }
+
 .header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
 .header-message {
@@ -1016,6 +1038,10 @@ button { -webkit-tap-highlight-color: transparent; }
   .account-button.has-avatar .account-name { display: none; }
   .account-button.has-avatar .avatar { width: 32px; height: 32px; font-size: 14px; }
   .header-message { display: none; }
+  /* 小屏只留火花图标：「登录/注册」和头像已经占了右上角，文字放不下。 */
+  .header-ai { height: 38px; padding: 0 11px; gap: 0; }
+  .header-ai span { display: none; }
+  .header-ai .icon { width: 19px; height: 19px; }
   .market-search { height: 41px; border-width: 1.5px; padding: 3px 4px 3px 13px; gap: 8px; }
   .market-search > .icon { width: 18px; height: 18px; }
   .market-search input { font-size: 12.5px; }

@@ -100,7 +100,9 @@ export function aiPet(){
       <textarea id="ai-pet-q" name="q" maxlength="300" rows="1" placeholder="问问小转，例如：怎么发布？" required></textarea>
       <button type="submit" class="ai-pet-send">发送</button>
     </form>
-    <p class="ai-pet-note">回答仅供参考。问题会发送给第三方 AI 服务用于生成回答，请勿输入密码、手机号、恢复码等敏感信息。</p>
+    <p class="ai-pet-note">${state.config?.ai_local
+      ? '回答仅供参考。模型跑在本机，问题不会离开这台电脑；仍请不要输入密码、恢复码等账号凭据。'
+      : '回答仅供参考。问题会发送给第三方 AI 服务用于生成回答，请勿输入密码、手机号、恢复码等敏感信息。'}</p>
     <span class="ai-pet-rs" data-dir="n"></span>
     <span class="ai-pet-rs" data-dir="s"></span>
     <span class="ai-pet-rs" data-dir="w"></span>
@@ -141,11 +143,37 @@ function moveTo(x, y){
   return p;
 }
 
+// 「回到顶部」按钮的区域。宠物默认位在右下角，正好压住它
+// （按钮 z-index 25 < 宠物 60，fixed 定位还跟着滚动走），真实用户也点不到，
+// 之前只有 smoke 抓到了。默认位先避开这块；用户手动拖到哪里都不干预。
+function backTopZone(){
+  const el = document.querySelector('.home-back-top');
+  if (!el) return null;
+  const cs = getComputedStyle(el);
+  if (cs.position !== 'fixed') return null;
+  // hidden 时元素 display:none，取不到布局盒，但 computed value 仍按 CSS 算得出来，
+  // 按钮一滚动显现就是这块区域，所以照常读。
+  const w = parseFloat(cs.width) || 46, h = parseFloat(cs.height) || 58;
+  const right = parseFloat(cs.right) || 16, bottom = parseFloat(cs.bottom) || 42;
+  return { left: window.innerWidth - right - w, right: window.innerWidth - right,
+           top: window.innerHeight - bottom - h, bottom: window.innerHeight - bottom };
+}
+
 function defaultPos(){
   const { w, h } = size();
   // 手机上抬，避开底部五个入口；桌面上贴右下角。
   const bottom = window.innerWidth <= 850 ? 96 : 28;
-  return { x: window.innerWidth - w - 20, y: window.innerHeight - h - bottom };
+  let x = window.innerWidth - w - 20;
+  let y = window.innerHeight - h - bottom;
+  const zone = backTopZone();
+  if (zone){
+    const hit = x + w > zone.left && x < zone.right && y + h > zone.top && y < zone.bottom;
+    if (hit){
+      if (window.innerWidth <= 850) x = Math.max(4, zone.left - w - 10);  // 手机：挪到按钮左边，继续贴底
+      else y = Math.max(4, zone.top - h - 10);                            // 桌面：跳到按钮上方
+    }
+  }
+  return { x, y };
 }
 
 function savePos(){

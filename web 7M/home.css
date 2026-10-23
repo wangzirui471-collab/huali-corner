@@ -20,6 +20,47 @@
 .home-page .category-chip { box-shadow: none; filter: saturate(.7); }
 .home-page .category-grid button:hover .category-chip { transform: translateY(-2px); box-shadow: 0 3px 10px #34382c0d; }
 .home-promos { gap: 18px; margin: 0 0 28px; }
+/* 「小转推荐」横滑轨：标题行 + 横向滚动卡带。
+   卡带用 scroll-snap + 隐藏滚动条：触屏一划一张，桌面端滚动条不添乱。 */
+.rec-rail { margin: 0 0 30px; }
+.rec-rail-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 15px; margin-bottom: 13px; }
+.rec-rail-head h2 { font-size: 23px; font-weight: 750; margin: 6px 0 0; letter-spacing: -.5px; color: #37382f; }
+.rec-rail-head h2 small { font-size: 11px; font-weight: 400; color: #958363; margin-left: 14px; letter-spacing: 0; }
+.rec-refresh {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  padding: 8px 14px; font-size: 12px; font-weight: 650; color: #7d5c07;
+  background: #fff6d8; border: 1.5px solid #f0b413; border-radius: 999px;
+  transition: background .2s var(--ease), transform .2s var(--ease);
+}
+.rec-refresh:hover { background: #fff1c4; }
+.rec-refresh:active { transform: scale(.96); }
+.rec-refresh:disabled { opacity: .55; pointer-events: none; }
+.rec-refresh .icon { width: 14px; height: 14px; }
+.rec-rail-track {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 158px; gap: 12px;
+  overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 6px;
+  scrollbar-width: none;
+}
+.rec-rail-track::-webkit-scrollbar { display: none; }
+.rec-card {
+  scroll-snap-align: start; text-align: left; display: flex; flex-direction: column;
+  background: #fff; border: 1px solid #ead9a7; border-radius: 14px; overflow: hidden;
+  transition: transform .2s var(--ease), box-shadow .2s var(--ease);
+}
+.rec-card:hover { transform: translateY(-3px); box-shadow: 0 8px 18px #34382c14; }
+.rec-card-img { position: relative; display: block; aspect-ratio: 1/1; background: #f6f1e4; }
+.rec-card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rec-card-img .photo-placeholder { min-height: 0; }
+.rec-reason {
+  position: absolute; left: 7px; top: 7px; font-style: normal; font-size: 9.5px; font-weight: 650;
+  color: #7d5c07; background: #fff6d8e6; border-radius: 999px; padding: 3px 8px;
+  backdrop-filter: blur(4px);
+}
+.rec-card-title {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: 12px; font-weight: 600; line-height: 1.45; color: #37382f; padding: 9px 10px 0;
+}
+.rec-card-price { display: block; padding: 5px 10px 11px; font-size: 15px; font-weight: 750; color: var(--price); }
 .home-promo-window { position: relative; min-width: 0; border-radius: 18px; box-shadow: 0 2px 5px #3e412b08; }
 .home-promo-window .campus-promo { padding: 0; min-height: 190px; width: 100%; display: block; border-radius: 18px; }
 .home-promo-window .book-promo { background: linear-gradient(105deg,#fff5df,#f8e7bf); border-color: #f0e2be; }
@@ -126,6 +167,13 @@
   .home-page .category-chip { width: 36px; height: 36px; }
   .home-page .category-chip .icon { width: 22px; height: 22px; }
   .home-promos { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin-bottom: 23px; }
+  /* 手机端推荐卡收窄一档，一屏能看出「还有下一张」；标题行留呼吸。 */
+  .rec-rail { margin-bottom: 24px; }
+  .rec-rail-head { align-items: center; }
+  .rec-rail-head h2 { font-size: 19px; }
+  .rec-rail-head h2 small { display: none; }
+  .rec-rail-track { grid-auto-columns: 138px; gap: 10px; }
+  .rec-card-price { font-size: 14px; }
   .home-promo-window,.home-promo-window .campus-promo { border-radius: 13px; }
   .home-promo-window .campus-promo,.home-promo-slide { min-height: 200px; }
   .home-promo-slide { padding: 17px 12px 35px; }

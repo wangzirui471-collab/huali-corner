@@ -48,7 +48,7 @@ const ROLE_TONE = { support: 'info', admin: 'violet', developer: 'warn', owner: 
 const ROLE_NAMES = { support: '客服', admin: '平台管理员', developer: '开发者', owner: '平台所有者' };
 const ROLE_RANK = { user: 0, support: 1, admin: 2, developer: 3, owner: 4 };
 // 当前登录者是不是开发者——只有开发者能改管理员/开发者的身份，也能新建管理员。
-const isDeveloper = () => state.me?.role === 'developer';
+const isDeveloper = () => ['developer', 'owner'].includes(state.me?.role);
 const ACTION_NAMES = { block: '拦截', review: '送审', report: '仅记录' };
 const ACTION_TONE = { block: 'danger', review: 'warn', report: 'mute' };
 
@@ -119,7 +119,7 @@ function identityBar() {
     <div class="desk-id-main"><b>${e(me.nickname || role)}</b>
       <small>${me.role === 'owner'
         ? '以平台所有者（L1）身份登录：可任免开发者及以下成员、使用 AI 办公助手；所有者账号只能由运维在数据库调整。'
-        : me.role === 'developer'
+        : ['developer','owner'].includes(me.role)
           ? '以开发者身份登录：可任命管理员、调整任何账号角色，其余与管理员一致。'
           : '以平台管理员身份登录：设置/废除客服、封号、整店处置、词库维护、审计导出。'}</small></div>
     ${statePill(role, tone)}
@@ -193,7 +193,7 @@ function overviewSection({ content, staff, sellers, audit }) {
 
 // --- 人员与权限 -----------------------------------------------------------
 
-const OPS_ROLES = ['support', 'admin', 'developer'];
+const OPS_ROLES = ['support', 'admin', 'developer', 'owner'];
 const USER_STATUS_LABEL = { active: '正常', banned: '已封禁', disabled: '已停用', deactivated: '已注销', deleted: '已清除' };
 const USER_STATUS_TONE = { active: 'ok', banned: 'danger', disabled: 'mute', deactivated: 'mute', deleted: 'mute' };
 
@@ -451,7 +451,7 @@ function aiSection(data) {
 
 export async function adminDesk(raw = '') {
   if (!needLogin()) return;
-  if (!['admin', 'developer'].includes(state.me.role)) {
+  if (!['admin', 'developer', 'owner'].includes(state.me.role)) {
     shell(heading('ACCESS DENIED', '这里只对平台管理员或开发者开放',
       '客服的日常工作在「客服工作台」，恢复上架、人员授权、词库维护由管理员负责。') +
       `<section class="panel"><p>如果你是客服，请点顶栏的「客服工作台」。</p>

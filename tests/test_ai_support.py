@@ -519,6 +519,101 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         rows = await ai.buy_search(db, '二手显示器')
         self.assertEqual(rows[0]['title'], '小米显示器 24 寸')
 
+    # --- 导购助手：对比 / 预算 / 场景 / 估价（京言AI 式能力，数据全来自站内在售）---
+    async def _shop_db(self):
+        import time
+        now = time.time()
+        db = self._memory_db()
+        await db.run("INSERT INTO products(id,seller_id,title,category,price,status,data,created) "
+                     "VALUES(1,1,'青轴机械键盘','electronics',19900,'available',"
+                     "'{\"photos\":[{\"url\":\"/media/p1\"}],\"condition\":\"正常使用痕迹\"}',"
+                     + str(now - 3600) + ")")
+        await db.run("INSERT INTO products(id,seller_id,title,category,price,status,data,created) "
+                     "VALUES(2,1,'罗技薄膜键盘','electronics',9900,'available',"
+                     "'{\"condition\":\"近乎全新\"}'," + str(now - 86400 * 5) + ")")
+        await db.run("INSERT INTO products(id,seller_id,title,category,price,status,data,created) "
+                     "VALUES(3,1,'数据结构 第二版','books',1500,'available',"
+                     "'{\"photos\":[{\"url\":\"/media/p3\"}],\"condition\":\"近乎全新\"}',"
+                     + str(now - 86400 * 2) + ")")
+        return db
+
+    def test_compare_pieces(self):
+        self.assertEqual(ai.compare_pieces('青轴机械键盘和罗技薄膜键盘哪个好'),
+                         ('青轴机械键盘', '罗技薄膜键盘'))
+        self.assertEqual(ai.compare_pieces('机械键盘 还是 薄膜键盘，选哪个'),
+                         ('机械键盘', '薄膜键盘'))
+        # 只有一个对象或纯问句：不构成对比，交回后续流程
+        self.assertIsNone(ai.compare_pieces('对比一下这两款耳机'))
+        self.assertIsNone(ai.compare_pieces('怎么发布闲置'))
+
+    async def test_compare_answer_lists_both_and_verdict(self):
+        r = await ai.shopping_answer('青轴机械键盘和罗技薄膜键盘哪个好', await self._shop_db())
+        self.assertEqual(len(r['products']), 2)
+        self.assertIn('¥199', r['answer'])
+        self.assertIn('¥99', r['answer'])
+        # 差价超过一成：结论落到预算上
+        self.assertIn('便宜 100 元', r['answer'])
+        self.assertIn('有实拍图', r['answer'])
+        self.assertEqual(r['mode'], 'rule')
+
+    async def test_compare_missing_item_says_so(self):
+        r = await ai.shopping_answer('青轴机械键盘和洗衣机哪个好', await self._shop_db())
+        self.assertIn('没找到', r['answer'])
+        self.assertEqual(r['products'], [])
+
+    def test_budget_of_and_keyword(self):
+        self.assertEqual(ai.budget_of('预算 500 以内求推荐键盘'), 50000)
+        self.assertEqual(ai.budget_of('不超过 300 元的耳机'), 30000)
+        self.assertIsNone(ai.budget_of('我想买键盘'))
+        # 规则题不抢答：「30 元以内能退吗」问的是售后规则
+        self.assertIsNone(ai.budget_of('30 元以内能退款吗'))
+        # 场景词被剥掉、商品词保留：以前把「键盘」当场景词剥光，搜不到货
+        self.assertEqual(ai.budget_keyword('预算 500 以内求推荐键盘'), '键盘')
+
+    async def test_budget_answer_filters_and_cheapest_hint(self):
+        db = await self._shop_db()
+        r = await ai.shopping_answer('预算 100 求推荐键盘', db)
+        self.assertEqual([p['title'] for p in r['products']], ['罗技薄膜键盘'])
+        # 有该类但都超预算：说清最便宜的多少，不默默换成无关商品
+        r = await ai.shopping_answer('预算 50 求推荐键盘', db)
+        self.assertIn('最便宜是 ¥99', r['answer'])
+
+    def test_scene_of_and_process_guard(self):
+        self.assertEqual(ai.scene_of('送室友什么生日礼物好')[0], '送礼')
+        self.assertEqual(ai.scene_of('宿舍神器推荐')[0], '宿舍生活')
+        # 「怎么选宿舍床帘」问方法不荐货；「我想买键盘」有明确目标：都不走场景
+        self.assertTrue(ai._scene_blocked('怎么选宿舍床帘', '宿舍生活'))
+        self.assertTrue(ai._scene_blocked('我想买键盘', '数码'))
+        self.assertFalse(ai._scene_blocked('想买生日礼物', '送礼'))
+
+    async def test_scene_answer_recommends_with_tip(self):
+        r = await ai.shopping_answer('送室友什么生日礼物好', await self._shop_db())
+        self.assertIn('送礼', r['answer'])
+        self.assertTrue(r['products'])
+        self.assertIn('面交', r['answer'])
+
+    def test_price_check_query(self):
+        self.assertEqual(ai.price_check_query('键盘 150 贵不贵'), '键盘')
+        # 「这款 199 贵不贵」里 199 是价格不是商品词
+        self.assertEqual(ai.price_check_query('这款 199 贵不贵'), '')
+        # 售后题不走估价
+        self.assertIsNone(ai.price_check_query('退货划算吗'))
+        self.assertIsNone(ai.price_check_query('怎么发布闲置'))
+
+    async def test_price_check_answer_compares_with_median(self):
+        r = await ai.shopping_answer('键盘 150 贵不贵', await self._shop_db())
+        self.assertIn('中位数 ¥149', r['answer'])
+        self.assertIn('正常价', r['answer'])
+        r = await ai.shopping_answer('键盘 90 贵不贵', await self._shop_db())
+        self.assertIn('划算', r['answer'])
+
+    async def test_shopping_does_not_hijack_other_intents(self):
+        db = await self._shop_db()
+        # 这些问句各有主流程，导购一律不接
+        for q in ['怎么发布闲置', '有没有台灯', '我想买键盘', '推荐几本数据结构的书',
+                  '30 元以内能退款吗', '怎么选宿舍床帘', '退款多久到账']:
+            self.assertIsNone(await ai.shopping_answer(q, db), q)
+
 
 
 class OfficeDataTests(unittest.IsolatedAsyncioTestCase):

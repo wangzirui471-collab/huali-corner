@@ -18,13 +18,13 @@ import { shell, heading } from '../core/shell.js';
 import { isAdmin } from '../core/roles.js';
 import { needLogin } from '../auth/login.js';
 
-const ROLE_NAMES = { user: '普通用户', support: '客服', admin: '平台管理员', developer: '开发者' };
+const ROLE_NAMES = { user: '普通用户', support: '客服', admin: '平台管理员', developer: '开发者', owner: '平台所有者' };
 const ROLE_TONE = { user: 'mute', support: 'info', admin: 'violet', developer: 'warn' };
 const USER_STATUS = { active: '正常', banned: '已封禁', deactivated: '已注销', deleted: '已清除' };
 const USER_TONE = { active: 'ok', banned: 'danger', deactivated: 'mute' };
 // 清除账号的分级：开发者(3) 可清 admin/support/user；管理员(2) 可清 support/user。
 // 规则与后端一致：操作者必须高于目标等级，且不能是自己。
-const PURGE_RANK = { user: 0, support: 1, admin: 2, developer: 3 };
+const PURGE_RANK = { user: 0, support: 1, admin: 2, developer: 3, owner: 4 };
 const TICKET_TYPES = { refund: '售后', report: '举报', appeal: '申诉', reschedule: '改约', other: '咨询' };
 const TICKET_TONE = { refund: 'violet', report: 'danger', appeal: 'warn', reschedule: 'info', other: 'mute' };
 const AUDIT_LABELS = {
@@ -194,7 +194,7 @@ export async function dossier(id) {
   // 放在页面最底部，避免误触——它不可撤销。
   const actorRank = PURGE_RANK[state.me.role] ?? -1;
   const targetRank = PURGE_RANK[user.role] ?? 99;
-  const canPurge = ['admin', 'developer'].includes(state.me.role)
+  const canPurge = ['admin', 'developer', 'owner'].includes(state.me.role)
     && user.id !== state.me.id && actorRank > targetRank;
   const dangerZone = canPurge ? `<section class="panel dossier-danger">
     <h2>危险操作</h2>
@@ -207,7 +207,7 @@ export async function dossier(id) {
   // 只对「看自己」和「看管理员/开发者」两种场景提示；管理员看普通用户时不显示，
   // 免得把「你没权限」当成噪音塞满页面。注意必须在 canPurge 声明之后求值。
   const noPurgeNote = !canPurge && (user.id === state.me.id
-    || (['admin', 'developer'].includes(state.me.role) && targetRank >= actorRank))
+    || (['admin', 'developer', 'owner'].includes(state.me.role) && targetRank >= actorRank))
     ? `<section class="panel">
         <h2>关于「清除账号」</h2>
         <p class="muted">${user.id === state.me.id

@@ -182,3 +182,22 @@ class CatalogTests(CloudCase):
   for rounds in (10000,599999,600001,True,'600000',600000.0,None):
    with self.subTest(rounds=rounds), self.assertRaises(DomainError):self.api.check_rounds(rounds)
 
+ async def test_products_rec_ranks_visible_quality_not_recency(self):
+  import time
+  # 「小转推荐」：最新但没图的排不到带图的前面；理由标签跟着商品走。
+  now=time.time()
+  self.db.execute("INSERT INTO products(id,seller_id,title,category,price,status,data,created) "
+                  "VALUES(11,2,'无图新书','books',900,'available','{}',?)",(now-3600,))
+  self.db.execute("INSERT INTO products(id,seller_id,title,category,price,status,data,created) "
+                  "VALUES(12,2,'带图旧书','books',800,'available','{\"photos\":[{\"url\":\"/media/x\"}]}',?)",(now-86400*5,))
+  r=await self.req('/api/products?rec=1&limit=5')
+  self.assertEqual(r.status,200,r.body)
+  titles=[p['title'] for p in r.body]
+  self.assertIn('带图旧书',titles)
+  self.assertLess(titles.index('带图旧书'),titles.index('无图新书'))
+  by_id={p['id']:p for p in r.body}
+  self.assertEqual(by_id[12]['rec_reason'],'带图实拍')
+  # 换一批 = 翻页：page=2 给同一排序的第二件，不是把第一件再塞回来
+  order=[p['id'] for p in r.body]
+  r2=await self.req('/api/products?rec=1&limit=1&page=2')
+  self.assertEqual([p['id'] for p in r2.body],[order[1]])

@@ -164,17 +164,16 @@ jobs:
           echo '=== AI 服务 ==='; tail -n 100 /tmp/ai.log
 
   # ── AI 客服集合：14 个请求 + 11 行 CSV 数据驱动 ─────────────────────
-  # continue-on-error 的原因：ai_service/server.py 第 71 行引用了已删除的
-  # rag.SOCIAL_REPLIES，任何带 history 的 /reply 都会 500，「06 多轮对话」必红。
-  # 修掉那行（改成 getattr(rag, 'SOCIAL_REPLIES', {})）之后，把 continue-on-error
-  # 整行删掉，这个 job 就会变成真正的门禁。
+  # 这是真门禁，没有 continue-on-error：ai_service/server.py 的 _history() 曾引用
+  # 已删除的 rag.SOCIAL_REPLIES，任何带 history 的 /reply 都会 500、连接被掐断，
+  # 前端表现就是第二句发不出去。已于 2026-10-23 用 getattr(rag, 'SOCIAL_REPLIES', {})
+  # 兜底修掉，现在 14 个请求 / 50 条断言全绿。
   ai:
     name: AI 客服集合（数据驱动）
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: api
     if: ${{ !inputs.skip_ai }}
-    continue-on-error: true
     steps:
       - name: 检出代码
         uses: actions/checkout@v4

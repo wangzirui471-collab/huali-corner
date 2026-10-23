@@ -13,6 +13,7 @@ import { field } from '../components/forms.js';
 import { ticketModal } from '../pages/support.js';
 import { setPetState, togglePetPanel, paintDuty } from '../components/ai-pet.js';
 import { openOfficeTickets } from '../components/office-tickets.js';
+import { loginModal } from '../auth/login.js';
 
 // --- AI 宠物对话 ---------------------------------------------------------
 function petText(text){ return e(text).replace(/\n/g,'<br>'); }
@@ -287,7 +288,7 @@ export const clicks = {
       out.innerHTML = `<div class="ai-reply-badge ${transfer ? 'is-transfer' : ''}">${transfer ? '建议转人工' : 'AI 建议'}</div>
         <div class="ai-reply-text">${e(r.answer).replace(/\n/g, '<br>')}</div>
         ${r.notice ? `<p class="ai-reply-notice">${e(r.notice)}</p>` : ''}
-        <div class="ai-reply-meta">${r.mode === 'rule' ? '规则回复' : r.mode === 'guard' ? '未命中资料' : r.mode === 'mock' ? '知识库摘录' : '模型生成'}${r.latency_ms ? ` · ${Math.round(r.latency_ms)} ms` : ''}</div>
+        <div class="ai-reply-meta">${r.mode === 'rule' ? '规则回复' : r.mode === 'guard' ? '未命中资料' : r.mode === 'mock' ? '知识库摘录' : r.mode === 'busy' ? '排队中 · 摘录' : '模型生成'}${r.latency_ms ? ` · ${Math.round(r.latency_ms)} ms` : ''}</div>
         ${sources ? `<details class="ai-reply-sources"><summary>参考 ${r.sources.length} 条资料</summary><ol>${sources}</ol></details>` : ''}
         <div class="ai-reply-actions"><button type="button" class="btn primary" data-action="ai-insert">插入回复框</button><button type="button" class="btn secondary" data-action="ai-reply">重新生成</button></div>`;
     } catch (err) {
@@ -309,6 +310,17 @@ export const clicks = {
   },
   'ai-pet-toggle': () => togglePetPanel(),
   'ai-office-tickets': () => openOfficeTickets(),
+  // 搜索框右侧的「小转AI」入口：先确保人登录、宠物挂着，再把面板递到眼前。
+  // 匿名点击不弹「请先登录」了事——直接开登录框，少一步是一步。
+  'ai-pet-open': () => {
+    if (!state.me){ loginModal(); return; }
+    if (!document.getElementById('ai-pet')){
+      toast('小转还没加载好，稍等一下再点；或者直接点右下角的小转');
+      return;
+    }
+    togglePetPanel(true);
+    setTimeout(() => $('#ai-pet-q')?.focus(), 80);
+  },
   'ai-pet-chip': b => petAsk(b.dataset.q),
   // 售后：选中订单后把 order_id 一起带给后端，按订单状态回答。
   'ai-pick-order': b => petAsk('订单 #' + b.dataset.id + ' 的售后怎么处理？', {order_id: Number(b.dataset.id)}),

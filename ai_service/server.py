@@ -1,13 +1,16 @@
 """本地 AI 客服 HTTP 服务（只绑定 127.0.0.1）。
 
 接口：
-  GET  /health   -> 索引与模型状态
+  GET  /health   -> 索引、模型后端、显存、排队与降级原因
+  GET  /models   -> 本机已安装的模型（Ollama）与建议档位
   POST /reply    -> {"question": "..."} 返回 {answer, action, sources, mode, ...}
   POST /reload   -> 重新载入 index.json（改完知识库后不用重启进程）
+  POST /warmup   -> 把模型预先加载进显存（也可由启动参数自动执行）
 
 启动：
   python ai_service/server.py
-  HC_AI_MOCK=1 python ai_service/server.py   # 没有 GPU/Ollama 时先用摘录模式
+  HC_AI_PROVIDER=ollama python ai_service/server.py   # 本机开源模型
+  HC_AI_MOCK=1 python ai_service/server.py            # 没有 GPU/Ollama 时用摘录模式
 """
 import json
 import sys
@@ -16,6 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import config
+import llm
 import rag
 
 
@@ -82,23 +86,48 @@ class Handler(BaseHTTPRequestHandler):
         return out
 
     def do_GET(self):
-        if self.path.split('?', 1)[0] != '/health':
-            return self._send({'error': 'not found'}, 404)
-        try:
-            idx = rag.load_index()
-        except Exception as exc:  # noqa: BLE001
-            return self._send({'ok': False, 'error': str(exc)}, 503)
-        return self._send({
-            'ok': True,
-            'chunks': len(idx.get('chunks') or []),
-            'provider': 'mock' if (config.MOCK or (config.PROVIDER == 'api' and not config.API_KEY)) else config.PROVIDER,
-            'model': config.OLLAMA_MODEL if config.PROVIDER == 'ollama' else config.CHAT_MODEL,
-            'embed_model': idx.get('embed_model'),
-            'embed_ok': bool(idx.get('embed_ok')),
-            'api_configured': bool(config.API_KEY),
-            'mode': 'mock' if (config.MOCK or (config.PROVIDER == 'api' and not config.API_KEY)) else 'llm',
-            'index_created': idx.get('created'),
-        })
+        path = self.path.split('?', 1)[0]
+        if path == '/health':
+            try:
+                idx = rag.load_index()
+            except Exception as exc:  # noqa: BLE001
+                return self._send({'ok': False, 'error': str(exc)}, 503)
+            info = llm.status()
+            ready = bool(info['ready'])
+            return self._send({
+                'ok': True,
+                'chunks': len(idx.get('chunks') or []),
+                'provider': info['provider'],
+                'model': info['model'],
+                'local': info['local'],
+                'embed_model': idx.get('embed_model'),
+                'embed_ok': bool(idx.get('embed_ok')),
+                'api_configured': bool(config.API_KEY),
+                'mode': 'llm' if ready else 'mock',
+                'api': True,
+                'model_ready': ready,
+                'model_loaded': info['loaded'],
+                'model_reason': info['reason'],
+                'model_hint': info['hint'],
+                'vram_gb': info['vram_gb'],
+                'suggested_model': info['suggested_model'],
+                'concurrency': info['concurrency'],
+                'keep_alive': info['keep_alive'],
+                'stats': info['stats'],
+                'index_created': idx.get('created'),
+            })
+        if path == '/models':
+            info = llm.status()
+            return self._send({
+                'provider': info['provider'],
+                'current': info['model'],
+                'installed': info['installed'],
+                'suggested': info['suggested_model'],
+                'vram_gb': info['vram_gb'],
+                'ready': info['ready'],
+                'hint': info['hint'],
+            })
+        return self._send({'error': 'not found'}, 404)
 
     def do_POST(self):
         if not self._auth_ok():
@@ -122,7 +151,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send({'error': '办公草稿服务暂不可用'}, 503)
         if path == '/reload':
             rag.reload_index()
+            llm.configure()
             return self._send({'ok': True})
+        if path == '/warmup':
+            return self._send(llm.warmup())
         if path == '/describe':
             data = self._read_json()
             if not isinstance(data, dict):
@@ -176,8 +208,25 @@ def main():
         print('缺少 index.json：请先运行 python ai_service/ingest.py')
         sys.exit(1)
     httpd = ThreadingHTTPServer(('127.0.0.1', config.PORT), Handler)
-    mode = 'mock（知识库摘录）' if config.MOCK else f'Ollama {config.CHAT_MODEL}'
-    print(f'AI 客服已启动：http://127.0.0.1:{config.PORT}  mode={mode}')
+    print(f'AI 客服已启动：http://127.0.0.1:{config.PORT}')
+    print(f'  模型后端：{llm.describe_backend()}')
+    st = llm.status()
+    if st['ready']:
+        print(f'  并发：{st["concurrency"]}（排队上限 {config.QUEUE}）· 常驻 {st["keep_alive"]}')
+        if st['provider'] == llm.OLLAMA and config.WARMUP:
+            # 先把权重读进显存：否则第一个客户要等 5–15 秒冷加载。
+            print('  正在预加载模型（首次约 5–15 秒）…', flush=True)
+            warm = llm.warmup()
+            print('  预加载完成：%d ms' % warm['ms'] if warm['ok']
+                  else '  预加载未成功：%s（服务仍会启动，首次提问会慢一些）' % warm.get('reason'),
+                  flush=True)
+    else:
+        # 模型不可用不是启动失败：检索 + 摘录仍然能用，客服不会因此打不开。
+        print('  [注意] %s' % (st['reason'] or '模型不可用'))
+        if st['hint']:
+            print('          %s' % st['hint'])
+        if st['provider'] == llm.OLLAMA and st['suggested_model']:
+            print('          本机显存建议档位：%s' % st['suggested_model'])
     print('按 Ctrl+C 停止。')
     try:
         httpd.serve_forever()

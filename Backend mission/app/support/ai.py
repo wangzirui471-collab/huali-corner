@@ -43,6 +43,42 @@ def _url():
     return os.environ.get('HC_AI_URL', 'http://127.0.0.1:8093').rstrip('/')
 
 
+_PROVIDER = {'at': 0.0, 'value': None}
+
+
+def provider_info(timeout=1.5):
+    """问一下本地 AI 服务用的是哪个后端，前端据此切换隐私提示。
+
+    缓存 30 秒：/api/config 会被每个页面调用，不能每次都去探服务。
+    服务没起时按「非本地」处理——这时 AI 本来也用不了。
+    """
+    now = time.time()
+    if _PROVIDER['value'] is not None and now - _PROVIDER['at'] < 30:
+        return _PROVIDER['value']
+    data = None
+    try:
+        req = urllib.request.Request(_url() + '/health', method='GET')
+        token = os.environ.get('HC_AI_TOKEN', '')
+        if token:
+            req.add_header('Authorization', 'Bearer ' + token)
+        with _NO_PROXY.open(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+    except Exception:  # noqa: BLE001 - 探不到就按云端口径，宁可多提示
+        data = None
+    info = {
+        'local': bool(data.get('local')) if isinstance(data, dict) else False,
+        'provider': str((data or {}).get('provider') or ''),
+        'model': str((data or {}).get('model') or ''),
+    }
+    _PROVIDER.update(at=now, value=info)
+    return info
+
+
+def local():
+    """AI 是否跑在本机开源模型上（数据不出本机）。"""
+    return bool(provider_info()['local'])
+
+
 def suggest(question):
     if not enabled():
         raise DomainError('AI 客服未启用', 503)

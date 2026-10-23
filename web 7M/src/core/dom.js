@@ -39,7 +39,9 @@ export const icons = {
   alert:'M12 3.5 21 19.5H3zM12 9.5v4M12 16.6h.01',
   list:'M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01',
   more:'M5 12h.01M12 12h.01M19 12h.01',
-  chart:'M2.5 20.5h19M5.5 20V12M10 20V6.5M14.5 20v-5.5M19 20V9'
+  chart:'M2.5 20.5h19M5.5 20V12M10 20V6.5M14.5 20v-5.5M19 20V9',
+  // 小转AI 入口用的火花图标：一颗主星 + 一颗辅星，和「AI 生成」的语义一致。
+  ai:'M12 3l1.8 4.6L18.5 9.5l-4.7 1.9L12 16l-1.8-4.6L5.5 9.5l4.7-1.9zM18.2 15.6l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z'
 };
 
 export const icon = (name, cls='') => `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${icons[name]||icons.bag}"/></svg>`;

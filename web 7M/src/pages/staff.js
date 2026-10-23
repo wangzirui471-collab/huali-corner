@@ -40,7 +40,7 @@ const SECTIONS = [
 ];
 
 const TICKET_TYPES = { refund: '售后', report: '举报', appeal: '申诉', reschedule: '改约', other: '咨询' };
-const ROLE_NAMES = { user: '普通用户', support: '客服', admin: '平台管理员', developer: '开发者' };
+const ROLE_NAMES = { user: '普通用户', support: '客服', admin: '平台管理员', developer: '开发者', owner: '平台所有者' };
 
 // 工单类型色：售后偏紫（要动钱）、举报偏红（要处置）、申诉偏橙（要复核）、改约偏蓝（只是协调）。
 const TICKET_TONE = { refund: 'violet', report: 'danger', appeal: 'warn', reschedule: 'info', other: 'mute' };
@@ -84,7 +84,7 @@ const AUDIT_GLYPHS = {
 // 当前登录者是不是平台管理员。客服与管理员看到的工作台不一样：
 // 客服可以受理工单、下架违规商品、复核商品；恢复上架、信誉调整、封禁只有管理员能做。
 // 后端也会逐次校验（server-side 才是真闸门），这里只是不给人看见必然失败的按钮。
-const isAdmin = () => ['admin', 'developer'].includes(state.me?.role);
+const isAdmin = () => ['admin', 'developer', 'owner'].includes(state.me?.role);
 
 const statePill = (label, tone = 'mute') =>
   `<span class="state-pill" data-tone="${tone}"><i aria-hidden="true"></i>${e(label)}</span>`;
@@ -290,7 +290,7 @@ function productsSection({ products, removed }) {
 function userRow(u) {
   const banned = u.status === 'banned';
   // 封禁只有管理员能做，且不能封管理员自己或当前登录者。
-  const canBan = isAdmin() && u.id !== state.me.id && !['admin', 'developer'].includes(u.role);
+  const canBan = isAdmin() && u.id !== state.me.id && !['admin', 'developer', 'owner'].includes(u.role);
   const tone = ROLE_TONE[u.role] || 'mute';
   const score = Math.max(0, Math.min(100, Number(u.score) || 0));
   // 档案页仅平台管理员与开发者可看（后端同样收窄）；客服端不再显示入口，
@@ -504,7 +504,7 @@ export async function staffDesk(section = 'overview') {
   if (!needLogin()) return;
   // 普通用户走到这里通常是手输地址或旧书签。给一页说明 + 出口，
   // 不要 throw 到路由层变成「暂时无法打开」——那不是故障，不需要吓人。
-  if (!['admin', 'support', 'developer'].includes(state.me.role)){
+  if (!['admin', 'support', 'developer', 'owner'].includes(state.me.role)){
     shell(heading('NO ACCESS', '客服工作台仅对客服开放',
       '你当前是普通用户，日常功能都在「我的」和「帮助与客服」里。')
       + `<section class="panel error-actions">

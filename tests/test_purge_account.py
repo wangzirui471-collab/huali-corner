@@ -106,7 +106,7 @@ class PurgeAccountTests(unittest.TestCase):
         sup = self.reg('13800000048', '客服乙', 'support')
         with self.assertRaises(DomainError) as ctx:
             self.m.purge_account(sup, self.usr, '越权')
-        self.assertIn('仅管理员或开发者', str(ctx.exception))
+        self.assertIn('仅管理员、开发者或所有者', str(ctx.exception))
 
     def test_audit_records_who_and_why(self):
         self.m.purge_account(self.dev, self.usr, '本人申请重置')

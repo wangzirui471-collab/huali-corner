@@ -111,7 +111,7 @@ class Handler(BaseHTTPRequestHandler):
                 directory=COLLEGES_JSON
                 colleges=json.loads(directory.read_text(encoding='utf-8'))['colleges'] if directory.exists() else []
                 if m.trial:colleges=[{'source_name':'计算机工程学院'}]
-                return self.respond({'simulation':True,'trial':m.trial,'auth_mode':'password' if m.trial else 'demo','phone_verified':False,'name':'华立转角','pilot':'计算机工程学院','campus':'广州校区','support_hours':'08:00–20:00','colleges':colleges,'grades':GRADES,'buildings':['本科综合楼','行政楼','7号楼仓库','A1','A2','A3','A4','B1','B2','B3','B4','B9','C1','C2','C3','C4','C5','C6','C7','C8','D1','D2','D5','D6','G1主楼','G1副楼','G2','G3','G4主楼','G4副楼','L1','L2','L3','L4','L5','L6','L7','L8','L9','L10','L11','L12','L13','L15','L16','L17','L18'],'ai':m.ai_enabled()})
+                return self.respond({'simulation':True,'trial':m.trial,'auth_mode':'password' if m.trial else 'demo','phone_verified':False,'name':'华立转角','pilot':'计算机工程学院','campus':'广州校区','support_hours':'08:00–20:00','colleges':colleges,'grades':GRADES,'buildings':['本科综合楼','行政楼','7号楼仓库','A1','A2','A3','A4','B1','B2','B3','B4','B9','C1','C2','C3','C4','C5','C6','C7','C8','D1','D2','D5','D6','G1主楼','G1副楼','G2','G3','G4主楼','G4副楼','L1','L2','L3','L4','L5','L6','L7','L8','L9','L10','L11','L12','L13','L15','L16','L17','L18'],'ai':m.ai_enabled(),'ai_local':m.ai_local()})
             if p=='/api/auth/code' and method=='POST':return self.respond(m.request_code(data.get('phone')))
             if p=='/api/auth/login' and method=='POST':return self.respond(m.login_password(data.get('phone'),data.get('password')) if m.trial else m.login(data.get('phone'),data.get('code')))
             if p=='/api/auth/register' and method=='POST':return self.respond(m.register_password(data.get('phone'),data.get('password'),data.get('nickname'),data.get('college'),data.get('grade'),data.get('major')))
@@ -215,6 +215,10 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/ticket/reply' and method=='POST':return self.respond(m.reply_ticket(u,int(data['id']),data))
             if p=='/api/ai/reply' and method=='POST':return self.respond(m.ai_reply(u,int(data['ticket_id'])))
             if p=='/api/ai/chat' and method=='POST':return self.respond(m.ai_chat(u,data.get('question','')))
+            if p=='/api/ai/office' and method=='POST':return self.respond(m.ai_office(u,data.get('question',''),data.get('mode','query')))
+            if p=='/api/ai/office/confirm' and method=='POST':return self.respond(m.ai_office_confirm(u,data.get('kind'),data.get('target'),data.get('role')))
+            if p=='/api/ai/office/generate' and method=='POST':return self.respond(m.ai_office_generate(u,data.get('prompt',''),data.get('count',5)))
+            if p=='/api/ai/office/publish' and method=='POST':return self.respond(m.ai_office_publish(u,data.get('items')))
             if p=='/api/ai/describe' and method=='POST':return self.respond(m.ai_describe(u,data))
             if p=='/api/ai/price' and method=='POST':return self.respond(m.ai_price(u,data))
             if p=='/api/admin/ai':

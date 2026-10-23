@@ -127,12 +127,12 @@ if (wantAction) {
 
 | 集合     | 结果                         |
 | ------ | -------------------------- |
-| 主集合    | 14 请求 / 47 断言：**13 绿 1 红** |
+| 主集合    | 14 请求 / 50 断言：**全绿** |
 | 数据驱动回归 | 11 次迭代 / 44 断言：**全绿**      |
 
-### 红旗：`06 多轮对话（history 透传）` —— 这是个真 bug
+### 已修（2026-10-23）：`06 多轮对话（history 透传）` 断连
 
-带 `history` 的请求，服务端**直接断连**（客户端只看到 `socket hang up`），服务端 dmesg：
+曾经带 `history` 的请求会让服务端**直接断连**（客户端只看到 `socket hang up`），服务端报：
 
 ```text
 File "ai_service\server.py", line 71, in _history
@@ -140,23 +140,18 @@ File "ai_service\server.py", line 71, in _history
 AttributeError: module 'rag' has no attribute 'SOCIAL_REPLIES'
 ```
 
-原因：`rag.py` 里闲聊标签 `SOCIAL_REPLIES` 已经随「删除 sad/cheer/lonely 词表」那轮一起删掉了，  
-但 `server.py` 的 `_history()` 还在引用。**影响**：网页客服的第二轮、第三轮对话在本地 8093 这条链路上会失败。
+原因：`rag.py` 里闲聊标签 `SOCIAL_REPLIES` 随「删除 sad/cheer/lonely 词表」那轮一起删掉了，
+但 `server.py` 的 `_history()` 还在按老口径做白名单校验。**影响**：网页客服的第二轮、第三轮
+对话在本地 8093 这条链路上会失败。
 
-最小修法（二选一，改完重启服务）：
+已用兼容写法修掉（改完重启服务）：
 
 ```python
-# ai_service/server.py:71 —— 兼容写法，rag 里没有这个常量时当空表
+# ai_service/server.py —— rag 里没有这个常量时当空表，不再抛 AttributeError
 if soc in getattr(rag, 'SOCIAL_REPLIES', {}):
 ```
 
-```python
-# 或者直接删掉 social 标签那段（现在规则已经不看这个标签了）
-if role == 'user':
-    depth = h.get('depth')
-    if isinstance(depth, int) and 0 < depth < 99:
-        item['depth'] = depth
-```
+修完 14 个请求 / 50 条断言全绿（修复前是 13 绿 1 红，断言也只有 47 条——失败时后面的用例被跳过了）。
 
 修好后 `06` 应当变绿；这条用例就是为它留下的回归防线。
 

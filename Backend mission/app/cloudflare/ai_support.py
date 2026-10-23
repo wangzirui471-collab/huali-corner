@@ -555,7 +555,7 @@ def _photos_url(raw):
 async def _buy_rows(db, term):
     like = '%' + term + '%'
     return await db.all(
-        'SELECT p.id,p.title,p.price,p.data,u.nickname FROM products p '
+        'SELECT p.id,p.title,p.price,p.category,p.data,u.nickname FROM products p '
         "JOIN users u ON u.id=p.seller_id WHERE p.status='available' "
         'AND (p.title LIKE ? OR p.data LIKE ?) ORDER BY p.id DESC LIMIT 12',
         (like, like))
@@ -584,9 +584,12 @@ async def buy_search(db, q, limit=4):
     rows.sort(key=score, reverse=True)  # 稳定排序：同分保持「最新」在前
     out = []
     for r in rows[:limit]:
+        d = _detail(r['data'])
         out.append({'id': r['id'], 'title': r['title'], 'price': r['price'],
-                    'url': _photos_url(_detail(r['data']).get('photos')),
-                    'nickname': r['nickname']})
+                    'url': _photos_url(d.get('photos')), 'nickname': r['nickname'],
+                    # 分类和成色给对比/估价用：卡片不渲染这两个字段，带上不亏。
+                    'category': r['category'] or '',
+                    'condition': str(d.get('condition') or '')})
     return out
 
 
@@ -673,6 +676,359 @@ async def recommend_answer(db, kw):
             'support': support_state()}
 
 
+# --- 导购助手：对比 / 预算 / 场景 / 估价 ----------------------------------
+# 借鉴京言AI（京东 AI 导购助手）的四类核心能力，但全部走站内在售数据：
+# 不调用模型，就不会把参数编错（京言早期把骁龙 8 Gen 3 写成 8 Gen 1），
+# 客户点开卡片就能买到。事实只来自 products 表。
+COMPARE_WORDS = ('对比', '比较', '哪个好', '哪款好', '哪个贵', '选哪个', '咋选', '怎么选')
+# 对比问句里的填充词：剥掉之后按分隔词切两半。
+_COMPARE_FILL = ('对比一下', '对比', '比较一下', '比较', '哪个好', '哪款好', '哪个贵',
+                 '选哪个', '咋选', '怎么选', '帮我', '看看', '一下', '这两款', '这两个')
+CONDITION_RANK = {'近乎全新': 3, '正常使用痕迹': 2, '明显磨损，已说明': 1}
+
+
+def compare_pieces(question):
+    """「对比 A 和 B / A 还是 B 哪个好」→ (A, B)；不是对比返回 None。"""
+    q = str(question or '').strip()
+    if not any(w in q for w in COMPARE_WORDS):
+        return None
+    s = q
+    for w in _COMPARE_FILL:
+        s = s.replace(w, ' ')
+    parts = [p.strip(' ，。！？、,.!?~～;；:：') for p in
+             re.split(r'还是|和|跟|与|,|，|vs', s, flags=re.I)]
+    parts = [p for p in parts if len(p) >= 2 and not p.replace('.', '').isdigit()]
+    if len(parts) < 2:
+        return None
+    return parts[0][:20], parts[1][:20]
+
+
+async def _compare_rows(db, term):
+    """按词搜在售商品，带上对比要用的分类/成色/卖家信誉。"""
+    like = '%' + term + '%'
+    rows = await db.all(
+        'SELECT p.id,p.title,p.price,p.category,p.data,u.nickname,u.score '
+        'FROM products p JOIN users u ON u.id=p.seller_id '
+        "WHERE p.status='available' AND (p.title LIKE ? OR p.data LIKE ?) "
+        'ORDER BY p.id DESC LIMIT 4', (like, like))
+    out = []
+    for r in rows:
+        d = _detail(r['data'])
+        out.append({'id': r['id'], 'title': r['title'], 'price': r['price'],
+                    'url': _photos_url(d.get('photos')), 'nickname': r['nickname'],
+                    'score': int(r['score'] or 100), 'category': r['category'] or '',
+                    'condition': str(d.get('condition') or '')})
+    return out
+
+
+def _best_match(rows, term):
+    """标题里带着搜索词的排最前；都没有就取最新一件。"""
+    low = (term or '').lower()
+    for r in rows:
+        if low in (r['title'] or '').lower():
+            return r
+    return rows[0] if rows else None
+
+
+def _yuan(cents):
+    return ('%.2f' % (int(cents or 0) / 100)).rstrip('0').rstrip('.')
+
+
+async def compare_answer(db, a, b):
+    A = _best_match(await _compare_rows(db, a), a)
+    B = _best_match(await _compare_rows(db, b), b)
+    if not A or not B:
+        miss = a if not A else b
+        return {'answer': '「%s」在站上没找到对应的在售商品，没法对比。\n'
+                          '可以把商品名说全一点，或者点按钮去首页自己搜。' % miss,
+                'action': 'reply', 'links': [{'label': '去首页搜索', 'action': 'pet-search', 'q': miss}],
+                'products': [], 'sources': [], 'mode': 'rule', 'latency_ms': 0,
+                'suggestions': SUGGESTIONS['shopping'], 'support': support_state()}
+    diff = A['price'] - B['price']
+    cheap, dear = (A, B) if diff <= 0 else (B, A)
+    # 结论只讲两条确定性规则：差价超过一成看预算，成色差档看新旧。
+    ca = CONDITION_RANK.get(A['condition'], 2)
+    cb = CONDITION_RANK.get(B['condition'], 2)
+    if abs(diff) > max(A['price'], B['price']) * 0.1:
+        verdict = '预算优先选「%s」，便宜 %s 元。' % (cheap['title'], _yuan(abs(diff)))
+    elif ca != cb:
+        better = A if ca > cb else B
+        verdict = '两件价格接近，看重成色选「%s」（%s）。' % (better['title'], better['condition'] or '成色见图')
+    else:
+        verdict = '两件价格和成色都接近，选卖家信誉高的：「%s」（信誉 %d）。' % (
+            (A if A['score'] >= B['score'] else B)['title'], max(A['score'], B['score']))
+    answer = ('帮你对比了站上这两件：\n'
+              '1.《%s》 ¥%s · %s · 卖家 %s（信誉 %d）· %s\n'
+              '2.《%s》 ¥%s · %s · 卖家 %s（信誉 %d）· %s\n'
+              '%s\n约面交当场验货再决定，最稳。'
+              % (A['title'], _yuan(A['price']), A['condition'] or '成色见图', A['nickname'], A['score'],
+                 '有实拍图' if A['url'] else '暂无实拍图',
+                 B['title'], _yuan(B['price']), B['condition'] or '成色见图', B['nickname'], B['score'],
+                 '有实拍图' if B['url'] else '暂无实拍图', verdict))
+    return {'answer': answer, 'action': 'reply', 'links': [],
+            'products': [A, B], 'sources': [], 'mode': 'rule', 'latency_ms': 0,
+            'suggestions': SUGGESTIONS['shopping'], 'support': support_state()}
+
+
+# 预算：「500 以内」「预算 500」「不超过 300」都认；单位是分。
+_BUDGET_AFTER = re.compile(r'(\d+(?:\.\d+)?)\s*(?:块|元|块钱)?\s*(?:以内|以下|之内)')
+_BUDGET_BEFORE = re.compile(r'(?:预算|不超过|最多|最多花|封顶)\s*(?:是|为|有)?\s*(\d+(?:\.\d+)?)')
+# 场景词：送礼/宿舍/学习/运动/数码，映射到站上分类。
+# 键里只放「场景词」，不放「键盘/耳机/教材」这类商品词——否则「我想买键盘」
+# 会被场景规则劫持成导购推荐，反而搜不到指定的货。
+SCENE_RULES = (
+    (('礼物', '送礼', '生日', '节日', '送室友', '送同学', '送女生', '送男生', '送人', '感谢'),
+     '送礼', ('books', 'living', 'electronics')),
+    (('宿舍', '神器', '桌面', '收纳', '租房', '床上'), '宿舍生活', ('living',)),
+    (('开学', '军训', '四六级', '考研', '期末', '考试'), '学习考试', ('books',)),
+    (('运动', '健身', '球拍', '跑步', '游泳'), '运动', ('sports',)),
+    (('数码',), '数码', ('electronics',)),
+)
+CATEGORY_CN = {'books': '二手书', 'electronics': '数码', 'living': '宿舍生活', 'sports': '运动'}
+_BUDGET_STRIP = ('预算', '以内', '以下', '之内', '左右', '最多', '不超过', '封顶',
+                 '求推荐', '推荐', '想买', '要买', '买', '帮我', '帮忙', '看看', '一下',
+                 '想要', '有啥', '有什么', '有没有', '同学', '咱们', '请问', '麻烦') + \
+                 tuple(w for _keys, _label, _cats in SCENE_RULES for w in _keys)
+
+
+_BUDGET_GUARD = ('退款', '退货', '售后', '工单', '规则', '押金', '手续费', '服务费', '赔偿', '信誉')
+
+
+def budget_of(question):
+    """从问句里取预算（分）；没有返回 None。"""
+    q = str(question or '')
+    # 「30 元以内能退吗」问的是规则不是购物：带售后词又没有购买意图时不抢答。
+    if any(w in q for w in _BUDGET_GUARD) and not (
+            any(w in q for w in BUY_PATTERNS) or BUY_REGEX.search(q)):
+        return None
+    m = _BUDGET_AFTER.search(q) or _BUDGET_BEFORE.search(q)
+    if not m:
+        return None
+    try:
+        cents = int(round(float(m.group(1)) * 100))
+    except (TypeError, ValueError):
+        return None
+    return cents if 0 < cents <= 200000 else None
+
+
+def budget_keyword(question):
+    """预算问句里剩下的商品词；剥掉预算、场景和客套后取第一段。"""
+    q = str(question or '')
+    rest = re.sub(r'\d+(?:\.\d+)?\s*(?:块|元|块钱)?', ' ', q)
+    for w in _BUDGET_STRIP:
+        rest = rest.replace(w, ' ')
+    rest = re.sub(r'[，。！？、,.!?~～;；:：\s]+', ' ', rest)
+    pieces = re.findall(r'[\u4e00-\u9fff]{2,}|[a-z0-9_]{2,}', rest.lower())
+    return pieces[0][:14] if pieces else ''
+
+
+async def budget_browse(db, budget, cats=None, limit=8):
+    """没给方向时按分类逛：有图 + 价格不离谱 + 新上架的往前排。"""
+    where = "p.status='available' AND p.price<=?"
+    args = [budget]
+    if cats:
+        where += ' AND p.category IN (%s)' % ','.join('?' * len(cats))
+        args.extend(cats)
+    rows = await db.all(
+        'SELECT p.id,p.title,p.price,p.category,p.data,u.nickname,u.score '
+        'FROM products p JOIN users u ON u.id=p.seller_id WHERE ' + where +
+        ' ORDER BY p.id DESC LIMIT 60', tuple(args))
+    out = []
+    for r in rows:
+        d = _detail(r['data'])
+        out.append({'id': r['id'], 'title': r['title'], 'price': r['price'],
+                    'url': _photos_url(d.get('photos')), 'nickname': r['nickname'],
+                    'category': r['category'] or '',
+                    'condition': str(d.get('condition') or '')})
+    return out[:limit]
+
+
+async def budget_answer(db, budget, kw, cats=None, label=''):
+    rows = []
+    if kw:
+        rows = [r for r in await buy_search(db, kw, 30) if r['price'] <= budget]
+        if not rows:
+            # 有这个类但都超预算：说清最便宜的多少，别默默换成无关商品。
+            above = await buy_search(db, kw, 30)
+            if above:
+                cheap = min(above, key=lambda r: r['price'])
+                return {'answer': '「%s」在售的最便宜是 ¥%s（《%s》），超出了 %s 元的预算。\n'
+                                  '可以把预算抬高一点，或者去「社区 → 校园求购」发一条，'
+                                  '写清要什么、预算多少，有货的同学会来找你。'
+                                  % (kw, _yuan(cheap['price']), cheap['title'], _yuan(budget)),
+                        'action': 'reply',
+                        'links': [{'label': '去社区发求购', 'href': '#community'}],
+                        'products': [cheap], 'sources': [], 'mode': 'rule', 'latency_ms': 0,
+                        'suggestions': SUGGESTIONS['shopping'], 'support': support_state()}
+    if not rows:
+        rows = await budget_browse(db, budget, cats)
+    if not rows:
+        return {'answer': '预算 %s 元以内，站上暂时没有合适的在售商品。\n'
+                          '可以把预算抬高一点，或者去「社区 → 校园求购」发一条，写清要什么、预算多少。'
+                          % _yuan(budget),
+                'action': 'reply',
+                'links': [{'label': '去社区发求购', 'href': '#community'}],
+                'products': [], 'sources': [], 'mode': 'rule', 'latency_ms': 0,
+                'suggestions': SUGGESTIONS['shopping'], 'support': support_state()}
+    # 有实拍图的往前，再按价格从低到高：预算内先看「看得见好坏」的。
+    rows.sort(key=lambda r: (0 if r['url'] else 1, r['price']))
+    rows = rows[:4]
+    names = '、'.join('《%s》（¥%s）' % (r['title'], _yuan(r['price'])) for r in rows)
+    if kw:
+        scope = '「%s」' % kw
+    elif label:
+        scope = '%s相关' % label
+    elif cats:
+        scope = '%s类' % '/'.join(CATEGORY_CN.get(c, c) for c in cats)
+    else:
+        scope = ''
+    answer = ('预算 %s 元以内%s为你找到 %d 件，先看这 %d 件：%s。\n'
+              '都是站上在售的，点卡片直接看详情；想更便宜可以发求购等卖家来找你。'
+              % (_yuan(budget), scope, len(rows), len(rows), names))
+    return {'answer': answer, 'action': 'reply', 'links': [],
+            'products': rows, 'sources': [], 'mode': 'rule', 'latency_ms': 0,
+            'suggestions': SUGGESTIONS['shopping'], 'support': support_state()}
+
+
+def scene_of(question):
+    """问句命中哪个场景 → (标签, 分类)；不命中返回 (None, None)。"""
+    q = str(question or '')
+    for keys, label, cats in SCENE_RULES:
+        if any(w in q for w in keys):
+            return label, cats
+    return None, None
+
+
+async def scene_answer(db, label, cats):
+    # 送礼默认按 300 元以内挑：再贵就不像同学间的心意了。
+    budget = 30000 if label == '送礼' else 100000
+    rows = await budget_browse(db, budget, cats, 8)
+    rows = [r for r in rows if r['url']] or rows      # 送礼优先带图的
+    rows = rows[:4]
+    if not rows:
+        return {'answer': '「%s」这块暂时没有合适的在售商品，可以去社区发个求购说说需求。' % label,
+                'action': 'reply',
+                'links': [{'label': '去社区发求购', 'href': '#community'}],
+                'products': [], 'sources': [], 'mode': 'rule', 'latency_ms': 0,
+                'suggestions': SUGGESTIONS['shopping'], 'support': support_state()}
+    names = '、'.join('《%s》（¥%s）' % (r['title'], _yuan(r['price'])) for r in rows)
+    tip = ('送礼小建议：选带实拍图的，面交时先看货；不确定对方喜好，书籍和宿舍用品这类通用款最稳。'
+           if label == '送礼' else '可以先点卡片看详情，约面交当场验货。')
+    answer = ('%s相关的在售好物，先看这 %d 件：%s。\n%s' % (label, len(rows), names, tip))
+    return {'answer': answer, 'action': 'reply', 'links': [],
+            'products': rows, 'sources': [], 'mode': 'rule', 'latency_ms': 0,
+            'suggestions': SUGGESTIONS['shopping'], 'support': support_state()}
+
+
+# 估价：「贵不贵 / 划算吗 / 值不值」——拿站上同类在售价做对标，不猜。
+PRICE_CHECK_WORDS = ('贵不贵', '贵吗', '划算吗', '值不值', '值得买吗', '值吗', '便宜了吗')
+_PRICE_CHECK_FILL = ('这个', '这件', '那个', '一瓶', '帮我', '看看', '一下', '请问', '二手', '全新的')
+_PRICE_THIS = re.compile(r'[这那][款个件本台部双只把条支杯盒箱]')
+
+
+def price_check_query(question):
+    """是估价问句就返回商品词（可能为空串）；不是返回 None。"""
+    q = str(question or '')
+    if not any(w in q for w in PRICE_CHECK_WORDS):
+        return None
+    # 「退货划算吗」是售后题不是估价题：别拿售后词去搜商品。
+    if after_sale_intent(q):
+        return None
+    rest = q
+    for w in PRICE_CHECK_WORDS + _PRICE_CHECK_FILL:
+        rest = rest.replace(w, ' ')
+    rest = _PRICE_THIS.sub(' ', rest)
+    rest = re.sub(r'[，。！？、,.!?~～;；:：\s]+', ' ', rest)
+    pieces = re.findall(r'[\u4e00-\u9fff]{2,}|[a-z0-9_]{2,}', rest.lower())
+    # 「这款 199 贵不贵」里 199 是价格不是商品词：纯数字候选一律丢掉。
+    pieces = [p for p in pieces if not p.isdigit()]
+    return pieces[0][:14] if pieces else ''
+
+
+def asked_price(question):
+    m = re.search(r'(\d+(?:\.\d+)?)\s*(?:块|元|块钱)?', str(question or ''))
+    if not m:
+        return None
+    try:
+        cents = int(round(float(m.group(1)) * 100))
+    except (TypeError, ValueError):
+        return None
+    return cents if 0 < cents <= 200000 else None
+
+
+async def price_check_answer(db, kw, question):
+    if not kw:
+        return {'answer': '想判断贵不贵，得先知道是什么东西。带上商品名再问一次，'
+                          '比如「耳机 199 贵不贵」。',
+                'action': 'reply', 'links': [], 'products': [], 'sources': [],
+                'mode': 'rule', 'latency_ms': 0,
+                'suggestions': SUGGESTIONS['shopping'], 'support': support_state()}
+    rows = await buy_search(db, kw, 12)
+    if not rows:
+        return {'answer': '站上暂时没有「%s」的在售商品，没有对标价格，我没法说贵不贵。\n'
+                          '可以去社区发个求购，看看大家出手都出多少。' % kw,
+                'action': 'reply',
+                'links': [{'label': '去社区发求购', 'href': '#community'}],
+                'products': [], 'sources': [], 'mode': 'rule', 'latency_ms': 0,
+                'suggestions': SUGGESTIONS['shopping'], 'support': support_state()}
+    prices = sorted(int(r['price'] or 0) for r in rows)
+    # 偶数件取中间两件的均值：两件在售时取高的一件当「中位数」会虚高。
+    mid = len(prices) // 2
+    median = prices[mid] if len(prices) % 2 else (prices[mid - 1] + prices[mid]) // 2
+    ask = asked_price(question)
+    if ask is None:
+        answer = ('站上「%s」有 %d 件在售，价格 ¥%s — ¥%s，中位数 ¥%s。\n'
+                  '成色好的可以靠近上限，明显磨损的往下谈；约面交看货后再定价也来得及。'
+                  % (kw, len(rows), _yuan(prices[0]), _yuan(prices[-1]), _yuan(median)))
+    else:
+        gap = (ask - median) / max(1, median)
+        if gap > 0.15:
+            judge = '比中位数高 %d%%，偏贵，建议再讲讲价。' % round(gap * 100)
+        elif gap < -0.15:
+            judge = '比中位数低 %d%%，算划算，看到合适的可以下手。' % round(-gap * 100)
+        else:
+            judge = '和中位数差不多，属正常价，重点看成色和实拍图。'
+        answer = ('站上「%s」有 %d 件在售，价格 ¥%s — ¥%s，中位数 ¥%s。\n'
+                  '你问的 ¥%s %s' % (kw, len(rows), _yuan(prices[0]), _yuan(prices[-1]),
+                                     _yuan(median), _yuan(ask), judge))
+    return {'answer': answer, 'action': 'reply', 'links': [],
+            'products': rows[:4], 'sources': [], 'mode': 'rule', 'latency_ms': 0,
+            'suggestions': SUGGESTIONS['shopping'], 'support': support_state()}
+
+
+async def shopping_answer(question, db):
+    """导购四连：对比 → 预算 → 场景 → 估价。命中一个就返回，都不中返回 None。"""
+    pair = compare_pieces(question)
+    if pair:
+        return await compare_answer(db, pair[0], pair[1])
+    budget = budget_of(question)
+    if budget is not None:
+        kw = budget_keyword(question)
+        label, cats = scene_of(question)
+        return await budget_answer(db, budget, kw, cats, label or '')
+    label, cats = scene_of(question)
+    if label and not _scene_blocked(question, label):
+        return await scene_answer(db, label, cats)
+    kw = price_check_query(question)
+    if kw is not None:
+        return await price_check_answer(db, kw, question)
+    return None
+
+
+# 「怎么选宿舍床帘」问的是方法不是荐货；「我想买键盘」有明确目标。
+# 这两种都该放过去搜指定的货/按知识答，只有「送礼」在带购买意图时也优先场景。
+_SCENE_PROCESS = ('怎么', '如何', '为什么', '教程', '步骤', '流程', '区别', '注意')
+
+
+def _scene_blocked(question, label):
+    q = str(question or '')
+    if label == '送礼':
+        return False
+    if any(w in q for w in _SCENE_PROCESS):
+        return True
+    return bool(any(w in q for w in BUY_PATTERNS) or BUY_REGEX.search(q))
+
+
 # --- 售后：先选订单，再按状态给路径 --------------------------------------
 # 参照电商客服的「选择要咨询的订单」：退货/退款这类问题不靠猜，
 # 让用户从自己的订单里选一笔，再按订单状态给确定答案。
@@ -742,6 +1098,8 @@ def order_reply(order):
 SUGGESTIONS = {
     'after_sale': ['还没发货，能直接取消吗？', '已经收货了怎么退？', '退款多久到账？'],
     'general': ['怎么发布闲置？', '怎么联系卖家？', '客服什么时候在线？'],
+    'shopping': ['预算 500 求推荐耳机', '对比一下这两本教材哪个好',
+                 '送室友什么生日礼物好？', '这款 199 贵不贵'],
 }
 # 借鉴 Campus_Marketplace（校园二手开源项目）的 AI 工具：描述生成 + 估价。
 # 与客服问答分开：不走知识库提示词，失败时按规则兜底，绝不让发布卡住。
@@ -946,17 +1304,26 @@ async def call_api(question, context, env, history=None, open_mode=False):
     return (choices[0].get('message') or {}).get('content') or ''
 
 
-async def open_answer(q, env, history, elapsed):
+async def open_answer(q, env, history, elapsed, fallback=None):
     """知识库没命中：交给模型按「开放人格」回答。
 
     旧实现在这里直接甩固定话术，于是客户问什么都是同一句「换个说法再问一次」，
     问「给我跳个舞」「我想谈恋爱」也回这段。现在只有模型真的不可用
     （没配 Key / 超时 / 5xx / 返回空）才退回兜底，其余情况都让人先说话。
+
+    fallback：模型这条路走不通时的第二选择，同步函数、返回回答字符串。
+    本地试用版没有 Worker 的 HC_AI_API_KEY，用它接本机 LLM 服务；
+    fallback 也失败才退回固定话术。Worker 不传，行为与以前一致。
     """
     try:
         text = strip_thinking(await call_api(q, '', env, history, open_mode=True))
     except Exception:  # noqa: BLE001 - 供应商故障和未配置都降级为兜底话术
         text = ''
+    if not text and fallback is not None:
+        try:
+            text = strip_thinking(fallback(q) or '')
+        except Exception:  # noqa: BLE001 - 第二选择也趴了，就只剩固定话术
+            text = ''
     if not text:
         out = no_hit_reply(q)
         out['latency_ms'] = elapsed()
@@ -1044,7 +1411,7 @@ def violation_reply(question):
 
 
 
-async def _answer_unguarded(question, env, history=None, db=None, uid=None, order_id=None):
+async def _answer_unguarded(question, env, history=None, db=None, uid=None, order_id=None, fallback=None):
     started = time.time()
     q = str(question or '').strip()[:800]
     elapsed = lambda: int((time.time() - started) * 1000)
@@ -1101,6 +1468,15 @@ async def _answer_unguarded(question, env, history=None, db=None, uid=None, orde
     # 也最像人的做法。以前切成 sad/cheer/lonely 五桶、每桶配几句固定回复，
     # 等于用词表假装听懂——「面试挂了」回一句「嗯，我在」就是这么来的。
 
+    # 导购四连（对比/预算/场景/估价）必须排在购买意图之前：
+    # 「预算 500 想买耳机」带「想买」，先被 buy_query 搜成全量列表就没了预算约束；
+    # 「A 和 B 哪个好」带「和/还是」，也会被切成单个商品词各搜各的。
+    if db is not None:
+        shop = await shopping_answer(q, db)
+        if shop:
+            shop['latency_ms'] = elapsed()
+            return shop
+
     # 推荐书目直接查在售书籍：比让模型背书名靠谱，客户点开就能买。
     rec = recommend_query(q)
     if rec is not None and db is not None:
@@ -1145,7 +1521,7 @@ async def _answer_unguarded(question, env, history=None, db=None, uid=None, orde
     # 「手机号没验证能做什么」）。这种命中带进上下文只会把话带偏，
     # 不如当成没查到，让模型自己答。
     if not hits or hits[0][0] < 0.15:
-        return await open_answer(q, env, history, elapsed)
+        return await open_answer(q, env, history, elapsed, fallback)
 
     context = build_context(hits)
     notice = ''
@@ -1181,9 +1557,13 @@ async def _answer_unguarded(question, env, history=None, db=None, uid=None, orde
             'mode': mode, 'notice': notice, 'latency_ms': elapsed(), 'support': support_state()}
 
 
-async def ai_answer(question, env, history=None, db=None, uid=None, order_id=None):
-    """所有回答的最后一道闸：先按原逻辑答，再扫一遍有没有把配置吐出来。"""
-    return guard_leak(await _answer_unguarded(question, env, history, db, uid, order_id))
+async def ai_answer(question, env, history=None, db=None, uid=None, order_id=None, fallback=None):
+    """所有回答的最后一道闸：先按原逻辑答，再扫一遍有没有把配置吐出来。
+
+    fallback：开放问答在模型不可用时的第二选择（本地试用版用它接本机
+    LLM 服务）。Worker 不传，维持「兜底话术」的原行为。
+    """
+    return guard_leak(await _answer_unguarded(question, env, history, db, uid, order_id, fallback))
 
 
 # --- 所有者办公助手 --------------------------------------------------------

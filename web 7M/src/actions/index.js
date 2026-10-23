@@ -19,7 +19,7 @@ import * as admin from './admin.js';
 import * as userProfile from './user-profile.js';
 
 // 公开演示版只放行这些只读交互，其余一律弹说明、不渲染任何表单。
-const DEMO_CLICK_ALLOWED = ['load-more','home-slide','home-promo-open','home-top','market-channel','market-shortcut','free-shelf','feed-sort','category','login','close','photo','share'];
+const DEMO_CLICK_ALLOWED = ['load-more','home-slide','home-promo-open','home-top','market-channel','market-shortcut','free-shelf','feed-sort','category','login','close','photo','share','rec-refresh'];
 
 const clicks = {...ui.clicks, ...catalog.clicks, ...trade.clicks, ...social.clicks, ...friend.clicks, ...forum.clicks, ...support.clicks, ...account.clicks, ...staff.clicks, ...admin.clicks, ...userProfile.clicks};
 const submits = {...catalog.submits, ...trade.submits, ...social.submits, ...friend.submits, ...forum.submits, ...support.submits, ...account.submits, ...staff.submits, ...admin.submits, ...userProfile.submits};

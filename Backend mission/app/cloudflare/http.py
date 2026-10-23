@@ -7,7 +7,16 @@ import json
 from urllib.parse import parse_qs, urlsplit
 
 from ..core.errors import DomainError
-from workers import Response
+
+try:
+    from workers import Response
+except ImportError:  # 本地 CPython（试用版 server.py）没有 workers 运行时：
+    # 只让「导入 cloudflare 包」这件事成立，json_response 在本地不进 HTTP 路由。
+    # Workers 上 workers 模块必然存在，走上面那条，行为零变化。
+    class Response:
+        @classmethod
+        def from_json(cls, body, status=200, headers=None):
+            return {'body': body, 'status': status, 'headers': headers or {}}
 
 JSON_HEADERS = {
     'Content-Type': 'application/json; charset=utf-8',

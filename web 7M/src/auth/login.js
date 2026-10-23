@@ -9,6 +9,7 @@ import { isStaff, isAdmin } from '../core/roles.js';
 import { modal, closeModal } from '../core/shell.js';
 import { field } from '../components/forms.js';
 import { rememberSession, forgetSession } from '../core/session.js';
+import { mountPet } from '../components/ai-pet.js';
 
 export function publicDemoNotice(){
   modal(`<span class="eyebrow">HUALI CORNER PREVIEW</span><h2>先逛逛，看看转角</h2><p>这是公开演示版，不收集手机号、收货地址、照片或聊天内容，也不进行真实交易。</p><p class="muted">可以体验搜索、分类、商品详情、卖家主页和社区样例。其余功能可在本地模拟版体验。</p><button class="btn primary full" data-action="close">继续逛逛</button>`);
@@ -34,6 +35,9 @@ export async function setLogin(r){
   state.cart = JSON.parse(sessionStorage.getItem('hc-cart-'+state.me.id) || '[]');
   closeModal();
   toast('欢迎，'+state.me.nickname+(state.config.trial?' · 订单和付款均为模拟':' · 当前为模拟登录'));
+  // 小转只在登录后挂载：从「小转AI」入口登录进来的用户，登完就该看见宠物，
+  // 不然入口点完还是空的（以前要刷新页面才挂上）。重定向分支也要挂。
+  mountPet();
   const target = (location.hash.slice(1) || 'home').split('/')[0];
   if ((target === 'staff' && !isStaff(state.me)) || (target === 'admin' && !isAdmin(state.me))){
     go('home');

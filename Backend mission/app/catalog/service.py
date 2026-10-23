@@ -2,6 +2,7 @@
 import hashlib, io, json, secrets, time
 from PIL import Image, ImageOps, UnidentifiedImageError
 from ..core.errors import ValidationMixin, DomainError
+from ..core.recommend import recommend_order
 from ..moderation import scan_product, message_for, report_of
 
 # 付费置顶档位：档位 -> (天数, 模拟价格·分)。低价非强制，免费商品自然下沉。
@@ -110,6 +111,8 @@ class CatalogService(ValidationMixin):
         if f.get('sort')=='price':base.sort(key=lambda p:p['price']+(p['delivery_fee'] if p['delivery']=='delivery' else 0))
         # 置顶商品提到最前（稳定排序：置顶组内仍保持上面的价格/最新顺序）。
         now=time.time();base.sort(key=lambda p:0 if (p.get('promoted_until') or 0)>now else 1)
+        # 「小转推荐」轨：按看得见好坏的程度排，同类打散（与 Worker 同一份规则）。
+        if f.get('rec'):base=recommend_order(base,now)
         page_items=base[(page-1)*limit:page*limit] if limit else base
         # 诚信客户按页批量算：只查这一页涉及的卖家，避免全量商品的 N+1。
         trusted=self.trusted_map([p['seller_id'] for p in page_items])

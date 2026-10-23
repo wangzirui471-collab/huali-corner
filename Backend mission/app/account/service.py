@@ -220,7 +220,9 @@ class AccountService(ValidationMixin):
     def deactivate(self,u):
         """用户主动注销账号。保留订单、工单、信誉等记录（数据可追溯），
         但账号立即下线、在售商品全部下架、之后不可再登录。
-        有未完结订单或未结案工单时禁止注销，堵住「货不对版就注销跑路」这条路。"""
+        有未完结订单或未结案工单时禁止注销，堵住「货不对版就注销跑路」这条路。
+        所有者账号不能自助注销，避免唯一 L1 退出后无人能任命开发者。"""
+        self.require(self.role_of(u)!='owner','所有者账号不能自助注销，请先由运维转移所有权',403)
         with self.tx() as c:
             open_order=c.execute("SELECT 1 FROM orders WHERE (buyer_id=? OR seller_id=?) AND status NOT IN ('completed','cancelled','refunded','partial_refunded') LIMIT 1",(u,u)).fetchone()
             self.require(not open_order,'还有未完成的订单，请先处理或申请售后后再注销')
@@ -253,12 +255,13 @@ class AccountService(ValidationMixin):
           - 任何情况下都不能清除自己，也不能清除同级或更高等级账号。
         """
         actor_role=self.role_of(u)
-        self.require(actor_role in ('admin','developer'),'仅管理员或开发者可清除账号',403)
+        self.require(actor_role in ('admin','developer','owner'),'仅管理员、开发者或所有者可清除账号',403)
         self.require(u!=target,'不能清除自己的账号')
         self.text(reason,500,'清除理由')
         with self.tx() as c:
             user=c.execute('SELECT id,phone,nickname,role FROM users WHERE id=?',(target,)).fetchone()
             self.require(user,'用户不存在',404)
+            self.require(user['role']!='owner','所有者账号不能清除，只能由运维在数据库处理',403)
             # 同级不能互删（admin 不能删 admin，developer 不能删 developer）；
             # 未知角色按最高等级处理，宁可不删。
             self.require(self.ROLE_RANK.get(actor_role,-1)>self.ROLE_RANK.get(user['role'],99),
@@ -316,14 +319,15 @@ class AccountService(ValidationMixin):
     # 四级：user(0) < support(1) < admin(2) < developer(3)。
     # 开发者是最高权限：可任命/降级管理员；管理员可设/废客服、封号；
     # 客服日常值守；用户无后台权限。层级判断统一走这里，别在业务里手写比较。
-    ROLE_RANK = {'user':0,'support':1,'admin':2,'developer':3}
+    ROLE_RANK = {'user':0,'support':1,'admin':2,'developer':3,'owner':4}
 
     def role_of(self,u):
         # 直接查 role：profile 现在会附带信誉星级（两次统计查询），
         # 鉴权路径没必要为拿一个角色承担这份开销。
         r=self.row('SELECT role FROM users WHERE id=?',(u,));return r['role'] if r else ''
-    def is_staff(self,u):return self.role_of(u) in ('support','admin','developer')
-    def is_admin(self,u):return self.role_of(u) in ('admin','developer')
+    def is_staff(self,u):return self.role_of(u) in ('support','admin','developer','owner')
+    def is_admin(self,u):return self.role_of(u) in ('admin','developer','owner')
+    def is_owner(self,u):return self.role_of(u)=='owner'
 
     def set_role_operator(self, phone, role):
         """本地 / 服务器操作者专用：直接设定任意账号角色。

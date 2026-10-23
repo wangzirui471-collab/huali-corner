@@ -6,6 +6,7 @@ import { api } from '../core/http.js';
 import { shell, heading, empty } from '../core/shell.js';
 import { createProductFeed } from '../core/product-feed.js';
 import { card } from '../components/product-card.js';
+import { recRail } from '../components/rec-rail.js';
 import { mountHomeFeed } from '../actions/home-feed.js';
 import { categoryArt } from '../components/category-art.js';
 import { homePromos } from '../components/home-promos.js';
@@ -34,7 +35,11 @@ export async function home(favorite=false){
   const free=state.freeShelf&&!favorite;
   const local=free||favorite;
   const params=homeParams(favorite);
+  // 「小转推荐」轨和商品流并行拉；推荐失败只当没有这条轨，不拖垮首屏。
+  const recPromise = local ? Promise.resolve([]) : api('/products?rec=1&limit=8').catch(() => []);
   let products=await api('/products?'+params);
+  if(epoch!==state.renderId || token!==state.token) return;
+  const rec=await recPromise;
   if(epoch!==state.renderId || token!==state.token) return;
   if(free) products=products.filter(product=>product.price===0);
   const initial=local?products.slice(0,PAGE_SIZE):products;
@@ -45,7 +50,9 @@ export async function home(favorite=false){
   }});
   const title=favorite?'收藏好物':free?'免费好物':'猜你喜欢';
   const context=filter.q?'搜索：'+filter.q:free?'物品免费，送货费请查看详情':favorite?'收藏不等于预留，成交前请确认状态':'来自同学的闲置，等一个新主人';
-  shell(`<div class="home-page">${favorite?heading('MY COLLECTION','我的收藏','喜欢的好物，先收藏再慢慢挑。'):navigation()+homePromos()}
+  // 推荐轨只出现在正常逛逛的首页：收藏页和免费送页各有各的语境。
+  const rail=(!local&&Array.isArray(rec)&&rec.length)?recRail(rec):'';
+  shell(`<div class="home-page">${favorite?heading('MY COLLECTION','我的收藏','喜欢的好物，先收藏再慢慢挑。'):navigation()+homePromos()}${rail}
     <section class="home-feed" aria-label="${title}"><div class="home-feed-heading"><div><span class="home-section-kicker">${favorite?'MY FINDS':'CAMPUS FINDS'}</span><h2>${title}<small>好物不闲置，生活有转角</small></h2></div><div class="home-feed-tools"><button class="${!filter.sort?'active':''}" data-action="feed-sort" data-value="" aria-pressed="${!filter.sort}">最新</button><button class="${filter.sort==='price'?'active':''}" data-action="feed-sort" data-value="price" aria-pressed="${filter.sort==='price'}">价格 ↑</button><button class="feed-filter" data-action="open-filter">${icon('filter')}筛选</button></div></div>
     <div class="home-feed-context"><span>${e(context)}</span><small data-feed-count>已展示 ${initial.length} 件商品</small></div>
     <div class="product-grid" aria-busy="false">${initial.map(card).join('')}</div>

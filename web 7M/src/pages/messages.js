@@ -137,7 +137,7 @@ function supportOnDuty(){
 
 function roomItem(r, activeId){
   const me = state.me;
-  const isStaff = me && ['support','admin','developer'].includes(me.role);
+  const isStaff = me && ['support','admin','developer','owner'].includes(me.role);
   const isSupport = !!r.support;
   // 客服视角：显示认领状态，避免两个客服同时回同一个用户。
   let tag = '';
@@ -472,7 +472,7 @@ function waitForPostCard(id, timeout = 3000){
         : (room.kind==='private'?'私聊':room.count+' 位成员')}</small></div>
       <div class="wx-head-actions">
         ${room.support
-          ? `<button class="text-button" data-action="close-support" data-id="${room.id}">${['support','admin','developer'].includes(state.me?.role)?'结束会话':'结束咨询'}</button>`
+          ? `<button class="text-button" data-action="close-support" data-id="${room.id}">${['support','admin','developer','owner'].includes(state.me?.role)?'结束会话':'结束咨询'}</button>`
           : room.kind!=='private'
             ? `<button class="text-button" data-action="toggle-members" data-id="${room.id}">成员</button>
         <button class="text-button" data-action="nominate" data-id="${room.id}">申请管理员</button>`
@@ -493,14 +493,14 @@ function waitForPostCard(id, timeout = 3000){
       <div class="wx-toolbar">
         <button type="button" class="wx-tool" data-action="wx-emoji" title="表情">😊</button>
         ${room.support
-          ? (['support','admin','developer'].includes(state.me?.role)
+          ? (['support','admin','developer','owner'].includes(state.me?.role)
               ? `<div class="wx-quick" id="wx-quick">${QUICK_REPLIES.map(t=>`<button type="button" class="wx-quick-chip" data-quick="${e(t)}">${e(t)}</button>`).join('')}</div>`
               : `<div class="wx-quick" id="wx-quick" hidden><span class="wx-quick-label">猜你想问</span>${SUPPORT_FAQS.map(t=>`<button type="button" class="wx-quick-chip" data-quick="${e(t)}">${e(t)}</button>`).join('')}</div>`)
           : ''}
         <span class="wx-count" id="wx-count"></span>
       </div>
       <div class="wx-composer" id="wx-composer" data-room="${room.id}">
-        <textarea id="wx-editor" name="message" maxlength="2000" rows="1" placeholder="${room.support?(['support','admin','developer'].includes(state.me?.role)?'输入回复，Enter 发送':'描述你的问题，客服会尽快回复'):'输入消息，Enter 发送，Shift+Enter 换行'}"></textarea>
+        <textarea id="wx-editor" name="message" maxlength="2000" rows="1" placeholder="${room.support?(['support','admin','developer','owner'].includes(state.me?.role)?'输入回复，Enter 发送':'描述你的问题，客服会尽快回复'):'输入消息，Enter 发送，Shift+Enter 换行'}"></textarea>
         <div class="wx-send-row"><span class="muted">${room.support?'客服在线时间 08:00–20:00 · 30 分钟无新消息会话自动结束':'消息会经过平台自动审核'}</span><button class="btn primary sm" type="button" id="wx-send">发送</button></div>
       </div>
       <div class="wx-emoji-panel" id="wx-emoji" hidden></div>
@@ -577,7 +577,7 @@ function waitForPostCard(id, timeout = 3000){
 
   // 客服会话认领：进入时先认领（await），认领成功才成为成员、才能拉消息。
   // 已被别人认领则只提示、不抢单——这是「两个客服不回同一个用户」的闸门。
-  if (room.support && ['support','admin','developer'].includes(state.me?.role)){
+  if (room.support && ['support','admin','developer','owner'].includes(state.me?.role)){
     try{
       const claim = await api('/support/claim', {room_id:room.id});
       if (claim.ok) room.assignee = claim.assignee;
@@ -800,7 +800,7 @@ function waitForPostCard(id, timeout = 3000){
   // 用户侧的「猜你想问」只在新会话（还没有任何消息）时展示；
   // 一旦聊起来就收起，把输入区还给正常对话。
   const quick = $('#wx-quick');
-  if (quick && room.support && !['support','admin','developer'].includes(state.me?.role)){
+  if (quick && room.support && !['support','admin','developer','owner'].includes(state.me?.role)){
     quick.hidden = state.messageCursor > 0;
   }
 

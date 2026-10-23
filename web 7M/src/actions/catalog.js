@@ -61,6 +61,7 @@ export const clicks = {
   },
   'feed-sort': b => { state.filter.sort = b.dataset.value; go('home'); },
   'load-more': () => state.homeView?.next(),
+  'rec-refresh': b => state.homeView?.recRefresh(b),
   'home-slide': b => state.homeView?.slide(b),
   'home-promo-open': b => {
     const slide=b.querySelector('[data-promo-slide]:not([hidden])');

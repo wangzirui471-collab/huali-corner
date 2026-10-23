@@ -9,18 +9,17 @@
 """
 import json
 import math
-import random
 import re
-import threading
 import time
-import urllib.request
 
 import config
+import llm
 from ingest import ollama_embed, tokenize
 
 SUPPORT_HOURS = '08:00—20:00'
 
 FALLBACK = '这个我这儿没有确切答案，不想瞎编一个给你。换个说法再问一次（带上页面名或订单号）通常会命中；要是着急，直接说「转人工」，我帮你叫人。'
+BUSY_REPLY = '现在同时问的人有点多，我这边排队排满了。稍等几秒再发一次，或者直接说「转人工」让客服接手。'
 TRANSFER_REPLY = '好的，马上帮你转接人工客服，请稍等。'
 GREETING_REPLY = '在的～我是小转，发布、退款、面交、客服时间都能问我，也可以随便聊聊。'
 COMPLAINT_REPLY = ('非常抱歉让你有这种感觉。你先别急，这类事有两条路可以走：\n'
@@ -241,9 +240,8 @@ def expand_question(question):
     extra = [words for key, words in SYNONYMS.items() if key in low]
     return (question + ' ' + ' '.join(extra)).strip() if extra else question
 
-# 本地 Ollama 不能走系统代理
-_NO_PROXY = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-_LOCK = threading.Lock()
+# 模型调用（含代理绕过、并发闸门、R1 思考剥离）统一在 llm.py；
+# 这里只保留索引缓存，检索侧不再持有锁。
 _CACHE = {'mtime': 0.0, 'data': None}
 
 
@@ -368,16 +366,8 @@ def sources_of(hits):
 
 
 def strip_thinking(text):
-    text = text or ''
-    text = re.sub(r'```(?:think|reasoning).*?```', '', text, flags=re.S | re.I)
-    text = re.sub(r'<think[^>]*>.*?</think>', '', text, flags=re.S | re.I)
-    # R1 有时把推理和答案写在同一段，答案通常在「答案：」之后
-    if '答案：' in text:
-        text = text.split('答案：', 1)[1]
-    text = re.sub(r'^\s*(思考|推理|分析)[:：].*$', '', text, flags=re.M)
-    text = re.sub(r'^#+\s*', '', text, flags=re.M)
-    text = text.replace('**', '').replace('`', '')
-    return text.strip()
+    """剥掉 R1 的思考过程（实现统一放在网关，半截推理视为无答案）。"""
+    return llm.strip_thinking(text)
 
 
 def trim(text, limit=320):
@@ -398,67 +388,54 @@ def extractive(hits):
     return trim(answer, 260) if len(answer) >= 12 else ''
 
 
-def call_ollama(question, context, open_mode=False):
+def _system_prompt(question, context, open_mode):
     template = OPEN_PROMPT if open_mode else SYSTEM_PROMPT
-    payload = {
-        'model': config.OLLAMA_MODEL,
-        'messages': [
-            {'role': 'system', 'content': template.format(context=context or '（无）', query=question)},
-            {'role': 'user', 'content': question},
-        ],
-        'stream': False,
-        'options': {
-            'temperature': 0.5 if open_mode else 0.2,
-            'top_p': 0.9,
-            'num_ctx': config.NUM_CTX,
-            'num_predict': config.NUM_PREDICT,
-        },
-    }
-    req = urllib.request.Request(
-        config.OLLAMA + '/api/chat',
-        data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
-        headers={'Content-Type': 'application/json'},
-        method='POST',
-    )
-    with _NO_PROXY.open(req, timeout=config.TIMEOUT) as resp:
-        data = json.loads(resp.read().decode('utf-8'))
-    msg = data.get('message') or {}
-    return msg.get('content') or ''
+    return template.format(context=context or '（无）', query=question)
+
+
+def call_ollama(question, context, open_mode=False):
+    """本地模型生成（保留旧入口名，内部统一走 llm 网关）。"""
+    return llm.chat(_system_prompt(question, context, open_mode), question,
+                    max_tokens=config.NUM_PREDICT,
+                    temperature=0.5 if open_mode else 0.2)
 
 
 def call_api(question, context, open_mode=False):
-    """调用 DeepSeek 官方 OpenAI 兼容接口（默认模型 deepseek-flash）。
+    """远端 API 生成（保留旧入口名，内部统一走 llm 网关）。
 
-    open_mode=True 时不带知识库、用开放人格回答（闲聊/常识/没命中时用）。
+    open_mode=True 时不带知识库、用开放人格回答（闲聊 / 常识 / 没命中时用）。
     """
-    if not config.API_KEY:
-        raise RuntimeError('未配置 HC_AI_API_KEY')
-    if open_mode:
-        template, temp, cap = OPEN_PROMPT, 0.7, 1000
-    else:
-        template, temp, cap = SYSTEM_PROMPT, 0.2, 600
-    payload = {
-        'model': config.CHAT_MODEL,
-        'messages': [
-            {'role': 'system', 'content': template.format(context=context or '（无）', query=question)},
-            {'role': 'user', 'content': question},
-        ],
-        'stream': False,
-        'temperature': temp,
-        'max_tokens': cap,
-    }
-    req = urllib.request.Request(
-        config.API_URL,
-        data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
-        headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + config.API_KEY},
-        method='POST',
-    )
-    with _NO_PROXY.open(req, timeout=config.TIMEOUT) as resp:
-        data = json.loads(resp.read().decode('utf-8'))
-    choices = data.get('choices') or []
-    if not choices:
-        raise RuntimeError('API 返回空结果')
-    return (choices[0].get('message') or {}).get('content') or ''
+    return llm.chat(_system_prompt(question, context, open_mode), question,
+                    max_tokens=1000 if open_mode else 600,
+                    temperature=0.7 if open_mode else 0.2)
+
+
+def generate(question, context, open_mode=False, history=None):
+    """生成回答并带上降级说明，返回 (text, mode, notice)。
+
+    三种后端（本地 Ollama / 自建兼容端点 / 远端 API）走同一个口径；
+    模型不可用或排队排满时返回空文本，由调用方用知识库原文顶上。
+    """
+    provider = llm.provider_kind()
+    if provider == llm.MOCK:
+        return '', 'mock', '当前为知识库摘录模式。'
+    if provider == llm.API and not config.API_KEY:
+        return '', 'mock', '未配置 DeepSeek API Key（HC_AI_API_KEY），以下为知识库原文摘录。'
+    try:
+        text = llm.chat(_system_prompt(question, context, open_mode), question,
+                        max_tokens=(1000 if open_mode else config.NUM_PREDICT) if provider == llm.API
+                        else config.NUM_PREDICT,
+                        temperature=0.6 if open_mode else 0.2,
+                        history=history)
+        return text, 'llm', ''
+    except llm.ModelBusy as exc:
+        # 排队满了不是故障：直接给原文 + 让客户过几秒再问，比让页面转圈强。
+        return '', 'busy', '同时提问的人有点多，先按知识库原文回你（约 %d 秒后可再问）。' % exc.retry_after
+    except llm.ModelUnavailable as exc:
+        where = '本地模型' if provider in llm.LOCAL_KINDS else 'DeepSeek API'
+        return '', 'mock', '%s暂不可用（%s），以下为知识库原文摘录。' % (where, exc)
+    except Exception as exc:  # noqa: BLE001 - 兜底：任何异常都不该让客服挂掉
+        return '', 'mock', '模型调用失败（%s），以下为知识库原文摘录。' % type(exc).__name__
 
 
 # --- 发布助手：AI 写描述 / AI 估价 ----------------------------------------
@@ -479,34 +456,12 @@ CONDITION_FACTORS = {
 
 
 def call_llm(system, user, owner=False, max_tokens=400):
-    """复用 OpenAI 兼容客户端；办公服务可单独配置模型和自托管端点。"""
-    api_key = config.OWNER_API_KEY if owner else config.API_KEY
-    api_url = config.OWNER_API_URL if owner else config.API_URL
-    model = config.OWNER_MODEL if owner else config.CHAT_MODEL
-    if not api_key:
-        raise RuntimeError('未配置 HC_AI_API_KEY')
-    payload = {
-        'model': model,
-        'messages': [
-            {'role': 'system', 'content': system},
-            {'role': 'user', 'content': user},
-        ],
-        'stream': False,
-        'temperature': 0.4,
-        'max_tokens': max_tokens,
-    }
-    req = urllib.request.Request(
-        api_url,
-        data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
-        headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + api_key},
-        method='POST',
-    )
-    with _NO_PROXY.open(req, timeout=config.TIMEOUT) as resp:
-        data = json.loads(resp.read().decode('utf-8'))
-    choices = data.get('choices') or []
-    if not choices:
-        raise RuntimeError('API 返回空结果')
-    return (choices[0].get('message') or {}).get('content') or ''
+    """办公/发布助手共用：仍走同一个网关，owner=True 走 L1 专用模型。
+
+    自托管模式下这条路径不需要 API Key——发布页「AI 帮我写」「AI 估价」
+    和工单批量草稿都能在断网的本机上跑完。
+    """
+    return llm.chat(system, user, owner=owner, max_tokens=max_tokens, temperature=0.4)
 
 
 def build_describe_prompt(title, category, condition, extra):
@@ -696,61 +651,20 @@ def _answer_unguarded(question, history=None):
     hits = retrieve(q)
     if not hits or hits[0][0] < 0.15:
         # 知识库没命中：交给模型按开放人格回答（闲聊、常识、平台没写死的事）。
-        # 只有模型真的不可用（MOCK / 没 Key / 本地模型没起 / 超时）才退回兜底话术。
-        text = ''
-        try:
-            if config.MOCK:
-                raise RuntimeError('mock 模式不调用模型')
-            if config.PROVIDER == 'ollama':
-                with _LOCK:
-                    text = call_ollama(q, '', open_mode=True)
-            else:
-                if not config.API_KEY:
-                    raise RuntimeError('未配置 HC_AI_API_KEY')
-                with _LOCK:
-                    text = call_api(q, '', open_mode=True)
-        except Exception:  # noqa: BLE001 - 模型不可用就退回兜底
-            text = ''
-        text = strip_thinking(text)
+        # 只有模型真的不可用（MOCK / 没 Key / 本地模型没起 / 排队满 / 超时）才退兜底。
+        text, mode, notice = generate(q, '', open_mode=True, history=history)
         if not text:
+            if mode == 'busy':
+                return {'answer': BUSY_REPLY, 'action': 'reply', 'sources': [], 'mode': mode,
+                        'notice': notice, 'latency_ms': int((time.time() - started) * 1000),
+                        'support': st}
             return {'answer': FALLBACK, 'action': 'reply', 'sources': [], 'mode': 'guess',
-                    'latency_ms': int((time.time() - started) * 1000), 'support': st}
+                    'notice': notice, 'latency_ms': int((time.time() - started) * 1000),
+                    'support': st}
         return {'answer': trim(text, 220), 'action': 'reply', 'sources': [], 'mode': 'llm',
                 'open': True, 'latency_ms': int((time.time() - started) * 1000), 'support': st}
 
-    context = build_context(hits)
-    notice = ''
-    mode = 'llm'
-    text = ''
-    provider = 'mock' if config.MOCK else config.PROVIDER
-    if provider == 'api' and not config.API_KEY:
-        provider = 'mock'
-        notice = '未配置 DeepSeek API Key（HC_AI_API_KEY），以下为知识库原文摘录。'
-    if provider == 'mock':
-        mode = 'mock'
-        if not notice:
-            notice = '当前为知识库摘录模式。'
-        text = extractive(hits)
-    elif provider == 'ollama':
-        try:
-            with _LOCK:
-                text = call_ollama(q, context)
-            mode = 'llm'
-        except Exception as exc:  # noqa: BLE001 - 本地模型没起时降级
-            mode = 'mock'
-            notice = f'本地模型暂不可用（{type(exc).__name__}），以下为知识库原文摘录。'
-            text = extractive(hits)
-    else:
-        try:
-            with _LOCK:
-                text = call_api(q, context)
-            mode = 'llm'
-        except Exception as exc:  # noqa: BLE001 - API 失败时降级，不中断客服
-            mode = 'mock'
-            notice = f'DeepSeek API 暂不可用（{type(exc).__name__}），以下为知识库原文摘录。'
-            text = extractive(hits)
-
-    text = strip_thinking(text)
+    text, mode, notice = generate(q, build_context(hits), history=history)
     # 模型没说清或用了不确定表述：退回知识库原文摘录。资料就在手边，
     # 没道理因为模型嘴软就把人推去工单。
     # 弱命中的资料不能用「含糊」当理由替换掉答案：问「为什么会做梦」命中
