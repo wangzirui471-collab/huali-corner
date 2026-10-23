@@ -70,6 +70,17 @@ class OfficeTicketTests(CloudCase):
         self.assertEqual(self.db.execute("SELECT count(*) FROM tickets WHERE status='open'").fetchone()[0], 3)
         self.assertEqual(self.db.execute('SELECT count(*) FROM ticket_messages WHERE internal=0').fetchone()[0], 0)
 
+    async def test_upstream_readonly_queries_survive_ticket_integration(self):
+        """同步新版后仍能查用户、概览及已解决工单，不被待办工具抢走。"""
+        self.db.execute("UPDATE tickets SET status='resolved' WHERE id=11")
+        for question in ('平台数据概览', '把所有用户列出来', '已解决工单'):
+            result = await self.post('', dict(question=question))
+            self.assertEqual(result.status, 200, result.body)
+            self.assertEqual(result.body.get('mode'), 'rule', question)
+        result = await self.post('', dict(question='已解决工单'))
+        self.assertIn('发布失败', result.body['answer'])
+        self.assertNotIn('如何修改介绍', result.body['answer'])
+
     async def test_pagination_reports_remaining_instead_of_claiming_all(self):
         """有更多工单时返回总量与下一页，不能把第一页当成全部。"""
         for tid in range(20, 42):

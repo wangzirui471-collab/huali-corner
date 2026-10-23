@@ -45,12 +45,13 @@ HARNESS = '''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name=
 import {state} from '/src/core/state.js';
 import {aiPet} from '/src/components/ai-pet.js';
 import {registerActions} from '/src/actions/index.js';
+import {clearAccount} from '/src/auth/login.js';
 state.token='test-5';state.me={id:5,role:'owner',nickname:'合成所有者'};
 document.body.insertAdjacentHTML('beforeend',aiPet());
 document.querySelector('#ai-pet-panel').hidden=false;
 registerActions();
 /** 仅测试页提供退出动作，用于验证面板不会跨账号保留资料。 */
-window.testLogout=()=>{state.token='';state.me=null;};
+window.testLogout=()=>clearAccount();
 </script></body></html>'''
 
 

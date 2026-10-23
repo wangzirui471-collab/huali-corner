@@ -12143,14 +12143,14 @@ function lw(e) {
 	cw?.();
 	let t = document.createElement("div");
 	document.body.appendChild(t);
-	let n, r, i = () => {
-		clearInterval(r), window.removeEventListener("hashchange", i), n?.unmount(), t.remove(), cw = null;
+	let n, r, i, a = () => {
+		clearInterval(r), i?.(), window.removeEventListener("hashchange", a), n?.unmount(), t.remove(), cw = null;
 	};
 	n = Ps(sw, {
 		...e,
-		close: i
-	}), n.mount(t), r = setInterval(() => {
-		e.authorized() || i();
-	}, 300), window.addEventListener("hashchange", i), cw = i;
+		close: a
+	}), n.mount(t), i = e.onAccountChange?.(a), r = setInterval(() => {
+		e.authorized() || a();
+	}, 300), window.addEventListener("hashchange", a), cw = a;
 }
 export { lw as openOfficeTickets };

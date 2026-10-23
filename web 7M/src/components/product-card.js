@@ -20,9 +20,14 @@ export function demoPhoto(p){
 export function demoTag(p){ return demoPhoto(p) !== null ? 'AI演示图' : '演示配图'; }
 
 export function productPicture(p, detail=false){
+  const url = p.photos?.[0]?.url || '';
+  // 演示商品可能没有实拍图（例如 AI 批量生成的）：给占位块，别让整页渲染崩掉。
+  if (!url){
+    return `<div class="photo-placeholder" role="img" aria-label="${e(p.title)}暂无实拍图">${icon('camera')}<span>暂无实拍</span></div>`;
+  }
   const n = demoPhoto(p);
-  if (n === null) return `<img ${detail?'id="main-photo"':''} src="${e(p.photos[0].url)}" alt="${e(p.title)}" loading="lazy">`;
-  return `${detail?`<img id="main-photo" class="sprite-source" src="${e(p.photos[0].url)}" alt="${e(p.title)}">`:''}<div class="photo-sprite" role="img" aria-label="${e(p.title)}的${demoTag(p)}，非实拍" style="background-position:${(n%4)*100/3}% ${Math.floor(n/4)*100/3}%"></div>`;
+  if (n === null) return `<img ${detail?'id="main-photo"':''} src="${e(url)}" alt="${e(p.title)}" loading="lazy">`;
+  return `${detail?`<img id="main-photo" class="sprite-source" src="${e(url)}" alt="${e(p.title)}">`:''}<div class="photo-sprite" role="img" aria-label="${e(p.title)}的${demoTag(p)}，非实拍" style="background-position:${(n%4)*100/3}% ${Math.floor(n/4)*100/3}%"></div>`;
 }
 
 export function priceLabel(p){

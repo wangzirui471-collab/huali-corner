@@ -2,6 +2,7 @@
 import { state } from '../core/state.js';
 import { api } from '../core/http.js';
 import { isOwner } from '../core/roles.js';
+import { subscribeSession } from '../core/session.js';
 
 /** 在当前所有者身份下打开工单工具；退出登录后面板自动销毁。 */
 export async function openOfficeTickets(initial){
@@ -15,6 +16,6 @@ export async function openOfficeTickets(initial){
   }
   const panel = await import('/assets/office/office-panel.js');
   if (token !== state.token || !isOwner(state.me)) return;
-  panel.openOfficeTickets({ api, initial,
+  panel.openOfficeTickets({ api, initial, onAccountChange: subscribeSession,
     authorized: () => token === state.token && isOwner(state.me) });
 }

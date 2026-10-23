@@ -13,9 +13,11 @@ export function openOfficeTickets(options){
   document.body.appendChild(root);
   let app;
   let timer;
+  let unsubscribe;
   /** 关闭并释放监听器，避免跨账号保留客户资料。 */
   const dispose = () => {
     clearInterval(timer);
+    unsubscribe?.();
     window.removeEventListener('hashchange', dispose);
     app?.unmount();
     root.remove();
@@ -23,6 +25,7 @@ export function openOfficeTickets(options){
   };
   app = createApp(OfficeTickets, { ...options, close: dispose });
   app.mount(root);
+  unsubscribe = options.onAccountChange?.(dispose);
   timer = setInterval(() => { if (!options.authorized()) dispose(); }, 300);
   window.addEventListener('hashchange', dispose);
   current = dispose;

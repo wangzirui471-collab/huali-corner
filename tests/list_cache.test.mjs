@@ -8,6 +8,28 @@ globalThis.sessionStorage = { getItem(){ return null; } };
 const { api, prefetch } = await import('../web 7M/src/core/http.js');
 const { state } = await import('../web 7M/src/core/state.js');
 
+test('global office response is rejected after account switch', async () => {
+  // 全局面板可跨路由等待，但不能把所有者数据交给下一账号。
+  state.token = 'owner-before';
+  let finish;
+  globalThis.fetch = () => new Promise(resolve => { finish = resolve; });
+  const pending = api('/ai/office', { question: '平台数据概览' }, { global: true });
+  state.token = 'user-after';
+  finish(Response.json({ answer: '所有者私密数据' }));
+  await assert.rejects(pending, /账号已切换/);
+});
+
+test('global office response survives route change within the same account', async () => {
+  // 保留此前修复的跨页面等待能力，仅豁免页面版本检查。
+  state.token = 'same-owner';
+  let finish;
+  globalThis.fetch = () => new Promise(resolve => { finish = resolve; });
+  const pending = api('/ai/office', { question: '待处理工单' }, { global: true });
+  state.renderId++;
+  finish(Response.json({ answer: '本账号结果' }));
+  assert.equal((await pending).answer, '本账号结果');
+});
+
 test('second first-page list call is served from cache', async () => {
   state.token = '';
   let calls = 0;

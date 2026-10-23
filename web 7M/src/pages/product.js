@@ -52,7 +52,7 @@ async function recommendations(p){
 
 export async function product(id){
   const p = await api('/product?id='+id);
-  const thumbs = p.simulation ? [p.photos[0]] : p.photos;
+  const thumbs = (p.photos || []).filter(x => x && x.url);
   const extras = await recommendations(p);
   const available = p.status === 'available';
   const angleName = x => ({front:'正面', side:'侧面', top:'顶部', extra:'细节'}[x.angle] || '细节');

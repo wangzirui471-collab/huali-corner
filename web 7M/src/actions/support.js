@@ -7,6 +7,8 @@ import { api } from '../core/http.js';
 import { go, render } from '../core/nav.js';
 import { modal, closeModal } from '../core/shell.js';
 import { state, statusNames } from '../core/state.js';
+import { subscribeSession } from '../core/session.js';
+import { isOwner } from '../core/roles.js';
 import { field } from '../components/forms.js';
 import { ticketModal } from '../pages/support.js';
 import { setPetState, togglePetPanel, paintDuty } from '../components/ai-pet.js';
@@ -28,8 +30,24 @@ function petAppend(html, who='bot'){
 let petHistory = [];
 // 所有者面板的「客服问答 / 办公」模式；普通用户固定走客服问答。
 let petMode = 'chat';
+// 演示商品预览：先生成、等 L1 确认后才入库。
+let pendingProducts = [];
 
-async function petAsk(q){
+/** 换号或退出立即移除旧内容和待执行草稿，迟到响应由 HTTP 会话守卫拒绝。 */
+function clearPetAccount(){
+  petHistory = []; petMode = 'chat'; pendingProducts = [];
+  const log = $('#ai-pet-log');
+  if (log) log.textContent = '我是小转，需要帮助可以重新提问。';
+  const area = $('#ai-pet-q');
+  if (area) area.value = '';
+  document.querySelectorAll('.ai-pet-mode, .ai-pet-chips.ai-pet-office').forEach(el => {
+    el.hidden = !isOwner(state.me); el.style.display = isOwner(state.me) ? '' : 'none';
+  });
+  document.querySelectorAll('[data-action="ai-pet-mode"]').forEach(el => { el.classList.toggle('active', el.dataset.mode === 'chat'); });
+}
+subscribeSession(clearPetAccount);
+
+async function petAsk(q, extra){
   const text=String(q||'').trim();
   const log=$('#ai-pet-log'); if(!text||!log) return;
   const form=$('#ai-pet-form'), area=form?.querySelector('textarea[name=q]'), send=form?.querySelector('button[type=submit]');
@@ -39,12 +57,15 @@ async function petAsk(q){
   if(send) send.disabled=true;
   setPetState('review');                  // 「专注工作」＝思考中：小转动手翻资料，等接口回来
   try{
-    const r=await api('/ai/chat',{question:text,history:petHistory.slice(-4)});
+    const r=await api('/ai/chat',{question:text,history:petHistory.slice(-4),...(extra||{})},{global:true,timeout:45000});
     const src=(r.sources||[]).slice(0,3).map((s,i)=>`[${i+1}] ${e(s.title||s.source)}`).join(' · ');
     const links=(r.links||[]).map(l=>l.action
       ? `<button type="button" class="ai-pet-link" data-action="${e(l.action)}" data-q="${e(l.q||'')}">${e(l.label)} →</button>`
       : `<a class="ai-pet-link" href="${e(l.href)}">${e(l.label)} →</a>`).join('');
     const prods=(r.products||[]).map(p=>`<a class="ai-pet-prod" href="#product/${p.id}"><span class="ai-pet-prod-img" style="background-image:url('${e(p.url||'')}')"></span><span class="ai-pet-prod-txt"><b>${e(p.title)}</b><small>¥${money(p.price)}${p.nickname?' · '+e(p.nickname):''}</small></span></a>`).join('');
+    // 售后：让用户从自己的订单里选一笔；常见服务做成可点的推荐问句。
+    const orders=(r.orders||[]).map(o=>`<button type="button" class="ai-pet-order" data-action="ai-pick-order" data-id="${o.id}"><b>${e(o.title)}</b><small>¥${money(o.total)} · ${e(o.status_label)}</small></button>`).join('');
+    const sug=(r.suggestions||[]).map(s=>`<button type="button" class="ai-pet-sug" data-action="ai-suggest" data-q="${e(s)}">${e(s)}</button>`).join('');
     const transfer=r.action==='transfer';        // 客户明说要人工，且客服在线
     const offline=r.action==='leave_message';    // 客户明说要人工，但客服已下班
     const st=r.support||{};
@@ -57,9 +78,11 @@ async function petAsk(q){
       card=`<div class="ai-pet-offline"><b>客服已下班（每天 ${hours}）</b><p>留言和工单会按提交顺序排着，${e(st.next_open||'明天 08:00')}上班后处理。你现在写下来，明天不用重新说一遍。</p><button type="button" class="btn primary" data-action="new-ticket">提交工单留言</button></div>`;
     }
     wait.innerHTML=`<div>${petText(r.answer)}</div>
+      ${orders?`<div class="ai-pet-orders">${orders}</div>`:''}
       ${links?`<div class="ai-pet-links">${links}</div>`:''}
       ${prods?`<div class="ai-pet-prods">${prods}</div>`:''}
       ${card}
+      ${sug?`<div class="ai-pet-sugs">${sug}</div>`:''}
       ${src?`<div class="ai-pet-src">来源：${src}</div>`:''}
       ${r.notice?`<div class="ai-pet-src">${e(r.notice)}</div>`:''}`;
     paintDuty(r.support);          // 状态灯以服务端为准，避免和回答内容打架
@@ -87,14 +110,21 @@ async function petAsk(q){
 async function petOffice(q, mode){
   const text=String(q||'').trim();
   const log=$('#ai-pet-log'); if(!text||!log) return;
+  const form=$('#ai-pet-form'), area=form?.querySelector('textarea[name=q]'), send=form?.querySelector('button[type=submit]');
+  if(area) area.value='';
   petAppend(petText(text),'user');
   const wait=petAppend('<span class="ai-pet-typing">正在查平台数据…</span>','bot');
+  if(send) send.disabled=true;
   setPetState('review');
   try{
-    const r=await api('/ai/office',{question:text,mode:mode||'query'});
+    // 办公请求是全局面板发起的，不跟随页面重渲染丢弃；最多等 60 秒。
+    const r=await api('/ai/office',{question:text,mode:mode||'query'},{global:true,timeout:60000});
     const p=r.proposal;
+    // 数据查询由后端确定性拼好，另带一份 items：列表比一大段文字好扫。
+    const rows=(r.items||[]).map(it=>`<div class="ai-pet-row"><b>${e(it.title)}</b>${it.meta?`<small>${e(it.meta)}</small>`:''}</div>`).join('');
     wait.innerHTML=`<div>${petText(r.answer)}</div>
       ${r.office_tool==='tickets'?`<div class="ai-pet-office">${(r.tickets||[]).slice(0,3).map(t=>`<p><b>#${t.id} ${e(t.subject)}</b><br>${e(t.body.slice(0,80))}</p>`).join('')}<button type="button" class="btn primary" data-action="ai-office-tickets">查看明细与处理建议</button></div>`:''}
+      ${rows?`<div class="ai-pet-rows">${rows}</div>`:''}
       ${p?`<div class="ai-pet-action"><b>待执行</b><p>${e(p.summary)}</p><p class="muted">不可逆操作，需要你再次确认。</p><button type="button" class="btn primary" data-action="ai-office-confirm" data-kind="${e(p.kind)}" data-target="${p.target}" data-role="${e(p.role||'')}" data-name="${e(p.nickname)}">确认执行</button></div>`:''}
       ${r.mode==='mock'?'<div class="ai-pet-src">模型暂不可用，以上为数据快照</div>':''}`;
     setPetState('idle');
@@ -102,6 +132,9 @@ async function petOffice(q, mode){
   }catch(err){
     wait.innerHTML=`<div>${petText(err.message||'办公助手暂时不可用')}</div>`;
     setPetState('fail',1600);
+  }finally{
+    if(send) send.disabled=false;
+    log.scrollTop=log.scrollHeight;
   }
 }
 
@@ -277,12 +310,16 @@ export const clicks = {
   'ai-pet-toggle': () => togglePetPanel(),
   'ai-office-tickets': () => openOfficeTickets(),
   'ai-pet-chip': b => petAsk(b.dataset.q),
+  // 售后：选中订单后把 order_id 一起带给后端，按订单状态回答。
+  'ai-pick-order': b => petAsk('订单 #' + b.dataset.id + ' 的售后怎么处理？', {order_id: Number(b.dataset.id)}),
+  // 常见服务推荐：点一下就是一句完整问题。
+  'ai-suggest': b => petAsk(b.dataset.q),
   'ai-office': b => { petMode = 'office'; petOffice(b.dataset.q, b.dataset.mode || 'query'); },
   'ai-pet-mode': b => {
     petMode = b.dataset.mode === 'office' ? 'office' : 'chat';
     document.querySelectorAll('.ai-pet-mode button').forEach(x => x.classList.toggle('active', x.dataset.mode === petMode));
     const area = $('#ai-pet-q');
-    if (area) area.placeholder = petMode === 'office' ? '问平台数据，或说「把某某降为管理员」…' : '问问小转，例如：怎么发布？';
+    if (area) area.placeholder = petMode === 'office' ? '问用户/订单/商品/工单，或说「把某某降为管理员」…' : '问问小转，例如：怎么发布？';
   },
   // 不可逆动作：L1 在浏览器里再确认一次，确认后才调用执行端点（后端仍校验身份并写审计）。
   'ai-office-confirm': async b => {
@@ -295,6 +332,43 @@ export const clicks = {
       toast(r.message||'已执行');
       b.textContent='已执行';
     }catch(err){ toast(err.message||'执行失败'); b.disabled=false; b.textContent='确认执行'; }
+  },
+  // 生成演示商品：只生成预览，L1 确认后才入库。
+  'ai-office-gen': async b => {
+    const log=$('#ai-pet-log'); if(!log) return;
+    const topic = window.prompt('生成什么主题的演示商品？（例如：宿舍好物、二手书、运动器材）', b.dataset.q || '宿舍好物');
+    if (!topic) return;
+    petAppend(petText('生成演示商品：' + topic), 'user');
+    const wait=petAppend('<span class="ai-pet-typing">正在生成预览…</span>','bot');
+    setPetState('review');
+    try{
+      const r = await api('/ai/office/generate', {prompt: topic, count: 5});
+      pendingProducts = r.items || [];
+      if (!pendingProducts.length){
+        wait.innerHTML = '<div>没生成出可用的商品，换个主题再试。</div>';
+        setPetState('fail',1600);
+        return;
+      }
+      const rows = pendingProducts.map((p,i)=>`<div class="ai-pet-prod" style="cursor:default"><span class="ai-pet-prod-img" style="background-image:url('${e(p.photo||'')}')"></span><span class="ai-pet-prod-txt"><b>${i+1}. ${e(p.title)}</b><small>¥${money(p.price)} · ${e(p.condition)}</small></span></div>`).join('');
+      wait.innerHTML = `<div>已生成 ${pendingProducts.length} 件预览（尚未入库）：</div>
+        <div class="ai-pet-prods">${rows}</div>
+        <div class="ai-pet-action"><b>确认入库</b><p>会以你的账号发布为演示商品（标记 virtual），出现在首页。</p><button type="button" class="btn primary" data-action="ai-office-publish">确认入库（${pendingProducts.length} 件）</button></div>`;
+      setPetState('idle');
+    }catch(err){
+      wait.innerHTML = `<div>${petText(err.message || '生成失败')}</div>`;
+      setPetState('fail',1600);
+    }
+  },
+  'ai-office-publish': async b => {
+    if (!pendingProducts.length) return;
+    if (!window.confirm(`确认把这 ${pendingProducts.length} 件演示商品入库？会出现在首页商品列表。`)) return;
+    b.disabled=true; b.textContent='入库中…';
+    try{
+      const r = await api('/ai/office/publish', {items: pendingProducts});
+      toast(`已入库 ${r.count} 件演示商品`);
+      b.textContent = `已入库 ${r.count} 件`;
+      pendingProducts = [];
+    }catch(err){ toast(err.message || '入库失败'); b.disabled=false; b.textContent='重试'; }
   },
   // 小转给了「去首页搜索」：把关键词塞进搜索框并跳到首页。
   'pet-search': b => {

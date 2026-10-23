@@ -11,6 +11,17 @@ function setup(){
   const handlers={};globalThis.window={addEventListener:(name,fn)=>{handlers[name]=fn;}};
   return handlers;
 }
+
+test('same-tab login and logout notify private views and support disposal',()=>{
+  // 同页换号立即清理私密内容，已卸载面板不继续接收通知。
+  setup();
+  const observed=[];
+  const dispose=subscribeSession(token=>observed.push(token));
+  rememberSession('first-owner'); forgetSession(); rememberSession('second-user');
+  assert.deepEqual(observed,['first-owner','','second-user']);
+  dispose(); forgetSession();
+  assert.equal(observed.length,3);
+});
 test('login survives a fresh tab without storing credentials or the user profile',()=>{
   setup();rememberSession('opaque-token');sessionStorage=storage();
   assert.equal(readSessionToken(),'opaque-token');

@@ -70,6 +70,45 @@ try {
   await mobile.getByRole('dialog', { name: '工单办公 · L1' }).waitFor({ state: 'detached' });
   await mobile.close();
   console.log('PASS mobile: editable drafts, no horizontal overflow, logout clears private panel');
+
+  // 全局宠物请求允许跨路由等待；换号必须清掉已显示内容、上下文和迟到响应。
+  const privacy = await browser.newPage();
+  let held;
+  let seen;
+  let calls = 0;
+  let nextHistory;
+  const waiting = new Promise(resolve => { seen = resolve; });
+  await privacy.route('**/api/ai/chat', async route => {
+    calls++;
+    if (calls === 2){ held = route; seen(); return; }
+    if (calls === 3) nextHistory = route.request().postDataJSON().history;
+    await route.fulfill({ json: { answer: calls === 1 ? 'OWNER_PRIVATE_BEFORE' : '新账号回答' } });
+  });
+  await privacy.goto(origin + '/__office_test__');
+  await privacy.locator('#ai-pet-q').fill('第一条合成问题');
+  await privacy.locator('#ai-pet-form button[type=submit]').click();
+  await privacy.getByText('OWNER_PRIVATE_BEFORE', { exact: true }).waitFor();
+  await privacy.locator('#ai-pet-q').fill('第二条延迟合成问题');
+  await privacy.locator('#ai-pet-form button[type=submit]').click();
+  await waiting;
+  await privacy.evaluate(async () => {
+    window.testLogout();
+    const { state } = await import('/src/core/state.js');
+    const { rememberSession } = await import('/src/core/session.js');
+    state.token = 'test-2'; state.me = { id: 2, role: 'user' };
+    rememberSession(state.token);
+  });
+  assert.equal(await privacy.getByText('OWNER_PRIVATE_BEFORE', { exact: true }).count(), 0);
+  await held.fulfill({ json: { answer: 'OWNER_PRIVATE_LATE' } });
+  await privacy.waitForFunction(() => !document.querySelector('#ai-pet-form button[type=submit]').disabled);
+  assert.equal(await privacy.getByText('OWNER_PRIVATE_LATE', { exact: true }).count(), 0);
+  assert.equal(await privacy.getByRole('button', { name: '工单办公', exact: true }).isVisible(), false);
+  await privacy.locator('#ai-pet-q').fill('第三条新账号问题');
+  await privacy.locator('#ai-pet-form button[type=submit]').click();
+  await privacy.getByText('新账号回答', { exact: true }).waitFor();
+  assert.deepEqual(nextHistory, []);
+  await privacy.close();
+  console.log('PASS account isolation: displayed content, late global response, history and owner controls cleared');
 } finally {
   await browser.close();
 }

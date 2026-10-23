@@ -3,6 +3,12 @@
 const TOKEN = 'hc-token';
 const EXPIRES = 'hc-token-expires';
 const LIFETIME = 30 * 86400000;
+const localListeners = new Set();
+
+/** 同页登录或退出立即通知私密面板清理；跨页变化仍沿用 storage 监听。 */
+function announceSession(token){
+  for (const listener of localListeners) listener(token);
+}
 
 function store(kind){ try { return globalThis[kind]; } catch { return null; } }
 function get(storage, key){ try { return storage?.getItem(key); } catch { return null; } }
@@ -13,6 +19,7 @@ function remove(storage){
 export function forgetSession(){
   remove(store('localStorage'));
   remove(store('sessionStorage'));
+  announceSession('');
 }
 
 export function rememberSession(token){
@@ -27,6 +34,7 @@ export function rememberSession(token){
     remove(local);
     try { session.setItem(EXPIRES, expires); session.setItem(TOKEN, token); } catch {}
   }
+  announceSession(token);
 }
 
 export function readSessionToken(now = Date.now()){
@@ -44,10 +52,17 @@ export function readSessionToken(now = Date.now()){
 }
 
 export function subscribeSession(onChange){
-  window.addEventListener('storage', event => {
+  // 已有订阅同时接收本页变化，避免只在另一标签页退出时才清理。
+  localListeners.add(onChange);
+  const onStorage = event => {
     if (event.key !== TOKEN && event.key !== null) return;
     // A stale tab-only token must not resurrect an account logged out elsewhere.
     remove(store('sessionStorage'));
     onChange(readSessionToken());
-  });
+  };
+  window.addEventListener('storage', onStorage);
+  return () => {
+    localListeners.delete(onChange);
+    window.removeEventListener?.('storage', onStorage);
+  };
 }

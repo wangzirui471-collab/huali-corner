@@ -41,7 +41,7 @@ export function prefetch(path){
   api(path).catch(() => {});
 }
 
-export async function api(path, data){
+export async function api(path, data, opts = {}){
   if (window.HUALI_STATIC_DEMO) return window.hualiDemoApi(path, data);
   const write = data !== undefined;
   const session = state.token, epoch = state.renderId;
@@ -49,21 +49,37 @@ export async function api(path, data){
     const cached = readList(path);
     if (cached !== null){
       // 命中缓存仍要遵守「页面/账号已切换」守卫，避免旧页面盖掉新页面。
-      if (session !== state.token || epoch !== state.renderId) throw new Error('页面或账号已切换，请重试');
+      if (session !== state.token || (!opts.global && epoch !== state.renderId)) throw new Error('页面或账号已切换，请重试');
       return Array.isArray(cached) ? cached.slice() : cached;
     }
   }
-  const res = await fetch('/api'+path, {
-    method: data === undefined ? 'GET' : 'POST',
-    headers: {'Content-Type':'application/json', ...(session ? {Authorization:'Bearer '+session} : {})},
-    body: data === undefined ? undefined : JSON.stringify(data)
-  });
+  const ctrl = opts.timeout ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), opts.timeout) : null;
+  let res;
+  try{
+    res = await fetch('/api'+path, {
+      method: data === undefined ? 'GET' : 'POST',
+      headers: {'Content-Type':'application/json', ...(session ? {Authorization:'Bearer '+session} : {})},
+      body: data === undefined ? undefined : JSON.stringify(data),
+      signal: ctrl ? ctrl.signal : undefined
+    });
+  }catch(err){
+    if (timer) clearTimeout(timer);
+    if (err && err.name === 'AbortError'){
+      const timeout = new Error('AI 响应超时，请稍后重试');
+      timeout.status = 504;
+      throw timeout;
+    }
+    throw err;
+  }
+  if (timer) clearTimeout(timer);
   const type = (res.headers.get('Content-Type') || '').toLowerCase();
   let body;
   if (type.includes('application/json') || type.includes('+json')){
     try { body = await res.json(); } catch { /* malformed response is handled below */ }
   }
-  if (session !== state.token || epoch !== state.renderId) throw new Error('页面或账号已切换，请重试');
+  // 全局请求只豁免路由变化，账号隔离始终有效。
+  if (session !== state.token || (!opts.global && epoch !== state.renderId)) throw new Error('页面或账号已切换，请重试');
   if (!body || typeof body !== 'object'){
     const error = new Error(res.status >= 500
       ? '服务暂时不可用，请稍后重试；当前登录状态已保留'
