@@ -140,6 +140,47 @@ async function petOffice(q, mode){
 }
 
 
+function setPetMode(mode){
+  petMode = ['office','work'].includes(mode) ? mode : 'chat';
+  document.querySelectorAll('.ai-pet-mode button').forEach(x => x.classList.toggle('active', x.dataset.mode === petMode));
+  const office = $('#ai-pet-office-chips'), work = $('#ai-pet-work-chips');
+  if (office) office.hidden = petMode !== 'office';
+  if (work) work.hidden = petMode !== 'work';
+  const area = $('#ai-pet-q');
+  if (area) area.placeholder = petMode === 'office'
+    ? '问用户/订单/商品/工单，或说「把某某降为管理员」…'
+    : petMode === 'work'
+      ? '试试：待处理工单 / 查用户小陈 / 最近 7 天订单 / 把某某降为客服…'
+      : '问问小转，例如：怎么发布？';
+}
+
+async function petWork(q){
+  const text = String(q || '').trim();
+  const log = $('#ai-pet-log'); if (!text || !log) return;
+  const form = $('#ai-pet-form'), area = form?.querySelector('textarea[name=q]'), send = form?.querySelector('button[type=submit]');
+  if (area) area.value = '';
+  petAppend(petText(text), 'user');
+  const wait = petAppend('<span class="ai-pet-typing">正在调用平台工具…</span>', 'bot');
+  if (send) send.disabled = true;
+  setPetState('review');
+  try {
+    const r = await api('/ai/work/chat', {question: text}, {global: true, timeout: 60000});
+    const rows = (r.items || []).map(it => `<div class="ai-pet-row"><b>${e(it.title)}</b>${it.meta ? `<small>${e(it.meta)}</small>` : ''}</div>`).join('');
+    const p = r.proposal;
+    wait.innerHTML = `<div>${petText(r.answer)}</div>
+      ${rows ? `<div class="ai-pet-rows">${rows}</div>` : ''}
+      ${p ? `<div class="ai-pet-action"><b>待执行</b><p>${e(p.summary)}</p><p class="muted">不可逆操作，需要再次确认。</p><button type="button" class="btn primary" data-action="ai-work-confirm" data-token="${e(r.token || '')}">确认执行</button></div>` : ''}
+      ${r.tool ? `<div class="ai-pet-src">工具：${e(r.tool)}</div>` : ''}`;
+    setPetState('idle');
+  } catch (err) {
+    wait.innerHTML = `<div>${petText(err.message || '工作模式暂时不可用')}</div>`;
+    setPetState('fail', 1600);
+  } finally {
+    if (send) send.disabled = false;
+    log.scrollTop = log.scrollHeight;
+  }
+}
+
 export const clicks = {
   'new-ticket': () => ticketModal('other'),
   appeal: () => ticketModal('appeal'),
@@ -326,12 +367,17 @@ export const clicks = {
   'ai-pick-order': b => petAsk('订单 #' + b.dataset.id + ' 的售后怎么处理？', {order_id: Number(b.dataset.id)}),
   // 常见服务推荐：点一下就是一句完整问题。
   'ai-suggest': b => petAsk(b.dataset.q),
-  'ai-office': b => { petMode = 'office'; petOffice(b.dataset.q, b.dataset.mode || 'query'); },
-  'ai-pet-mode': b => {
-    petMode = b.dataset.mode === 'office' ? 'office' : 'chat';
-    document.querySelectorAll('.ai-pet-mode button').forEach(x => x.classList.toggle('active', x.dataset.mode === petMode));
-    const area = $('#ai-pet-q');
-    if (area) area.placeholder = petMode === 'office' ? '问用户/订单/商品/工单，或说「把某某降为管理员」…' : '问问小转，例如：怎么发布？';
+  'ai-office': b => { setPetMode('office'); petOffice(b.dataset.q, b.dataset.mode || 'query'); },
+  'ai-work': b => { setPetMode('work'); petWork(b.dataset.q); },
+  'ai-pet-mode': b => setPetMode(b.dataset.mode),
+  'ai-work-confirm': async b => {
+    if (!window.confirm('再次确认执行这个不可逆操作？')) return;
+    b.disabled = true; b.textContent = '执行中…';
+    try{
+      const r = await api('/ai/work/confirm', {token: b.dataset.token});
+      toast('已执行');
+      b.textContent = '已执行';
+    }catch(err){ toast(err.message || '执行失败'); b.disabled = false; b.textContent = '确认执行'; }
   },
   // 不可逆动作：L1 在浏览器里再确认一次，确认后才调用执行端点（后端仍校验身份并写审计）。
   'ai-office-confirm': async b => {
@@ -450,5 +496,9 @@ export const submits = {
     toast(delta !== null ? '信誉变动已审计记录' : `已按价格计算并扣分（现信誉 ${r.score}/100）`);
     await render();
   },
-  'ai-pet-form': async ({d}) => { await (petMode === 'office' ? petOffice(d.q) : petAsk(d.q)); },
+  'ai-pet-form': async ({d}) => {
+    if (petMode === 'work') { await petWork(d.q); return; }
+    if (petMode === 'office') { await petOffice(d.q, 'query'); return; }
+    await petAsk(d.q);
+  },
 };

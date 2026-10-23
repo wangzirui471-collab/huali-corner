@@ -413,6 +413,27 @@ class SupportService(ValidationMixin):
                       (u,None,'ai_office_publish','生成演示商品 %d 件' % len(ids),now))
         return {'ok':True,'count':len(ids),'ids':ids}
 
+    # --- 工作模式：owner 工具注册表 ---------------------------------------
+    def work_tools(self,u):
+        self.require(self.is_owner(u),'仅平台所有者可使用工作模式',403)
+        from . import work
+        return {'tools':work.catalog()}
+
+    def work_call(self,u,tool,args=None,token=None):
+        self.require(self.is_owner(u),'仅平台所有者可使用工作模式',403)
+        from . import work
+        return work.call(self,u,str(tool or ''),args if isinstance(args,dict) else {},token)
+
+    def work_chat(self,u,q):
+        self.require(self.is_owner(u),'仅平台所有者可使用工作模式',403)
+        from . import work
+        return work.agent(self,u,self.text(q,500,'问题'))
+
+    def work_confirm(self,u,token):
+        self.require(self.is_owner(u),'仅平台所有者可使用工作模式',403)
+        from . import work
+        return work.confirm(self,u,str(token or ''))
+
     def check_conflict(self,u,t):
         if t.get('product_id'):
             pid=t['product_id']

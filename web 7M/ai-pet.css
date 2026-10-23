@@ -446,3 +446,6 @@ button.ai-pet-link{ cursor: pointer; font-family: inherit; }
 .ai-pet-offline b{ display: block; margin-bottom: 2px; color: #4a4f57; }
 .ai-pet-offline p{ margin: 0 0 8px; color: #6b6f77; }
 .ai-pet-offline .btn{ font-size: 12px; }
+
+/* 办公 / 工作快捷行按页签显隐：.ai-pet-chips 的 display:flex 会盖掉 [hidden] */
+.ai-pet-chips[hidden]{ display: none !important; }

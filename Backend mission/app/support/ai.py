@@ -131,6 +131,16 @@ def _post(path, payload):
         raise DomainError('AI 服务未启动：请先运行 python ai_service/server.py', 503) from None
 
 
+def plan(question, tools):
+    """工作模式：让本地 AI 规划器选一个工具，不执行。"""
+    if not enabled():
+        raise DomainError('AI 客服未启用', 503)
+    data = _post('/plan', {'question': question, 'tools': tools})
+    if not isinstance(data, dict) or not data.get('tool'):
+        raise DomainError('规划服务返回格式不正确', 502)
+    return data
+
+
 def describe(payload):
     """发布页「AI 帮我写」：把标题/分类/成色发给本地 AI 服务生成介绍。"""
     if not enabled():

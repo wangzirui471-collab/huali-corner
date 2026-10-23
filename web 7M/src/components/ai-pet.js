@@ -85,8 +85,9 @@ export function aiPet(){
     ${isOwner(state.me) ? `<div class="ai-pet-mode" aria-label="对话模式">
       <button type="button" data-action="ai-pet-mode" data-mode="chat" class="active">客服问答</button>
       <button type="button" data-action="ai-pet-mode" data-mode="office">办公</button>
+      <button type="button" data-action="ai-pet-mode" data-mode="work">工作</button>
     </div>
-    <div class="ai-pet-chips ai-pet-office" aria-label="所有者办公">
+    <div class="ai-pet-chips ai-pet-office" id="ai-pet-office-chips" aria-label="所有者办公" hidden>
       <button type="button" data-action="ai-office" data-q="平台数据概览">数据概览</button>
       <button type="button" data-action="ai-office" data-q="把所有用户列出来">用户列表</button>
       <button type="button" data-action="ai-office" data-q="最近 10 笔订单">最近订单</button>
@@ -94,6 +95,15 @@ export function aiPet(){
       <button type="button" data-action="ai-office-tickets">工单办公</button>
       <button type="button" data-action="ai-office" data-mode="draft" data-q="写一条面向同学的客服公告，说明本周六晚系统维护、期间下单可能延迟。">写公告</button>
       <button type="button" data-action="ai-office-gen" data-q="宿舍好物">生成演示商品</button>
+    </div>
+    <div class="ai-pet-chips ai-pet-work" id="ai-pet-work-chips" aria-label="工作模式" hidden>
+      <button type="button" data-action="ai-work" data-q="平台概览">平台概览</button>
+      <button type="button" data-action="ai-work" data-q="待处理工单">待处理工单</button>
+      <button type="button" data-action="ai-work" data-q="查用户">查用户</button>
+      <button type="button" data-action="ai-work" data-q="查订单">查订单</button>
+      <button type="button" data-action="ai-work" data-q="查商品">查商品</button>
+      <button type="button" data-action="ai-work" data-q="看审计">看审计</button>
+      <button type="button" data-action="ai-work" data-q="最近 7 天趋势">趋势</button>
     </div>` : ''}
     <form id="ai-pet-form" class="ai-pet-form">
       <label class="ai-pet-sr" for="ai-pet-q">输入问题</label>

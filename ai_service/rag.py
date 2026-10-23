@@ -388,6 +388,33 @@ def extractive(hits):
     return trim(answer, 260) if len(answer) >= 12 else ''
 
 
+PLAN_SYSTEM = """你是转角平台的工作 Agent 规划器。根据用户请求，从给定工具中选择一个最合适的工具，并给出 JSON 参数。
+只输出 JSON，不要解释、不要 Markdown：
+{"tool":"users","args":{"q":"小陈"}}
+规则：
+1. 只能选择工具列表里的工具，不能编造；
+2. 用户只是问数据/列表 → 选读工具；用户要求改账号/处置商品/退款 → 选写工具（后端会生成确认卡，不会直接执行）；
+3. 问“待办/需要我处理/待处理” → tickets，status=open；
+4. 问订单/成交 → orders；问用户/账号 → users；问商品/在售 → products；问审计 → audit；
+5. 只有宽泛地问“平台怎么样/数据概览”才选 overview；
+6. 不确定时选 overview。
+"""
+
+
+def plan(question, tools):
+    """让模型选工具；只做规划，不执行、不碰数据库。"""
+    catalog = json.dumps(tools or [], ensure_ascii=False)[:8000]
+    raw = llm.chat(PLAN_SYSTEM, '工具列表：%s\n用户请求：%s' % (catalog, question),
+                   max_tokens=200, temperature=0.1, owner=True)
+    m = re.search(r'\{[\s\S]*\}', raw or '')
+    if not m:
+        raise ValueError('规划结果不是 JSON')
+    data = json.loads(m.group(0))
+    tool = str(data.get('tool') or '')
+    args = data.get('args') if isinstance(data.get('args'), dict) else {}
+    return {'tool': tool, 'args': args}
+
+
 def _system_prompt(question, context, open_mode):
     template = OPEN_PROMPT if open_mode else SYSTEM_PROMPT
     return template.format(context=context or '（无）', query=question)

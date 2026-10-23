@@ -219,6 +219,10 @@ class Handler(BaseHTTPRequestHandler):
             if p=='/api/ai/office/confirm' and method=='POST':return self.respond(m.ai_office_confirm(u,data.get('kind'),data.get('target'),data.get('role')))
             if p=='/api/ai/office/generate' and method=='POST':return self.respond(m.ai_office_generate(u,data.get('prompt',''),data.get('count',5)))
             if p=='/api/ai/office/publish' and method=='POST':return self.respond(m.ai_office_publish(u,data.get('items')))
+            if p=='/api/ai/work/tools' and method=='GET':return self.respond(m.work_tools(u))
+            if p=='/api/ai/work/chat' and method=='POST':return self.respond(m.work_chat(u,data.get('question','')))
+            if p=='/api/ai/work/call' and method=='POST':return self.respond(m.work_call(u,data.get('tool'),data.get('args'),data.get('token')))
+            if p=='/api/ai/work/confirm' and method=='POST':return self.respond(m.work_confirm(u,data.get('token')))
             if p=='/api/ai/describe' and method=='POST':return self.respond(m.ai_describe(u,data))
             if p=='/api/ai/price' and method=='POST':return self.respond(m.ai_price(u,data))
             if p=='/api/admin/ai':
