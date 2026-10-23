@@ -13,7 +13,7 @@ import { state } from '../core/state.js';
 import { isOwner } from '../core/roles.js';
 import {
   currentSkin, getScale, getLife, getHidden, setHidden,
-  applySkinVars, applySkinFrame, actHasFlip, stopFrames,
+  applySkinVars, applySkinFrame, resolveAct, stopFrames,
 } from './pet-skins.js';
 import { openPetSettings, onPetPrefChange } from './pet-settings.js';
 
@@ -54,6 +54,10 @@ export function paintDuty(server){
 
 let petEl = null;
 let drag = null;
+let petHoldTimer = 0;
+let petFeedbackTimer = 0;
+let suppressPetClickUntil = 0;
+let petReactionIndex = 0;
 // 初始值不能是 0：页面刚加载时 performance.now() 还不到 320ms，
 // 「点一下开面板」会被当成拖动结束的补发 click 吞掉。
 let lastDragEnd = -1e9;
@@ -63,15 +67,19 @@ let lifeTimer = 0;
 // --- 标记 ---------------------------------------------------------------
 export function aiPet(){
   return `<div class="ai-pet" id="ai-pet" data-state="idle">
-  <button type="button" class="ai-pet-body" id="ai-pet-body" aria-label="AI 助手小转，可拖动；点一下提问">
+  <button type="button" class="ai-pet-body" id="ai-pet-body" aria-label="AI 助手小转，点一下聊天，长按摸摸，拖动移动">
     <span class="ai-pet-sprite" aria-hidden="true"></span>
     <span class="ai-pet-fallback" aria-hidden="true">转</span>
   </button>
-  <div class="ai-pet-hint" id="ai-pet-hint" hidden>按住我可以拖到任意位置</div>
+  <span class="ai-pet-reaction" id="ai-pet-reaction" role="status" aria-live="polite">被你摸到啦，好开心！</span>
+  <div class="ai-pet-hint" id="ai-pet-hint" hidden>点我聊天 · 长按摸摸 · 拖动换位置</div>
   <section class="ai-pet-panel" id="ai-pet-panel" hidden aria-label="AI 助手小转">
     <header class="ai-pet-head" id="ai-pet-head">
       <span class="ai-pet-avatar"><img id="ai-pet-avatar" src="/assets/ai-pet/xiaozhuan-avatar.png" alt=""></span>
       <div><b id="ai-pet-name">小转</b><small id="ai-pet-duty">客服在线 · 08:00–20:00</small></div>
+      <button type="button" class="ai-pet-pat" id="ai-pet-pat" aria-label="摸摸小转" title="摸摸小转">
+        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M10 17s-6.5-3.9-6.5-8.2A3.6 3.6 0 0 1 10 6.9a3.6 3.6 0 0 1 6.5 1.9C16.5 13.1 10 17 10 17Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+      </button>
       <button type="button" class="ai-pet-gear" id="ai-pet-set" aria-label="桌宠设置" title="桌宠设置：换形象、大小、须知">
         <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M2.6 4.4h10.8M2.6 8h10.8M2.6 11.6h10.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="5.6" cy="4.4" r="1.7" fill="currentColor"/><circle cx="10.4" cy="8" r="1.7" fill="currentColor"/><circle cx="6.2" cy="11.6" r="1.7" fill="currentColor"/></svg>
       </button>
@@ -145,14 +153,34 @@ export function aiPet(){
 export function setPetState(name, holdMs){
   if (!petEl) return;
   clearTimeout(stateTimer);
-  const act = name || 'idle';
-  petEl.dataset.state = act;
+  const state = name || 'idle';
+  petEl.dataset.state = state;
   const skin = currentSkin();
   if (skin){
-    petEl.classList.toggle('is-flip', actHasFlip(skin, act));
+    // 状态名到帧序列的换算交给皮肤：小毛的「移动」其实是一段捂鼻子摇手，
+    // 大乔的「移动」分左右两行。调用方只说自己正在干什么。
+    const { act, flip } = resolveAct(skin, state);
+    petEl.classList.toggle('is-flip', flip);
     applySkinFrame(petEl.querySelector('.ai-pet-sprite'), skin, act);
   }
   if (holdMs) stateTimer = setTimeout(() => setPetState('idle'), holdMs);
+}
+
+// 摸摸时给小转一个短暂的挥袖反馈；连续触发会重新播放动画并轮换一句回应。
+function petReaction(){
+  if (!petEl) return;
+  clearTimeout(petFeedbackTimer);
+  const messages = ['被你摸到啦，好开心！', '转一圈，电量回满！', '嘿嘿，我也摸摸你！'];
+  const bubble = $('#ai-pet-reaction');
+  if (bubble) bubble.textContent = messages[petReactionIndex++ % messages.length];
+  petEl.classList.remove('is-petted');
+  // 等一帧再加类，让连续点击也能重启动画。
+  requestAnimationFrame(() => {
+    if (!petEl) return;
+    petEl.classList.add('is-petted');
+    setPetState('wave', 900);
+    petFeedbackTimer = setTimeout(() => petEl?.classList.remove('is-petted'), 1500);
+  });
 }
 
 // --- 位置 ---------------------------------------------------------------
@@ -389,7 +417,7 @@ export function togglePetPanel(open){
   if (show){
     if (!panel.classList.contains('is-max')) restorePanelSize();   // 上次拖过的尺寸接着用
     placePanel();
-    setPetState('wave', 900);
+    setPetState('point', 900);
     paintDuty();                       // 每次打开都刷新客服在线状态
     setTimeout(() => $('#ai-pet-q')?.focus(), 60);
   }else{
@@ -402,7 +430,15 @@ function bindDrag(body){
   body.addEventListener('pointerdown', ev => {
     if (ev.pointerType === 'mouse' && ev.button !== 0) return;
     const r = petEl.getBoundingClientRect();
-    drag = { id: ev.pointerId, sx: ev.clientX, sy: ev.clientY, ox: r.left, oy: r.top, moved: false };
+    drag = { id: ev.pointerId, sx: ev.clientX, sy: ev.clientY, ox: r.left, oy: r.top, moved: false, petted: false };
+    const activeDrag = drag;
+    clearTimeout(petHoldTimer);
+    // 轻触继续打开对话；只有静止长按才摸摸，开始拖动时立即取消这个计时。
+    petHoldTimer = setTimeout(() => {
+      if (drag !== activeDrag || drag.moved) return;
+      activeDrag.petted = true;
+      petReaction();
+    }, 620);
     petEl.classList.add('is-dragging');
     try{ body.setPointerCapture(ev.pointerId); }catch(_){ /* 老浏览器没有捕获也能靠 move 兜住 */ }
   });
@@ -411,6 +447,7 @@ function bindDrag(body){
     if (!drag || ev.pointerId !== drag.id) return;
     const dx = ev.clientX - drag.sx, dy = ev.clientY - drag.sy;
     if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 5) return;   // 手抖不算拖动
+    if (!drag.moved) clearTimeout(petHoldTimer);
     drag.moved = true;
     moveTo(drag.ox + dx, drag.oy + dy);
     // 只在真的往某一侧移动时换朝向；dx 恰好为 0 时保持当前朝向，不要无端翻面。
@@ -421,7 +458,10 @@ function bindDrag(body){
 
   const end = ev => {
     if (!drag || ev.pointerId !== drag.id) return;
+    clearTimeout(petHoldTimer);
     const moved = drag.moved;
+    // 长按后的浏览器 click 是合成事件，拦一次，避免摸摸意外打开聊天框。
+    if (drag.petted && !moved && ev.type === 'pointerup') suppressPetClickUntil = performance.now() + 600;
     drag = null;
     petEl.classList.remove('is-dragging');
     try{ body.releasePointerCapture(ev.pointerId); }catch(_){ }
@@ -436,6 +476,7 @@ function bindDrag(body){
 
   // 拖动结束后浏览器仍会补一个 click，用时间戳挡掉，避免一松手就弹面板。
   body.addEventListener('click', ev => {
+    if (performance.now() < suppressPetClickUntil){ ev.preventDefault(); ev.stopPropagation(); return; }
     if (performance.now() - lastDragEnd < 320){ ev.preventDefault(); ev.stopPropagation(); return; }
     togglePetPanel();
   });
@@ -446,7 +487,7 @@ function scheduleLife(){
   clearTimeout(lifeTimer);
   lifeTimer = setTimeout(() => {
     if (getLife() && petEl && !drag && !petEl.classList.contains('is-open')){
-      setPetState(Math.random() < .6 ? 'wave' : 'jump', 1100);
+      setPetState(Math.random() < .55 ? 'greet' : 'look', 1400);
     }
     scheduleLife();
   }, 11000 + Math.random() * 9000);
@@ -464,7 +505,7 @@ function applySkin(){
   const name = $('#ai-pet-name');
   if (name) name.textContent = skin.name;
   const body = $('#ai-pet-body');
-  if (body) body.setAttribute('aria-label', `AI 助手${skin.name}，可拖动；点一下提问`);
+  if (body) body.setAttribute('aria-label', `AI 助手${skin.name}，点一下聊天，长按摸摸，拖动移动`);
   petEl.hidden = getHidden();
 
   // 图集（或用户上传的图）能不能解码，决定用精灵还是降级成字钮。
@@ -492,6 +533,7 @@ export function mountPet(){
   restorePos();
   bindDrag(body);
   bindPanelResize($('#ai-pet-panel'));
+  $('#ai-pet-pat')?.addEventListener('click', petReaction);
   $('#ai-pet-close')?.addEventListener('click', () => togglePetPanel(false));
   $('#ai-pet-set')?.addEventListener('click', () => openPetSettings('pet'));
 
@@ -541,6 +583,13 @@ export function mountPet(){
     if (ev.key !== 'Enter' || ev.shiftKey || ev.isComposing) return;
     ev.preventDefault();
     $('#ai-pet-form')?.requestSubmit();
+  });
+
+  // 你在输入框里打字，它就当场躺下等着；停手两秒自己爬起来。
+  // 输入法拼字期间 value 会反复变，这里只按「有没有内容」判断，不打断拼字。
+  $('#ai-pet-q')?.addEventListener('input', ev => {
+    if (String(ev.target.value || '').trim()) setPetState('typing', 2000);
+    else setPetState('idle');
   });
 
   // 皮肤（图集地址、帧尺寸、色调）走 CSS 变量，图解码好之前元素是透明的，

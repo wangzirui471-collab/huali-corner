@@ -10,7 +10,7 @@
 
 import { $ } from '../core/dom.js';
 import {
-  SKINS, SKIN_LIST, DEFAULT_SKIN, currentSkin, customSkin,
+  SKINS, SKIN_LIST, PENDING_SKINS, DEFAULT_SKIN, currentSkin, customSkin,
   saveCustomSkin, clearCustomSkin, getSkinId, setSkinId,
   getScale, setScale, getLife, setLife, getHidden, setHidden,
   hasReadNotice, markNoticeRead, forgetPosition,
@@ -95,6 +95,14 @@ function skinCards(){
       <span class="ps-skin-txt"><b>${esc(s.name)}</b><small>${esc(s.note || '')}</small></span>
       <span class="ps-tick" aria-hidden="true">✓</span>
     </button>`);
+  // 形象还没画好的角色占个位子，别让它点出个没反应的空按钮。
+  PENDING_SKINS.forEach(p => {
+    cards.push(`
+    <button type="button" class="ps-skin is-pending" disabled aria-disabled="true">
+      <span class="ps-skin-pic is-empty">?</span>
+      <span class="ps-skin-txt"><b>${esc(p.name)}</b><small>${esc(p.note || '')}</small></span>
+    </button>`);
+  });
   cards.push(`
     <button type="button" class="ps-skin${cur === 'custom' ? ' is-on' : ''}" data-skin="custom" role="radio" aria-checked="${cur === 'custom'}">
       <span class="ps-skin-pic${custom ? '' : ' is-empty'}">${custom ? `<img src="${esc(custom.atlas)}" alt="">` : '＋'}</span>

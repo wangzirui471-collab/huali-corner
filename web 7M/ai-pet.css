@@ -41,6 +41,53 @@
 .ai-pet-body:active,
 .ai-pet.is-dragging .ai-pet-body{ cursor: grabbing; filter: drop-shadow(0 18px 26px rgba(46, 34, 72, .30)); }
 .ai-pet-body:focus-visible{ outline: 3px solid #7f68af80; outline-offset: 4px; border-radius: 12px; }
+.ai-pet-body::before,
+.ai-pet-body::after{
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+}
+.ai-pet-body::before{ content: '✦'; top: 8%; right: 13%; color: #f0b429; font-size: 20px; }
+.ai-pet-body::after{ content: '♥'; top: 23%; left: 12%; color: #d78ca9; font-size: 16px; }
+.ai-pet.is-petted .ai-pet-body::before{ animation: pet-sparkle .9s ease-out both; }
+.ai-pet.is-petted .ai-pet-body::after{ animation: pet-sparkle .9s .12s ease-out both; }
+@keyframes pet-sparkle{
+  0%{ opacity: 0; transform: translateY(8px) scale(.5) rotate(-18deg); }
+  30%{ opacity: 1; }
+  100%{ opacity: 0; transform: translateY(-25px) scale(1.2) rotate(18deg); }
+}
+
+.ai-pet-reaction{
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: calc(100% - 5px);
+  padding: 7px 11px;
+  border: 1px solid #f3e5b3;
+  border-radius: 12px 12px 12px 4px;
+  background: #fffdf4;
+  box-shadow: 0 6px 18px rgba(46, 34, 72, .13);
+  color: #6c578d;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(-50%, 7px) scale(.92);
+  transform-origin: bottom center;
+}
+.ai-pet.is-petted .ai-pet-reaction{
+  visibility: visible;
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+  animation: pet-say .3s ease-out both;
+}
+@keyframes pet-say{
+  from{ opacity: 0; transform: translate(-50%, 7px) scale(.92); }
+  to{ opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
 
 .ai-pet-sprite{
   position: absolute;
@@ -205,6 +252,20 @@
 .ai-pet-avatar img{ width: 100%; height: 100%; object-fit: cover; }
 .ai-pet-head b{ display: block; font-size: 14px; color: #1a1a1a; }
 .ai-pet-head small{ display: block; margin-top: 2px; font-size: 11px; color: #8a8a93; }
+.ai-pet-pat{
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #fff7dc;
+  color: #7f68af;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.ai-pet-pat:hover{ background: #ffefbb; transform: scale(1.06); }
+.ai-pet-pat:focus-visible{ outline: 2px solid #7f68af; outline-offset: 2px; }
 /* 齿轮把「放大」推到右边：先占住 margin-left:auto，后者紧跟其后 */
 .ai-pet-gear{
   margin-left: auto;
@@ -366,6 +427,9 @@
 @media (prefers-reduced-motion: reduce){
   .ai-pet-sprite{ animation: none !important; }
   .ai-pet-body{ transition: none; }
+  .ai-pet-body::before,
+  .ai-pet-body::after{ animation: none !important; }
+  .ai-pet.is-petted .ai-pet-reaction{ animation: none; }
 }
 
 /* 回答里的跳转文字链接：客户看完规则可直接去对应页面执行。 */
@@ -709,3 +773,9 @@ button.ai-pet-link{ cursor: pointer; font-family: inherit; }
   .pn-body{ font-size: 12.5px; padding: 16px 18px 8px; }
   .pn-head{ padding: 16px 18px 13px; }
 }
+
+/* 形象还没画好的角色：占位但不可选，置灰而不是隐藏——
+   让人知道「有这么一只，只是还没做」，比凭空少一个位置清楚。 */
+.ps-skin.is-pending{ opacity: .62; cursor: not-allowed; background: #fbfbf9; }
+.ps-skin.is-pending:hover{ border-color: #eceee5; background: #fbfbf9; }
+.ps-skin.is-pending .ps-skin-pic{ color: #b9bfae; }

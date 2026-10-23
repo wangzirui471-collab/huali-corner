@@ -9,10 +9,12 @@
 // 自定义桌宠走另一条路：用户传一张图，只有一帧，配一个呼吸动效。
 
 export const SKINS = {
-  zhuan: {
-    id: 'zhuan',
-    name: '小转',
-    note: '转角原生 · 挥袖的书童',
+  // 女角色。图集沿用旧文件名（xiaozhuan-atlas），换名字只改这里，不动物理文件，
+  // 免得 CDN 上多一份重复的大图。
+  daqiao: {
+    id: 'daqiao',
+    name: '大乔',
+    note: '女角色 · 转角原生',
     avatar: '/assets/ai-pet/xiaozhuan-avatar.png',
     atlas: '/assets/ai-pet/xiaozhuan-atlas.webp',
     cell: [120, 147],
@@ -20,65 +22,47 @@ export const SKINS = {
     rows: 9,
     acts: {
       idle: { row: 0, n: 6, ms: 220 },
-      right: { row: 1, n: 8, ms: 90 },
-      left: { row: 2, n: 8, ms: 90 },
-      wave: { row: 3, n: 4, ms: 180, once: true },
-      jump: { row: 4, n: 5, ms: 140, once: true },
+      move: { row: 1, n: 8, ms: 90 },          // 向右
+      moveLeft: { row: 2, n: 8, ms: 90 },      // 向左（这段图集本来就有独立的一行）
+      greet: { row: 3, n: 4, ms: 180, once: true },
+      lie: { row: 6, n: 6, ms: 180 },
+      look: { row: 7, n: 6, ms: 170 },
       fail: { row: 5, n: 8, ms: 140, once: true },
-      waiting: { row: 6, n: 6, ms: 180 },
-      review: { row: 7, n: 6, ms: 170 },
       run: { row: 8, n: 6, ms: 130 },
     },
   },
-  daqiao: {
-    id: 'daqiao',
-    name: '大乔',
-    note: '褐绒毛团 · 爱哭也爱举手',
-    avatar: '/assets/ai-pet/daqiao-avatar.png',
-    atlas: '/assets/ai-pet/daqiao-atlas.webp',
-    // 图是 8 列 × 11 行，单帧 171×171（原图为 1288×1920，抠白底后按投影带重排）
-    cell: [171, 171],
-    cols: 8,
-    rows: 11,
-    acts: {
-      idle: { row: 10, n: 8, ms: 190 },   // 说话招手
-      right: { row: 9, n: 8, ms: 90 },    // 跑
-      left: { row: 9, n: 8, ms: 90, flip: true },
-      wave: { row: 2, n: 8, ms: 110, once: true },   // 举手
-      jump: { row: 3, n: 4, ms: 150, once: true },   // 吐舌蹦
-      fail: { row: 8, n: 6, ms: 160, once: true },   // 哭
-      waiting: { row: 5, n: 8, ms: 170 },            // 趴着
-      review: { row: 1, n: 8, ms: 150 },             // 拿笔翻资料
-      run: { row: 9, n: 8, ms: 90 },
-    },
-  },
+  // 褐绒毛团。11 行动作表，按原作者的分镜摆位：
+  //   0 捂鼻子摇手（移动）、9 抬头低头看（点一下）、5 摊平躺下（打字）、
+  //   4 站着小幅晃（待机）、6 举手、7 垮掉、10 左右张望
   xiaomao: {
     id: 'xiaomao',
     name: '小毛',
-    note: '同一只的暖色版 · 素材位先占着',
-    avatar: '/assets/ai-pet/daqiao-avatar.png',
-    atlas: '/assets/ai-pet/daqiao-atlas.webp',
+    note: '褐绒毛团 · 会当场躺平',
+    avatar: '/assets/ai-pet/xiaomao-avatar.png',
+    atlas: '/assets/ai-pet/xiaomao-atlas.webp',
     cell: [171, 171],
     cols: 8,
     rows: 11,
-    // 还没有独立素材，先用同一张图集调色区分；给图后把这行换成 atlas 即可
-    tint: 'sepia(.32) saturate(1.45) hue-rotate(-14deg) brightness(1.02)',
     acts: {
-      idle: { row: 10, n: 8, ms: 190 },
-      right: { row: 9, n: 8, ms: 90 },
-      left: { row: 9, n: 8, ms: 90, flip: true },
-      wave: { row: 2, n: 8, ms: 110, once: true },
-      jump: { row: 3, n: 4, ms: 150, once: true },
-      fail: { row: 8, n: 6, ms: 160, once: true },
-      waiting: { row: 5, n: 8, ms: 170 },
-      review: { row: 1, n: 8, ms: 150 },
-      run: { row: 9, n: 8, ms: 90 },
+      idle: { row: 4, n: 5, ms: 260 },
+      move: { row: 0, n: 7, ms: 110 },
+      look: { row: 9, n: 8, ms: 150 },
+      lie: { row: 5, n: 8, ms: 180 },
+      greet: { row: 6, n: 6, ms: 130, once: true },
+      fail: { row: 7, n: 6, ms: 150, once: true },
+      run: { row: 10, n: 8, ms: 120 },
     },
   },
 };
 
-export const SKIN_LIST = [SKINS.zhuan, SKINS.daqiao, SKINS.xiaomao];
-export const DEFAULT_SKIN = 'zhuan';
+// 还没画好形象的角色先占着位置：设置页里显示成灰色卡片，点了给一句提示。
+// 有了素材就在 SKINS 里加一条同 id 的记录，这里自然不再出现。
+export const PENDING_SKINS = [
+  { id: 'zhuan', name: '小转', note: '形象还在画，先选别的' },
+];
+
+export const SKIN_LIST = [SKINS.daqiao, SKINS.xiaomao];
+export const DEFAULT_SKIN = 'daqiao';
 
 const SKIN_KEY = 'hc-pet-skin';
 const CUSTOM_KEY = 'hc-pet-custom';
@@ -219,8 +203,27 @@ export function applySkinVars(el, skin, userScale){
   applySkinFrame(el.querySelector('.ai-pet-sprite'), skin, 'idle');
 }
 
-// left 方向在图集里没有单独一段时，用水平翻转凑。
-export function actHasFlip(skin, actName){
-  const act = skin && skin.acts[actName];
-  return !!(act && act.flip);
+// 状态名 → 动作名。桌宠的状态来自各处调用（拖动、点开面板、等接口、出错），
+// 但每只宠物的动作表不一样：小毛只有「捂鼻子摇手」一段能表达移动，
+// 大乔却分左右两段。这层映射放在皮肤系统里，调用方只管说自己在干什么。
+const STATE_TO_ACT = {
+  right: 'move',
+  left: 'moveLeft',
+  run: 'move',
+  review: 'lie',     // 等接口回来：躺下
+  waiting: 'lie',
+  typing: 'lie',     // 用户在打字：也躺下
+  wave: 'greet',
+  jump: 'greet',
+  point: 'look',     // 点一下桌宠：抬头看看你
+};
+
+export function resolveAct(skin, state){
+  if (!skin || !skin.acts) return { act: 'idle', flip: false };
+  const want = STATE_TO_ACT[state] || state;
+  if (skin.acts[want]) return { act: want, flip: !!skin.acts[want].flip };
+  // 图集里没有单独的「向左」，就把「向右」那段翻过来用。
+  if (want === 'moveLeft' && skin.acts.move) return { act: 'move', flip: true };
+  if (want === 'move' && skin.acts.moveLeft) return { act: 'moveLeft', flip: true };
+  return { act: skin.acts.idle ? 'idle' : 'idle', flip: false };
 }
