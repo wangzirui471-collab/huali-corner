@@ -2,6 +2,10 @@
 
 > 2026-10-23 新增。给 L1 所有者用的「平台工具台」：用一句话查全平台数据，或让 Agent
 > 选工具完成操作；不可逆动作必须二次确认。不是给普通客服/用户的功能。
+>
+> 本地与 Cloudflare D1 **同一套契约**（`/api/ai/work/*` 四个接口、同一份工具目录），
+> 数据层不同：本地 SQLite + HMAC 令牌；线上 D1 + `ai_office_jobs` 提案表。
+> 实现：本地 `app/support/work.py`，线上 `app/cloudflare/work_mode.py`。
 
 ## 1. 定位
 
@@ -49,9 +53,16 @@
 | `backup` | 写 | 打包数据库与上传文件到 `backups/` |
 | `notification_send` | 写 | 给指定账号发站内通知 |
 | `ai_settings` | 危险 | 开关 AI、调整每日额度 |
+| `demo_generate` | 读 | 按主题生成演示商品预览（不写库），确认后用 `demo_publish` 入库 |
 | `demo_publish` | 写 | 批量入库演示商品（virtual） |
 
-当前共 **36 个工具**（19 读 + 17 写）。新增工具只需在 `app/support/work.py` 的 `TOOLS` 注册，并实现 `READ` 或 `_execute` 分支。
+当前共 **37 个工具**（20 读 + 17 写）。新增工具只需在 `app/support/work.py` 与
+`app/cloudflare/work_mode.py` 的 `TOOLS` 注册，并实现 `READ` 或 `_execute` 分支
+（线上是 `_read_*` / `_work_plan_statements`）。两处目录保持一致，规划器才能
+在本地和线上给出同一套行为。
+
+差异说明：线上 `content_remove` 只支持 `post` / `message`（D1 评论表没有
+`removed` 列，移除评论请移除整帖或到管理台处理）；其余工具语义一致。
 
 ## 3. 接口
 
@@ -62,7 +73,8 @@
 | `/api/ai/work/call` | POST | `{tool,args,token?}`：直接调工具；写工具不带 token 返回 proposal |
 | `/api/ai/work/confirm` | POST | `{token}`：执行已确认的写操作 |
 
-所有接口都走 `SupportService` 的 owner 校验；写操作执行后写 `ai_office_*` / `ai_work_*` 审计。
+所有接口都走 owner 校验（本地 `SupportService.is_owner`，线上 `cf_staff_actor`）；
+写操作执行后写 `ai_office_*` / `ai_work_*` 审计。
 
 ## 4. Agent 流程
 
@@ -81,6 +93,10 @@
 示例：「把卖假货的商品全部下架」
 `products(q=假货)` → 看到候选 → `product_bulk_moderate(q=假货, action=delist)` → 确认卡。
 
+示例：「发布 3 件宿舍好物演示商品」
+`demo_generate(prompt=宿舍好物, count=3)` → 预览（不写库）→ `demo_publish` → 确认卡 → 入库。
+预览项由后端从上一步结果直接传入，不经模型转抄（模型抄不动 5 件商品的结构化字段）。
+
 规划器提示词要求「待办→tickets、订单→orders、用户→users、商品→products」，
 只有宽泛的“平台怎么样”才选 overview。
 
@@ -97,18 +113,27 @@
 
 - 默认手机号打码；查看全号需要 `reveal=true`，并写 `pii_view` 审计。
 - 工具参数/结果不写进模型上下文（读工具由代码直接拼答案）；只有规划阶段把**问题**和**工具目录**发给模型，不发业务数据。
-- 写工具永不自动执行；token 与 owner 绑定、10 分钟过期、HMAC 防篡改。
-- 当前工作模式只做**单步工具**；多步任务（先搜商品再下架）需要分两次对话，或后续加多步规划。
-- 线上 Cloudflare 目前只有「办公」接口；工作模式先落本地，D1 版工具需要另行移植。
+- 写工具永不自动执行；本地 token 与 owner 绑定、10 分钟过期、HMAC 防篡改；
+  线上提案写 `ai_office_jobs`（随机作业号、绑定 actor、10 分钟过期），确认时
+  在**同一个 D1 batch** 里复查 owner 身份、作业状态与参数，再执行业务写入。
+- 「生成预览 → 确认入库」：`demo_generate` 只出预览（不写库），预览项由后端
+  直接传给 `demo_publish`，不经模型转抄；owner 点确认后才批量入库。
+- 线上已部署：Cloudflare 与本地同一套接口；规划器用 `HC_AI_MODEL_OWNER`
+  指定更强模型，未配 `HC_AI_API_KEY` 时自动退回关键词规则路由。
 
 ## 7. 测试
 
 ```powershell
-cd E:\zi\huali-corner-trial\tests
-..\.venv-trial\Scripts\python.exe -m unittest test_owner_office test_work_mode -v
-..\.venv-trial\Scripts\python.exe eval_work_agent.py
+cd E:\zi\huali-corner-trial
+# 本地（SQLite）
+.venv-trial\Scripts\python.exe -m unittest tests.test_work_mode tests.test_owner_office -v
+# 线上同构（内存 D1）
+.venv-trial\Scripts\python.exe -m unittest tests.test_cloudflare_work_mode -v
+# 评测集（golden set）
+.venv-trial\Scripts\python.exe tests\eval_work_agent.py
 ```
 
 覆盖：工具目录、概览/用户/工单/趋势/会话/治理/信誉/账本查询、写操作 proposal→confirm、
-owner 保护、非 owner 403、无效 token、Agent 动作路由、封禁与注销语义区分、
-多步「查询→批量下架」、批量操作不落库。评测集 8/8。
+owner 保护、非 owner 403、无效/过期/他人 token、Agent 动作路由、封禁与注销语义区分、
+多步「查询→批量下架」、批量操作不落库、「生成预览→确认入库」闭环。
+评测集 9/9；线上同构测试 25 项。

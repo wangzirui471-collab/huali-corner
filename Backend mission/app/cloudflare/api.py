@@ -47,13 +47,14 @@ from .catalog_api import CatalogApi, CATALOG_ROUTES
 from .community_api import CommunityApi, COMMUNITY_ROUTES
 from .staff_api import StaffApi, STAFF_ROUTES
 from .ai_support import AiSupport, AI_ROUTES
+from .work_mode import WorkMode, WORK_ROUTES
 from .auth_api import AuthApi, AUTH_ROUTES
 from .friend_api import FriendApi, FRIEND_ROUTES
 from ..core.config import COLLEGES, GRADES
 from ..core.recommend import recommend_order
 
 
-class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, AiSupport, CloudRules, ReadPages):
+class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, AiSupport, WorkMode, CloudRules, ReadPages):
     def __init__(self, env):
         self.env = env
         self.db = Database(env.DB)
@@ -667,5 +668,6 @@ ROUTES.update(CATALOG_ROUTES)
 ROUTES.update(COMMUNITY_ROUTES)
 ROUTES.update(STAFF_ROUTES)
 ROUTES.update(AI_ROUTES)
+ROUTES.update(WORK_ROUTES)
 ROUTES.update(AUTH_ROUTES)
 ROUTES.update(FRIEND_ROUTES)

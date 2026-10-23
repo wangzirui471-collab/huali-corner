@@ -516,8 +516,12 @@ class StaffApi:
             writer.writerow([safe(r.get(k)) for k in ('id', 'created', 'actor', 'actor_name', 'type', 'target', 'delta', 'reason', 'ticket_id')])
         return Response(('\ufeff'+stream.getvalue()).encode('utf-8'), headers={'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'private, no-store', 'Content-Disposition': 'attachment; filename="audit.csv"', 'X-Content-Type-Options': 'nosniff'})
 
-    async def cf_staff_backup(self, request):
-        uid, _ = await self.cf_staff_actor(request, admin=True)
+    async def cf_staff_backup_archive(self, uid):
+        """打包数据库与媒体为 zip 字节；返回 (payload, manifest, media_count)。
+
+        管理台下载与工作模式备份共用同一份打包逻辑：表清单、行数/体积上限、
+        清单校验规则只有一处，不会出现「下载的备份和一句话生成的备份不一样」。
+        """
         import zipfile
         # Only project tables, all read inside one D1 batch snapshot. Hard bounds fail explicitly.
         tables = BACKUP_TABLES
@@ -548,11 +552,18 @@ class StaffApi:
                 payload, _ = await self.media_store.read(key); total += len(payload)
                 require(total <= 32*1024*1024, '媒体超过在线备份上限，请用 Cloudflare R2 导出工具', 413)
                 archive.writestr('r2/'+key, payload); checksums['r2/'+key] = hashlib.sha256(payload).hexdigest()
-            archive.writestr('manifest.json', json.dumps({'format': 'huali-d1-r2-v1', 'created': time.time(), 'tables': tables, 'media': media, 'sha256': checksums, 'simulation': True}, ensure_ascii=False))
+            manifest = {'format': 'huali-d1-r2-v1', 'created': time.time(), 'tables': tables,
+                        'media': media, 'sha256': checksums, 'simulation': True}
+            archive.writestr('manifest.json', json.dumps(manifest, ensure_ascii=False))
             archive.writestr('RESTORE.txt', 'Keep this archive private: it contains account credentials and private media.\nStop writes before restoring. Import database.sql into an EMPTY D1 database. Upload every file under r2/ to a PRIVATE R2 bucket using the same relative object key (media/...). Bind DB and MEDIA to that restored database/bucket. Verify manifest SHA-256 checksums before restore and reconcile orders afterwards. This is one D1 snapshot plus its immutable content-addressed referenced R2 objects; unreferenced R2 objects are omitted. Never enable public R2 access. Existing sessions are included; revoke them after recovery if appropriate.\n')
         # Media are immutable content-addressed keys. Missing any referenced object raises, never success.
-        await self.cf_staff_commit(uid, 'SELECT 1', (), [self.cf_staff_audit(uid, 'backup', f'下载私密D1/R2备份（{len(media)}个媒体）')], ('admin', 'developer'))
-        return Response(buffer.getvalue(), headers={'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="huali-d1-r2-backup.zip"', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff'})
+        return buffer.getvalue(), manifest, len(media)
+
+    async def cf_staff_backup(self, request):
+        uid, _ = await self.cf_staff_actor(request, admin=True)
+        payload, manifest, media = await self.cf_staff_backup_archive(uid)
+        await self.cf_staff_commit(uid, 'SELECT 1', (), [self.cf_staff_audit(uid, 'backup', f'下载私密D1/R2备份（{media}个媒体）')], ('admin', 'developer'))
+        return Response(payload, headers={'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="huali-d1-r2-backup.zip"', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff'})
 
 
 STAFF_ROUTES = {

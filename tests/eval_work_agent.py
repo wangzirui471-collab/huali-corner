@@ -26,6 +26,10 @@ CASES = [
      'expect': 'product_bulk_moderate', 'proposal': True},
     {'q': '封禁 小陈同学', 'plan': None, 'expect': 'user_ban', 'proposal': True},
     {'q': '把小陈同学降为客服', 'plan': None, 'expect': 'user_role', 'proposal': True},
+    {'q': '发布 3 件宿舍好物演示商品',
+     'plan': [{'tool': 'demo_generate', 'args': {'prompt': '宿舍好物', 'count': 3}},
+              {'tool': 'demo_publish', 'args': {}}],
+     'expect': 'demo_publish', 'proposal': True},
 ]
 
 

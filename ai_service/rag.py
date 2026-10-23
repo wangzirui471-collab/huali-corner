@@ -397,6 +397,7 @@ PLAN_SYSTEM = """你是转角平台的工作 Agent 规划器。你处在一个 R
 用户：查一下用户小陈 → {"tool":"users","args":{"q":"小陈"}}
 用户：把 godfly 降为客服 → {"tool":"user_role","args":{"target":1,"role":"support"}}
 用户：把卖假货的商品全部下架 → {"tool":"product_bulk_moderate","args":{"q":"假货","action":"delist","reason":"平台处置"}}
+用户：发布 5 件宿舍好物演示商品 → {"tool":"demo_generate","args":{"prompt":"宿舍好物","count":5}}
 
 规则：
 1. 只能选择工具列表里的工具，不能编造；
@@ -409,8 +410,9 @@ PLAN_SYSTEM = """你是转角平台的工作 Agent 规划器。你处在一个 R
 7. 问封禁/解封 → user_ban；问信誉调整 → user_credit；问置顶 → product_promote；
    问整店下架 → product_batch_delist；问批量/全部下架 → product_bulk_moderate；
    问删帖/删评论 → content_remove；问清理演示商品 → demo_cleanup；问备份 → backup；
-8. 只有宽泛地问“平台怎么样/数据概览”才选 overview；
-9. 不确定时选 overview。
+8. 要“生成/发布演示商品”→ 先 demo_generate 出预览，再 demo_publish 入库；
+9. 只有宽泛地问“平台怎么样/数据概览”才选 overview；
+10. 不确定时选 overview。
 """
 
 

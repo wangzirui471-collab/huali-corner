@@ -235,6 +235,7 @@ export async function mine(){
       ${tile('forum','community','校园论坛',0,'','',false)}
       ${tile('profile/'+state.me.id,'user','公开主页',0)}
       ${state.config.trial?tile('','shield','账号与安全',0,'data-action="change-password"'):''}
+      ${tile('','ai','桌宠设置',0,'data-action="pet-settings"')}
       ${tile('support','message','帮助与客服',0)}
       ${tile('credit','chart','信誉与申诉',0)}
       ${tile('','close','退出登录',0,'data-action="logout"','danger')}

@@ -8,6 +8,7 @@ import { api } from '../core/http.js';
 import { modal } from '../core/shell.js';
 import { userAvatar } from '../components/user-avatar.js';
 import { userProfileSummary, userProfileComparison, userProfileValues } from '../components/user-profile.js';
+import { openPetSettings } from '../components/pet-settings.js';
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const AVATAR_ID = /^ua_[0-9a-f]{32}$/;
@@ -347,6 +348,9 @@ function securityModal(){
 export const clicks = {
   'uc-scroll':scrollToSection,
   'uc-security':securityModal,
+  // 桌宠设置挂在「我的」页：桌宠被关掉之后，对话面板就点不到了，
+  // 这条入口是把它找回来的唯一路径。
+  'pet-settings':()=>openPetSettings('pet'),
   'user-profile-compare':compareProfile,
   'user-profile-keep-input':keepInputs,
   'user-profile-reset':resetProfile,
