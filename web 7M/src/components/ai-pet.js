@@ -10,6 +10,7 @@
 
 import { $ } from '../core/dom.js';
 import { state } from '../core/state.js';
+import { isOwner } from '../core/roles.js';
 
 const SPRITE_W = 120;          // 单帧宽（与 ai-pet.css 里的 --pet-cell-w 一致）
 const SPRITE_H = 147;
@@ -70,6 +71,15 @@ export function aiPet(){
       <button type="button" data-action="ai-pet-chip" data-q="客服什么时候在线？">客服时间</button>
       <button type="button" data-action="ai-pet-chip" data-q="怎么注销账号？">注销账号</button>
     </div>
+    ${isOwner(state.me) ? `<div class="ai-pet-mode" aria-label="对话模式">
+      <button type="button" data-action="ai-pet-mode" data-mode="chat" class="active">客服问答</button>
+      <button type="button" data-action="ai-pet-mode" data-mode="office">办公</button>
+    </div>
+    <div class="ai-pet-chips ai-pet-office" aria-label="所有者办公">
+      <button type="button" data-action="ai-office" data-q="平台数据概览">数据概览</button>
+      <button type="button" data-action="ai-office" data-q="今天有哪些待处理工单？">待处理工单</button>
+      <button type="button" data-action="ai-office" data-mode="draft" data-q="写一条面向同学的客服公告，说明本周六晚系统维护、期间下单可能延迟。">写公告</button>
+    </div>` : ''}
     <form id="ai-pet-form" class="ai-pet-form">
       <label class="ai-pet-sr" for="ai-pet-q">输入问题</label>
       <textarea id="ai-pet-q" name="q" maxlength="300" rows="1" placeholder="问问小转，例如：怎么发布？" required></textarea>

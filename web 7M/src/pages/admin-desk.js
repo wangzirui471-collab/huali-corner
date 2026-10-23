@@ -237,8 +237,8 @@ function peopleSection({ staff, scope = 'staff', q = '' }) {
   const all = scope === 'all';
   const disabled = staff.filter(a => a.status === 'disabled').length;
   const roleChips = all
-    ? [['user', '普通用户'], ['support', '客服'], ['admin', '管理员'], ['developer', '开发者'], ['banned', '已封禁'], ['deleted', '已清除']]
-    : [['developer', '开发者'], ['admin', '管理员'], ['support', '客服'], ['disabled', '已停用']];
+    ? [['user', '普通用户'], ['support', '客服'], ['admin', '管理员'], ['developer', '开发者'], ['owner', '所有者'], ['banned', '已封禁'], ['deleted', '已清除']]
+    : [['owner', '所有者'], ['developer', '开发者'], ['admin', '管理员'], ['support', '客服'], ['disabled', '已停用']];
   return `<section class="panel desk-panel">
     ${panelHead(all ? '全部注册账号' : '运营账号',
       all

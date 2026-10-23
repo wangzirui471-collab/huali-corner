@@ -25,6 +25,8 @@ function petAppend(html, who='bot'){
 
 // 最近几轮对话：只用于让 AI 理解追问（例如「那退款呢」），不落库。
 let petHistory = [];
+// 所有者面板的「客服问答 / 办公」模式；普通用户固定走客服问答。
+let petMode = 'chat';
 
 async function petAsk(q){
   const text=String(q||'').trim();
@@ -76,6 +78,27 @@ async function petAsk(q){
   }finally{
     if(send) send.disabled=false;
     log.scrollTop=log.scrollHeight;
+  }
+}
+
+
+// 所有者办公：查询/起草直接答；账号动作返回 proposal，等 L1 二次确认后执行。
+async function petOffice(q, mode){
+  const text=String(q||'').trim();
+  const log=$('#ai-pet-log'); if(!text||!log) return;
+  petAppend(petText(text),'user');
+  const wait=petAppend('<span class="ai-pet-typing">正在查平台数据…</span>','bot');
+  setPetState('review');
+  try{
+    const r=await api('/ai/office',{question:text,mode:mode||'query'});
+    const p=r.proposal;
+    wait.innerHTML=`<div>${petText(r.answer)}</div>
+      ${p?`<div class="ai-pet-action"><b>待执行</b><p>${e(p.summary)}</p><p class="muted">不可逆操作，需要你再次确认。</p><button type="button" class="btn primary" data-action="ai-office-confirm" data-kind="${e(p.kind)}" data-target="${p.target}" data-role="${e(p.role||'')}" data-name="${e(p.nickname)}">确认执行</button></div>`:''}
+      ${r.mode==='mock'?'<div class="ai-pet-src">模型暂不可用，以上为数据快照</div>':''}`;
+    setPetState('idle');
+  }catch(err){
+    wait.innerHTML=`<div>${petText(err.message||'办公助手暂时不可用')}</div>`;
+    setPetState('fail',1600);
   }
 }
 
@@ -250,6 +273,25 @@ export const clicks = {
   },
   'ai-pet-toggle': () => togglePetPanel(),
   'ai-pet-chip': b => petAsk(b.dataset.q),
+  'ai-office': b => { petMode = 'office'; petOffice(b.dataset.q, b.dataset.mode || 'query'); },
+  'ai-pet-mode': b => {
+    petMode = b.dataset.mode === 'office' ? 'office' : 'chat';
+    document.querySelectorAll('.ai-pet-mode button').forEach(x => x.classList.toggle('active', x.dataset.mode === petMode));
+    const area = $('#ai-pet-q');
+    if (area) area.placeholder = petMode === 'office' ? '问平台数据，或说「把某某降为管理员」…' : '问问小转，例如：怎么发布？';
+  },
+  // 不可逆动作：L1 在浏览器里再确认一次，确认后才调用执行端点（后端仍校验身份并写审计）。
+  'ai-office-confirm': async b => {
+    const kind=b.dataset.kind, target=Number(b.dataset.target), role=b.dataset.role||'', name=b.dataset.name||'该账号';
+    const verb = kind==='disable' ? '注销' : kind==='revoke' ? '强制下线' : '调整角色';
+    if (!window.confirm(`再次确认：${verb}「${name}」？\n此操作会撤销其登录会话，不可逆。`)) return;
+    b.disabled=true; b.textContent='执行中…';
+    try{
+      const r=await api('/ai/office/confirm',{kind,target,role});
+      toast(r.message||'已执行');
+      b.textContent='已执行';
+    }catch(err){ toast(err.message||'执行失败'); b.disabled=false; b.textContent='确认执行'; }
+  },
   // 小转给了「去首页搜索」：把关键词塞进搜索框并跳到首页。
   'pet-search': b => {
     const q=b.dataset.q||'';
@@ -318,5 +360,5 @@ export const submits = {
     toast(delta !== null ? '信誉变动已审计记录' : `已按价格计算并扣分（现信誉 ${r.score}/100）`);
     await render();
   },
-  'ai-pet-form': async ({d}) => { await petAsk(d.q); },
+  'ai-pet-form': async ({d}) => { await (petMode === 'office' ? petOffice(d.q) : petAsk(d.q)); },
 };

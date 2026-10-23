@@ -185,6 +185,14 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ai.links_for('怎么注销账号')[0]['href'], '#me')
         self.assertEqual(ai.links_for('客服什么时候在线、怎么找人工')[0]['href'], '#support')
 
+    def test_office_action_parsing(self):
+        # 只解析动作，不执行；执行由 L1 二次确认后走 /ai/office/confirm
+        self.assertEqual(ai.office_action('把张三降为管理员'), {'kind': 'role', 'role': 'admin'})
+        self.assertEqual(ai.office_action('注销李四的账号'), {'kind': 'disable', 'role': None})
+        self.assertEqual(ai.office_action('强制王五下线'), {'kind': 'revoke', 'role': None})
+        self.assertIsNone(ai.office_action('平台数据概览'))
+        self.assertIsNone(ai.office_action('写一条客服公告'))
+
     def test_publish_helpers(self):
         # 估价 JSON：模型回「元」，解析层只负责校验与截断
         self.assertEqual(ai.parse_price_json('{"low": 30, "high": 45, "reason": "成色一般"}'),

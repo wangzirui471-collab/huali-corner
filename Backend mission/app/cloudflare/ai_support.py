@@ -1104,6 +1104,41 @@ OFFICE_QUERY_SYSTEM = """你是「转角」平台的所有者办公助手。只�
 OFFICE_DRAFT_SYSTEM = """你是「转角」平台的所有者办公助手，负责起草客服文案。
 要求：中文、简短、礼貌；不承诺赔偿或时效；不写手机号等隐私；只输出文案本身，不要解释。"""
 
+# 办公动作：AI 只负责解析 + 准备，真正执行由 L1 在界面上二次确认后调用
+# /api/ai/office/confirm（后端仍会再校验一次所有者身份并写审计）。
+OFFICE_ACTIONS = {
+    'disable': ('注销', '停用', '禁用', '封禁', '开除'),
+    'revoke': ('强制下线', '踢下线', '下线'),
+    'role': ('降为', '改为', '设为', '升为', '任命', '调为', '转成'),
+}
+OFFICE_ROLE_WORDS = (
+    ('普通用户', 'user'), ('用户', 'user'), ('客服', 'support'),
+    ('管理员', 'admin'), ('开发者', 'developer'),
+)
+ROLE_LABELS = {'user': '普通用户', 'support': '客服', 'admin': '管理员',
+               'developer': '开发者', 'owner': '平台所有者'}
+
+
+def office_action(question):
+    """解析所有者话里的动作意图；只解析，不执行。"""
+    q = str(question or '').strip()
+    kind = None
+    for k, words in OFFICE_ACTIONS.items():
+        if any(w in q for w in words):
+            kind = k
+            break
+    if not kind:
+        return None
+    role = None
+    if kind == 'role':
+        for word, val in OFFICE_ROLE_WORDS:
+            if word in q:
+                role = val
+                break
+        if not role:
+            return None
+    return {'kind': kind, 'role': role}
+
 
 def build_office_prompt(stats, question):
     return ('【平台数据】\n工单：总数 %s，待处理 %s，处理中 %s\n'
@@ -1307,13 +1342,47 @@ class AiSupport:
             'audit': '；'.join('%s %s' % (a['type'], a['reason']) for a in audit) or '无',
         }
 
+    async def _office_targets(self, question):
+        rows = await self.db.all(
+            "SELECT id,nickname,role,status FROM users "
+            "WHERE role IN ('support','admin','developer','owner')")
+        hits = [r for r in rows if r['nickname'] and str(r['nickname']) in question]
+        hits.sort(key=lambda r: len(str(r['nickname'])), reverse=True)
+        return hits
+
     async def ai_office(self, request):
-        """所有者办公助手：查询/起草；不可逆操作只给建议，不在这里执行。"""
+        """所有者办公助手：查询/起草直接答；账号动作只准备，等 L1 二次确认。"""
         uid, role = await self.cf_staff_actor(request)
         require(role == 'owner', '仅平台所有者可使用办公助手', 403)
         d = await json_body(request)
         question = ValidationMixin.text(d.get('question'), 300, '问题')
         mode = 'draft' if d.get('mode') == 'draft' else 'query'
+
+        act = office_action(question)
+        if act:
+            hits = await self._office_targets(question)
+            if not hits:
+                return json_response({'answer': '没找到对应的运营账号。请说完整昵称，或到管理台操作。',
+                                      'proposal': None, 'mode': 'rule', 'stats': None})
+            target = hits[0]
+            if target['role'] == 'owner':
+                return json_response({'answer': '所有者账号不能通过助手调整，只能由运维在数据库处理。',
+                                      'proposal': None, 'mode': 'rule', 'stats': None})
+            if act['kind'] == 'role':
+                summary = '把「%s」从%s调整为%s，并撤销其登录会话' % (
+                    target['nickname'], ROLE_LABELS.get(target['role'], target['role']),
+                    ROLE_LABELS.get(act['role'], act['role']))
+            elif act['kind'] == 'disable':
+                summary = '注销「%s」的账号，并撤销其所有登录会话' % target['nickname']
+            else:
+                summary = '强制「%s」下线（撤销其所有登录会话）' % target['nickname']
+            return json_response({
+                'answer': '找到「%s」。这是不可逆操作，请再次确认：%s。' % (target['nickname'], summary),
+                'proposal': {'kind': act['kind'], 'target': target['id'],
+                             'nickname': target['nickname'], 'role': act.get('role'),
+                             'summary': summary},
+                'mode': 'rule', 'stats': None})
+
         await self.ai_quota(uid, role)
         stats = await self._office_stats()
         # 所有者可用更强的模型：HC_AI_MODEL_OWNER 未配置时回退到默认模型。
@@ -1332,6 +1401,37 @@ class AiSupport:
             await self.ai_count(uid)
         return json_response({'answer': text, 'mode': 'llm' if ok else 'mock',
                               'stats': stats, 'draft': mode == 'draft'})
+
+    async def ai_office_confirm(self, request):
+        """L1 二次确认后执行办公动作；仍校验所有者身份并写审计。"""
+        uid, role = await self.cf_staff_actor(request)
+        require(role == 'owner', '仅平台所有者可执行', 403)
+        d = await json_body(request)
+        kind = str(d.get('kind') or '')
+        target = int(d.get('target') or 0)
+        new_role = str(d.get('role') or '')
+        require(kind in ('role', 'disable', 'revoke'), '未知操作')
+        t = await self.db.first('SELECT id,nickname,role,status FROM users WHERE id=?', (target,))
+        require(t, '账号不存在', 404)
+        require(t['role'] != 'owner', '所有者账号不能通过助手调整', 403)
+        require(target != uid, '不能对自己执行此操作', 403)
+        if kind == 'role':
+            require(new_role in ('user', 'support', 'admin', 'developer'), '目标角色无效')
+            require(t['role'] != new_role, '角色没有变化')
+            await self.db.run('UPDATE users SET role=? WHERE id=?', (new_role, target))
+            await self.db.run('DELETE FROM sessions WHERE user_id=?', (target,))
+            msg = '已将「%s」调整为%s' % (t['nickname'], ROLE_LABELS.get(new_role, new_role))
+        elif kind == 'disable':
+            await self.db.run("UPDATE users SET status='disabled' WHERE id=?", (target,))
+            await self.db.run('DELETE FROM sessions WHERE user_id=?', (target,))
+            msg = '已注销「%s」并撤销其所有会话' % t['nickname']
+        else:
+            await self.db.run('DELETE FROM sessions WHERE user_id=?', (target,))
+            msg = '已强制「%s」下线' % t['nickname']
+        await self.db.run(
+            'INSERT INTO audit(actor,target,type,delta,reason,ticket_id,created) VALUES(?,?,?,?,?,?,?)',
+            (uid, target, 'ai_office_' + kind, None, msg, None, time.time()))
+        return json_response({'ok': True, 'message': msg})
 
     async def ai_admin_get(self, request):
         uid, _ = await self.cf_staff_actor(request, admin=True)
@@ -1383,6 +1483,7 @@ AI_ROUTES = {
     '/api/ai/describe': (('POST',), 'ai_describe'),
     '/api/ai/price': (('POST',), 'ai_price'),
     '/api/ai/office': (('POST',), 'ai_office'),
+    '/api/ai/office/confirm': (('POST',), 'ai_office_confirm'),
     '/api/admin/ai': (('GET', 'POST'), 'ai_admin'),
     '/api/admin/ai/reload': (('POST',), 'ai_reload'),
 }
