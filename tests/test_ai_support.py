@@ -207,6 +207,13 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
              'condition': '正常使用痕迹', 'description': '暖光'}])
         self.assertEqual(cleaned[0]['price'], 2500)
 
+    def test_demo_photo_mapping(self):
+        # 演示商品只用项目自带的授权图，按分类轮换
+        self.assertEqual(ai.demo_photo_for('books', 0), '/assets/book0.svg')
+        self.assertEqual(ai.demo_photo_for('books', 6), '/assets/book0.svg')
+        self.assertEqual(ai.demo_photo_for('electronics', 4), '/assets/item1.svg')
+        self.assertEqual(ai.demo_photo_for('unknown', 0), '/assets/book3.svg')
+
     def test_publish_helpers(self):
         # 估价 JSON：模型回「元」，解析层只负责校验与截断
         self.assertEqual(ai.parse_price_json('{"low": 30, "high": 45, "reason": "成色一般"}'),

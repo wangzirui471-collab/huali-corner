@@ -1130,6 +1130,21 @@ PRODUCT_SYSTEM = """你是「转角」校园二手平台的演示数据生成器
 PRODUCT_CATEGORIES = ('books', 'electronics', 'living', 'sports')
 PRODUCT_CONDITIONS = ('近乎全新', '正常使用痕迹', '明显磨损，已说明')
 
+# 演示商品配图：只用项目自带、已登记授权的演示图（book0-5 / item0-2）。
+# 不去网上抓图——版权与署名不可控，而且会把第三方内容带进商品列表。
+DEMO_PHOTOS = {
+    'books': ['/assets/book0.svg', '/assets/book1.svg', '/assets/book2.svg',
+              '/assets/book3.svg', '/assets/book4.svg', '/assets/book5.svg'],
+    'electronics': ['/assets/item0.svg', '/assets/item1.svg', '/assets/item2.svg'],
+    'living': ['/assets/book3.svg', '/assets/book4.svg', '/assets/book5.svg'],
+    'sports': ['/assets/item0.svg', '/assets/item1.svg', '/assets/item2.svg'],
+}
+
+
+def demo_photo_for(category, index=0):
+    pool = DEMO_PHOTOS.get(category) or DEMO_PHOTOS['living']
+    return pool[index % len(pool)]
+
 
 def _clean_product(row, price_in_cents=False):
     if not isinstance(row, dict):
@@ -1521,6 +1536,8 @@ class AiSupport:
             items = parse_products_json(raw)
         except Exception:  # noqa: BLE001 - 生成失败不写库
             items = []
+        for idx, item in enumerate(items):
+            item['photo'] = demo_photo_for(item['category'], idx)
         if items:
             await self.ai_count(uid)
         return json_response({'items': items, 'mode': 'llm' if items else 'mock'})
@@ -1534,11 +1551,12 @@ class AiSupport:
         require(items, '商品数据不合法')
         now = time.time()
         ids = []
-        for item in items:
+        for idx, item in enumerate(items):
             pid = secrets.randbits(48)
             ids.append(pid)
             data = {'description': item['description'], 'condition': item['condition'],
-                    'virtual': True, 'photos': []}
+                    'virtual': True,
+                    'photos': [{'url': demo_photo_for(item['category'], idx), 'angle': 'front'}]}
             await self.db.run(
                 'INSERT INTO products(id,seller_id,title,category,price,delivery_fee,delivery,'
                 'region,status,data,created) VALUES(?,?,?,?,?,?,?,?,?,?,?)',

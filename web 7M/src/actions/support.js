@@ -310,7 +310,7 @@ export const clicks = {
         setPetState('fail',1600);
         return;
       }
-      const rows = pendingProducts.map((p,i)=>`<div class="ai-pet-prod" style="cursor:default"><span class="ai-pet-prod-txt"><b>${i+1}. ${e(p.title)}</b><small>¥${money(p.price)} · ${e(p.condition)}</small></span></div>`).join('');
+      const rows = pendingProducts.map((p,i)=>`<div class="ai-pet-prod" style="cursor:default"><span class="ai-pet-prod-img" style="background-image:url('${e(p.photo||'')}')"></span><span class="ai-pet-prod-txt"><b>${i+1}. ${e(p.title)}</b><small>¥${money(p.price)} · ${e(p.condition)}</small></span></div>`).join('');
       wait.innerHTML = `<div>已生成 ${pendingProducts.length} 件预览（尚未入库）：</div>
         <div class="ai-pet-prods">${rows}</div>
         <div class="ai-pet-action"><b>确认入库</b><p>会以你的账号发布为演示商品（标记 virtual），出现在首页。</p><button type="button" class="btn primary" data-action="ai-office-publish">确认入库（${pendingProducts.length} 件）</button></div>`;
