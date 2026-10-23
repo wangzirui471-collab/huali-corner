@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import cloudflare_test_support  # noqa: F401 - 设置 sys.path 并桩掉 workers
 
 import app.cloudflare.ai_support as ai
+import app.cloudflare.office_data as office
 
 
 class AiSupportTests(unittest.IsolatedAsyncioTestCase):
@@ -518,3 +519,120 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         rows = await ai.buy_search(db, '二手显示器')
         self.assertEqual(rows[0]['title'], '小米显示器 24 寸')
 
+
+
+class OfficeDataTests(unittest.IsolatedAsyncioTestCase):
+    """办公助手的数据查询层：只读、确定性、手机号打码。"""
+
+    def _db(self):
+        import sqlite3
+        import time
+        from cloudflare_test_support import Binding
+        from app.cloudflare.d1 import Database
+        conn = sqlite3.connect(':memory:')
+        conn.row_factory = sqlite3.Row
+        root = Path(cloudflare_test_support.__file__).resolve().parents[1]
+        conn.executescript((root / 'Backend mission/app/cloudflare/schema.sql').read_text(encoding='utf-8'))
+        self.addCleanup(conn.close)
+        now = time.time()
+        today = office.day_start(0) + 3600
+        conn.executemany(
+            'INSERT INTO users(id,phone,nickname,role,status,score,college,grade,last_login) '
+            'VALUES(?,?,?,?,?,?,?,?,?)',
+            [(1, '13800000001', '张三', 'owner', 'active', 100, '计算机工程学院', '2024级', now - 60),
+             (2, '13800000002', '李四', 'admin', 'active', 96, '计算机工程学院', '2023级', now - 3600),
+             (3, '13800000003', '王五', 'user', 'active', 100, '计算机工程学院', '2024级', now - 7200),
+             (4, '13800000004', '赵六', 'user', 'banned', 40, '计算机工程学院', '2022级', 0)])
+        conn.executemany(
+            'INSERT INTO products(id,seller_id,title,category,price,status,data,created) '
+            'VALUES(?,?,?,?,?,?,?,?)',
+            [(1, 3, '青轴机械键盘', 'electronics', 19900, 'available', '{}', today),
+             (2, 2, '护眼台灯', 'living', 4900, 'removed', '{}', now - 86400 * 3)])
+        conn.executemany(
+            'INSERT INTO orders(id,buyer_id,seller_id,items,subtotal,delivery_fee,total,status,created) '
+            'VALUES(?,?,?,?,?,?,?,?,?)',
+            [(1, 3, 2, '[]', 19900, 0, 19900, 'paid', today),
+             (2, 4, 3, '[]', 4900, 0, 4900, 'completed', now - 86400 * 10)])
+        conn.execute('INSERT INTO tickets(id,user_id,type,subject,status,created) '
+                     "VALUES(1,3,'refund','退款申请','open',?)", (now - 600,))
+        conn.execute('INSERT INTO audit(id,actor,target,type,reason,created) '
+                     "VALUES(1,1,2,'staff_role','把李四调整为管理员',?)", (now - 120,))
+        conn.execute('INSERT INTO wants(id,user_id,keyword,budget,status,created) '
+                     "VALUES(1,3,'机械键盘',20000,'open',?)", (now - 900,))
+        return Database(Binding(conn))
+
+    async def test_users_list_masks_phone_and_keeps_counts(self):
+        r = await ai.office_lookup(self._db(), '把所有用户列出来')
+        self.assertIn('共 4 个账号', r['answer'])
+        self.assertIn('张三', r['answer'])
+        self.assertIn('138****0001', r['answer'])
+        self.assertNotIn('13800000001', r['answer'])   # 完整手机号不出现在答案里
+        self.assertEqual(len(r['items']), 4)
+
+    async def test_users_filter_by_role(self):
+        r = await ai.office_lookup(self._db(), '列出管理员')
+        self.assertIn('共 1 个账号', r['answer'])
+        self.assertIn('李四', r['answer'])
+        self.assertNotIn('王五', r['answer'])
+
+    async def test_user_count_only_does_not_dump_rows(self):
+        r = await ai.office_lookup(self._db(), '有多少用户')
+        self.assertIn('共 4 个账号', r['answer'])
+        self.assertEqual(r['items'], [])
+
+    async def test_user_detail_has_profile_and_counts(self):
+        r = await ai.office_lookup(self._db(), '王五的用户详情')
+        self.assertIn('账号 #3', r['answer'])
+        self.assertIn('发布商品 1 件', r['answer'])
+        self.assertIn('买家订单 1 笔', r['answer'])
+        self.assertIn('工单 1 张', r['answer'])
+        self.assertIn('完整手机号请到管理台档案查看', r['answer'])
+
+    async def test_orders_recent_lists_buyer_seller_and_amount(self):
+        r = await ai.office_lookup(self._db(), '最近订单')
+        self.assertIn('#1', r['answer'])
+        self.assertIn('待发货', r['answer'])
+        self.assertIn('王五 → 李四', r['answer'])
+        self.assertIn('¥199.00', r['answer'])
+
+    async def test_orders_today_window(self):
+        r = await ai.office_lookup(self._db(), '今天有多少订单')
+        self.assertIn('今天 1 笔订单', r['answer'])
+
+    async def test_products_available_excludes_removed(self):
+        r = await ai.office_lookup(self._db(), '在售商品')
+        self.assertIn('青轴机械键盘', r['answer'])
+        self.assertNotIn('护眼台灯', r['answer'])
+        self.assertIn('在售 1', r['answer'])
+
+    async def test_tickets_open(self):
+        r = await ai.office_lookup(self._db(), '待处理工单')
+        self.assertIn('退款申请', r['answer'])
+        self.assertIn('待处理', r['answer'])
+
+    async def test_audit_recent(self):
+        r = await ai.office_lookup(self._db(), '最近的操作记录')
+        self.assertIn('把李四调整为管理员', r['answer'])
+
+    async def test_overview(self):
+        r = await ai.office_lookup(self._db(), '平台数据概览')
+        self.assertIn('用户 4', r['answer'])
+        self.assertIn('订单 2', r['answer'])
+        self.assertIn('工单 1', r['answer'])
+
+    async def test_limit_and_remaining_hint(self):
+        r = await ai.office_lookup(self._db(), '前 2 个用户')
+        self.assertEqual(len(r['items']), 2)
+        self.assertIn('还有 2 个', r['answer'])
+
+    async def test_unknown_question_falls_back_to_model(self):
+        self.assertIsNone(await ai.office_lookup(self._db(), '最近有什么异常'))
+        self.assertIsNone(office.parse_office_query('最近有什么异常'))
+
+    async def test_user_input_is_parameterized(self):
+        # 引号和 LIKE 通配符都只当普通字符：不报错，也不会把整表捞出来
+        db = self._db()
+        r = await ai.office_lookup(db, "查一下用户「' OR 1=1 --」")
+        self.assertIn('没有找到', r['answer'])
+        r2 = await ai.office_lookup(db, '把所有名字含「%」的用户列出来')
+        self.assertIn('没有找到', r2['answer'])

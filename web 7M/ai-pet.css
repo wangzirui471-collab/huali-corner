@@ -268,15 +268,15 @@
 .ai-pet-transfer b{ display: block; margin-bottom: 2px; color: #a83a28; }
 .ai-pet-transfer p{ margin: 0 0 8px; color: #6b6f77; }
 
+/* 快捷问放不下就换行，不要横向滚动：滚动条是隐藏的，桌面端用鼠标
+   滑不到后面的按钮（办公行加到 6 个后就溢出了，只能看到前 5 个）。 */
 .ai-pet-chips{
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 8px 12px 0;
-  overflow-x: auto;
-  scrollbar-width: none;
   background: #fff;
 }
-.ai-pet-chips::-webkit-scrollbar{ display: none; }
 .ai-pet-chips button{
   flex: none;
   padding: 5px 10px;
@@ -388,6 +388,15 @@ button.ai-pet-link{ cursor: pointer; font-family: inherit; }
 .ai-pet-action b{ display: block; color: #b23c1e; margin-bottom: 2px; }
 .ai-pet-action p{ margin: 0 0 6px; color: #6b4a42; }
 .ai-pet-action .btn{ font-size: 12px; }
+
+/* 办公数据查询的结果列表：一行一个账号/订单/商品，比一大段文字好扫。 */
+.ai-pet-rows{ display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.ai-pet-row{
+  padding: 6px 8px; border: 1px solid #eef0f3; border-radius: 8px;
+  background: #fff; font-size: 12px; line-height: 1.5;
+}
+.ai-pet-row b{ display: block; font-size: 12.5px; font-weight: 650; color: #2b2c30; }
+.ai-pet-row small{ display: block; color: #8a8a93; font-size: 11px; overflow-wrap: anywhere; }
 
 /* 所有者面板的模式切换：客服问答 / 办公 */
 .ai-pet-mode{ display: flex; gap: 6px; padding: 0 12px 6px; }

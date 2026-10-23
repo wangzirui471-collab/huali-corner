@@ -360,7 +360,7 @@ async def _products(db, plan):
     head = '%s共 %d 件商品（%s）' % (label or '平台', total, breakdown)
     lines, items = [head], []
     for r in rows:
-        line = '%s ¥%s · %s · 卖家 %s · %s' % (
+        line = '%s %s · %s · 卖家 %s · %s' % (
             str(r['title'])[:30], money(r['price']),
             PRODUCT_CN.get(r['status'], r['status']), r['seller'] or '—', fmt_time(r['created']))
         lines.append(line)
@@ -392,8 +392,11 @@ async def _tickets(db, plan):
         'FROM tickets t LEFT JOIN users u ON u.id=t.user_id' + w +
         ' ORDER BY t.id DESC LIMIT ?', params + (plan['limit'],))
     breakdown = ' · '.join('%s %s' % (TICKET_CN.get(x['status'], x['status']), x['n']) for x in by)
-    lines = ['%s共 %d 张（%s）：' % (TICKET_CN.get(plan.get('status'), '待处理及处理中') if plan.get('status')
-                                 else '待处理及处理中', total, breakdown)]
+    if plan.get('status'):
+        head = '%s %d 张（%s）：' % (TICKET_CN.get(plan['status'], plan['status']), total, breakdown)
+    else:
+        head = '待处理及处理中 %d 张（%s）：' % (total, breakdown)
+    lines = [head]
     items = []
     for r in rows:
         line = '#%s %s · %s · %s · %s' % (
@@ -471,8 +474,7 @@ async def _overview(db):
     audit = await db.all('SELECT type,reason,created FROM audit ORDER BY id DESC LIMIT 3')
 
     stats = {
-        'users': {'total': int(u['total'] or 0), 'today': int(u['today'] or 0),
-                  'week': int(u['week'] or 0), 'active24': int(u['active24'] or 0)},
+        'users': {'total': int(u['total'] or 0), 'active24': int(u['active24'] or 0)},
         'products': {'total': int(p['total'] or 0), 'available': int(p['on_sale'] or 0),
                      'today': int(p['today'] or 0)},
         'orders': {'total': int(o['total'] or 0), 'today': int(o['today'] or 0),
@@ -483,9 +485,8 @@ async def _overview(db):
     }
     lines = [
         '平台概览（%s）' % fmt_time(now),
-        '用户 %d（今天 +%d / 近 7 天 +%d / 24h 活跃 %d）' % (
-            stats['users']['total'], stats['users']['today'],
-            stats['users']['week'], stats['users']['active24']),
+        '用户 %d（24h 活跃 %d）' % (
+            stats['users']['total'], stats['users']['active24']),
         '商品 %d（在售 %d / 今天新发 %d）' % (
             stats['products']['total'], stats['products']['available'],
             stats['products']['today']),

@@ -20,6 +20,9 @@ const SIZE_KEY = 'hc-pet-panel-size';
 const HINT_KEY = 'hc-pet-hinted';
 const MIN_PANEL_W = 300;       // 再窄按钮和输入框就挤成一条了
 const MIN_PANEL_H = 320;
+// 用户选的面板尺寸。和「夹到当前视口后的显示尺寸」是两回事：窗口临时变小
+// 只该夹显示，不该把用户选的尺寸改掉，否则窗口放大后恢复不回去。
+let panelSize = null;
 
 // 客服在不在线。按北京时间算，与后端 support_state()、消息页 supportOnDuty() 同一口径。
 // 后端只回当前状态，面板上的状态灯由前端自己算，省一次请求。
@@ -85,7 +88,9 @@ export function aiPet(){
     </div>
     <div class="ai-pet-chips ai-pet-office" aria-label="所有者办公">
       <button type="button" data-action="ai-office" data-q="平台数据概览">数据概览</button>
-      <button type="button" data-action="ai-office" data-q="今天有哪些待处理工单？">待处理工单</button>
+      <button type="button" data-action="ai-office" data-q="把所有用户列出来">用户列表</button>
+      <button type="button" data-action="ai-office" data-q="最近 10 笔订单">最近订单</button>
+      <button type="button" data-action="ai-office" data-q="待处理工单">待处理工单</button>
       <button type="button" data-action="ai-office" data-mode="draft" data-q="写一条面向同学的客服公告，说明本周六晚系统维护、期间下单可能延迟。">写公告</button>
       <button type="button" data-action="ai-office-gen" data-q="宿舍好物">生成演示商品</button>
     </div>` : ''}
@@ -191,14 +196,17 @@ function panelContentMinH(){
   return Math.max(MIN_PANEL_H, fixed + 96);   // 96 = .ai-pet-log 的 min-height
 }
 
+function clampPanelW(w){
+  const maxW = Math.max(240, window.innerWidth - 24);
+  return Math.min(Math.max(Math.min(MIN_PANEL_W, maxW), w), maxW);
+}
+
 // 尺寸上限按当前视口算，窗口缩小后旧尺寸要收回来。
 function clampPanelSize(w, h){
-  const edge = 12;
-  const maxW = Math.max(240, window.innerWidth - edge * 2);
-  const maxH = Math.max(280, window.innerHeight - edge * 2);
+  const maxH = Math.max(280, window.innerHeight - 24);
   const minH = Math.min(panelContentMinH(), maxH);
   return {
-    w: Math.min(Math.max(Math.min(MIN_PANEL_W, maxW), w), maxW),
+    w: clampPanelW(w),
     h: Math.min(Math.max(minH, h), maxH),
   };
 }
@@ -206,6 +214,10 @@ function clampPanelSize(w, h){
 function applyPanelSize(w, h){
   const panel = $('#ai-pet-panel');
   if (!panel) return;
+  panelSize = { w: w, h: h };   // 记用户选的尺寸；夹到视口内只影响显示
+  // 先把宽度落下再量高度下限：快捷问行会随宽度换行，内容下限是跟着宽度变的。
+  // 不先落宽度，就会拿旧宽度的下限去卡新宽度——刷新后尺寸和拖出来的对不上。
+  panel.style.width = clampPanelW(w) + 'px';
   const s = clampPanelSize(w, h);
   panel.style.width = s.w + 'px';
   panel.style.height = s.h + 'px';
@@ -213,10 +225,13 @@ function applyPanelSize(w, h){
   panel.style.maxHeight = 'none';
 }
 
+// 存用户选的尺寸，不是当前显示尺寸：窗口临时变小会把面板夹小，
+// 若不区分，夹出来的小尺寸会覆盖原设置，窗口放大后就恢复不回去了。
 function savePanelSize(){
   const panel = $('#ai-pet-panel');
   if (!panel || panel.classList.contains('is-max')) return;
-  try{ localStorage.setItem(SIZE_KEY, JSON.stringify({ w: panel.offsetWidth, h: panel.offsetHeight })); }catch(_){ }
+  const s = panelSize || { w: panel.offsetWidth, h: panel.offsetHeight };
+  try{ localStorage.setItem(SIZE_KEY, JSON.stringify(s)); }catch(_){ }
 }
 
 function restorePanelSize(){
@@ -232,7 +247,7 @@ function setPanelMax(on){
   if (on === isMax) return;
   const btn = $('#ai-pet-max');
   if (on){
-    panel.dataset.prev = JSON.stringify({ w: panel.offsetWidth, h: panel.offsetHeight });
+    panel.dataset.prev = JSON.stringify(panelSize || { w: panel.offsetWidth, h: panel.offsetHeight });
     panel.style.width = '';
     panel.style.height = '';
     panel.style.maxHeight = '';
@@ -272,6 +287,8 @@ function bindPanelResize(panel){
         if (dir.includes('s')) h = st.h + dy;
         if (dir.includes('w')) w = st.w - dx;
         if (dir.includes('n')) h = st.h - dy;
+        panelSize = { w: w, h: h };   // 记用户拖到的目标尺寸，夹到视口内只影响显示
+        panel.style.width = clampPanelW(w) + 'px';   // 先落宽度，内容下限才按新宽度算
         const c = clampPanelSize(w, h);
         const edge = 12;
         let left = dir.includes('w') ? st.right - c.w : st.left;
@@ -443,7 +460,8 @@ export function mountPet(){
     const panel = $('#ai-pet-panel');
     if (!panel || panel.hidden) return;
     if (panel.classList.contains('is-max')) return;   // 最大化由 CSS 的 dvh 自适应
-    if (panel.style.width) applyPanelSize(panel.offsetWidth, panel.offsetHeight);   // 窗口变小，旧尺寸收回屏内
+    // 用用户选的尺寸重新夹一次：窗口变小夹进去，放大还他原来的大小
+    if (panelSize) applyPanelSize(panelSize.w, panelSize.h);   // 窗口变小，旧尺寸收回屏内
     placePanel();
   });
 }
