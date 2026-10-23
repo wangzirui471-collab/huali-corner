@@ -91,4 +91,9 @@ async def guard(handler):
     except DomainError as exc:
         return error_response(str(exc), getattr(exc, 'status', 400))
     except Exception:  # noqa: BLE001 - 边界处兜底，绝不回传堆栈
+        # 堆栈只进 Worker 日志（wrangler tail 可见），不回给客户端。
+        # 2026-10-23 的那次整站 500 就是被这里静默吞掉的：线上只说
+        # 「服务内部错误」，tail 里连 exceptions 都是空的，只能靠本地复现才拿到栈。
+        import traceback
+        traceback.print_exc()
         return error_response('服务内部错误', 500)

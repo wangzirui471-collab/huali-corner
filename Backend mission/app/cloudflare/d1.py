@@ -50,9 +50,41 @@ DB_LIMIT_BYTES = 10 * 1024 ** 3
 __all__ = ['Database', 'DB_LIMIT_BYTES']
 
 
+def _py(value):
+    """把 Pyodide 的 JsProxy 转成 Python 对象；普通对象原样返回。
+
+    事故背景（2026-10-23）：wrangler.jsonc 加上 disable_python_external_sdk
+    改用平台内置 Python SDK 之后，D1 的 `.first()` 返回的是裸 JsProxy，
+    而旧的外部 SDK 会先转成 dict。于是 `dict(row)` 抛
+    TypeError: 'pyodide.ffi.JsProxy' object is not iterable，
+    所有查库的接口一律 500（首页、商品、健康检查全挂，前端整屏「服务暂不可用」）。
+    在这里统一兜住：两种 SDK、两种返回形态都能跑。
+    """
+    to_py = getattr(value, 'to_py', None)
+    if callable(to_py):
+        try:
+            return to_py()
+        except Exception:  # noqa: BLE001 - 转不了就交回原对象，由调用方兜底
+            return value
+    return value
+
+
 def _as_dict(row):
     """D1 返回的对象支持下标访问，但统一转成 dict，便于现有 service 的 row['x'] 写法。"""
-    return dict(row) if row is not None else None
+    if row is None:
+        return None
+    row = _py(row)
+    if isinstance(row, dict):
+        return row
+    return dict(row)
+
+
+def _as_list(value):
+    """把 D1 的 results 统一成 list（平台 SDK 下是 JsProxy 数组）。"""
+    if value is None:
+        return []
+    value = _py(value)
+    return value if isinstance(value, list) else list(value)
 
 
 class Database:
@@ -67,7 +99,7 @@ class Database:
 
     async def all(self, sql, params=()):
         result = await self._db.prepare(sql).bind(*params).all()
-        return [_as_dict(row) for row in (result.results or [])]
+        return [_as_dict(row) for row in _as_list(getattr(result, 'results', None))]
 
     async def first(self, sql, params=()):
         result = await self._db.prepare(sql).bind(*params).first()
@@ -105,13 +137,14 @@ class Database:
         被 D1 的 SQLITE_AUTH 白名单拒绝（实测 7500），不能用。
         """
         result = await self._db.prepare('SELECT 1').run()
-        meta = getattr(result, 'meta', None)
+        meta = _py(getattr(result, 'meta', None))
         if meta is None:
             return None
         if hasattr(meta, 'get'):
             size = meta.get('size_after')
         else:
             size = getattr(meta, 'size_after', None)
+        size = _py(size)
         return int(size) if size is not None else None
 
     # ---- 事务 --------------------------------------------------------------
@@ -125,7 +158,7 @@ class Database:
         prepared = [self._db.prepare(sql).bind(*params) for sql, params in statements]
         if not prepared:
             return []
-        return list(await self._db.batch(prepared))
+        return _as_list(await self._db.batch(prepared))
 
     @staticmethod
     def guard_statement(guard_sql, guard_params):
@@ -159,12 +192,15 @@ class Database:
         for holder in (getattr(result, 'meta', None), result):
             if holder is None:
                 continue
+            # meta 在平台 SDK 下同样是 JsProxy：不先转成 dict，下面两个分支都取不到值，
+            # 结果是「所有写操作都被判成 0 行」——守卫全误报冲突。
+            holder = _py(holder)
             if hasattr(holder, 'get'):
                 value = holder.get('changes')
             else:
                 value = getattr(holder, 'changes', None)
             if value is not None:
-                return int(value)
+                return int(_py(value))
         return 0
 
     @classmethod
