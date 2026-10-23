@@ -103,3 +103,17 @@ https://github.com/wangzirui471-collab/huali-corner/actions/runs/39906746810 （
 连接器下载 artifact 后核验摘要 `a1004c5ed59b55ed3464d17f3b705166127a179045ac9d672c7e578581535c15`。
 安装器实际检查通过，并以 Python -O 负向确认旧版证明会被拒绝，然后只安装到独立发布目录。
 GitHub Postman CI 的 `ffde073`、`b799054` 已成功；正式 Worker 重新发布结果另记发布回执。
+
+## 实际发布后的验收
+
+- 正式 Pillow 12.3.0 装入独立发布目录后，真实 Cloudflare 发布成功：提交 `3200806`，
+  Version `cff521a1-5ae5-4d52-a5b8-fa702d05b5c1`，启动 992ms，上传压缩后 1482.41KiB。
+- 平台元数据再次读取确认该版本 100% 流量，兼容日期仍为 2026-10-17，保留原有绑定、变量与密钥。
+- 公开 urllib 检查先得到 Cloudflare 403/1010；正常未登录 Chromium 浏览器验收成功，未修改 WAF/TLS。
+- 浏览器根页面 HTTP200、页面脚本错误 0；七个关键 JS/CSS 逐字节 SHA256 匹配。
+- `/api/config` HTTP200 且为 JSON；四个新增办公接口匿名 POST 均为401，未发送客户消息。
+- GitHub Postman CI `3200806` 成功：
+  https://github.com/wangzirui471-collab/huali-corner/actions/runs/39907687964 。
+- 原本地项目 HEAD 和发布源码一致，未提交 Postman、导购、推荐等内容保留；
+  旧 Wasm 依赖整体归档后安装相同正式 12.3.0，Windows 依赖未改动。
+- 本收尾文档再次同步后的最终版本见本机发布回执；实际客户工单写入、真实小程序和外部模型调用仍未验收。
