@@ -40,7 +40,7 @@ async function petAsk(q){
   if(send) send.disabled=true;
   setPetState('review');                  // 「专注工作」＝思考中：小转动手翻资料，等接口回来
   try{
-    const r=await api('/ai/chat',{question:text,history:petHistory.slice(-4)});
+    const r=await api('/ai/chat',{question:text,history:petHistory.slice(-4)},{global:true,timeout:45000});
     const src=(r.sources||[]).slice(0,3).map((s,i)=>`[${i+1}] ${e(s.title||s.source)}`).join(' · ');
     const links=(r.links||[]).map(l=>l.action
       ? `<button type="button" class="ai-pet-link" data-action="${e(l.action)}" data-q="${e(l.q||'')}">${e(l.label)} →</button>`
@@ -88,11 +88,15 @@ async function petAsk(q){
 async function petOffice(q, mode){
   const text=String(q||'').trim();
   const log=$('#ai-pet-log'); if(!text||!log) return;
+  const form=$('#ai-pet-form'), area=form?.querySelector('textarea[name=q]'), send=form?.querySelector('button[type=submit]');
+  if(area) area.value='';
   petAppend(petText(text),'user');
   const wait=petAppend('<span class="ai-pet-typing">正在查平台数据…</span>','bot');
+  if(send) send.disabled=true;
   setPetState('review');
   try{
-    const r=await api('/ai/office',{question:text,mode:mode||'query'});
+    // 办公请求是全局面板发起的，不跟随页面重渲染丢弃；最多等 60 秒。
+    const r=await api('/ai/office',{question:text,mode:mode||'query'},{global:true,timeout:60000});
     const p=r.proposal;
     wait.innerHTML=`<div>${petText(r.answer)}</div>
       ${p?`<div class="ai-pet-action"><b>待执行</b><p>${e(p.summary)}</p><p class="muted">不可逆操作，需要你再次确认。</p><button type="button" class="btn primary" data-action="ai-office-confirm" data-kind="${e(p.kind)}" data-target="${p.target}" data-role="${e(p.role||'')}" data-name="${e(p.nickname)}">确认执行</button></div>`:''}
@@ -101,6 +105,9 @@ async function petOffice(q, mode){
   }catch(err){
     wait.innerHTML=`<div>${petText(err.message||'办公助手暂时不可用')}</div>`;
     setPetState('fail',1600);
+  }finally{
+    if(send) send.disabled=false;
+    log.scrollTop=log.scrollHeight;
   }
 }
 
