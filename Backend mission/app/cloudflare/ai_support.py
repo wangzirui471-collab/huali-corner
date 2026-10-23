@@ -12,7 +12,7 @@ from ..core.errors import ValidationMixin, DomainError
 from .http import json_body, json_response, require, int_param
 from .ai_knowledge import KNOWLEDGE
 
-STAFF = ('support', 'admin', 'developer')
+STAFF = ('support', 'admin', 'developer', 'owner')
 
 SUPPORT_HOURS = '08:00—20:00'
 
@@ -154,13 +154,14 @@ STOP = {
 
 
 AI_PERMISSIONS = [
-    {'cap': '客服页 AI 宠物（提问）', 'user': True, 'support': True, 'admin': True, 'developer': True},
-    {'cap': '工单页 AI 建议回复', 'user': False, 'support': True, 'admin': True, 'developer': True},
-    {'cap': '查看自己的今日额度', 'user': True, 'support': True, 'admin': True, 'developer': True},
-    {'cap': '查看全部用量与来源统计', 'user': False, 'support': False, 'admin': True, 'developer': True},
-    {'cap': '开启/关闭 AI、调整每日额度', 'user': False, 'support': False, 'admin': True, 'developer': True},
-    {'cap': '重载知识库（本地）', 'user': False, 'support': False, 'admin': True, 'developer': True},
-    {'cap': '修改模型/接口地址/API Key', 'user': False, 'support': False, 'admin': False, 'developer': True},
+    {'cap': '客服页 AI 宠物（提问）', 'user': True, 'support': True, 'admin': True, 'developer': True, 'owner': True},
+    {'cap': '工单页 AI 建议回复', 'user': False, 'support': True, 'admin': True, 'developer': True, 'owner': True},
+    {'cap': '所有者办公助手（查询/起草）', 'user': False, 'support': False, 'admin': False, 'developer': False, 'owner': True},
+    {'cap': '查看自己的今日额度', 'user': True, 'support': True, 'admin': True, 'developer': True, 'owner': True},
+    {'cap': '查看全部用量与来源统计', 'user': False, 'support': False, 'admin': True, 'developer': True, 'owner': True},
+    {'cap': '开启/关闭 AI、调整每日额度', 'user': False, 'support': False, 'admin': True, 'developer': True, 'owner': True},
+    {'cap': '重载知识库（本地）', 'user': False, 'support': False, 'admin': True, 'developer': True, 'owner': True},
+    {'cap': '修改模型/接口地址/API Key', 'user': False, 'support': False, 'admin': False, 'developer': True, 'owner': True},
 ]
 
 SYSTEM_PROMPT = """你叫小转，是「转角」校园二手平台的助手，也是个什么都能聊的同学。
@@ -718,13 +719,13 @@ def parse_price_json(raw):
     return low, high, reason
 
 
-async def call_llm(system, user, env, max_tokens=400):
-    """通用 DeepSeek 调用：不走知识库提示词，供描述生成 / 估价复用。"""
+async def call_llm(system, user, env, max_tokens=400, model=None):
+    """通用 DeepSeek 调用：不走知识库提示词，供描述生成 / 估价 / 办公助手复用。"""
     api_key = getattr(env, 'HC_AI_API_KEY', '') or ''
     if not api_key:
         raise DomainError('AI 未配置：请在 Worker 设置 HC_AI_API_KEY', 503)
     api_url = getattr(env, 'HC_AI_API_URL', 'https://api.deepseek.com/chat/completions')
-    model = getattr(env, 'HC_AI_MODEL', 'deepseek-flash')
+    model = model or getattr(env, 'HC_AI_MODEL', 'deepseek-flash')
     payload = {
         'model': model,
         'messages': [
@@ -1093,6 +1094,39 @@ async def ai_answer(question, env, history=None, db=None):
     return guard_leak(await _answer_unguarded(question, env, history, db))
 
 
+# --- 所有者办公助手 --------------------------------------------------------
+# 参照 LangGraph 的 Human-in-the-Loop：只读查询 / 起草直接执行；
+# 任免、注销等不可逆操作只给建议，由所有者在界面上确认后走既有后台接口，
+# 模型永远不直接执行写操作（避免一次提示词注入就把人注销了）。
+OFFICE_QUERY_SYSTEM = """你是「转角」平台的所有者办公助手。只依据下面给出的数据回答，不要编造数字。
+回答要求：中文、简短；先给结论再给数字；数据里没有的直接说「这个数据我没有」。"""
+
+OFFICE_DRAFT_SYSTEM = """你是「转角」平台的所有者办公助手，负责起草客服文案。
+要求：中文、简短、礼貌；不承诺赔偿或时效；不写手机号等隐私；只输出文案本身，不要解释。"""
+
+
+def build_office_prompt(stats, question):
+    return ('【平台数据】\n工单：总数 %s，待处理 %s，处理中 %s\n'
+            '用户：总数 %s，近 24 小时活跃 %s\n'
+            '商品：总数 %s，在售 %s\n'
+            '订单：总数 %s，近 24 小时 %s\n'
+            '最近审计：%s\n\n【问题】\n%s'
+            % (stats['tickets']['total'], stats['tickets']['open'], stats['tickets']['busy'],
+               stats['users']['total'], stats['users']['active24'],
+               stats['products']['total'], stats['products']['available'],
+               stats['orders']['total'], stats['orders']['recent'],
+               stats['audit'], question))
+
+
+def format_stats(stats):
+    return ('工单 %s（待处理 %s / 处理中 %s）· 用户 %s（24h 活跃 %s）· '
+            '商品 %s（在售 %s）· 订单 %s（24h %s）'
+            % (stats['tickets']['total'], stats['tickets']['open'], stats['tickets']['busy'],
+               stats['users']['total'], stats['users']['active24'],
+               stats['products']['total'], stats['products']['available'],
+               stats['orders']['total'], stats['orders']['recent']))
+
+
 class AiSupport:
     async def ai_settings(self):
         await self.db.run('INSERT OR IGNORE INTO ai_settings(id,enabled,daily_limit,staff_daily_limit) VALUES(1,1,30,100)')
@@ -1248,6 +1282,57 @@ class AiSupport:
         return json_response({'low': low, 'high': high, 'suggest': (low + high) // 2,
                               'reason': reason, 'samples': len(prices), 'mode': mode})
 
+    async def _office_stats(self):
+        """办公助手的数据快照：只读、聚合，不含任何客户原文。"""
+        since = time.time() - 86400
+        t = await self.db.first(
+            "SELECT COUNT(*) total, SUM(CASE WHEN status='open' THEN 1 ELSE 0 END) open, "
+            "SUM(CASE WHEN status IN ('processing','review') THEN 1 ELSE 0 END) busy FROM tickets")
+        u = await self.db.first(
+            'SELECT COUNT(*) total, SUM(CASE WHEN last_login>=? THEN 1 ELSE 0 END) active24 FROM users',
+            (since,))
+        p = await self.db.first(
+            "SELECT COUNT(*) total, SUM(CASE WHEN status='available' THEN 1 ELSE 0 END) available "
+            'FROM products')
+        o = await self.db.first(
+            'SELECT COUNT(*) total, SUM(CASE WHEN created>=? THEN 1 ELSE 0 END) recent FROM orders',
+            (since,))
+        audit = await self.db.all('SELECT type,reason FROM audit ORDER BY id DESC LIMIT 5')
+        return {
+            'tickets': {'total': int(t['total'] or 0), 'open': int(t['open'] or 0),
+                        'busy': int(t['busy'] or 0)},
+            'users': {'total': int(u['total'] or 0), 'active24': int(u['active24'] or 0)},
+            'products': {'total': int(p['total'] or 0), 'available': int(p['available'] or 0)},
+            'orders': {'total': int(o['total'] or 0), 'recent': int(o['recent'] or 0)},
+            'audit': '；'.join('%s %s' % (a['type'], a['reason']) for a in audit) or '无',
+        }
+
+    async def ai_office(self, request):
+        """所有者办公助手：查询/起草；不可逆操作只给建议，不在这里执行。"""
+        uid, role = await self.cf_staff_actor(request)
+        require(role == 'owner', '仅平台所有者可使用办公助手', 403)
+        d = await json_body(request)
+        question = ValidationMixin.text(d.get('question'), 300, '问题')
+        mode = 'draft' if d.get('mode') == 'draft' else 'query'
+        await self.ai_quota(uid, role)
+        stats = await self._office_stats()
+        # 所有者可用更强的模型：HC_AI_MODEL_OWNER 未配置时回退到默认模型。
+        model = getattr(self.env, 'HC_AI_MODEL_OWNER', '') or None
+        text = ''
+        try:
+            text = trim(strip_thinking(await call_llm(
+                OFFICE_QUERY_SYSTEM if mode == 'query' else OFFICE_DRAFT_SYSTEM,
+                build_office_prompt(stats, question), self.env, max_tokens=600, model=model)), 900)
+        except Exception:  # noqa: BLE001 - 模型不可用时给数据快照
+            text = ''
+        ok = bool(text)
+        if not ok:
+            text = '办公助手暂时不可用，当前数据：' + format_stats(stats)
+        if ok:
+            await self.ai_count(uid)
+        return json_response({'answer': text, 'mode': 'llm' if ok else 'mock',
+                              'stats': stats, 'draft': mode == 'draft'})
+
     async def ai_admin_get(self, request):
         uid, _ = await self.cf_staff_actor(request, admin=True)
         s = await self.ai_settings()
@@ -1297,6 +1382,7 @@ AI_ROUTES = {
     '/api/ai/reply': (('POST',), 'ai_reply'),
     '/api/ai/describe': (('POST',), 'ai_describe'),
     '/api/ai/price': (('POST',), 'ai_price'),
+    '/api/ai/office': (('POST',), 'ai_office'),
     '/api/admin/ai': (('GET', 'POST'), 'ai_admin'),
     '/api/admin/ai/reload': (('POST',), 'ai_reload'),
 }

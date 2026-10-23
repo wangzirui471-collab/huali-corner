@@ -15,7 +15,7 @@ class ReadPages:
         uid = await sessions.require_user_id(self.db, request)
         if staff:
             role = await self.db.scalar('SELECT role FROM users WHERE id=?', (uid,))
-            require(role in ('support', 'admin', 'developer'), '没有客服权限', 403)
+            require(role in ('support', 'admin', 'developer', 'owner'), '没有客服权限', 403)
         return uid
 
     async def health(self, request):

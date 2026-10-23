@@ -12,9 +12,13 @@ from . import crypto
 from ..account.credit import (VIOLATION_BASE, VIOLATION_LABEL, suggest_penalty, AWARD_REASON_PREFIX,
     AWARD_DAILY_CAP, AWARD_MONTHLY_CAP, day_start, month_start)
 
-STAFF = ('support', 'admin', 'developer')
-RANK = {'user': 0, 'support': 1, 'admin': 2, 'developer': 3}
-NAMES = {'user': '普通用户', 'support': '客服', 'admin': '平台管理员', 'developer': '开发者'}
+STAFF = ('support', 'admin', 'developer', 'owner')
+# 角色层级：参照 GitLab 的 Guest < Reporter < Developer < Maintainer < Owner。
+# Owner（L1）在开发者之上，可任免开发者及以下成员；所有者账号本身不允许通过
+# 后台接口降级/停用（防止把最后一个 Owner 锁死），只能由运维在数据库设置。
+RANK = {'user': 0, 'support': 1, 'admin': 2, 'developer': 3, 'owner': 4}
+NAMES = {'user': '普通用户', 'support': '客服', 'admin': '平台管理员',
+         'developer': '开发者', 'owner': '平台所有者'}
 
 # 备份覆盖的应用表清单。schema.sql 每加一张表，这里就必须补上：
 # cf_staff_backup 里 `found <= set(BACKUP_TABLES)` 会拦住缺表的备份（宁可 503，
@@ -42,7 +46,7 @@ class StaffApi:
     async def cf_staff_actor(self, request, admin=False):
         uid = await self.page_user(request, staff=True)
         role = await self.db.scalar('SELECT role FROM users WHERE id=?', (uid,))
-        require(not admin or role in ('admin', 'developer'), '仅平台管理员或开发者可操作', 403)
+        require(not admin or role in ('admin', 'developer', 'owner'), '仅平台管理员、开发者或所有者可操作', 403)
         return uid, role
 
     def cf_staff_audit(self, uid, kind, reason, target=None, tid=None, delta=None):
@@ -232,14 +236,14 @@ class StaffApi:
         uid, role = await self.cf_staff_actor(request, admin=True)
         if request.method == 'POST':
             d = await json_body(request); new_role = d.get('role') or 'support'
-            require(new_role in STAFF, '角色无效'); require(role == 'developer' or new_role == 'support', '只有开发者可以创建管理员或开发者账号', 403)
+            require(new_role in ('support', 'admin', 'developer'), '角色无效'); require(role in ('developer', 'owner') or new_role == 'support', '只有开发者或所有者可以创建管理员/开发者账号', 403)
             phone = self.normalize_account(d.get('phone')); nickname = text(d.get('nickname'), 24, '昵称')
             salt, digest, rounds, recovery, recovery_digest = self.cf_staff_credentials(d)
             target = secrets.randbits(48)
             await self.cf_staff_commit(uid, 'SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM users WHERE phone=?)', (phone,), [('INSERT INTO users(id,phone,nickname,role) VALUES(?,?,?,?)', (target, phone, nickname, new_role)), ('INSERT INTO password_credentials VALUES(?,?,?,?,?)', (target, salt, digest, rounds, recovery_digest)), self.cf_staff_audit(uid, 'staff_create', f'创建{NAMES[new_role]}账号「{nickname}」', target)], ('developer',) if new_role != 'support' else ('admin', 'developer'))
             return json_response({'id': target, 'phone': phone, 'role': new_role, 'recovery_code': recovery})
         all_accounts = path_of(request).endswith('/accounts'); q = str(query_of(request).get('q') or '').strip(); kw = '%'+q+'%'
-        where = "(?='' OR u.nickname LIKE ? OR u.phone LIKE ?)" if all_accounts else "u.role IN ('support','admin','developer')"
+        where = "(?='' OR u.nickname LIKE ? OR u.phone LIKE ?)" if all_accounts else "u.role IN ('support','admin','developer','owner')"
         args = (time.time(), q, kw, kw) if all_accounts else (time.time(),)
         rows = await self.db.all('SELECT u.id,u.phone,u.nickname,u.college,u.score,u.role,u.status,u.last_login,(SELECT COUNT(*) FROM sessions s WHERE s.user_id=u.id AND s.expires>?) sessions FROM users u WHERE '+where+' ORDER BY u.id DESC LIMIT 300', args)
         for r in rows: r.update(role_name=NAMES[r['role']], online=bool(r['sessions']))
@@ -255,21 +259,23 @@ class StaffApi:
         uid, actor_role = await self.cf_staff_actor(request); d = await json_body(request)
         target = ident(d.get('target') if path_of(request).endswith('/role') else d.get('id')); require(target != uid, '不能对自己的账号执行此操作', 403)
         t = await self.db.first('SELECT * FROM users WHERE id=?', (target,)); require(t, '账号不存在', 404)
+        require(t['role'] != 'owner', '所有者账号只能由运维在数据库调整', 403)
         action = path_of(request).rsplit('/', 1)[-1]; stmts = []; response = {'ok': True}; guard = 'SELECT 1 FROM users WHERE id=? AND role=? AND status=?'; args = (target, t['role'], t['status']); roles = STAFF
         if action == 'revoke':
-            require(t['role'] not in STAFF or actor_role in ('admin', 'developer'), '只有管理员可以强制下线运营账号', 403)
-            if t['role'] in STAFF: roles = ('admin', 'developer')
+            require(t['role'] not in STAFF or actor_role in ('admin', 'developer', 'owner'), '只有管理员可以强制下线运营账号', 403)
+            if t['role'] in STAFF: roles = ('admin', 'developer', 'owner')
             response = {'revoked': await self.db.scalar('SELECT COUNT(*) FROM sessions WHERE user_id=?', (target,))}; kind = 'session_revoke'
         else:
-            require(actor_role in ('admin', 'developer'), '仅平台管理员或开发者可操作', 403); roles = (actor_role,)
+            require(actor_role in ('admin', 'developer', 'owner'), '仅平台管理员、开发者或所有者可操作', 403); roles = (actor_role,)
             if action == 'role':
                 nr = d.get('role'); require(nr in RANK, '未知角色')
-                require(actor_role == 'developer' or (nr in ('user', 'support') and RANK[t['role']] < 2), '不能调整同级或更高等级账号', 403)
+                require(nr != 'owner', '所有者角色只能由运维设置', 403)
+                require(actor_role in ('developer', 'owner') or (nr in ('user', 'support') and RANK[t['role']] < 2), '不能调整同级或更高等级账号', 403)
                 if t['role'] == 'developer' and nr != 'developer': guard += " AND (SELECT COUNT(*) FROM users WHERE role='developer' AND status='active')>1"
                 stmts.append(('UPDATE users SET role=? WHERE id=?', (nr, target))); kind = 'role_change'
             else:
                 require(t['role'] in STAFF, '这里只管理客服与管理员账号')
-                require(actor_role == 'developer' or RANK[t['role']] < RANK[actor_role], '不能操作同级或更高等级运营账号', 403)
+                require(actor_role in ('developer', 'owner') or RANK[t['role']] < RANK[actor_role], '不能操作同级或更高等级运营账号', 403)
                 if action == 'status':
                     status = d.get('status'); require(status in ('active', 'disabled'), '状态无效')
                     require(t['status'] in ('active', 'disabled'), '不能恢复封禁或注销账号')

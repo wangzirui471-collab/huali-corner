@@ -68,7 +68,12 @@ class Handler(BaseHTTPRequestHandler):
             item = {'role': role, 'content': content}
             if role == 'user':
                 soc = h.get('social')
-                if soc in rag.SOCIAL_REPLIES:
+                # rag 的 SOCIAL_REPLIES 随旧版「闲聊分类表」一起删了（rag.py 里已经没有了），
+                # 但这里还在按老口径做白名单校验——任何带 history 的请求都会
+                # AttributeError: module 'rag' has no attribute 'SOCIAL_REPLIES' 把连接掐断，
+                # 前端表现就是第二句发不出去（socket hang up）。
+                # 用 getattr 兜底：表不存在时一律放行，行为等同「不贴标签」，不再抛异常。
+                if soc in getattr(rag, 'SOCIAL_REPLIES', {}):
                     item['social'] = soc
                 depth = h.get('depth')
                 if isinstance(depth, int) and 0 < depth < 99:
