@@ -16,7 +16,10 @@ const SPRITE_W = 120;          // 单帧宽（与 ai-pet.css 里的 --pet-cell-w
 const SPRITE_H = 147;
 const ATLAS = '/assets/ai-pet/xiaozhuan-atlas.webp';
 const POS_KEY = 'hc-pet-pos';
+const SIZE_KEY = 'hc-pet-panel-size';
 const HINT_KEY = 'hc-pet-hinted';
+const MIN_PANEL_W = 300;       // 再窄按钮和输入框就挤成一条了
+const MIN_PANEL_H = 320;
 
 // 客服在不在线。按北京时间算，与后端 support_state()、消息页 supportOnDuty() 同一口径。
 // 后端只回当前状态，面板上的状态灯由前端自己算，省一次请求。
@@ -44,7 +47,9 @@ export function paintDuty(server){
 
 let petEl = null;
 let drag = null;
-let lastDragEnd = 0;
+// 初始值不能是 0：页面刚加载时 performance.now() 还不到 320ms，
+// 「点一下开面板」会被当成拖动结束的补发 click 吞掉。
+let lastDragEnd = -1e9;
 let stateTimer = 0;
 let lifeTimer = 0;
 
@@ -57,9 +62,12 @@ export function aiPet(){
   </button>
   <div class="ai-pet-hint" id="ai-pet-hint" hidden>按住我可以拖到任意位置</div>
   <section class="ai-pet-panel" id="ai-pet-panel" hidden aria-label="AI 助手小转">
-    <header class="ai-pet-head">
+    <header class="ai-pet-head" id="ai-pet-head">
       <span class="ai-pet-avatar"><img src="/assets/ai-pet/xiaozhuan-avatar.png" alt=""></span>
       <div><b>小转</b><small id="ai-pet-duty">客服在线 · 08:00–20:00</small></div>
+      <button type="button" class="ai-pet-max" id="ai-pet-max" aria-label="放大对话窗口" title="放大 / 还原（双击标题也可以）">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
       <button type="button" class="ai-pet-close" id="ai-pet-close" aria-label="收起对话">×</button>
     </header>
     <div class="ai-pet-log" id="ai-pet-log">
@@ -87,6 +95,14 @@ export function aiPet(){
       <button type="submit" class="ai-pet-send">发送</button>
     </form>
     <p class="ai-pet-note">回答仅供参考。问题会发送给第三方 AI 服务用于生成回答，请勿输入密码、手机号、恢复码等敏感信息。</p>
+    <span class="ai-pet-rs" data-dir="n"></span>
+    <span class="ai-pet-rs" data-dir="s"></span>
+    <span class="ai-pet-rs" data-dir="w"></span>
+    <span class="ai-pet-rs" data-dir="e"></span>
+    <span class="ai-pet-rs" data-dir="nw"></span>
+    <span class="ai-pet-rs" data-dir="ne"></span>
+    <span class="ai-pet-rs" data-dir="sw"></span>
+    <span class="ai-pet-rs" data-dir="se"></span>
   </section>
 </div>`;
 }
@@ -140,10 +156,12 @@ function restorePos(){
 }
 
 // --- 面板 ---------------------------------------------------------------
+// 面板高度会随消息变长：不重新夹回视口的话，底部（输入框、隐私提示）会被
+// 推到屏幕外，overflow:hidden 直接切掉——这就是「底部被裁」的根因。
 function placePanel(){
   const panel = $('#ai-pet-panel');
   const body = $('#ai-pet-body');
-  if (!panel || !body || panel.hidden) return;
+  if (!panel || !body || panel.hidden || panel.classList.contains('is-max')) return;
   const b = body.getBoundingClientRect();
   const pw = panel.offsetWidth, ph = panel.offsetHeight;
   const gap = 10, edge = 12;
@@ -151,12 +169,134 @@ function placePanel(){
   let left = b.left + b.width / 2 - pw / 2;
   left = Math.min(Math.max(edge, left), Math.max(edge, window.innerWidth - pw - edge));
 
+  // 优先放在宠物上方；放不下翻到下方；再放不下就夹在视口内（整块必须可见）。
   let top = b.top - ph - gap;
-  if (top < edge) top = Math.min(b.bottom + gap, window.innerHeight - ph - edge);
-  top = Math.max(edge, top);
+  if (top < edge) top = b.bottom + gap;
+  top = Math.min(Math.max(edge, top), Math.max(edge, window.innerHeight - ph - edge));
 
   panel.style.left = left + 'px';
   panel.style.top = top + 'px';
+}
+
+// 面板最小高度不能拍脑袋：头 + 快捷问 + 模式 + 输入框 + 隐私提示都是固定行，
+// 加上消息区的下限，才是「不裁掉底部」的真实下限。所有者模式多了办公那一行。
+function panelContentMinH(){
+  const panel = $('#ai-pet-panel');
+  if (!panel) return MIN_PANEL_H;
+  let fixed = 2;   // 上下边框
+  for (const el of panel.children){
+    if (el.classList.contains('ai-pet-rs') || el.classList.contains('ai-pet-log')) continue;
+    fixed += el.offsetHeight;
+  }
+  return Math.max(MIN_PANEL_H, fixed + 96);   // 96 = .ai-pet-log 的 min-height
+}
+
+// 尺寸上限按当前视口算，窗口缩小后旧尺寸要收回来。
+function clampPanelSize(w, h){
+  const edge = 12;
+  const maxW = Math.max(240, window.innerWidth - edge * 2);
+  const maxH = Math.max(280, window.innerHeight - edge * 2);
+  const minH = Math.min(panelContentMinH(), maxH);
+  return {
+    w: Math.min(Math.max(Math.min(MIN_PANEL_W, maxW), w), maxW),
+    h: Math.min(Math.max(minH, h), maxH),
+  };
+}
+
+function applyPanelSize(w, h){
+  const panel = $('#ai-pet-panel');
+  if (!panel) return;
+  const s = clampPanelSize(w, h);
+  panel.style.width = s.w + 'px';
+  panel.style.height = s.h + 'px';
+  // 拖过尺寸后高度由 JS 统一管；继续留着 max-height 会让实际高度和记录值不一致。
+  panel.style.maxHeight = 'none';
+}
+
+function savePanelSize(){
+  const panel = $('#ai-pet-panel');
+  if (!panel || panel.classList.contains('is-max')) return;
+  try{ localStorage.setItem(SIZE_KEY, JSON.stringify({ w: panel.offsetWidth, h: panel.offsetHeight })); }catch(_){ }
+}
+
+function restorePanelSize(){
+  let s = null;
+  try{ s = JSON.parse(localStorage.getItem(SIZE_KEY) || 'null'); }catch(_){ s = null; }
+  if (s && Number.isFinite(s.w) && Number.isFinite(s.h)) applyPanelSize(s.w, s.h);
+}
+
+function setPanelMax(on){
+  const panel = $('#ai-pet-panel');
+  if (!panel) return;
+  const isMax = panel.classList.contains('is-max');
+  if (on === isMax) return;
+  const btn = $('#ai-pet-max');
+  if (on){
+    panel.dataset.prev = JSON.stringify({ w: panel.offsetWidth, h: panel.offsetHeight });
+    panel.style.width = '';
+    panel.style.height = '';
+    panel.style.maxHeight = '';
+    panel.style.left = '';
+    panel.style.top = '';
+    panel.classList.add('is-max');
+    if (btn){ btn.setAttribute('aria-label', '还原对话窗口'); btn.classList.add('is-max'); }
+  }else{
+    panel.classList.remove('is-max');
+    let prev = null;
+    try{ prev = JSON.parse(panel.dataset.prev || 'null'); }catch(_){ prev = null; }
+    if (prev && Number.isFinite(prev.w) && Number.isFinite(prev.h)) applyPanelSize(prev.w, prev.h);
+    else { panel.style.width = ''; panel.style.height = ''; panel.style.maxHeight = ''; }
+    if (btn){ btn.setAttribute('aria-label', '放大对话窗口'); btn.classList.remove('is-max'); }
+    placePanel();
+  }
+}
+
+// 八个方向的拖拽手柄：改宽高，拖西/北边时同时挪左上角，对边保持不动。
+function bindPanelResize(panel){
+  panel.querySelectorAll('.ai-pet-rs').forEach(handle => {
+    handle.addEventListener('pointerdown', ev => {
+      if (panel.classList.contains('is-max')) return;
+      if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const r = panel.getBoundingClientRect();
+      const dir = handle.dataset.dir || 'se';
+      const st = { id: ev.pointerId, sx: ev.clientX, sy: ev.clientY, w: r.width, h: r.height, left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+      panel.classList.add('is-resizing');
+
+      const move = e => {
+        if (e.pointerId !== st.id) return;
+        const dx = e.clientX - st.sx, dy = e.clientY - st.sy;
+        let w = st.w, h = st.h;
+        if (dir.includes('e')) w = st.w + dx;
+        if (dir.includes('s')) h = st.h + dy;
+        if (dir.includes('w')) w = st.w - dx;
+        if (dir.includes('n')) h = st.h - dy;
+        const c = clampPanelSize(w, h);
+        const edge = 12;
+        let left = dir.includes('w') ? st.right - c.w : st.left;
+        let top = dir.includes('n') ? st.bottom - c.h : st.top;
+        left = Math.min(Math.max(edge, left), Math.max(edge, window.innerWidth - c.w - edge));
+        top = Math.min(Math.max(edge, top), Math.max(edge, window.innerHeight - c.h - edge));
+        panel.style.width = c.w + 'px';
+        panel.style.height = c.h + 'px';
+        panel.style.maxHeight = 'none';
+        panel.style.left = left + 'px';
+        panel.style.top = top + 'px';
+      };
+      const end = e => {
+        if (e.pointerId !== st.id) return;
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', end);
+        window.removeEventListener('pointercancel', end);
+        panel.classList.remove('is-resizing');
+        savePanelSize();
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', end);
+      window.addEventListener('pointercancel', end);
+    });
+  });
 }
 
 export function togglePetPanel(open){
@@ -168,6 +308,7 @@ export function togglePetPanel(open){
   petEl.classList.toggle('is-open', show);
   $('#ai-pet-hint')?.setAttribute('hidden', '');
   if (show){
+    if (!panel.classList.contains('is-max')) restorePanelSize();   // 上次拖过的尺寸接着用
     placePanel();
     setPetState('wave', 900);
     paintDuty();                       // 每次打开都刷新客服在线状态
@@ -244,7 +385,29 @@ export function mountPet(){
   const body = $('#ai-pet-body');
   restorePos();
   bindDrag(body);
+  bindPanelResize($('#ai-pet-panel'));
   $('#ai-pet-close')?.addEventListener('click', () => togglePetPanel(false));
+
+  // 放大 / 还原：标题栏右上角的按钮，或双击标题栏空白处。
+  $('#ai-pet-max')?.addEventListener('click', () => {
+    const panel = $('#ai-pet-panel');
+    setPanelMax(!panel?.classList.contains('is-max'));
+  });
+  $('#ai-pet-head')?.addEventListener('dblclick', ev => {
+    if (ev.target.closest('button')) return;
+    const panel = $('#ai-pet-panel');
+    setPanelMax(!panel?.classList.contains('is-max'));
+  });
+
+  // 消息变长会把面板撑高；一旦超出视口就重新贴回宠物旁边，避免底部被切。
+  if ('ResizeObserver' in window){
+    const panel = $('#ai-pet-panel');
+    new ResizeObserver(() => {
+      if (!panel || panel.hidden || panel.classList.contains('is-max') || panel.classList.contains('is-resizing')) return;
+      const r = panel.getBoundingClientRect();
+      if (r.bottom > window.innerHeight - 11 || r.top < 11 || r.right > window.innerWidth - 11 || r.left < 11) placePanel();
+    }).observe(panel);
+  }
 
   // 输入框里 Enter 直接发，Shift+Enter 换行。中文输入法拼字期间的 Enter 不能拦，
   // 否则选词会把半截拼音发出去。
@@ -277,6 +440,10 @@ export function mountPet(){
   window.addEventListener('resize', () => {
     if (!petEl) return;
     restorePos();
+    const panel = $('#ai-pet-panel');
+    if (!panel || panel.hidden) return;
+    if (panel.classList.contains('is-max')) return;   // 最大化由 CSS 的 dvh 自适应
+    if (panel.style.width) applyPanelSize(panel.offsetWidth, panel.offsetHeight);   // 窗口变小，旧尺寸收回屏内
     placePanel();
   });
 }
