@@ -120,3 +120,26 @@ Worker 访问独立服务时，用运维配置的 `HC_OFFICE_AGENT_URL`（HTTPS 
    本轮没有实现、没有上架商品；初步测试草稿保留在当前工作区仓库外，未混入已通过测试。
 3. 在开源 Agent 框架上逐步补充多轮工具规划、长期任务、断点恢复、文件办公和工作流模板，
    每轮一个可验收切片，不以“引用框架”替代实际接入。
+
+## 正式 Worker 图片依赖（2026-10-23）
+
+不能直接复用原 `python_modules` 中的 Pillow 12.2.0，也不能把 Windows wheel 放进 Worker。
+已用官方 Pyodide 配方 `314-20260911`，将 Pillow 源码版本与官方 PyPI SHA256 固定到 12.3.0；
+通过 GitHub Ubuntu 隔离编译，目标是 CPython 3.14 / pyemscripten_2026_0_wasm32。
+没有自行实现图片库、重命名旧版本或放宽 TLS/KDF。
+
+[实际成功构建](https://github.com/wangzirui471-collab/huali-corner/actions/runs/39906746810)
+在真实 Pyodide 314.0.7 验证版本、JPEG/PNG/WebP、EXIF 校正/去元数据、坏图拒绝和像素上限。
+本轮 wheel SHA256 为 `315cf03364146407d03d96c59da49a88b4b86e55ec6ee3e5075d64eb037ef51c`，
+完整来源和制品摘要见 `Backend mission/worker-pillow.lock.json`。
+
+下载该运行的 `huali-pillow-12.3.0-wasm` 制品，先核对 GitHub artifact digest，再解压到私密目录。
+使用干净的独立发布目录运行 `scripts/install_worker_pillow.py --wheel <wheel路径> --proof <运行证明JSON路径>`。
+安装器核对当前发布锁、版本、ABI、运行证明、Wasm 标头和 ZIP 路径，拒绝覆盖现有目录；
+`--check-only` 可只检查。校验即使 Python 开启优化也不会被跳过。
+已存在的旧目录须先另存到项目 `_local/` 或工作区私密备份位置，不能删掉原文件后碰运气。
+
+制品默认保留十四天，过期后可重跑固定配方的工作流；新产物应重新校验并更新锁，不能盲用新摘要。
+Wrangler 直连发布显式使用 `disable_python_external_sdk`，继续使用平台内置 SDK，
+保持兼容日期 2026-10-17；未来改用完整 pywrangler 外置 SDK 应作为独立平台验收。
+上面的 Wasm 包验收不替代实际 Worker 发布校验或真实账号业务验收。

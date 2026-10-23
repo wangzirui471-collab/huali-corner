@@ -1,0 +1,32 @@
+{
+  "version": "12.3.0",
+  "formats": [
+    "JPEG",
+    "PNG",
+    "WEBP"
+  ],
+  "exif": true,
+  "bad_image_rejected": true,
+  "pixel_limit": true,
+  "wheel": "pillow-12.3.0-cp314-cp314-pyemscripten_2026_0_wasm32.whl",
+  "sha256": "315cf03364146407d03d96c59da49a88b4b86e55ec6ee3e5075d64eb037ef51c",
+  "abi": "cp314-cp314-pyemscripten_2026_0_wasm32",
+  "source": {
+    "version": "12.3.0",
+    "url": "https://files.pythonhosted.org/packages/1c/3d/bb7fca845737cf9d7dbde16ed1843984665ff2e0a518f5db43e77ec540b9/pillow-12.3.0.tar.gz",
+    "sha256": "3b8182a766685eaa002637e28b4ec8d6b18819a0c71f579bf0dbaa5830297cce",
+    "recipe_repository": "https://github.com/pyodide/pyodide-recipes",
+    "recipe_ref": "314-20260911",
+    "pyodide": "314.0.7",
+    "abi": "pyemscripten_2026_0_wasm32"
+  },
+  "recipes_commit": "fc8587207ecbf0fb54305d5da25ab7ed70f126d3",
+  "build": {
+    "artifact_id": 12480274591,
+    "sha256": "a1004c5ed59b55ed3464d17f3b705166127a179045ac9d672c7e578581535c15",
+    "run_id": 39906746810,
+    "source_commit": "6e69539cca9564681ce4d142f358ccb10e5a8263",
+    "repository": "wangzirui471-collab/huali-corner"
+  },
+  "workflow_url": "https://github.com/wangzirui471-collab/huali-corner/actions/runs/39906746810"
+}

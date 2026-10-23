@@ -83,3 +83,17 @@ Worker `deploy --dry-run --keep-vars` 已通过；真实部署与表结构操作
 依据 Cloudflare 官方运行时定义：
 https://github.com/cloudflare/workerd/blob/main/src/workerd/io/compatibility-date.capnp （pythonExternalSDK）。
 首次失败没有产生成功部署回执；新增空确认表保留供重试，未执行全库恢复或删除业务表。
+
+### 正式 Pillow Wasm 制品验收
+
+SDK 修复后的第二次真实发布仍被 10021 拒绝，原因是缺少 PIL；原本地旧依赖实际为 12.2.0，未复制到线上。
+官方 PyPI 12.3.0 元数据没有 Wasm wheel；Pyodide 官方 314-20260911 索引也仍为 12.2.0。
+本机 WSL Ubuntu 报 `ERROR_NO_SYSTEM_RESOURCES`，没有更改系统配置或停止其他进程。
+
+已复用官方配方，在隔离 GitHub Linux CI 构建正式 Pillow 12.3.0：
+https://github.com/wangzirui471-collab/huali-corner/actions/runs/39906746810 （成功）。
+真实 Wasm 验证 JPEG/PNG/WebP、EXIF、坏图拒绝和像素上限通过，非 Windows Pillow 冒充平台验收。
+源码 SHA256、配方引用、制品来源及 wheel SHA256 已锁定在 `Backend mission/worker-pillow.lock.json`。
+连接器下载 artifact 后核验摘要 `a1004c5ed59b55ed3464d17f3b705166127a179045ac9d672c7e578581535c15`。
+安装器实际检查通过，并以 Python -O 负向确认旧版证明会被拒绝，然后只安装到独立发布目录。
+GitHub Postman CI 的 `ffde073`、`b799054` 已成功；正式 Worker 重新发布结果另记发布回执。
