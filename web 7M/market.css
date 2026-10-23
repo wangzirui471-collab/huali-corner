@@ -172,27 +172,57 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .market-search button:hover { background: #303237; }
 
-/* 搜索框右侧的「小转AI」入口：品牌色描边 + 火花图标。
-   和黑色底的「搜索」按钮并排时不打架，也不抢「发布闲置」主按钮的戏。 */
+/* 搜索框右侧的「小转AI」入口：暗夜霓虹科技风——深底 + 琥珀辉光描边，
+   「AI」等宽金色，呼吸辉光 + 悬停扫光。与黑色「搜索」按钮并排仍不打架，
+   也不抢「发布闲置」主按钮的戏（主按钮是实心品牌黄，这个更暗更冷）。 */
 .header-ai {
+  position: relative;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   height: 46px;
-  padding: 0 17px;
+  padding: 0 18px;
   border-radius: var(--r-pill);
-  border: 1.5px solid var(--brand-lo);
-  background: var(--brand-soft);
-  color: var(--brand-ink);
+  border: 1.5px solid #ffcc38;
+  background: linear-gradient(180deg, #23252d 0%, #14161b 100%);
+  color: #fff;
   font-size: 13px;
   font-weight: 650;
   white-space: nowrap;
   flex-shrink: 0;
-  transition: background .2s var(--ease), border-color .2s var(--ease), transform .2s var(--ease);
+  box-shadow: 0 6px 18px -6px rgba(255,180,20,.5), inset 0 1px 0 rgba(255,255,255,.07);
+  transition: transform .2s var(--ease), box-shadow .25s var(--ease), border-color .25s var(--ease);
+  animation: header-ai-breathe 3s var(--ease) infinite;
 }
-.header-ai:hover { background: #fff1c4; border-color: var(--brand); }
+.header-ai .icon { width: 17px; height: 17px; color: #ffcc38; }
+.header-ai .ai-tag { font-style: normal; font-weight: 700; letter-spacing: .5px; color: #ffcc38; font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace); }
+.header-ai:hover { border-color: #ffd966; box-shadow: 0 10px 28px -6px rgba(255,200,50,.72), inset 0 1px 0 rgba(255,255,255,.12); }
 .header-ai:active { transform: scale(.97); }
-.header-ai .icon { width: 17px; height: 17px; }
+.header-ai::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -130%;
+  width: 55%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255,228,150,.3), transparent);
+  transform: skewX(-18deg);
+  pointer-events: none;
+}
+.header-ai:hover::before { animation: header-ai-sweep .85s var(--ease); }
+@keyframes header-ai-breathe {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(255,190,40,.32)); }
+  50% { filter: drop-shadow(0 0 9px rgba(255,200,50,.6)); }
+}
+@keyframes header-ai-sweep {
+  from { left: -130%; }
+  to { left: 135%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .header-ai { animation: none; }
+  .header-ai:hover::before { animation: none; }
+}
 
 .header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
