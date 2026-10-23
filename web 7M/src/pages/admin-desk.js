@@ -44,9 +44,9 @@ const BLURBS = {
   ai: 'AI 开关、每日额度、权限矩阵与用量；API Key 由开发者在环境变量/Worker secret 中配置，不在网页里保存。'
 };
 
-const ROLE_TONE = { support: 'info', admin: 'violet', developer: 'warn' };
-const ROLE_NAMES = { support: '客服', admin: '平台管理员', developer: '开发者' };
-const ROLE_RANK = { user: 0, support: 1, admin: 2, developer: 3 };
+const ROLE_TONE = { support: 'info', admin: 'violet', developer: 'warn', owner: 'ok' };
+const ROLE_NAMES = { support: '客服', admin: '平台管理员', developer: '开发者', owner: '平台所有者' };
+const ROLE_RANK = { user: 0, support: 1, admin: 2, developer: 3, owner: 4 };
 // 当前登录者是不是开发者——只有开发者能改管理员/开发者的身份，也能新建管理员。
 const isDeveloper = () => state.me?.role === 'developer';
 const ACTION_NAMES = { block: '拦截', review: '送审', report: '仅记录' };
@@ -112,14 +112,16 @@ function deskNav(active) {
 // 身份条：管理员台的首页里，第一眼该看到「我是谁、以什么身份在做事」。
 function identityBar() {
   const me = state.me || {};
-  const role = me.role === 'developer' ? '开发者' : '平台管理员';
-  const tone = me.role === 'developer' ? 'warn' : 'violet';
+  const role = ROLE_NAMES[me.role] || '平台管理员';
+  const tone = ROLE_TONE[me.role] || 'violet';
   return `<div class="desk-id">
     <span class="avatar role-avatar" data-tone="${tone}">${e((me.nickname || '?')[0])}</span>
     <div class="desk-id-main"><b>${e(me.nickname || role)}</b>
-      <small>${me.role === 'developer'
-        ? '以开发者身份登录：可任命管理员、调整任何账号角色，其余与管理员一致。'
-        : '以平台管理员身份登录：设置/废除客服、封号、整店处置、词库维护、审计导出。'}</small></div>
+      <small>${me.role === 'owner'
+        ? '以平台所有者（L1）身份登录：可任免开发者及以下成员、使用 AI 办公助手；所有者账号只能由运维在数据库调整。'
+        : me.role === 'developer'
+          ? '以开发者身份登录：可任命管理员、调整任何账号角色，其余与管理员一致。'
+          : '以平台管理员身份登录：设置/废除客服、封号、整店处置、词库维护、审计导出。'}</small></div>
     ${statePill(role, tone)}
   </div>`;
 }
