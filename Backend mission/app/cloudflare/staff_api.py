@@ -27,7 +27,8 @@ NAMES = {'user': '普通用户', 'support': '客服', 'admin': '平台管理员'
 BACKUP_TABLES = ['ai_office_jobs', 'ai_settings', 'ai_usage', 'audit', 'auth_attempts', 'blocks', 'comments',
                  'friendships', 'ledger', 'members', 'message_hides', 'messages', 'nominations',
                  'notifications', 'offers', 'order_changes', 'order_notes', 'orders', 'otp',
-                 'password_credentials', 'posts', 'products', 'reactions', 'reviews', 'room_pins',
+                 'password_credentials', 'pet_prefs', 'posts', 'products', 'reactions', 'reviews',
+                 'room_pins',
                  'rooms', 'sessions', 'settings', 'ticket_messages', 'tickets', 'uploads',
                  'user_avatar_uploads', 'users', 'wants']
 

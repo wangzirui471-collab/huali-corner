@@ -4,6 +4,7 @@
 所以检索/兜底逻辑在这里保留一份（改规则时两处一起改）。
 业务事实只来自 ai_knowledge.py（由 ai_service/index.json 生成）。
 """
+import base64
 import json
 import re
 import secrets
@@ -1754,6 +1755,79 @@ class AiSupport(OfficeTickets):
                 'top': [{'user_id': r['user_id'], 'nickname': r['nickname'], 'count': int(r['count'] or 0)} for r in top],
                 'total': sum(int(r['count'] or 0) for r in rows)}
 
+    # --- 桌宠偏好：换设备之后形象还跟着人 -------------------------------
+    # 本地 localStorage 仍是第一落点（离线、没登录也能用），这里只做同步。
+    # 冲突按「服务端为准」：登录拉到记录就覆盖本地，没记录就把本地推上去。
+
+    async def pet_prefs(self, request):
+        uid = await self.page_user(request)
+        row = await self.db.first('SELECT * FROM pet_prefs WHERE user_id=?', (uid,))
+        if not row:
+            return json_response({'synced': False})
+        return json_response({
+            'synced': True,
+            'skin': row['skin'] or '',
+            'scale': float(row['scale'] or 1),
+            'hidden': bool(row['hidden']),
+            'life': bool(row['life']),
+            'custom_url': row['custom_url'] or '',
+            'custom_w': int(row['custom_w'] or 0),
+            'custom_h': int(row['custom_h'] or 0),
+            'updated_at': float(row['updated_at'] or 0),
+        })
+
+    async def pet_prefs_save(self, request):
+        uid = await self.page_user(request)
+        d = await json_body(request)
+        skin = str(d.get('skin') or 'daqiao')[:20]
+        if skin not in ('daqiao', 'xiaomao', 'zhuan', 'custom'):
+            skin = 'daqiao'
+        try:
+            scale = float(d.get('scale') or 1)
+        except (TypeError, ValueError):
+            scale = 1.0
+        scale = min(1.6, max(0.6, scale))
+        custom_url = str(d.get('custom_url') or '')[:120]
+        # 只接受自己上传的那类地址，别把任意 URL 写进库再让前端去加载。
+        if custom_url and not re.fullmatch(r'/media/pet_[0-9a-f]{32}', custom_url):
+            custom_url = ''
+        try:
+            cw = max(0, min(2000, int(d.get('custom_w') or 0)))
+            ch = max(0, min(2000, int(d.get('custom_h') or 0)))
+        except (TypeError, ValueError):
+            cw = ch = 0
+        await self.db.run(
+            'INSERT INTO pet_prefs(user_id,skin,scale,hidden,life,custom_url,custom_w,custom_h,updated_at) '
+            'VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET '
+            'skin=excluded.skin,scale=excluded.scale,hidden=excluded.hidden,'
+            'life=excluded.life,custom_url=excluded.custom_url,'
+            'custom_w=excluded.custom_w,custom_h=excluded.custom_h,updated_at=excluded.updated_at',
+            (uid, skin, scale, 1 if d.get('hidden') else 0, 1 if d.get('life') else 0,
+             custom_url, cw, ch, time.time()))
+        return json_response({'ok': True})
+
+    async def pet_avatar(self, request):
+        """自定义桌宠图：存 R2，返回可以匿名访问的 /media/pet_xxx。
+
+        和头像上传分开走：头像会被 normalize 成方形，透明背景保不住。
+        """
+        uid = await self.page_user(request)
+        d = await json_body(request)
+        raw = str(d.get('data') or '')
+        head, _, body = raw.partition(',')
+        require(head in ('data:image/webp;base64', 'data:image/png;base64'),
+                '只支持 WebP / PNG 图片', 400)
+        try:
+            payload = base64.b64decode(body[:700000], validate=True)
+        except Exception:  # noqa: BLE001 - 客户端传来的 base64 不可信
+            raise DomainError('图片数据损坏，请重新选择', 400)
+        saved = await self.media_store.put_pet_image(payload, uid)
+        upload_id = 'pet_' + saved['digest'][:32]
+        await self.db.run(
+            'INSERT OR REPLACE INTO uploads(id,user_id,path,digest,angle,private) '
+            'VALUES(?,?,?,?,?,?)', (upload_id, uid, saved['key'], saved['digest'], '', 0))
+        return json_response({'url': '/media/' + upload_id, 'bytes': saved['bytes']})
+
     async def ai_chat(self, request):
         uid = await self.page_user(request)
         require(await self.ai_enabled(), 'AI 客服已关闭，请转人工客服', 503)
@@ -2118,6 +2192,9 @@ AI_ROUTES = {
     '/api/ai/office/confirm': (('POST',), 'ai_office_confirm'),
     '/api/ai/office/generate': (('POST',), 'ai_office_generate'),
     '/api/ai/office/publish': (('POST',), 'ai_office_publish'),
+    '/api/pet/prefs': (('GET',), 'pet_prefs'),
+    '/api/pet/prefs/save': (('POST',), 'pet_prefs_save'),
+    '/api/pet/avatar': (('POST',), 'pet_avatar'),
     '/api/admin/ai': (('GET', 'POST'), 'ai_admin'),
     '/api/admin/ai/reload': (('POST',), 'ai_reload'),
 }

@@ -111,8 +111,9 @@
   transform: scale(calc(-1 * var(--pet-s)), var(--pet-s));
 }
 
-/* 自定义桌宠只有一张图，没有帧序列，用呼吸动效让它看起来是活的。 */
-.ai-pet.is-custom .ai-pet-sprite{ animation: pet-breathe 3.6s ease-in-out infinite; }
+/* 只有一张图的形象（自定义、以及还没有动作表的小转）没有帧序列，
+   用呼吸动效让它看起来是活的。 */
+.ai-pet.is-static .ai-pet-sprite{ animation: pet-breathe 3.6s ease-in-out infinite; }
 @keyframes pet-breathe{
   0%, 100%{ transform: scale(var(--pet-s)) translateY(0); }
   50%{ transform: scale(calc(var(--pet-s) * 1.03)) translateY(calc(-1px * var(--pet-s) * 3)); }
@@ -188,6 +189,7 @@
    少了这条，消息一长就把底部挤出面板，被 overflow:hidden 切掉。 */
 .ai-pet-head,
 .ai-pet-chips,
+.ai-pet-chips-head,
 .ai-pet-mode,
 .ai-pet-form,
 .ai-pet-note{ flex: none; }
@@ -369,6 +371,32 @@
   white-space: nowrap;
 }
 .ai-pet-chips button:hover{ border-color: #7f68af; background: #f7f4fd; }
+
+/* 「快捷指令 14 个」的标题行：右边那颗就是收起/展开。
+   收起来后只留这一行，消息区能多出四五行的位置。 */
+.ai-pet-chips-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 12px 0;
+  background: #fff;
+}
+.ai-pet-chips-head[hidden]{ display: none; }
+.ai-pet-chips-head span{ font-size: 11px; color: #8a8a93; }
+.ai-pet-chips-head button{
+  flex: none;
+  padding: 3px 10px;
+  border: 1px solid #ececf0;
+  border-radius: 999px;
+  background: #fff;
+  color: #5c5c66;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.ai-pet-chips-head button:hover{ border-color: #7f68af; background: #f7f4fd; color: #5b4a86; }
 
 .ai-pet-form{
   display: flex;

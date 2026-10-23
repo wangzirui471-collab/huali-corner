@@ -14,6 +14,7 @@ import {
   saveCustomSkin, clearCustomSkin, getSkinId, setSkinId,
   getScale, setScale, getLife, setLife, getHidden, setHidden,
   hasReadNotice, markNoticeRead, forgetPosition,
+  pullPetPrefs, schedulePushPetPrefs, uploadCustomSkin,
 } from './pet-skins.js';
 
 const TABS = [
@@ -237,6 +238,7 @@ function bind(){
     }
     if (kind === 'del-custom'){
       clearCustomSkin();
+      schedulePushPetPrefs(0);
       renderPanes();
       emit('skin');
       return;
@@ -262,6 +264,7 @@ function bindPanes(){
         return;
       }
       setSkinId(id);
+      schedulePushPetPrefs();
       renderPanes();
       emit('skin');
     };
@@ -275,6 +278,7 @@ function bindPanes(){
     scale.oninput = () => {
       const v = Number(scale.value) / 100;
       setScale(v);
+      schedulePushPetPrefs();
       const label = root.querySelector('#ps-scale-val');
       if (label) label.textContent = String(Math.round(v * 100));
       emit('scale');
@@ -285,6 +289,7 @@ function bindPanes(){
   if (show){
     show.onchange = () => {
       setHidden(!show.checked);
+      schedulePushPetPrefs();
       emit('show');
     };
   }
@@ -293,6 +298,7 @@ function bindPanes(){
   if (life){
     life.onchange = () => {
       setLife(life.checked);
+      schedulePushPetPrefs();
       emit('life');
     };
   }
@@ -338,6 +344,8 @@ function handleUpload(input){
         markNoticeRead();
         emit('skin');
         toast('已换成你上传的桌宠');
+        // 传上去之后换设备也能用；失败就只留本机，不打扰用户
+        uploadCustomSkin(url);
       }catch(_){
         toast('图片处理失败，换一张试试');
       }

@@ -24,6 +24,19 @@ CREATE TABLE IF NOT EXISTS rooms(id INTEGER PRIMARY KEY,kind TEXT,name TEXT,coll
 CREATE TABLE IF NOT EXISTS room_pins(user_id INTEGER,room_id INTEGER,pinned_at REAL,PRIMARY KEY(user_id,room_id));
 CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INTEGER,expires REAL);
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+-- 桌宠偏好：换设备、换浏览器之后形象和大小还跟着人走。
+-- 自定义形象存 R2，这里只记 /media/pet_xxx 的地址。
+CREATE TABLE IF NOT EXISTS pet_prefs(
+  user_id INTEGER PRIMARY KEY,
+  skin TEXT NOT NULL DEFAULT 'daqiao',
+  scale REAL NOT NULL DEFAULT 1,
+  hidden INTEGER NOT NULL DEFAULT 0,
+  life INTEGER NOT NULL DEFAULT 1,
+  custom_url TEXT,
+  custom_w INTEGER NOT NULL DEFAULT 0,
+  custom_h INTEGER NOT NULL DEFAULT 0,
+  updated_at REAL NOT NULL DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS ticket_messages(id INTEGER PRIMARY KEY,ticket_id INTEGER,user_id INTEGER,body TEXT,internal INTEGER DEFAULT 0,created REAL);
 CREATE TABLE IF NOT EXISTS tickets(id INTEGER PRIMARY KEY,user_id INTEGER,order_id INTEGER,product_id INTEGER,type TEXT,subject TEXT,body TEXT,status TEXT DEFAULT 'open',assignee INTEGER,outcome TEXT,reason TEXT,created REAL);
 CREATE TABLE IF NOT EXISTS uploads(id TEXT PRIMARY KEY,user_id INTEGER,path TEXT,digest TEXT,angle TEXT,private INTEGER DEFAULT 0);

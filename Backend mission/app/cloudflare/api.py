@@ -575,7 +575,15 @@ class Api(AuthApi, StaffApi, CatalogApi, CommunityApi, TradeApi, FriendApi, AiSu
         uid, status = await sessions.current_user_id(self.db, request)
         active = uid is not None and status == 'active'
         cache = 'private, no-store'
-        if key.startswith('ua_'):
+        if key.startswith('pet_'):
+            # 桌宠形象：CSS background-image 拿不到 Authorization 头，
+            # 所以这里必须匿名可读。URL 里的 32 位 hash 由图片内容算出，
+            # 不可枚举；图片本身也只是用户自己的一只宠物，不含隐私。
+            row = await self.db.first('SELECT path FROM uploads WHERE id=?', (key,))
+            require(row is not None, '图片不存在', 404)
+            path = row['path']
+            cache = 'public, max-age=31536000, immutable'
+        elif key.startswith('ua_'):
             # Avatars use a separate registry; staff have no preview bypass.
             from ..account.avatars import AVATAR_ID
             require(AVATAR_ID.fullmatch(key), '图片不存在', 404)

@@ -13,7 +13,7 @@ import { state } from '../core/state.js';
 import { isOwner } from '../core/roles.js';
 import {
   currentSkin, getScale, getLife, getHidden, setHidden,
-  applySkinVars, applySkinFrame, resolveAct, stopFrames,
+  applySkinVars, applySkinFrame, resolveAct, stopFrames, pullPetPrefs,
 } from './pet-skins.js';
 import { openPetSettings, onPetPrefChange } from './pet-settings.js';
 
@@ -22,6 +22,7 @@ const SPRITE_H = 147;
 const POS_KEY = 'hc-pet-pos';
 const SIZE_KEY = 'hc-pet-panel-size';
 const HINT_KEY = 'hc-pet-hinted';
+const CHIPS_KEY = 'hc-pet-chips-collapsed';   // 快捷指令收起了没有
 const MIN_PANEL_W = 300;       // 再窄按钮和输入框就挤成一条了
 const MIN_PANEL_H = 320;
 // 用户选的面板尺寸。和「夹到当前视口后的显示尺寸」是两回事：窗口临时变小
@@ -50,6 +51,38 @@ export function paintDuty(server){
   const hours = (server && server.hours) || local.hours;
   el.textContent = (online ? '客服在线 · ' : '客服已下班 · ') + hours;
   el.dataset.online = String(online);
+}
+
+// --- 快捷指令的收起 / 展开 ------------------------------------------------
+// 办公 7 个、工作 14 个按钮，铺开能占四五行走廊，把消息区挤得只剩一两行。
+// 收起状态写进 localStorage：重开面板、切模式、刷新页面都不会自己弹回来。
+function chipsCollapsed(){
+  try{ return localStorage.getItem(CHIPS_KEY) === '1'; }catch(_){ return false; }
+}
+
+export function applyPetChips(mode){
+  const owner = isOwner(state.me);
+  const collapsed = chipsCollapsed();
+  const faq = $('#ai-pet-faq-chips');
+  const head = $('#ai-pet-chips-head');
+  const office = $('#ai-pet-office-chips');
+  const work = $('#ai-pet-work-chips');
+  // 办公/工作模式有工具指令，客服那排常见问和模式页签重复，先让位。
+  if (faq) faq.hidden = mode !== 'chat';
+  if (head) head.hidden = !owner || mode === 'chat';
+  if (office) office.hidden = !owner || collapsed || mode !== 'office';
+  if (work) work.hidden = !owner || collapsed || mode !== 'work';
+  const btn = $('#ai-pet-chips-toggle');
+  if (btn){
+    btn.textContent = collapsed ? '展开' : '收起';
+    btn.setAttribute('aria-expanded', String(!collapsed));
+  }
+}
+
+export function togglePetChips(mode){
+  // 隐私模式下 localStorage 可能抛错：退化成「本次有效」，不阻断点击。
+  try{ localStorage.setItem(CHIPS_KEY, chipsCollapsed() ? '0' : '1'); }catch(_){ }
+  applyPetChips(mode);
 }
 
 let petEl = null;
@@ -91,7 +124,7 @@ export function aiPet(){
     <div class="ai-pet-log" id="ai-pet-log">
       <div class="ai-pet-msg bot">我是转角的桌宠。发布、退款、面交、客服时间都能问我——不想问正事，聊两句也行。</div>
     </div>
-    <div class="ai-pet-chips" aria-label="常见问题">
+    <div class="ai-pet-chips" id="ai-pet-faq-chips" aria-label="常见问题">
       <button type="button" data-action="ai-pet-chip" data-q="怎么发布闲置？">怎么发布</button>
       <button type="button" data-action="ai-pet-chip" data-q="怎么退款？">怎么退款</button>
       <button type="button" data-action="ai-pet-chip" data-q="客服什么时候在线？">客服时间</button>
@@ -101,6 +134,11 @@ export function aiPet(){
       <button type="button" data-action="ai-pet-mode" data-mode="chat" class="active">客服问答</button>
       <button type="button" data-action="ai-pet-mode" data-mode="office">办公</button>
       <button type="button" data-action="ai-pet-mode" data-mode="work">工作</button>
+    </div>
+    <div class="ai-pet-chips-head" id="ai-pet-chips-head" hidden>
+      <span>快捷指令</span>
+      <button type="button" id="ai-pet-chips-toggle" data-action="ai-pet-chips-toggle"
+              aria-controls="ai-pet-office-chips ai-pet-work-chips" aria-expanded="true">收起</button>
     </div>
     <div class="ai-pet-chips ai-pet-office" id="ai-pet-office-chips" aria-label="所有者办公" hidden>
       <button type="button" data-action="ai-office" data-q="平台数据概览">数据概览</button>
@@ -527,6 +565,7 @@ export function mountPet(){
   document.body.insertAdjacentHTML('beforeend', aiPet());
   petEl = $('#ai-pet');
   const body = $('#ai-pet-body');
+  applyPetChips('chat');     // 上次收起过就保持收起，别一挂载又铺满
   // 先把皮肤贴上去再定位：桌宠的宽高由皮肤的格子尺寸算出来，
   // 顺序反了会按上一只的尺寸夹位置，换宠物后可能半个身子在屏幕外。
   applySkin();
@@ -594,6 +633,9 @@ export function mountPet(){
 
   // 皮肤（图集地址、帧尺寸、色调）走 CSS 变量，图解码好之前元素是透明的，
   // 解码失败才降级成字钮，功能不至于消失。
+  // 拉一次账号里的偏好：这台设备第一次用、或者换了浏览器时，
+  // 形象和大小应该还是上次调好的样子。失败就用本地的，不打扰。
+  pullPetPrefs().then(changed => { if (changed) applySkin(); });
 
   // 第一次来提示一次可以拖，之后不再打扰。
   try{

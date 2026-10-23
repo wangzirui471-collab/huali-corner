@@ -76,6 +76,27 @@ class MediaStore:
         raw = bytes(body.to_py()) if hasattr(body, 'to_py') else bytes(body)
         return raw, CONTENT_TYPE
 
+    async def put_pet_image(self, content, owner_id):
+        """桌宠形象：原样存，不做头像那套方形裁剪/重编码。
+
+        头像的 normalize 会按人像重排，抠好透明背景的宠物图会被压掉 alpha。
+        这里只校验格式和体积——内容已经由前端压到长边 480。
+        """
+        if not (300 <= len(content) <= 400 * 1024):
+            raise DomainError('图片大小不合适（300B ~ 400KB）', 400)
+        webp = content[:4] == b'RIFF' and content[8:12] == b'WEBP'
+        png = content[:8] == b'\x89PNG\r\n\x1a\n'
+        if not (webp or png):
+            raise DomainError('只支持 PNG / WebP 图片', 400)
+        key = self.key_for('pet', owner_id, content)
+        written = await self._bucket.put(key, content, {
+            'httpMetadata': {'contentType': 'image/webp' if webp else 'image/png'},
+            'customMetadata': {'owner': str(int(owner_id)), 'scope': 'pet'},
+        })
+        if written is None:
+            raise DomainError('图片保存失败，请稍后重试', 503)
+        return {'key': key, 'bytes': len(content), 'digest': hashlib.sha256(content).hexdigest()}
+
     async def put_backup(self, payload, name):
         """工作模式备份落盘：backups/ 前缀的私有 zip，不经图片重编码。
 

@@ -8,6 +8,9 @@
 //
 // 自定义桌宠走另一条路：用户传一张图，只有一帧，配一个呼吸动效。
 
+import { api } from '../core/http.js';
+import { state } from '../core/state.js';
+
 export const SKINS = {
   // 女角色。图集沿用旧文件名（xiaozhuan-atlas），换名字只改这里，不动物理文件，
   // 免得 CDN 上多一份重复的大图。
@@ -30,6 +33,20 @@ export const SKINS = {
       fail: { row: 5, n: 8, ms: 140, once: true },
       run: { row: 8, n: 6, ms: 130 },
     },
+  },
+  // 橙团子。目前只有一张成图，没有动作表，靠呼吸动效显得是活的。
+  // 以后作者给了分镜表，把 static 去掉、补 acts 即可，调用方不用改。
+  zhuan: {
+    id: 'zhuan',
+    name: '小转',
+    note: '橙团子 · 一只在等人的小兽',
+    avatar: '/assets/ai-pet/xiaozhuan-pet.png',
+    atlas: '/assets/ai-pet/xiaozhuan-pet.png',
+    cell: [480, 464],
+    cols: 1,
+    rows: 1,
+    static: true,
+    acts: { idle: { row: 0, n: 1, ms: 0 } },
   },
   // 褐绒毛团。11 行动作表，按原作者的分镜摆位：
   //   0 捂鼻子摇手（移动）、9 抬头低头看（点一下）、5 摊平躺下（打字）、
@@ -57,11 +74,9 @@ export const SKINS = {
 
 // 还没画好形象的角色先占着位置：设置页里显示成灰色卡片，点了给一句提示。
 // 有了素材就在 SKINS 里加一条同 id 的记录，这里自然不再出现。
-export const PENDING_SKINS = [
-  { id: 'zhuan', name: '小转', note: '形象还在画，先选别的' },
-];
+export const PENDING_SKINS = [];
 
-export const SKIN_LIST = [SKINS.daqiao, SKINS.xiaomao];
+export const SKIN_LIST = [SKINS.zhuan, SKINS.daqiao, SKINS.xiaomao];
 export const DEFAULT_SKIN = 'daqiao';
 
 const SKIN_KEY = 'hc-pet-skin';
@@ -95,10 +110,12 @@ export function customSkin(){
     if (!d || !d.atlas) return null;
     return {
       id: 'custom',
-      name: String(d.name || '自定义').slice(0, 12),
+      name: String(d.name || '我的桌宠').slice(0, 12),
       custom: true,
-      atlas: d.atlas,
-      avatar: d.atlas,
+      // 换设备时本机没有 dataURL，用账号同步下来的 /media/pet_xxx
+      atlas: d.atlas || d.remote || '',
+      avatar: d.atlas || d.remote || '',
+      remote: d.remote || '',
       cell: [Number(d.w) || 200, Number(d.h) || 200],
       cols: 1,
       rows: 1,
@@ -200,6 +217,7 @@ export function applySkinVars(el, skin, userScale){
   el.style.setProperty('--pet-tint', skin.tint || 'none');
   el.dataset.skin = skin.id;
   el.classList.toggle('is-custom', !!skin.custom);
+  el.classList.toggle('is-static', !!skin.static || !!skin.custom);
   applySkinFrame(el.querySelector('.ai-pet-sprite'), skin, 'idle');
 }
 
@@ -226,4 +244,97 @@ export function resolveAct(skin, state){
   if (want === 'moveLeft' && skin.acts.move) return { act: 'move', flip: true };
   if (want === 'move' && skin.acts.moveLeft) return { act: 'moveLeft', flip: true };
   return { act: skin.acts.idle ? 'idle' : 'idle', flip: false };
+}
+
+// --- 账号同步 ---------------------------------------------------------
+// localStorage 仍是第一落点：没登录、断网、本地纯开都能用。
+// 服务端只是让「换设备之后形象还在」成立，任何一步失败都静默降级——
+// 同步失败不该挡住用户换皮肤。
+
+let pushTimer = 0;
+let pulling = false;
+
+function prefsPayload(){
+  const c = customSkin();
+  return {
+    skin: getSkinId(),
+    scale: getScale(),
+    hidden: getHidden(),
+    life: getLife(),
+    custom_url: (c && c.remote) || '',
+    custom_w: c ? c.cell[0] : 0,
+    custom_h: c ? c.cell[1] : 0,
+  };
+}
+
+function writeCustom(raw){
+  try{ localStorage.setItem(CUSTOM_KEY, JSON.stringify(raw)); }catch(_){ }
+}
+
+function applyRemote(d){
+  if (!d || !d.synced) return false;
+  // 远端有自定义图而本机没有：把地址落到本地记录里，尺寸也一起带回来
+  if (d.custom_url){
+    let cur = null;
+    try{ cur = JSON.parse(localStorage.getItem(CUSTOM_KEY) || 'null'); }catch(_){ cur = null; }
+    if (!cur || !cur.atlas){
+      writeCustom({
+        atlas: '', remote: d.custom_url,
+        w: d.custom_w || 220, h: d.custom_h || 220,
+        name: '我的桌宠',
+      });
+    }else if (cur.remote !== d.custom_url){
+      cur.remote = d.custom_url;
+      writeCustom(cur);
+    }
+  }
+  if (d.skin){
+    // 远端选了自定义但本机确实没有那张图，退回默认，别留一个加载不出来的桌宠
+    const want = d.skin === 'custom' && !customSkin() ? DEFAULT_SKIN : d.skin;
+    if (SKINS[want] || want === 'custom') setSkinId(want);
+  }
+  if (Number.isFinite(d.scale)) setScale(d.scale);
+  setHidden(!!d.hidden);
+  setLife(!!d.life);
+  return true;
+}
+
+/** 登录后拉一次。服务端没有记录时，把这台设备的设置反推上去。 */
+export async function pullPetPrefs(){
+  if (pulling || !state.token) return false;
+  pulling = true;
+  try{
+    const d = await api('/pet/prefs', undefined, { global: true });
+    if (d && d.synced) return applyRemote(d);
+    schedulePushPetPrefs(0);
+    return false;
+  }catch(_){
+    return false;   // 老后端没有这个接口，或者断网：当作纯本地模式
+  }finally{
+    pulling = false;
+  }
+}
+
+/** 本地改动后节流推送：拖滑块会连着触发，别每一下都打一次接口。 */
+export function schedulePushPetPrefs(delay = 900){
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => {
+    if (!state.token) return;
+    api('/pet/prefs/save', prefsPayload(), { global: true }).catch(() => {});
+  }, Math.max(0, delay));
+}
+
+/** 把自定义形象上传到 R2，成功后把远端地址记在本地并推一次偏好。 */
+export async function uploadCustomSkin(dataUrl){
+  try{
+    const d = await api('/pet/avatar', { data: dataUrl }, { global: true });
+    if (!d || !d.url) return '';
+    let cur = null;
+    try{ cur = JSON.parse(localStorage.getItem(CUSTOM_KEY) || 'null'); }catch(_){ cur = null; }
+    if (cur){ cur.remote = d.url; writeCustom(cur); }
+    schedulePushPetPrefs(0);
+    return d.url;
+  }catch(_){
+    return '';      // 传不上去就只留本地，下次换设备再传
+  }
 }
