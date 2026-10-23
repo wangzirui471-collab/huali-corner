@@ -27,6 +27,8 @@ function petAppend(html, who='bot'){
 let petHistory = [];
 // 所有者面板的「客服问答 / 办公」模式；普通用户固定走客服问答。
 let petMode = 'chat';
+// 演示商品预览：先生成、等 L1 确认后才入库。
+let pendingProducts = [];
 
 async function petAsk(q){
   const text=String(q||'').trim();
@@ -291,6 +293,43 @@ export const clicks = {
       toast(r.message||'已执行');
       b.textContent='已执行';
     }catch(err){ toast(err.message||'执行失败'); b.disabled=false; b.textContent='确认执行'; }
+  },
+  // 生成演示商品：只生成预览，L1 确认后才入库。
+  'ai-office-gen': async b => {
+    const log=$('#ai-pet-log'); if(!log) return;
+    const topic = window.prompt('生成什么主题的演示商品？（例如：宿舍好物、二手书、运动器材）', b.dataset.q || '宿舍好物');
+    if (!topic) return;
+    petAppend(petText('生成演示商品：' + topic), 'user');
+    const wait=petAppend('<span class="ai-pet-typing">正在生成预览…</span>','bot');
+    setPetState('review');
+    try{
+      const r = await api('/ai/office/generate', {prompt: topic, count: 5});
+      pendingProducts = r.items || [];
+      if (!pendingProducts.length){
+        wait.innerHTML = '<div>没生成出可用的商品，换个主题再试。</div>';
+        setPetState('fail',1600);
+        return;
+      }
+      const rows = pendingProducts.map((p,i)=>`<div class="ai-pet-prod" style="cursor:default"><span class="ai-pet-prod-txt"><b>${i+1}. ${e(p.title)}</b><small>¥${money(p.price)} · ${e(p.condition)}</small></span></div>`).join('');
+      wait.innerHTML = `<div>已生成 ${pendingProducts.length} 件预览（尚未入库）：</div>
+        <div class="ai-pet-prods">${rows}</div>
+        <div class="ai-pet-action"><b>确认入库</b><p>会以你的账号发布为演示商品（标记 virtual），出现在首页。</p><button type="button" class="btn primary" data-action="ai-office-publish">确认入库（${pendingProducts.length} 件）</button></div>`;
+      setPetState('idle');
+    }catch(err){
+      wait.innerHTML = `<div>${petText(err.message || '生成失败')}</div>`;
+      setPetState('fail',1600);
+    }
+  },
+  'ai-office-publish': async b => {
+    if (!pendingProducts.length) return;
+    if (!window.confirm(`确认把这 ${pendingProducts.length} 件演示商品入库？会出现在首页商品列表。`)) return;
+    b.disabled=true; b.textContent='入库中…';
+    try{
+      const r = await api('/ai/office/publish', {items: pendingProducts});
+      toast(`已入库 ${r.count} 件演示商品`);
+      b.textContent = `已入库 ${r.count} 件`;
+      pendingProducts = [];
+    }catch(err){ toast(err.message || '入库失败'); b.disabled=false; b.textContent='重试'; }
   },
   // 小转给了「去首页搜索」：把关键词塞进搜索框并跳到首页。
   'pet-search': b => {

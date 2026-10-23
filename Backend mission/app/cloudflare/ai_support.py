@@ -6,6 +6,7 @@
 """
 import json
 import re
+import secrets
 import time
 
 from ..core.errors import ValidationMixin, DomainError
@@ -1118,6 +1119,68 @@ OFFICE_ROLE_WORDS = (
 ROLE_LABELS = {'user': '普通用户', 'support': '客服', 'admin': '管理员',
                'developer': '开发者', 'owner': '平台所有者'}
 
+# 演示商品生成：只生成预览，入库必须由 L1 在界面上确认（参照 LangGraph HITL）。
+PRODUCT_SYSTEM = """你是「转角」校园二手平台的演示数据生成器。根据主题生成校园二手商品。
+只输出 JSON 数组，不要任何解释。每项字段：
+{"title": "标题（30 字内）", "category": "books|electronics|living|sports",
+ "price": 数字（元，0-2000）, "condition": "近乎全新|正常使用痕迹|明显磨损，已说明",
+ "description": "60 字内介绍"}
+不要出现真实姓名、手机号、宿舍号；不要承诺真实交易。"""
+
+PRODUCT_CATEGORIES = ('books', 'electronics', 'living', 'sports')
+PRODUCT_CONDITIONS = ('近乎全新', '正常使用痕迹', '明显磨损，已说明')
+
+
+def _clean_product(row, price_in_cents=False):
+    if not isinstance(row, dict):
+        return None
+    title = str(row.get('title') or '').strip()[:40]
+    category = str(row.get('category') or '').strip()
+    condition = str(row.get('condition') or '').strip()
+    desc = str(row.get('description') or '').strip()[:200]
+    try:
+        price = (int(row.get('price') or 0) if price_in_cents
+                 else int(round(float(row.get('price') or 0) * 100)))
+    except (TypeError, ValueError):
+        return None
+    if not title or category not in PRODUCT_CATEGORIES:
+        return None
+    if condition not in PRODUCT_CONDITIONS:
+        condition = '正常使用痕迹'
+    if price < 0 or price > 2000 * 100:
+        return None
+    return {'title': title, 'category': category, 'price': price,
+            'condition': condition, 'description': desc}
+
+
+def parse_products_json(raw):
+    """解析模型返回的商品 JSON 数组（价格单位：元）；非法项直接丢弃。"""
+    m = re.search(r'\[[\s\S]*\]', raw or '')
+    if not m:
+        return []
+    try:
+        rows = json.loads(m.group(0))
+    except Exception:
+        return []
+    if not isinstance(rows, list):
+        return []
+    out = []
+    for row in rows[:10]:
+        item = _clean_product(row, False)
+        if item:
+            out.append(item)
+    return out
+
+
+def clean_product_items(items):
+    """校验前端回传的预览项（价格单位：分）。"""
+    out = []
+    for row in (items or [])[:10]:
+        item = _clean_product(row, True)
+        if item:
+            out.append(item)
+    return out
+
 
 def office_action(question):
     """解析所有者话里的动作意图；只解析，不执行。"""
@@ -1244,6 +1307,11 @@ class AiSupport:
             await self.ai_count(uid)
         return json_response(result)
 
+    async def _owner_model(self, uid):
+        """所有者可用更强模型（HC_AI_MODEL_OWNER 未配置时返回 None，走默认）。"""
+        role = await self.db.scalar('SELECT role FROM users WHERE id=?', (uid,))
+        return (getattr(self.env, 'HC_AI_MODEL_OWNER', '') or None) if role == 'owner' else None
+
     async def _price_samples(self, category, title):
         """同类在售价：先按分类，再按标题关键词兜底。"""
         like = '%' + (title or '')[:12] + '%'
@@ -1269,7 +1337,8 @@ class AiSupport:
         try:
             text = trim(strip_thinking(await call_llm(
                 DESCRIBE_SYSTEM,
-                build_describe_prompt(title, category, condition, extra), self.env)), 400)
+                build_describe_prompt(title, category, condition, extra), self.env,
+                model=await self._owner_model(uid))), 400)
         except Exception:  # noqa: BLE001 - 生成失败不能卡住发布
             mode = 'mock'
         if not text:
@@ -1304,7 +1373,7 @@ class AiSupport:
             parsed = parse_price_json(strip_thinking(await call_llm(
                 PRICE_SYSTEM,
                 build_price_prompt(title, category, condition, original, prices),
-                self.env, max_tokens=200)))
+                self.env, max_tokens=200, model=await self._owner_model(uid))))
             if parsed:
                 low, high, reason = parsed[0] * 100, parsed[1] * 100, parsed[2]
                 mode = 'llm'
@@ -1433,6 +1502,53 @@ class AiSupport:
             (uid, target, 'ai_office_' + kind, None, msg, None, time.time()))
         return json_response({'ok': True, 'message': msg})
 
+    async def ai_office_generate(self, request):
+        """生成演示商品预览（只返回，不入库）。"""
+        uid, role = await self.cf_staff_actor(request)
+        require(role == 'owner', '仅平台所有者可生成演示商品', 403)
+        d = await json_body(request)
+        prompt = ValidationMixin.text(d.get('prompt'), 100, '主题')
+        try:
+            count = max(1, min(int(d.get('count') or 5), 10))
+        except (TypeError, ValueError):
+            count = 5
+        await self.ai_quota(uid, role)
+        model = getattr(self.env, 'HC_AI_MODEL_OWNER', '') or None
+        items = []
+        try:
+            raw = await call_llm(PRODUCT_SYSTEM, '主题：%s\n数量：%d 件' % (prompt, count),
+                                 self.env, max_tokens=1200, model=model)
+            items = parse_products_json(raw)
+        except Exception:  # noqa: BLE001 - 生成失败不写库
+            items = []
+        if items:
+            await self.ai_count(uid)
+        return json_response({'items': items, 'mode': 'llm' if items else 'mock'})
+
+    async def ai_office_publish(self, request):
+        """L1 确认后批量入库演示商品；服务端重新校验，最多 10 件。"""
+        uid, role = await self.cf_staff_actor(request)
+        require(role == 'owner', '仅平台所有者可发布演示商品', 403)
+        d = await json_body(request)
+        items = clean_product_items(d.get('items'))
+        require(items, '商品数据不合法')
+        now = time.time()
+        ids = []
+        for item in items:
+            pid = secrets.randbits(48)
+            ids.append(pid)
+            data = {'description': item['description'], 'condition': item['condition'],
+                    'virtual': True, 'photos': []}
+            await self.db.run(
+                'INSERT INTO products(id,seller_id,title,category,price,delivery_fee,delivery,'
+                'region,status,data,created) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+                (pid, uid, item['title'], item['category'], item['price'], 0, 'pickup',
+                 '校内面交', 'available', json.dumps(data, ensure_ascii=False), now))
+        await self.db.run(
+            'INSERT INTO audit(actor,target,type,delta,reason,ticket_id,created) VALUES(?,?,?,?,?,?,?)',
+            (uid, None, 'ai_office_publish', None, '生成演示商品 %d 件' % len(ids), None, now))
+        return json_response({'ok': True, 'count': len(ids), 'ids': ids})
+
     async def ai_admin_get(self, request):
         uid, _ = await self.cf_staff_actor(request, admin=True)
         s = await self.ai_settings()
@@ -1484,6 +1600,8 @@ AI_ROUTES = {
     '/api/ai/price': (('POST',), 'ai_price'),
     '/api/ai/office': (('POST',), 'ai_office'),
     '/api/ai/office/confirm': (('POST',), 'ai_office_confirm'),
+    '/api/ai/office/generate': (('POST',), 'ai_office_generate'),
+    '/api/ai/office/publish': (('POST',), 'ai_office_publish'),
     '/api/admin/ai': (('GET', 'POST'), 'ai_admin'),
     '/api/admin/ai/reload': (('POST',), 'ai_reload'),
 }

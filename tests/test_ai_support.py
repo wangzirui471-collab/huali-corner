@@ -193,6 +193,20 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(ai.office_action('平台数据概览'))
         self.assertIsNone(ai.office_action('写一条客服公告'))
 
+    def test_product_preview_parsing(self):
+        # 模型输出价格是「元」→ 解析成分；非法分类/价格直接丢弃
+        raw = ('[{"title":"宿舍台灯","category":"living","price":25,'
+               '"condition":"正常使用痕迹","description":"暖光台灯"},'
+               '{"title":"坏数据","category":"unknown","price":1}]')
+        items = ai.parse_products_json(raw)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['price'], 2500)
+        # 前端回传的预览项已经是「分」，不能再次乘 100
+        cleaned = ai.clean_product_items([
+            {'title': '宿舍台灯', 'category': 'living', 'price': 2500,
+             'condition': '正常使用痕迹', 'description': '暖光'}])
+        self.assertEqual(cleaned[0]['price'], 2500)
+
     def test_publish_helpers(self):
         # 估价 JSON：模型回「元」，解析层只负责校验与截断
         self.assertEqual(ai.parse_price_json('{"low": 30, "high": 45, "reason": "成色一般"}'),

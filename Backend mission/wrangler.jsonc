@@ -12,6 +12,9 @@
   // API Key 不进仓库，用 `wrangler secret put HC_AI_API_KEY` 单独设置。
   "vars": {
     "HC_AI_MODEL": "deepseek-flash",
+    // 所有者（L1）可用更强的模型；留空则回退 HC_AI_MODEL。
+    // 例：在 Cloudflare 控制台/`wrangler secret put` 设为你的套餐支持的模型名。
+    "HC_AI_MODEL_OWNER": "",
     "HC_AI_API_URL": "https://api.deepseek.com/chat/completions",
     "HC_AI_DAILY_LIMIT": "30"
   },
