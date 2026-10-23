@@ -49,3 +49,6 @@ d1out.json
 postman/_backup/
 # 每次跑完覆盖的临时报告，不想让它反复出现在 diff 里就打开下面这行
 # postman/运行报告.md
+
+# 正式 Worker 图片依赖的隔离构建目录。
+.worker-build/

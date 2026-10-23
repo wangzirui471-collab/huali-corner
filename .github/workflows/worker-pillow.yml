@@ -1,0 +1,70 @@
+name: Worker Pillow 12.3 Wasm
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/ai-office-tickets]
+    paths:
+      - .github/workflows/worker-pillow.yml
+      - scripts/worker_images/**
+permissions:
+  contents: read
+jobs:
+  pillow:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: 获取项目代码
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: 获取官方固定版本构建配方
+        uses: actions/checkout@v7.0.1
+        with:
+          repository: pyodide/pyodide-recipes
+          ref: 314-20260911
+          path: .worker-build/recipes
+          persist-credentials: false
+      - name: 安装匹配目标的 Python
+        uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.14'
+      - name: 安装 Node 测试运行时
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+      - name: 安装官方构建工具
+        run: python -m pip install pyodide-build==0.39.2 PyYAML==6.0.3
+      - name: 校验并准备正式 Pillow 配方
+        run: python scripts/worker_images/prepare_pillow_recipe.py
+      - name: 安装固定 ABI 的官方交叉编译环境
+        run: pyodide xbuildenv install 314.0.7
+      - name: 按官方配方编译 Pillow 及编解码依赖
+        run: pyodide build-recipes Pillow --recipe-dir .worker-build/recipes/packages --install --install-dir .worker-build/dist --log-dir .worker-build/logs --n-jobs 2
+      - name: 安装真实 Wasm 测试运行时
+        run: npm install --prefix .worker-build/test-runtime --no-save pyodide@314.0.7
+      - name: 验证正式版本和实际图片编解码
+        run: node scripts/worker_images/verify_pillow_wasm.cjs
+      - name: 保存配方来源与构建版本
+        run: |
+          git -C .worker-build/recipes rev-parse HEAD > .worker-build/dist/recipes-commit.txt
+          python -m pip freeze > .worker-build/dist/build-requirements.txt
+      - name: 上传已验证的正式依赖制品
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: huali-pillow-12.3.0-wasm
+          path: |
+            .worker-build/dist/pillow-12.3.0-*.whl
+            .worker-build/dist/pillow-runtime-verification.json
+            .worker-build/dist/pillow-source.json
+            .worker-build/dist/recipes-commit.txt
+            .worker-build/dist/build-requirements.txt
+          if-no-files-found: error
+          retention-days: 14
+      - name: 保留构建失败诊断
+        if: failure()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: pillow-build-diagnostics
+          path: .worker-build/logs
+          if-no-files-found: ignore
+          retention-days: 7
