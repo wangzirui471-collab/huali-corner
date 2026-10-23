@@ -214,6 +214,18 @@ class AiSupportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ai.demo_photo_for('electronics', 4), '/assets/item1.svg')
         self.assertEqual(ai.demo_photo_for('unknown', 0), '/assets/book3.svg')
 
+    def test_after_sale_intent_and_order_reply(self):
+        self.assertTrue(ai.after_sale_intent('我要退货'))
+        self.assertTrue(ai.after_sale_intent('订单没收到怎么办'))
+        self.assertFalse(ai.after_sale_intent('怎么发布闲置'))
+        text, links = ai.order_reply({'status': 'awaiting_payment'})
+        self.assertIn('直接取消', text)
+        self.assertEqual(links[0]['href'], '#orders')
+        text, _ = ai.order_reply({'status': 'awaiting_receipt'})
+        self.assertIn('确认收货', text)
+        text, _ = ai.order_reply({'status': 'refunded'})
+        self.assertIn('退款完成', text)
+
     def test_publish_helpers(self):
         # 估价 JSON：模型回「元」，解析层只负责校验与截断
         self.assertEqual(ai.parse_price_json('{"low": 30, "high": 45, "reason": "成色一般"}'),

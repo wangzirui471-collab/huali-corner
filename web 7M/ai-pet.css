@@ -398,6 +398,26 @@ button.ai-pet-link{ cursor: pointer; font-family: inherit; }
 }
 .ai-pet-mode button.active{ background: #fff6d8; border-color: #f0e2ae; color: #7a5c07; font-weight: 650; }
 
+/* 售后：订单选择卡 */
+.ai-pet-orders{ display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.ai-pet-order{
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 8px 10px; border: 1px solid #e3e6ea; border-radius: 10px;
+  background: #fff; cursor: pointer; text-align: left; font-family: inherit;
+}
+.ai-pet-order:hover{ border-color: #d8451f; }
+.ai-pet-order b{ font-size: 12.5px; color: #2b2b33; }
+.ai-pet-order small{ font-size: 11px; color: #8a8a93; }
+
+/* 常见服务推荐 */
+.ai-pet-sugs{ display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ai-pet-sug{
+  padding: 4px 9px; border-radius: 999px; border: 1px solid #ececf0;
+  background: #f7f8fa; color: #4a4f57; font-size: 11.5px; cursor: pointer;
+  font-family: inherit;
+}
+.ai-pet-sug:hover{ background: #fff6d8; border-color: #f0e2ae; color: #7a5c07; }
+
 /* 客服状态灯：面板标题下的小字。在线=绿，已下班=灰，一眼看得出现在能不能找人。 */
 .ai-pet-head small#ai-pet-duty::before{
   content: ''; display: inline-block; width: 6px; height: 6px;

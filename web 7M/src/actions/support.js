@@ -30,7 +30,7 @@ let petMode = 'chat';
 // 演示商品预览：先生成、等 L1 确认后才入库。
 let pendingProducts = [];
 
-async function petAsk(q){
+async function petAsk(q, extra){
   const text=String(q||'').trim();
   const log=$('#ai-pet-log'); if(!text||!log) return;
   const form=$('#ai-pet-form'), area=form?.querySelector('textarea[name=q]'), send=form?.querySelector('button[type=submit]');
@@ -40,12 +40,15 @@ async function petAsk(q){
   if(send) send.disabled=true;
   setPetState('review');                  // 「专注工作」＝思考中：小转动手翻资料，等接口回来
   try{
-    const r=await api('/ai/chat',{question:text,history:petHistory.slice(-4)},{global:true,timeout:45000});
+    const r=await api('/ai/chat',{question:text,history:petHistory.slice(-4),...(extra||{})},{global:true,timeout:45000});
     const src=(r.sources||[]).slice(0,3).map((s,i)=>`[${i+1}] ${e(s.title||s.source)}`).join(' · ');
     const links=(r.links||[]).map(l=>l.action
       ? `<button type="button" class="ai-pet-link" data-action="${e(l.action)}" data-q="${e(l.q||'')}">${e(l.label)} →</button>`
       : `<a class="ai-pet-link" href="${e(l.href)}">${e(l.label)} →</a>`).join('');
     const prods=(r.products||[]).map(p=>`<a class="ai-pet-prod" href="#product/${p.id}"><span class="ai-pet-prod-img" style="background-image:url('${e(p.url||'')}')"></span><span class="ai-pet-prod-txt"><b>${e(p.title)}</b><small>¥${money(p.price)}${p.nickname?' · '+e(p.nickname):''}</small></span></a>`).join('');
+    // 售后：让用户从自己的订单里选一笔；常见服务做成可点的推荐问句。
+    const orders=(r.orders||[]).map(o=>`<button type="button" class="ai-pet-order" data-action="ai-pick-order" data-id="${o.id}"><b>${e(o.title)}</b><small>¥${money(o.total)} · ${e(o.status_label)}</small></button>`).join('');
+    const sug=(r.suggestions||[]).map(s=>`<button type="button" class="ai-pet-sug" data-action="ai-suggest" data-q="${e(s)}">${e(s)}</button>`).join('');
     const transfer=r.action==='transfer';        // 客户明说要人工，且客服在线
     const offline=r.action==='leave_message';    // 客户明说要人工，但客服已下班
     const st=r.support||{};
@@ -58,9 +61,11 @@ async function petAsk(q){
       card=`<div class="ai-pet-offline"><b>客服已下班（每天 ${hours}）</b><p>留言和工单会按提交顺序排着，${e(st.next_open||'明天 08:00')}上班后处理。你现在写下来，明天不用重新说一遍。</p><button type="button" class="btn primary" data-action="new-ticket">提交工单留言</button></div>`;
     }
     wait.innerHTML=`<div>${petText(r.answer)}</div>
+      ${orders?`<div class="ai-pet-orders">${orders}</div>`:''}
       ${links?`<div class="ai-pet-links">${links}</div>`:''}
       ${prods?`<div class="ai-pet-prods">${prods}</div>`:''}
       ${card}
+      ${sug?`<div class="ai-pet-sugs">${sug}</div>`:''}
       ${src?`<div class="ai-pet-src">来源：${src}</div>`:''}
       ${r.notice?`<div class="ai-pet-src">${e(r.notice)}</div>`:''}`;
     paintDuty(r.support);          // 状态灯以服务端为准，避免和回答内容打架
@@ -98,7 +103,10 @@ async function petOffice(q, mode){
     // 办公请求是全局面板发起的，不跟随页面重渲染丢弃；最多等 60 秒。
     const r=await api('/ai/office',{question:text,mode:mode||'query'},{global:true,timeout:60000});
     const p=r.proposal;
+    // 数据查询由后端确定性拼好，另带一份 items：列表比一大段文字好扫。
+    const rows=(r.items||[]).map(it=>`<div class="ai-pet-row"><b>${e(it.title)}</b>${it.meta?`<small>${e(it.meta)}</small>`:''}</div>`).join('');
     wait.innerHTML=`<div>${petText(r.answer)}</div>
+      ${rows?`<div class="ai-pet-rows">${rows}</div>`:''}
       ${p?`<div class="ai-pet-action"><b>待执行</b><p>${e(p.summary)}</p><p class="muted">不可逆操作，需要你再次确认。</p><button type="button" class="btn primary" data-action="ai-office-confirm" data-kind="${e(p.kind)}" data-target="${p.target}" data-role="${e(p.role||'')}" data-name="${e(p.nickname)}">确认执行</button></div>`:''}
       ${r.mode==='mock'?'<div class="ai-pet-src">模型暂不可用，以上为数据快照</div>':''}`;
     setPetState('idle');
@@ -282,12 +290,16 @@ export const clicks = {
   },
   'ai-pet-toggle': () => togglePetPanel(),
   'ai-pet-chip': b => petAsk(b.dataset.q),
+  // 售后：选中订单后把 order_id 一起带给后端，按订单状态回答。
+  'ai-pick-order': b => petAsk('订单 #' + b.dataset.id + ' 的售后怎么处理？', {order_id: Number(b.dataset.id)}),
+  // 常见服务推荐：点一下就是一句完整问题。
+  'ai-suggest': b => petAsk(b.dataset.q),
   'ai-office': b => { petMode = 'office'; petOffice(b.dataset.q, b.dataset.mode || 'query'); },
   'ai-pet-mode': b => {
     petMode = b.dataset.mode === 'office' ? 'office' : 'chat';
     document.querySelectorAll('.ai-pet-mode button').forEach(x => x.classList.toggle('active', x.dataset.mode === petMode));
     const area = $('#ai-pet-q');
-    if (area) area.placeholder = petMode === 'office' ? '问平台数据，或说「把某某降为管理员」…' : '问问小转，例如：怎么发布？';
+    if (area) area.placeholder = petMode === 'office' ? '问用户/订单/商品/工单，或说「把某某降为管理员」…' : '问问小转，例如：怎么发布？';
   },
   // 不可逆动作：L1 在浏览器里再确认一次，确认后才调用执行端点（后端仍校验身份并写审计）。
   'ai-office-confirm': async b => {
