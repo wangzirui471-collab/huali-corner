@@ -35,6 +35,13 @@ class Proxy:
         raise TypeError("'pyodide.ffi.JsProxy' object is not iterable")
 
 
+class JsNull:
+    """模拟 pyodide 的 JsNull：查不到行时 D1 返回的 JS null，不是 Python None。"""
+
+    def __iter__(self):
+        raise TypeError("'JsNull' object is not iterable")
+
+
 class Statement:
     def __init__(self, binding, sql):
         self.binding = binding
@@ -87,6 +94,13 @@ class RowsTest(unittest.TestCase):
         self.assertEqual(self.run_async(db.all('SELECT 1')), [{'id': 1}])
         self.assertEqual(self.run_async(db.scalar('SELECT 1')), 2)
 
+    def test_missing_row_is_none_not_error(self):
+        # 「查无此行」在平台 SDK 下是 JsNull：不认就会 500，本该 404 / 401
+        db = Database(Binding(rows=JsNull(), row=JsNull()))
+        self.assertIsNone(self.run_async(db.first('SELECT 1')))
+        self.assertIsNone(self.run_async(db.scalar('SELECT 1')))
+        self.assertEqual(self.run_async(db.all('SELECT 1')), [])
+
     def test_no_rows_is_empty_not_error(self):
         db = Database(Binding(rows=None, row=None))
         self.assertEqual(self.run_async(db.all('SELECT 1')), [])
@@ -106,8 +120,10 @@ class RowsTest(unittest.TestCase):
     def test_helpers_tolerate_both_shapes(self):
         self.assertEqual(_as_dict(Proxy({'a': 1})), {'a': 1})
         self.assertIsNone(_as_dict(None))
+        self.assertIsNone(_as_dict(JsNull()))
         self.assertEqual(_as_list(Proxy([1, 2])), [1, 2])
         self.assertEqual(_as_list(None), [])
+        self.assertEqual(_as_list(JsNull()), [])
 
 
 if __name__ == '__main__':

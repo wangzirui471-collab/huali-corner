@@ -50,6 +50,18 @@ DB_LIMIT_BYTES = 10 * 1024 ** 3
 __all__ = ['Database', 'DB_LIMIT_BYTES']
 
 
+def _is_null(value):
+    """判空：包含 JS 的 null / undefined（Pyodide 里是 JsNull / JsUndefined，不是 None）。
+
+    D1 查不到行时 `.first()` 返回 JS null，旧外部 SDK 转成 Python None，
+    平台 SDK 直接给 JsNull。不认它，`dict(JsNull)` 就会抛
+    TypeError: 'JsNull' object is not iterable —— 于是「查无此项」全部变成 500。
+    """
+    if value is None:
+        return True
+    return type(value).__name__ in ('JsNull', 'JsUndefined')
+
+
 def _py(value):
     """把 Pyodide 的 JsProxy 转成 Python 对象；普通对象原样返回。
 
@@ -60,6 +72,8 @@ def _py(value):
     所有查库的接口一律 500（首页、商品、健康检查全挂，前端整屏「服务暂不可用」）。
     在这里统一兜住：两种 SDK、两种返回形态都能跑。
     """
+    if _is_null(value):
+        return None
     to_py = getattr(value, 'to_py', None)
     if callable(to_py):
         try:
@@ -71,9 +85,9 @@ def _py(value):
 
 def _as_dict(row):
     """D1 返回的对象支持下标访问，但统一转成 dict，便于现有 service 的 row['x'] 写法。"""
+    row = _py(row)
     if row is None:
         return None
-    row = _py(row)
     if isinstance(row, dict):
         return row
     return dict(row)
@@ -81,9 +95,9 @@ def _as_dict(row):
 
 def _as_list(value):
     """把 D1 的 results 统一成 list（平台 SDK 下是 JsProxy 数组）。"""
+    value = _py(value)
     if value is None:
         return []
-    value = _py(value)
     return value if isinstance(value, list) else list(value)
 
 
