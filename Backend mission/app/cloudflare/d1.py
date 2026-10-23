@@ -127,13 +127,17 @@ class Database:
             return []
         return list(await self._db.batch(prepared))
 
-    async def guarded_batch(self, guard_sql, guard_params, statements, message='状态已变化，请重试'):
-        '''Check a trusted SELECT inside the write transaction; false rolls back.
+    @staticmethod
+    def guard_statement(guard_sql, guard_params):
+        """生成事务内失败即回滚的守卫，便于批量工具拆分查询以遵守 D1 参数限制。"""
+        return ('INSERT INTO settings(key,value) SELECT \'__cloud_batch_guard__\',NULL WHERE NOT EXISTS (' + guard_sql + ')', tuple(guard_params))
 
-        The failure-only insert violates the existing NOT NULL constraint.
-        A successful guard inserts no row and needs no schema migration.
-        '''
-        guard = ('INSERT INTO settings(key,value) SELECT \'__cloud_batch_guard__\',NULL WHERE NOT EXISTS (' + guard_sql + ')', tuple(guard_params))
+    async def guarded_batch(self, guard_sql, guard_params, statements, message='状态已变化，请重试'):
+        """在同一事务中检查可信 SELECT；不满足时触发非空约束并整批回滚。
+
+        守卫满足时不插入任何数据，不需要额外的守卫表或数据库迁移。
+        """
+        guard = self.guard_statement(guard_sql, guard_params)
         try:
             results = await self.batch([guard] + list(statements))
         except Exception as exc:

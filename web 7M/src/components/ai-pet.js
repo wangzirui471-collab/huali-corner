@@ -77,7 +77,8 @@ export function aiPet(){
     </div>
     <div class="ai-pet-chips ai-pet-office" aria-label="所有者办公">
       <button type="button" data-action="ai-office" data-q="平台数据概览">数据概览</button>
-      <button type="button" data-action="ai-office" data-q="今天有哪些待处理工单？">待处理工单</button>
+      <button type="button" data-action="ai-office" data-q="当前有哪些待处理工单？">待处理工单</button>
+      <button type="button" data-action="ai-office-tickets">工单办公</button>
       <button type="button" data-action="ai-office" data-mode="draft" data-q="写一条面向同学的客服公告，说明本周六晚系统维护、期间下单可能延迟。">写公告</button>
     </div>` : ''}
     <form id="ai-pet-form" class="ai-pet-form">

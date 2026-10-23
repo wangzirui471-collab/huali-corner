@@ -24,7 +24,7 @@ NAMES = {'user': '普通用户', 'support': '客服', 'admin': '平台管理员'
 # cf_staff_backup 里 `found <= set(BACKUP_TABLES)` 会拦住缺表的备份（宁可 503，
 # 也不能悄悄漏一张表交付），tests/test_cloudflare_staff.py 还会静态比对 schema.sql，
 # 迁移加表忘了补清单时测试先红，不会等到线上点备份才发现。
-BACKUP_TABLES = ['ai_settings', 'ai_usage', 'audit', 'auth_attempts', 'blocks', 'comments',
+BACKUP_TABLES = ['ai_office_jobs', 'ai_settings', 'ai_usage', 'audit', 'auth_attempts', 'blocks', 'comments',
                  'friendships', 'ledger', 'members', 'message_hides', 'messages', 'nominations',
                  'notifications', 'offers', 'order_changes', 'order_notes', 'orders', 'otp',
                  'password_credentials', 'posts', 'products', 'reactions', 'reviews', 'room_pins',
@@ -127,9 +127,9 @@ class StaffApi:
         uid = await self.page_user(request)
         return json_response(await self.cf_staff_ticket_dto(uid, int_param(query_of(request), 'id')))
 
-    async def cf_staff_reply(self, request):
-        uid = await self.page_user(request); d = await json_body(request); tid = ident(d.get('id'))
-        t = await self.cf_staff_ticket_dto(uid, tid); internal = bool(d.get('internal'))
+    async def cf_staff_reply_plan(self, uid, t, d):
+        """准备现有工单回复的守卫、正文和通知，供工作台与办公助手原子提交。"""
+        tid = t['id']; internal = bool(d.get('internal'))
         role = await self.db.scalar('SELECT role FROM users WHERE id=?', (uid,))
         require(not internal or role in STAFF, '没有客服权限', 403)
         stmts = [('INSERT INTO ticket_messages(ticket_id,user_id,body,internal,created) VALUES(?,?,?,?,?)', (tid, uid, text(d.get('body'), 2000, '回复'), int(internal), time.time()))]
@@ -143,15 +143,22 @@ class StaffApi:
         guard = 'SELECT 1 FROM tickets WHERE id=? AND order_id IS ?'; args = (tid, t['order_id'])
         if role not in STAFF:
             guard += ' AND (user_id=? OR EXISTS(SELECT 1 FROM orders WHERE id=tickets.order_id AND (buyer_id=? OR seller_id=?)))'; args += (uid, uid, uid)
+        return guard, args, stmts, roles
+
+    async def cf_staff_reply(self, request):
+        """沿用原回复协议；与助手共用同一业务写入计划。"""
+        uid = await self.page_user(request); d = await json_body(request); tid = ident(d.get('id'))
+        t = await self.cf_staff_ticket_dto(uid, tid)
+        guard, args, stmts, roles = await self.cf_staff_reply_plan(uid, t, d)
         await self.cf_staff_commit(uid, guard, args, stmts, roles)
         return json_response(await self.cf_staff_ticket_dto(uid, tid))
 
-    async def cf_staff_resolve(self, request):
-        uid, _ = await self.cf_staff_actor(request); d = await json_body(request); tid = ident(d.get('id'))
-        t = await self.cf_staff_ticket_dto(uid, tid); await self.cf_staff_conflict(uid, t)
+    async def cf_staff_resolve_plan(self, uid, t, d):
+        """准备原有工单处理计划，保持退款、利益冲突、通知及会话归档规则。"""
+        tid = t['id']; await self.cf_staff_conflict(uid, t)
         reason = text(d.get('reason'), 1000, '处理依据'); outcome = d.get('outcome', 'resolved')
         require(outcome in ('refund', 'reject', 'resolved', 'review', 'claim'), '处理方式无效')
-        if t['status'] == 'resolved': return json_response({'ok': True})
+        if t['status'] == 'resolved': return None
         o = await self.db.first('SELECT * FROM orders WHERE id=?', (t['order_id'],)) if t['order_id'] else None
         guard, args = self.cf_staff_ticket_guard(uid, t); stmts = []
         if outcome == 'refund':
@@ -174,7 +181,16 @@ class StaffApi:
                           "WHERE support=1 AND ticket_id=? AND COALESCE(support_status,'open')='open'", (time.time(), tid)))
             stmts.append(("UPDATE messages SET removed=3 WHERE removed IN (0,1) AND room_id IN "
                           "(SELECT id FROM rooms WHERE support=1 AND ticket_id=? AND support_status='closed' AND support_closed_by='ticket')", (tid,)))
-        await self.cf_staff_commit(uid, guard, args, stmts)
+        return guard, args, stmts
+
+    async def cf_staff_resolve(self, request):
+        """工作台处理入口；办公助手复用计划，保持一个领域写入口。"""
+        uid, _ = await self.cf_staff_actor(request); d = await json_body(request); tid = ident(d.get('id'))
+        t = await self.cf_staff_ticket_dto(uid, tid)
+        plan = await self.cf_staff_resolve_plan(uid, t, d)
+        if plan:
+            guard, args, stmts = plan
+            await self.cf_staff_commit(uid, guard, args, stmts)
         return json_response({'ok': True})
 
     async def cf_staff_candidates(self, request):

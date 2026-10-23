@@ -478,24 +478,27 @@ CONDITION_FACTORS = {
 }
 
 
-def call_llm(system, user):
-    """通用 DeepSeek 调用（不走知识库提示词），供描述生成 / 估价复用。"""
-    if not config.API_KEY:
+def call_llm(system, user, owner=False, max_tokens=400):
+    """复用 OpenAI 兼容客户端；办公服务可单独配置模型和自托管端点。"""
+    api_key = config.OWNER_API_KEY if owner else config.API_KEY
+    api_url = config.OWNER_API_URL if owner else config.API_URL
+    model = config.OWNER_MODEL if owner else config.CHAT_MODEL
+    if not api_key:
         raise RuntimeError('未配置 HC_AI_API_KEY')
     payload = {
-        'model': config.CHAT_MODEL,
+        'model': model,
         'messages': [
             {'role': 'system', 'content': system},
             {'role': 'user', 'content': user},
         ],
         'stream': False,
         'temperature': 0.4,
-        'max_tokens': 400,
+        'max_tokens': max_tokens,
     }
     req = urllib.request.Request(
-        config.API_URL,
+        api_url,
         data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
-        headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + config.API_KEY},
+        headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + api_key},
         method='POST',
     )
     with _NO_PROXY.open(req, timeout=config.TIMEOUT) as resp:

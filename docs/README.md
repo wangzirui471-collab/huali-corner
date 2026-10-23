@@ -13,6 +13,7 @@
 | 查看仓库既有需求记录 | [V1.2](转角软件需求文档-v1.2.md)、[V1.3](转角软件需求文档-v1.3.md) |
 | 本地启动与账号管理 | [试用说明](TRIAL.md)、[本次恢复记录](LOCAL_RECOVERY-2026-10-18.md) |
 | 商品管理与人员权限 | [商品下架规则](MAIN_PRODUCT_DELIST_FIX.md)、[管理员与客服分权](管理员与客服分权方案.md)、[工作台接口](工作台接口契约.md) |
+| L1 工单办公与开源编排 | [功能与配置](AI-OFFICE.md)、[补充交付](refactor/DELIVERY-HANDOFF.md)、[实测验证](refactor/verification.md) |
 | Cloudflare 迁移 | [迁移设计](superpowers/specs/2026-10-17-cloudflare-trial-design.md)、[授权说明](CLOUDFLARE_ACCESS.md) |
 | 素材来源 | [资源署名](ASSET-CREDITS.md) |
 

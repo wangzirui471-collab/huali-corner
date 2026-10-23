@@ -104,6 +104,22 @@ class Handler(BaseHTTPRequestHandler):
         if not self._auth_ok():
             return self._send({'error': 'unauthorized'}, 401)
         path = self.path.split('?', 1)[0]
+        if path == '/office/tickets/draft':
+            # 独立服务只做草稿编排，没有业务数据库或平台写入凭证。
+            if not config.TOKEN:
+                return self._send({'error': '办公草稿服务必须配置独立 HC_AI_TOKEN'}, 503)
+            data = self._read_json()
+            if not isinstance(data, dict):
+                return self._send({'error': '请求体必须是 JSON'}, 400)
+            try:
+                from office_agent import draft_tickets, generate_with_provider
+                return self._send(draft_tickets(data.get('tickets'), generate_with_provider))
+            except ImportError:
+                return self._send({'error': '办公编排依赖未安装，请安装 requirements-office.txt'}, 503)
+            except ValueError:
+                return self._send({'error': '办公工单输入无效'}, 400)
+            except Exception:  # noqa: BLE001 - 不把原文、服务凭证或堆栈发给客户端
+                return self._send({'error': '办公草稿服务暂不可用'}, 503)
         if path == '/reload':
             rag.reload_index()
             return self._send({'ok': True})

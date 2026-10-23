@@ -27,6 +27,9 @@ PROVIDER = os.environ.get('HC_AI_PROVIDER', 'api').strip().lower()
 API_URL = os.environ.get('HC_AI_API_URL', 'https://api.deepseek.com/chat/completions')
 API_KEY = os.environ.get('HC_AI_API_KEY') or os.environ.get('DEEPSEEK_API_KEY', '')
 CHAT_MODEL = os.environ.get('HC_AI_MODEL', 'deepseek-flash')
+OWNER_MODEL = os.environ.get('HC_AI_MODEL_OWNER') or CHAT_MODEL
+OWNER_API_URL = os.environ.get('HC_AI_API_URL_OWNER') or API_URL
+OWNER_API_KEY = os.environ.get('HC_AI_API_KEY_OWNER') or API_KEY
 
 # 可选：本地 Ollama 模式
 OLLAMA = os.environ.get('HC_AI_OLLAMA', 'http://127.0.0.1:11434').rstrip('/')

@@ -1162,7 +1162,10 @@ def format_stats(stats):
                stats['orders']['total'], stats['orders']['recent']))
 
 
-class AiSupport:
+from .office_tickets import OfficeTickets, OFFICE_TICKET_ROUTES, ticket_question
+
+
+class AiSupport(OfficeTickets):
     async def ai_settings(self):
         await self.db.run('INSERT OR IGNORE INTO ai_settings(id,enabled,daily_limit,staff_daily_limit) VALUES(1,1,30,100)')
         return await self.db.first('SELECT * FROM ai_settings WHERE id=1')
@@ -1358,6 +1361,16 @@ class AiSupport:
         question = ValidationMixin.text(d.get('question'), 300, '问题')
         mode = 'draft' if d.get('mode') == 'draft' else 'query'
 
+        # 工单查询直接调用领域工具；汇总提示词无法提供明细或实际处理能力。
+        if mode == 'query' and ticket_question(question):
+            match = re.search(r'(?:工单\s*#?\s*|#)(\d+)', question)
+            query = {'ticket_id': int(match.group(1))} if match else {}
+            if '处理中' in question:
+                query['status'] = 'processing'
+            elif '复核' in question:
+                query['status'] = 'review'
+            return json_response(await self.office_ticket_list_data(uid, query))
+
         act = office_action(question)
         if act:
             hits = await self._office_targets(question)
@@ -1487,3 +1500,4 @@ AI_ROUTES = {
     '/api/admin/ai': (('GET', 'POST'), 'ai_admin'),
     '/api/admin/ai/reload': (('POST',), 'ai_reload'),
 }
+AI_ROUTES.update(OFFICE_TICKET_ROUTES)

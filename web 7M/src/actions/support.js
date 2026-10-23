@@ -10,6 +10,7 @@ import { state, statusNames } from '../core/state.js';
 import { field } from '../components/forms.js';
 import { ticketModal } from '../pages/support.js';
 import { setPetState, togglePetPanel, paintDuty } from '../components/ai-pet.js';
+import { openOfficeTickets } from '../components/office-tickets.js';
 
 // --- AI 宠物对话 ---------------------------------------------------------
 function petText(text){ return e(text).replace(/\n/g,'<br>'); }
@@ -93,9 +94,11 @@ async function petOffice(q, mode){
     const r=await api('/ai/office',{question:text,mode:mode||'query'});
     const p=r.proposal;
     wait.innerHTML=`<div>${petText(r.answer)}</div>
+      ${r.office_tool==='tickets'?`<div class="ai-pet-office">${(r.tickets||[]).slice(0,3).map(t=>`<p><b>#${t.id} ${e(t.subject)}</b><br>${e(t.body.slice(0,80))}</p>`).join('')}<button type="button" class="btn primary" data-action="ai-office-tickets">查看明细与处理建议</button></div>`:''}
       ${p?`<div class="ai-pet-action"><b>待执行</b><p>${e(p.summary)}</p><p class="muted">不可逆操作，需要你再次确认。</p><button type="button" class="btn primary" data-action="ai-office-confirm" data-kind="${e(p.kind)}" data-target="${p.target}" data-role="${e(p.role||'')}" data-name="${e(p.nickname)}">确认执行</button></div>`:''}
       ${r.mode==='mock'?'<div class="ai-pet-src">模型暂不可用，以上为数据快照</div>':''}`;
     setPetState('idle');
+    if(r.office_tool==='tickets') await openOfficeTickets(r);
   }catch(err){
     wait.innerHTML=`<div>${petText(err.message||'办公助手暂时不可用')}</div>`;
     setPetState('fail',1600);
@@ -272,6 +275,7 @@ export const clicks = {
     toast('已插入回复框，请核对后发送');
   },
   'ai-pet-toggle': () => togglePetPanel(),
+  'ai-office-tickets': () => openOfficeTickets(),
   'ai-pet-chip': b => petAsk(b.dataset.q),
   'ai-office': b => { petMode = 'office'; petOffice(b.dataset.q, b.dataset.mode || 'query'); },
   'ai-pet-mode': b => {

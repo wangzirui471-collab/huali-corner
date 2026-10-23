@@ -1,0 +1,3 @@
+# 仅安装到独立 Python 3.10+ AI 服务；不要塞入 Python Worker 的图片依赖目录。
+-c requirements-office.lock
+langgraph==1.2.16
