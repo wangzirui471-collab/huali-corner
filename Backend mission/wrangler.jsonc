@@ -4,7 +4,9 @@
   "main": "worker.py",
   "account_id": "824c84ca5e382e2b4f8de6260d6b0017",
   "compatibility_date": "2026-10-17",
-  "compatibility_flags": ["python_workers"],
+  // 当前直用 Wrangler 打包，显式使用平台内置 Python SDK；不降低兼容日期或 TLS 校验。
+  // 否则新运行时默认要求随包提供 external SDK，导入 workers 会在发布校验时报 10021。
+  "compatibility_flags": ["python_workers", "disable_python_external_sdk"],
   "observability": {
     "logs": {"enabled": true, "invocation_logs": true}
   },

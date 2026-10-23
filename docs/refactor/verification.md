@@ -77,3 +77,15 @@
 与此前已验收版本相比，业务 Python 代码及单元测试正文不变；新增上游浏览器脚本，补齐第七个工单入口和视口恢复断言。
 已实际运行 `office_mode_browser_smoke.py`：真实内存查询、列表渲染、手机号打码、七个快捷入口、底部不裁和缩小后恢复尺寸均通过。
 执行环境为原项目 Python 3.12.7 的 Playwright，数据仅为脚本合成，未访问线上业务。
+
+### 发布运行时兼容修复
+
+授权后已对当前绑定库仅执行 `CREATE TABLE IF NOT EXISTS ai_office_jobs`，七列结构及零行均核验通过；未修改已有业务记录。
+原工作区已快进至整合提交并恢复全部待提交内容；十九个文件有私密恢复快照，十七个不重叠文件保持内容，九十一个既有 Python 函数保留。
+
+第一次真实发布被 Cloudflare 校验拒绝（10021）：`ModuleNotFoundError: No module named workers`，提示需要外置 SDK 或内置 SDK 兼容标志。
+原线上兼容日期同为 2026-10-17，代码此前依赖平台内置 SDK；本轮保持该日期，显式添加 `disable_python_external_sdk`。
+该标志只选择 SDK 来源，不降低 TLS、KDF 或 Pillow 版本，不自行拼装 SDK。
+依据 Cloudflare 官方运行时定义：
+https://github.com/cloudflare/workerd/blob/main/src/workerd/io/compatibility-date.capnp （pythonExternalSDK）。
+首次失败没有产生成功部署回执；新增空确认表保留供重试，未执行全库恢复或删除业务表。
