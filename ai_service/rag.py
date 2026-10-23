@@ -396,8 +396,13 @@ PLAN_SYSTEM = """你是转角平台的工作 Agent 规划器。根据用户请�
 2. 用户只是问数据/列表 → 选读工具；用户要求改账号/处置商品/退款 → 选写工具（后端会生成确认卡，不会直接执行）；
 3. 问“待办/需要我处理/待处理” → tickets，status=open；
 4. 问订单/成交 → orders；问用户/账号 → users；问商品/在售 → products；问审计 → audit；
-5. 只有宽泛地问“平台怎么样/数据概览”才选 overview；
-6. 不确定时选 overview。
+5. 问会话/聊天 → rooms；问举报/治理 → moderation；问信誉 → credit；问议价 → offers；
+   问帖子/社区 → posts；问账本/流水 → ledger；问卖家/排行 → sellers；
+6. 问封禁/解封 → user_ban；问信誉调整 → user_credit；问置顶 → product_promote；
+   问整店下架 → product_batch_delist；问删帖/删评论 → content_remove；
+   问清理演示商品 → demo_cleanup；问备份 → backup；
+7. 只有宽泛地问“平台怎么样/数据概览”才选 overview；
+8. 不确定时选 overview。
 """
 
 

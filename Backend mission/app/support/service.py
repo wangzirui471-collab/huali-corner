@@ -363,11 +363,14 @@ class SupportService(ValidationMixin):
         self.require(self.is_owner(u),'仅平台所有者可执行',403)
         from . import office
         kind=str(kind or ''); target=int(target or 0); role=str(role or '')
-        self.require(kind in ('role','disable','revoke'),'未知操作')
+        self.require(kind in ('role','disable','ban','revoke'),'未知操作')
         t=self.row('SELECT id,nickname,role,status FROM users WHERE id=?',(target,))
         self.require(t,'账号不存在',404)
         self.require(t['role']!='owner','所有者账号不能通过助手调整',403)
         self.require(target!=u,'不能对自己执行此操作',403)
+        if kind=='ban':
+            self.ban_user(u,target,True,'工作模式封禁')
+            return {'ok':True,'message':'已封禁「%s」' % t['nickname']}
         now=time.time()
         with self.tx() as c:
             if kind=='role':

@@ -62,7 +62,10 @@ def parse_action(question):
     m = re.search(r'把\s*[「"“]?([^」"”\s，。]{1,20})[」"”]?\s*(?:降为|设为|改成|调整为|转为)\s*(管理员|客服|开发者|普通用户|用户)', q)
     if m:
         return {'kind': 'role', 'name': m.group(1), 'role': role_map[m.group(2)]}
-    m = re.search(r'(?:注销|停用|禁用|封禁)\s*[「"“]?([^」"”\s，。]{1,20})[」"”]?', q)
+    m = re.search(r'(?:封禁|禁用)\s*[「"“]?([^」"”\s，。]{1,20})[」"”]?', q)
+    if m:
+        return {'kind': 'ban', 'name': m.group(1), 'role': None}
+    m = re.search(r'(?:注销|停用)\s*[「"“]?([^」"”\s，。]{1,20})[」"”]?', q)
     if m:
         return {'kind': 'disable', 'name': m.group(1), 'role': None}
     m = re.search(r'(?:强制|踢)\s*[「"“]?([^」"”\s，。]{1,20})[」"”]?\s*(?:下线|退出)', q)
@@ -171,6 +174,8 @@ def answer(m, question, mode='query'):
                 ROLE_LABELS.get(action['role'], action['role']))
         elif action['kind'] == 'disable':
             summary = '注销「%s」的账号，并撤销其所有登录会话' % target['nickname']
+        elif action['kind'] == 'ban':
+            summary = '封禁「%s」，下架其在售商品并撤销登录会话' % target['nickname']
         else:
             summary = '强制「%s」下线（撤销其所有登录会话）' % target['nickname']
         return {'answer': '找到「%s」。这是不可逆操作，请再次确认：%s。' % (target['nickname'], summary),

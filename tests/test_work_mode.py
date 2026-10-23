@@ -19,6 +19,9 @@ class WorkModeTests(unittest.TestCase):
         with self.m.tx() as c:
             c.execute("UPDATE users SET role='owner' WHERE id=?", (self.owner,))
         self.m.create_ticket(self.target, {'type': 'other', 'subject': '演示工单', 'body': '工作模式测试'})
+        self.post_id = self.m.add_post(self.target, {'topic': '交流', 'body': '工作模式测试帖'})['id']
+        # 造一件在售商品，覆盖置顶/整店下架等写工具的 proposal
+        self.m.ai_office_publish(self.owner, self.m.ai_office_generate(self.owner, '宿舍好物', 1)['items'])
 
     def test_tools_and_overview(self):
         data = self.m.work_tools(self.owner)
@@ -28,6 +31,33 @@ class WorkModeTests(unittest.TestCase):
         r = self.m.work_chat(self.owner, '平台概览')
         self.assertIn('活跃用户', r['answer'])
         self.assertTrue(r['items'])
+
+    def test_extended_read_tools(self):
+        for tool in ('rooms', 'posts', 'ledger', 'sellers', 'offers', 'moderation', 'credit'):
+            r = self.m.work_call(self.owner, tool, {})
+            self.assertIn('answer', r, tool)
+            self.assertIn('items', r, tool)
+
+    def test_extended_write_tools_need_token(self):
+        product = self.m.row("SELECT id,promoted_until,status FROM products WHERE status='available' LIMIT 1")
+        if not product:
+            self.skipTest('no available product in seed')
+        cases = [
+            ('user_ban', {'target': self.target, 'banned': True, 'reason': '测试'}),
+            ('product_promote', {'id': product['id'], 'tier': '1d', 'reason': '测试'}),
+            ('product_batch_delist', {'seller': self.target, 'reason': '测试'}),
+            ('content_remove', {'kind': 'post', 'id': self.post_id, 'reason': '测试'}),
+            ('demo_cleanup', {}),
+            ('backup', {}),
+        ]
+        for tool, args in cases:
+            r = self.m.work_call(self.owner, tool, args)
+            self.assertIsNotNone(r.get('token'), tool)
+            self.assertIsNotNone(r.get('proposal'), tool)
+        # proposal 阶段不写库
+        self.assertEqual(self.m.row('SELECT status FROM users WHERE id=?', (self.target,))['status'], 'active')
+        self.assertEqual(self.m.row('SELECT removed FROM posts WHERE id=?', (self.post_id,))['removed'], 0)
+        self.assertEqual(self.m.row('SELECT promoted_until FROM products WHERE id=?', (product['id'],))['promoted_until'] or 0, product['promoted_until'] or 0)
 
     def test_read_tools(self):
         users = self.m.work_call(self.owner, 'users', {'q': '小陈'})
@@ -64,6 +94,11 @@ class WorkModeTests(unittest.TestCase):
     def test_invalid_token(self):
         with self.assertRaises(DomainError):
             self.m.work_confirm(self.owner, 'not-a-token')
+
+    def test_ban_is_not_disable(self):
+        r = self.m.work_chat(self.owner, '封禁 小陈同学')
+        self.assertIn('封禁', r['proposal']['summary'])
+        self.assertEqual(self.m.row('SELECT status FROM users WHERE id=?', (self.target,))['status'], 'active')
 
     def test_agent_routes_action_to_proposal(self):
         r = self.m.work_chat(self.owner, '把小陈同学降为客服')

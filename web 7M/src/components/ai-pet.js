@@ -104,6 +104,13 @@ export function aiPet(){
       <button type="button" data-action="ai-work" data-q="查商品">查商品</button>
       <button type="button" data-action="ai-work" data-q="看审计">看审计</button>
       <button type="button" data-action="ai-work" data-q="最近 7 天趋势">趋势</button>
+      <button type="button" data-action="ai-work" data-q="查会话">会话</button>
+      <button type="button" data-action="ai-work" data-q="内容治理">内容治理</button>
+      <button type="button" data-action="ai-work" data-q="低信誉用户">信誉</button>
+      <button type="button" data-action="ai-work" data-q="最近议价">议价</button>
+      <button type="button" data-action="ai-work" data-q="社区内容">社区</button>
+      <button type="button" data-action="ai-work" data-q="资金账本">账本</button>
+      <button type="button" data-action="ai-work" data-q="卖家排行">卖家</button>
     </div>` : ''}
     <form id="ai-pet-form" class="ai-pet-form">
       <label class="ai-pet-sr" for="ai-pet-q">输入问题</label>

@@ -56,8 +56,35 @@ TOOLS = {
               'params': {'actor': '操作人 id', 'type': '操作类型', 'days': '最近 N 天', 'limit': '1-100'}},
     'stats': {'title': '趋势统计', 'risk': 'read', 'desc': '最近 N 天新增用户/商品/订单/工单',
               'params': {'days': '7 或 30'}},
+    'rooms': {'title': '查会话', 'risk': 'read', 'desc': '群聊/私聊/客服会话，含最近消息时间与受理人',
+              'params': {'kind': 'group/private', 'support': 'true=只看客服', 'limit': '1-50'}},
+    'messages': {'title': '看聊天记录', 'risk': 'read', 'desc': '指定会话的最近消息（会写 chat_view 审计）',
+                 'params': {'room': '会话 id', 'limit': '1-50'}},
+    'moderation': {'title': '内容治理', 'risk': 'read', 'desc': '待处理举报、被移除的帖子/评论、待审商品',
+                   'params': {'limit': '1-30'}},
+    'credit': {'title': '信誉', 'risk': 'read', 'desc': '低信誉用户 + 最近信誉变动',
+               'params': {'threshold': '80', 'limit': '1-50'}},
+    'offers': {'title': '议价', 'risk': 'read', 'desc': '最近出价/还价记录',
+               'params': {'limit': '1-50'}},
+    'posts': {'title': '社区内容', 'risk': 'read', 'desc': '按关键词搜帖子/评论',
+              'params': {'q': '关键词', 'limit': '1-30'}},
+    'ledger': {'title': '资金账本', 'risk': 'read', 'desc': '按类型汇总流水 + 最近记录', 'params': {}},
+    'sellers': {'title': '卖家排行', 'risk': 'read', 'desc': '最近 N 天成交额/单量排行',
+                'params': {'days': '7/30', 'limit': '1-20'}},
     'user_role': {'title': '调整角色', 'risk': 'danger', 'desc': '把某个账号调整为 user/support/admin/developer（不能动 owner）',
                   'params': {'target': '用户 id', 'role': '目标角色'}},
+    'user_ban': {'title': '封禁/解封', 'risk': 'danger', 'desc': '封禁或解封账号（含在途订单处置）',
+                 'params': {'target': '用户 id', 'banned': 'true/false', 'reason': '理由'}},
+    'user_credit': {'title': '调整信誉', 'risk': 'danger', 'desc': '基于已结案工单调整信誉分',
+                    'params': {'target': '用户 id', 'delta': '-100..100', 'reason': '依据', 'ticket': '工单 id'}},
+    'product_promote': {'title': '平台置顶', 'risk': 'write', 'desc': '把商品置顶 1/3/7 天（模拟支付）',
+                        'params': {'id': '商品 id', 'tier': '1d/3d/7d', 'reason': '理由'}},
+    'product_batch_delist': {'title': '整店下架', 'risk': 'danger', 'desc': '下架某卖家全部在售商品',
+                             'params': {'seller': '卖家 id', 'reason': '理由'}},
+    'content_remove': {'title': '移除内容', 'risk': 'danger', 'desc': '移除帖子或评论',
+                       'params': {'kind': 'post/comment', 'id': '内容 id', 'reason': '理由'}},
+    'demo_cleanup': {'title': '清理演示商品', 'risk': 'danger', 'desc': '删除所有 virtual 演示商品', 'params': {}},
+    'backup': {'title': '创建备份', 'risk': 'write', 'desc': '打包数据库与上传文件到 backups/', 'params': {}},
     'user_disable': {'title': '注销账号', 'risk': 'danger', 'desc': '注销账号并撤销会话、下架在售商品',
                      'params': {'target': '用户 id'}},
     'user_revoke': {'title': '强制下线', 'risk': 'write', 'desc': '撤销某账号的全部登录会话',
@@ -333,12 +360,135 @@ def _stats(m, u, a):
         'data': {'users_total': users_total, 'orders': orders, 'tickets': tickets}}
 
 
+
+def _rooms(m, u, a):
+    sql = ("SELECT r.id,r.kind,r.name,r.support,r.assignee,r.ticket_id,r.support_status,r.college,"
+           "(SELECT MAX(created) FROM messages x WHERE x.room_id=r.id) last_at FROM rooms r WHERE 1=1")
+    args = []
+    if a.get('kind'):
+        sql += ' AND r.kind=?'
+        args.append(a['kind'])
+    if str(a.get('support')).lower() in ('1', 'true'):
+        sql += ' AND r.support=1'
+    sql += ' ORDER BY COALESCE(last_at,0) DESC, r.id DESC LIMIT ?'
+    args.append(_limit(a.get('limit'), 20))
+    rows = m.rows(sql, tuple(args))
+    items = []
+    for r in rows:
+        who = '客服' if r['support'] else ('受理人 #%s' % r['assignee'] if r['assignee'] else '未分配')
+        last = time.strftime('%m-%d %H:%M', time.localtime(r['last_at'])) if r['last_at'] else '无消息'
+        items.append({'title': r['name'] or ('会话 #%s' % r['id']),
+                      'meta': '%s · %s%s · 最近 %s' % (r['kind'], who,
+                                                     (' · ' + r['support_status']) if r['support'] else '', last)})
+    return {'answer': '找到 %d 个会话。' % len(rows), 'items': items, 'data': [dict(r) for r in rows]}
+
+
+def _messages(m, u, a):
+    rid = int(a.get('room') or 0)
+    room = m.row('SELECT id,name,kind,support FROM rooms WHERE id=?', (rid,))
+    if not room:
+        raise DomainError('会话不存在', 404)
+    with m.tx() as c:
+        c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',
+                  (u, rid, 'chat_view', '工作模式查看聊天记录', time.time()))
+    rows = list(reversed(m.rows(
+        'SELECT m.id,m.user_id,m.body,m.removed,m.created,usr.nickname FROM messages m '
+        'JOIN users usr ON usr.id=m.user_id WHERE m.room_id=? ORDER BY m.id DESC LIMIT ?',
+        (rid, _limit(a.get('limit'), 20)))))
+    items = [{'title': r['nickname'], 'meta': str(r['body'])[:80]} for r in rows]
+    return {'answer': '会话「%s」最近 %d 条消息（已记录查看审计）。' % (
+        room['name'] or ('#%s' % rid), len(rows)), 'items': items, 'data': [dict(r) for r in rows]}
+
+
+def _moderation(m, u, a):
+    lim = _limit(a.get('limit'), 10)
+    reports = m.rows("SELECT id,subject,status,created FROM tickets WHERE type='report' "
+                     "AND status IN ('open','processing','review') ORDER BY id DESC LIMIT ?", (lim,))
+    posts = m.rows('SELECT id,substr(body,1,60) body,created FROM posts WHERE removed=1 ORDER BY id DESC LIMIT 5')
+    comments = m.rows('SELECT id,post_id,substr(body,1,60) body,created FROM comments WHERE removed=1 ORDER BY id DESC LIMIT 5')
+    items = [{'title': '#%s %s' % (r['id'], r['subject']), 'meta': '举报 · ' + r['status']} for r in reports]
+    items += [{'title': '帖子 #%s' % r['id'], 'meta': str(r['body'])[:50]} for r in posts]
+    items += [{'title': '评论 #%s' % r['id'], 'meta': str(r['body'])[:50]} for r in comments]
+    return {'answer': '待处理举报 %d 条，已移除帖子 %d 条、评论 %d 条。' % (len(reports), len(posts), len(comments)),
+            'items': items, 'data': {'reports': [dict(r) for r in reports], 'posts': [dict(r) for r in posts],
+                                     'comments': [dict(r) for r in comments]}}
+
+
+def _credit(m, u, a):
+    try:
+        threshold = max(0, min(int(a.get('threshold') or 80), 100))
+    except (TypeError, ValueError):
+        threshold = 80
+    low = m.rows("SELECT id,nickname,score,status FROM users WHERE score<=? AND status='active' "
+                 "ORDER BY score,id LIMIT ?", (threshold, _limit(a.get('limit'), 20)))
+    recent = m.rows("SELECT id,actor,target,delta,reason,created FROM audit WHERE type='credit' "
+                    "ORDER BY id DESC LIMIT 8")
+    items = [{'title': r['nickname'], 'meta': '%s 分 · #%s' % (r['score'], r['id'])} for r in low]
+    items += [{'title': '信誉变动 #%s' % r['id'], 'meta': '%+d · %s' % (r['delta'] or 0, str(r['reason'])[:30])}
+              for r in recent]
+    return {'answer': '信誉 ≤ %d 的活跃账号 %d 个；最近信誉变动 %d 条。' % (threshold, len(low), len(recent)),
+            'items': items, 'data': {'low': [dict(r) for r in low], 'recent': [dict(r) for r in recent]}}
+
+
+def _offers(m, u, a):
+    rows = m.rows('SELECT o.id,o.product_id,o.buyer_id,o.amount,o.status,o.created,p.title,u.nickname '
+                  'FROM offers o JOIN products p ON p.id=o.product_id JOIN users u ON u.id=o.buyer_id '
+                  'ORDER BY o.id DESC LIMIT ?', (_limit(a.get('limit'), 20),))
+    items = [{'title': '#%s %s' % (r['id'], r['title']), 'meta': '%s · ¥%.2f · %s' % (
+        r['nickname'], int(r['amount']) / 100, r['status'])} for r in rows]
+    return {'answer': '最近 %d 条出价记录。' % len(rows), 'items': items, 'data': [dict(r) for r in rows]}
+
+
+def _posts(m, u, a):
+    q = str(a.get('q') or '').strip()
+    lim = _limit(a.get('limit'), 20)
+    if q:
+        posts = m.rows('SELECT id,user_id,substr(body,1,80) body,removed,created FROM posts '
+                       'WHERE body LIKE ? ORDER BY id DESC LIMIT ?', ('%' + q + '%', lim))
+        comments = m.rows('SELECT id,post_id,substr(body,1,80) body,removed,created FROM comments '
+                          'WHERE body LIKE ? ORDER BY id DESC LIMIT ?', ('%' + q + '%', lim))
+    else:
+        posts = m.rows('SELECT id,user_id,substr(body,1,80) body,removed,created FROM posts ORDER BY id DESC LIMIT ?', (lim,))
+        comments = m.rows('SELECT id,post_id,substr(body,1,80) body,removed,created FROM comments ORDER BY id DESC LIMIT ?', (lim,))
+    items = [{'title': '帖子 #%s' % r['id'], 'meta': ('已移除 · ' if r['removed'] else '') + str(r['body'])[:50]} for r in posts]
+    items += [{'title': '评论 #%s' % r['id'], 'meta': ('已移除 · ' if r['removed'] else '') + str(r['body'])[:50]} for r in comments]
+    return {'answer': '找到帖子 %d 条、评论 %d 条。' % (len(posts), len(comments)), 'items': items,
+            'data': {'posts': [dict(r) for r in posts], 'comments': [dict(r) for r in comments]}}
+
+
+def _ledger(m, u, a):
+    sums = m.rows('SELECT kind,SUM(amount) total,COUNT(*) n FROM ledger GROUP BY kind ORDER BY kind')
+    recent = m.rows('SELECT id,order_id,kind,amount,created FROM ledger ORDER BY id DESC LIMIT 10')
+    items = [{'title': r['kind'], 'meta': '%d 笔 · ¥%.2f' % (r['n'], int(r['total']) / 100)} for r in sums]
+    items += [{'title': '流水 #%s' % r['id'], 'meta': '%s · ¥%.2f · 订单 #%s' % (
+        r['kind'], int(r['amount']) / 100, r['order_id'])} for r in recent]
+    return {'answer': '账本共 %d 种类型；最近 %d 条流水。' % (len(sums), len(recent)), 'items': items,
+            'data': {'sums': [dict(r) for r in sums], 'recent': [dict(r) for r in recent]}}
+
+
+def _sellers(m, u, a):
+    try:
+        days = max(1, min(int(a.get('days') or 7), 90))
+    except (TypeError, ValueError):
+        days = 7
+    since = time.time() - days * 86400
+    rows = m.rows("SELECT o.seller_id,COUNT(*) n,SUM(o.total) gmv,u.nickname FROM orders o "
+                  "JOIN users u ON u.id=o.seller_id WHERE o.status='completed' AND o.created>=? "
+                  "GROUP BY o.seller_id ORDER BY gmv DESC LIMIT ?", (since, _limit(a.get('limit'), 10)))
+    items = [{'title': r['nickname'], 'meta': '%d 单 · ¥%.2f' % (r['n'], int(r['gmv']) / 100)} for r in rows]
+    return {'answer': '最近 %d 天成交卖家 %d 位。' % (days, len(rows)), 'items': items,
+            'data': [dict(r) for r in rows]}
+
+
 READ = {
     'overview': _overview, 'users': _users, 'user_detail': _user_detail,
     'products': _products, 'product_detail': _product_detail,
     'orders': _orders, 'order_detail': _order_detail,
     'tickets': _tickets, 'ticket_detail': _ticket_detail,
     'audit': _audit, 'stats': _stats,
+    'rooms': _rooms, 'messages': _messages, 'moderation': _moderation,
+    'credit': _credit, 'offers': _offers, 'posts': _posts,
+    'ledger': _ledger, 'sellers': _sellers,
 }
 
 
@@ -389,6 +539,20 @@ def _summary(name, args):
             '开启' if args.get('enabled') else '关闭', args.get('daily_limit'), args.get('staff_daily_limit'))
     if name == 'demo_publish':
         return '批量入库 %d 件演示商品' % len(args.get('items') or [])
+    if name == 'user_ban':
+        return '%s「%s」' % ('封禁' if args.get('banned') else '解封', _who(args))
+    if name == 'user_credit':
+        return '把「%s」的信誉分调整 %+d（工单 #%s）' % (_who(args), int(args.get('delta') or 0), args.get('ticket'))
+    if name == 'product_promote':
+        return '把商品 #%s 置顶 %s' % (args.get('id'), args.get('tier'))
+    if name == 'product_batch_delist':
+        return '下架卖家 #%s 的全部在售商品' % args.get('seller')
+    if name == 'content_remove':
+        return '移除%s #%s' % ('帖子' if args.get('kind') == 'post' else '评论', args.get('id'))
+    if name == 'demo_cleanup':
+        return '删除全部演示商品（virtual）'
+    if name == 'backup':
+        return '创建一份完整备份'
     return name
 
 
@@ -434,12 +598,72 @@ def _execute(m, u, name, args):
         return m.ai_admin_update(u, args)
     if name == 'demo_publish':
         return m.ai_office_publish(u, args.get('items'))
+    if name == 'user_ban':
+        target = int(args.get('target') or 0)
+        banned = bool(args.get('banned'))
+        m.ban_user(u, target, banned, str(args.get('reason') or '工作模式封禁'))
+        return {'ok': True, 'message': '已%s' % ('解封' if not banned else '封禁')}
+    if name == 'user_credit':
+        m.credit_action(u, int(args.get('target') or 0), int(args.get('delta')),
+                        str(args.get('reason') or '工作模式调整信誉'), int(args.get('ticket') or 0))
+        return {'ok': True}
+    if name == 'product_promote':
+        pid = int(args.get('id') or 0)
+        days = {'1d': 1, '3d': 3, '7d': 7}[args.get('tier')]
+        p = m.row('SELECT id,promoted_until,status FROM products WHERE id=?', (pid,))
+        if not p or p['status'] != 'available':
+            raise DomainError('只有在售商品可以置顶', 400)
+        until = max(p['promoted_until'] or 0, time.time()) + days * 86400
+        with m.tx() as c:
+            c.execute('UPDATE products SET promoted_until=? WHERE id=?', (until, pid))
+            c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',
+                      (u, pid, 'promote', '工作模式置顶 %d 天：%s' % (days, args.get('reason') or ''), time.time()))
+        return {'ok': True, 'promoted_until': until}
+    if name == 'product_batch_delist':
+        seller = int(args.get('seller') or 0)
+        reason = str(args.get('reason') or '工作模式整店下架')
+        rows = m.rows("SELECT id FROM products WHERE seller_id=? AND status='available' LIMIT 100", (seller,))
+        count = 0
+        for r in rows:
+            try:
+                m.moderate_product(u, r['id'], 'delist', reason)
+                count += 1
+            except DomainError:
+                pass
+        return {'ok': True, 'count': count}
+    if name == 'content_remove':
+        kind = args.get('kind')
+        cid = int(args.get('id') or 0)
+        table = 'posts' if kind == 'post' else 'comments'
+        reason = str(args.get('reason') or '工作模式移除')
+        with m.tx() as c:
+            c.execute('UPDATE %s SET removed=1 WHERE id=?' % table, (cid,))
+            c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',
+                      (u, cid, 'content_remove', '移除%s #%s：%s' % (kind, cid, reason), time.time()))
+        return {'ok': True}
+    if name == 'demo_cleanup':
+        ids = []
+        for r in m.rows('SELECT id,data FROM products'):
+            try:
+                d = json.loads(r['data'] or '{}')
+            except ValueError:
+                d = {}
+            if d.get('virtual'):
+                ids.append(r['id'])
+        with m.tx() as c:
+            for pid in ids:
+                c.execute('DELETE FROM products WHERE id=?', (pid,))
+            c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',
+                      (u, None, 'ai_work_demo_cleanup', '清理演示商品 %d 件' % len(ids), time.time()))
+        return {'ok': True, 'count': len(ids)}
+    if name == 'backup':
+        return {'ok': True, 'result': m.backup(u)}
     raise DomainError('未知工具', 404)
 
 
 def _validate(m, u, name, args):
     """写工具在“出 proposal”前就校验目标，避免给 owner 一个执行必失败的确认卡。"""
-    if name in ('user_role', 'user_disable', 'user_revoke'):
+    if name in ('user_role', 'user_disable', 'user_revoke', 'user_ban', 'user_credit'):
         target = int(args.get('target') or 0)
         t = m.row('SELECT id,nickname,role,status FROM users WHERE id=?', (target,))
         if not t:
@@ -461,6 +685,29 @@ def _validate(m, u, name, args):
     if name == 'notification_send':
         if not m.row('SELECT id FROM users WHERE id=?', (int(args.get('target') or 0),)):
             raise DomainError('收件账号不存在', 404)
+    if name == 'user_credit':
+        try:
+            delta = int(args.get('delta'))
+        except (TypeError, ValueError):
+            raise DomainError('信誉变动必须是整数', 400) from None
+        if delta == 0 or delta < -100 or delta > 100:
+            raise DomainError('信誉变动必须在 -100 到 100 之间且不能为 0', 400)
+        if not m.row('SELECT id FROM tickets WHERE id=?', (int(args.get('ticket') or 0),)):
+            raise DomainError('关联工单不存在', 404)
+    if name == 'product_promote':
+        if not m.row('SELECT id FROM products WHERE id=?', (int(args.get('id') or 0),)):
+            raise DomainError('商品不存在', 404)
+        if args.get('tier') not in ('1d', '3d', '7d'):
+            raise DomainError('置顶档位必须是 1d/3d/7d', 400)
+    if name == 'product_batch_delist':
+        if not m.row('SELECT id FROM users WHERE id=?', (int(args.get('seller') or 0),)):
+            raise DomainError('卖家不存在', 404)
+    if name == 'content_remove':
+        if args.get('kind') not in ('post', 'comment'):
+            raise DomainError('内容类型必须是 post 或 comment', 400)
+        table = 'posts' if args.get('kind') == 'post' else 'comments'
+        if not m.row('SELECT id FROM %s WHERE id=?' % table, (int(args.get('id') or 0),)):
+            raise DomainError('内容不存在', 404)
 
 
 def call(m, u, name, args=None, token=None):
@@ -479,7 +726,7 @@ def call(m, u, name, args=None, token=None):
         return {'answer': '这是不可逆操作，请再次确认：%s。' % _summary(name, args),
                 'proposal': {'tool': name, 'title': spec['title'], 'summary': _summary(name, args),
                              'risk': spec['risk'], 'args': args},
-                'token': _sign(payload), 'mode': 'rule'}
+                'token': _sign(payload), 'tool': name, 'mode': 'rule'}
     payload = _verify(token)
     if payload.get('u') != u or payload.get('name') != name:
         raise DomainError('确认令牌与当前账号不匹配', 403)
@@ -520,10 +767,19 @@ def agent(m, u, question):
             return {'answer': '没找到「%s」对应的运营账号。' % act['name'], 'items': [], 'proposal': None}
         if target['role'] == 'owner':
             return {'answer': '所有者账号不能通过助手调整，只能由运维在数据库处理。', 'items': [], 'proposal': None}
-        tool = 'user_role' if act['kind'] == 'role' else ('user_disable' if act['kind'] == 'disable' else 'user_revoke')
+        if act['kind'] == 'role':
+            tool = 'user_role'
+        elif act['kind'] == 'disable':
+            tool = 'user_disable'
+        elif act['kind'] == 'ban':
+            tool = 'user_ban'
+        else:
+            tool = 'user_revoke'
         args = {'target': target['id'], 'nickname': target['nickname']}
         if tool == 'user_role':
             args['role'] = act['role']
+        if tool == 'user_ban':
+            args.update({'banned': True, 'reason': '工作模式封禁'})
         return call(m, u, tool, args)
 
     # 先让规划器选工具；模型不可用/超时再退回规则路由。

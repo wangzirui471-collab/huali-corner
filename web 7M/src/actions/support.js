@@ -382,7 +382,7 @@ export const clicks = {
   // 不可逆动作：L1 在浏览器里再确认一次，确认后才调用执行端点（后端仍校验身份并写审计）。
   'ai-office-confirm': async b => {
     const kind=b.dataset.kind, target=Number(b.dataset.target), role=b.dataset.role||'', name=b.dataset.name||'该账号';
-    const verb = kind==='disable' ? '注销' : kind==='revoke' ? '强制下线' : '调整角色';
+    const verb = kind==='disable' ? '注销' : kind==='ban' ? '封禁' : kind==='revoke' ? '强制下线' : '调整角色';
     if (!window.confirm(`再次确认：${verb}「${name}」？\n此操作会撤销其登录会话，不可逆。`)) return;
     b.disabled=true; b.textContent='执行中…';
     try{

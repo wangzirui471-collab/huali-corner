@@ -25,17 +25,32 @@
 | `ticket_detail` | 读 | 工单 + 全部对话（含内部备注） |
 | `audit` | 读 | 按操作人/类型/天数查审计 |
 | `stats` | 读 | 最近 N 天订单/工单趋势 + 活跃用户总数 |
+| `rooms` | 读 | 群聊/私聊/客服会话，含最近消息与受理人 |
+| `messages` | 读 | 指定会话最近消息（写 `chat_view` 审计） |
+| `moderation` | 读 | 待处理举报、被移除帖子/评论、待审商品 |
+| `credit` | 读 | 低信誉用户 + 最近信誉变动 |
+| `offers` | 读 | 最近出价/还价记录 |
+| `posts` | 读 | 按关键词搜帖子/评论 |
+| `ledger` | 读 | 按类型汇总流水 + 最近记录 |
+| `sellers` | 读 | 最近 N 天成交额/单量排行 |
 | `user_role` | 危险 | 调整 user/support/admin/developer（不能动 owner） |
 | `user_disable` | 危险 | 注销账号、下架在售、撤销会话 |
 | `user_revoke` | 写 | 强制下线 |
 | `product_moderate` | 危险 | 平台下架 / 恢复上架 |
 | `ticket_reply` | 写 | 工单公开回复 / 内部备注 |
 | `ticket_resolve` | 危险 | 认领 / 复核 / 退款 / 驳回 / 结案 |
+| `user_ban` | 危险 | 封禁 / 解封账号（含在途订单处置） |
+| `user_credit` | 危险 | 基于已结案工单调整信誉分 |
+| `product_promote` | 写 | 平台置顶 1/3/7 天（模拟支付） |
+| `product_batch_delist` | 危险 | 整店下架某卖家全部在售商品 |
+| `content_remove` | 危险 | 移除帖子 / 评论 |
+| `demo_cleanup` | 危险 | 删除全部 `virtual` 演示商品 |
+| `backup` | 写 | 打包数据库与上传文件到 `backups/` |
 | `notification_send` | 写 | 给指定账号发站内通知 |
 | `ai_settings` | 危险 | 开关 AI、调整每日额度 |
 | `demo_publish` | 写 | 批量入库演示商品（virtual） |
 
-新增工具只需在 `app/support/work.py` 的 `TOOLS` 注册，并实现 `READ` 或 `_execute` 分支。
+当前共 **35 个工具**（16 读 + 19 写）。新增工具只需在 `app/support/work.py` 的 `TOOLS` 注册，并实现 `READ` 或 `_execute` 分支。
 
 ## 3. 接口
 
@@ -88,5 +103,5 @@ cd E:\zi\huali-corner-trial\tests
 ..\.venv-trial\Scripts\python.exe -m unittest test_owner_office test_work_mode -v
 ```
 
-覆盖：工具目录、概览/用户/工单/趋势查询、写操作 proposal→confirm、owner 保护、
-非 owner 403、无效 token、Agent 动作路由。
+覆盖：工具目录、概览/用户/工单/趋势/会话/治理/信誉/账本查询、写操作 proposal→confirm、
+owner 保护、非 owner 403、无效 token、Agent 动作路由、封禁与注销语义区分。
