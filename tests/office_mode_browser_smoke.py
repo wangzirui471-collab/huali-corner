@@ -177,9 +177,13 @@ def main():
             page.evaluate("document.querySelector('#ai-pet-body').click()")
             page.wait_for_timeout(300)
 
-            # 办公快捷按钮：所有者才看得到，且换行后 7 个都点得着
+            # 办公快捷按钮：所有者才看得到。只断言本功能用到的几个在，不写死
+            # 总数——这一行会随需求加按钮（并行会话就加过「工单办公」）。
             chips = page.query_selector_all('.ai-pet-office button')
-            check(len(chips) == 7, '办公快捷按钮 7 个（实际 %d）' % len(chips))
+            check(len(chips) >= 6, '办公快捷按钮至少 6 个（实际 %d）' % len(chips))
+            for label in ['数据概览', '用户列表', '最近订单', '待处理工单']:
+                check(page.query_selector('.ai-pet-office button:text-is("%s")' % label) is not None,
+                      '快捷问「%s」在' % label)
             row = page.evaluate("""() => { const r=document.querySelector('.ai-pet-office');
                 return {scrollW:r.scrollWidth, clientW:r.clientWidth}; }""")
             check(row['scrollW'] <= row['clientW'] + 1,
