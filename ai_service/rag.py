@@ -388,29 +388,41 @@ def extractive(hits):
     return trim(answer, 260) if len(answer) >= 12 else ''
 
 
-PLAN_SYSTEM = """你是转角平台的工作 Agent 规划器。根据用户请求，从给定工具中选择一个最合适的工具，并给出 JSON 参数。
-只输出 JSON，不要解释、不要 Markdown：
-{"tool":"users","args":{"q":"小陈"}}
+PLAN_SYSTEM = """你是转角平台的工作 Agent 规划器。你处在一个 ReAct 循环里：
+根据用户请求、工具目录和已执行步骤，决定下一步调用哪个工具；如果已有结果足够回答，返回 {"tool":"final"}。
+只输出 JSON，不要解释、不要 Markdown：{"tool":"users","args":{"q":"小陈"}}
+
+示例（few-shot）：
+用户：现在有什么需要我处理的？ → {"tool":"tickets","args":{"status":"open"}}
+用户：查一下用户小陈 → {"tool":"users","args":{"q":"小陈"}}
+用户：把 godfly 降为客服 → {"tool":"user_role","args":{"target":1,"role":"support"}}
+用户：把卖假货的商品全部下架 → {"tool":"product_bulk_moderate","args":{"q":"假货","action":"delist","reason":"平台处置"}}
+
 规则：
 1. 只能选择工具列表里的工具，不能编造；
-2. 用户只是问数据/列表 → 选读工具；用户要求改账号/处置商品/退款 → 选写工具（后端会生成确认卡，不会直接执行）；
-3. 问“待办/需要我处理/待处理” → tickets，status=open；
-4. 问订单/成交 → orders；问用户/账号 → users；问商品/在售 → products；问审计 → audit；
-5. 问会话/聊天 → rooms；问举报/治理 → moderation；问信誉 → credit；问议价 → offers；
+2. 每次只选一个工具；最多 3 步；已经有足够结果就返回 {"tool":"final"}；
+3. 用户只是问数据/列表 → 读工具；要求改账号/处置商品/退款 → 写工具（后端出确认卡，不会直接执行）；
+4. 问“待办/需要我处理/待处理” → tickets，status=open；
+5. 问订单/成交 → orders；问用户/账号 → users；问商品/在售 → products；问审计 → audit；
+6. 问会话/聊天 → rooms；问举报/治理 → moderation；问信誉 → credit；问议价 → offers；
    问帖子/社区 → posts；问账本/流水 → ledger；问卖家/排行 → sellers；
-6. 问封禁/解封 → user_ban；问信誉调整 → user_credit；问置顶 → product_promote；
-   问整店下架 → product_batch_delist；问删帖/删评论 → content_remove；
-   问清理演示商品 → demo_cleanup；问备份 → backup；
-7. 只有宽泛地问“平台怎么样/数据概览”才选 overview；
-8. 不确定时选 overview。
+7. 问封禁/解封 → user_ban；问信誉调整 → user_credit；问置顶 → product_promote；
+   问整店下架 → product_batch_delist；问批量/全部下架 → product_bulk_moderate；
+   问删帖/删评论 → content_remove；问清理演示商品 → demo_cleanup；问备份 → backup；
+8. 只有宽泛地问“平台怎么样/数据概览”才选 overview；
+9. 不确定时选 overview。
 """
 
 
-def plan(question, tools):
-    """让模型选工具；只做规划，不执行、不碰数据库。"""
+def plan(question, tools, history=None):
+    """让模型选下一步工具；只做规划，不执行、不碰数据库。"""
     catalog = json.dumps(tools or [], ensure_ascii=False)[:8000]
-    raw = llm.chat(PLAN_SYSTEM, '工具列表：%s\n用户请求：%s' % (catalog, question),
-                   max_tokens=200, temperature=0.1, owner=True)
+    hist = ''
+    if history:
+        hist = '\n已执行步骤（只读结果摘要）：\n' + json.dumps(history[-4:], ensure_ascii=False)[:4000]
+        hist += '\n请决定下一步；若已足够，返回 {"tool":"final"}。'
+    raw = llm.chat(PLAN_SYSTEM, '工具列表：%s\n用户请求：%s%s' % (catalog, question, hist),
+                   max_tokens=240, temperature=0.1, owner=True)
     m = re.search(r'\{[\s\S]*\}', raw or '')
     if not m:
         raise ValueError('规划结果不是 JSON')

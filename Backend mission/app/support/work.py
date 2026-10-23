@@ -81,6 +81,10 @@ TOOLS = {
                         'params': {'id': '商品 id', 'tier': '1d/3d/7d', 'reason': '理由'}},
     'product_batch_delist': {'title': '整店下架', 'risk': 'danger', 'desc': '下架某卖家全部在售商品',
                              'params': {'seller': '卖家 id', 'reason': '理由'}},
+    'product_bulk_moderate': {'title': '批量处置商品', 'risk': 'danger',
+                              'desc': '按关键词/分类/卖家批量下架或恢复（最多 50 件）',
+                              'params': {'q': '标题关键词', 'category': '分类', 'seller': '卖家 id',
+                                         'action': 'delist/restore', 'reason': '理由'}},
     'content_remove': {'title': '移除内容', 'risk': 'danger', 'desc': '移除帖子或评论',
                        'params': {'kind': 'post/comment', 'id': '内容 id', 'reason': '理由'}},
     'demo_cleanup': {'title': '清理演示商品', 'risk': 'danger', 'desc': '删除所有 virtual 演示商品', 'params': {}},
@@ -545,8 +549,17 @@ def _summary(name, args):
         return '把「%s」的信誉分调整 %+d（工单 #%s）' % (_who(args), int(args.get('delta') or 0), args.get('ticket'))
     if name == 'product_promote':
         return '把商品 #%s 置顶 %s' % (args.get('id'), args.get('tier'))
+    if name == 'product_bulk_moderate':
+        if args.get('action') not in ('delist', 'restore'):
+            raise DomainError('批量动作必须是 delist 或 restore', 400)
+        if not any(args.get(k) for k in ('q', 'category', 'seller')):
+            raise DomainError('批量处置至少要给一个筛选条件（关键词/分类/卖家）', 400)
     if name == 'product_batch_delist':
         return '下架卖家 #%s 的全部在售商品' % args.get('seller')
+    if name == 'product_bulk_moderate':
+        verb = '恢复' if args.get('action') == 'restore' else '下架'
+        cond = '、'.join('%s=%s' % (k, args.get(k)) for k in ('q', 'category', 'seller') if args.get(k))
+        return '按条件批量%s商品（%s，最多 50 件）' % (verb, cond)
     if name == 'content_remove':
         return '移除%s #%s' % ('帖子' if args.get('kind') == 'post' else '评论', args.get('id'))
     if name == 'demo_cleanup':
@@ -619,6 +632,30 @@ def _execute(m, u, name, args):
             c.execute('INSERT INTO audit(actor,target,type,reason,created) VALUES(?,?,?,?,?)',
                       (u, pid, 'promote', '工作模式置顶 %d 天：%s' % (days, args.get('reason') or ''), time.time()))
         return {'ok': True, 'promoted_until': until}
+    if name == 'product_bulk_moderate':
+        action = args.get('action')
+        status = 'available' if action == 'delist' else 'removed'
+        sql = 'SELECT id FROM products WHERE status=?'
+        params = [status]
+        if args.get('q'):
+            sql += ' AND title LIKE ?'
+            params.append('%' + str(args['q']) + '%')
+        if args.get('category'):
+            sql += ' AND category=?'
+            params.append(args['category'])
+        if args.get('seller'):
+            sql += ' AND seller_id=?'
+            params.append(int(args['seller']))
+        sql += ' LIMIT 50'
+        rows = m.rows(sql, tuple(params))
+        count = 0
+        for r in rows:
+            try:
+                m.moderate_product(u, r['id'], action, str(args.get('reason') or '工作模式批量处置'))
+                count += 1
+            except DomainError:
+                pass
+        return {'ok': True, 'count': count}
     if name == 'product_batch_delist':
         seller = int(args.get('seller') or 0)
         reason = str(args.get('reason') or '工作模式整店下架')
@@ -782,15 +819,32 @@ def agent(m, u, question):
             args.update({'banned': True, 'reason': '工作模式封禁'})
         return call(m, u, tool, args)
 
-    # 先让规划器选工具；模型不可用/超时再退回规则路由。
-    try:
-        from .ai import plan as ai_plan
-        p = ai_plan(q, catalog())
-        tool = p.get('tool')
-        if tool in TOOLS:
-            return call(m, u, tool, p.get('args') or {})
-    except Exception:  # noqa: BLE001 - 规划失败不阻断工作模式
-        pass
+    # ReAct 风格多步循环：规划 → 执行读工具 → 观察结果回到规划器；
+    # 写工具立即转确认卡；最多 3 步；模型不可用退回规则路由。
+    observations = []
+    last = None
+    for _ in range(3):
+        try:
+            from .ai import plan as ai_plan
+            p = ai_plan(q, catalog(), observations)
+        except Exception:  # noqa: BLE001 - 规划失败不阻断工作模式
+            break
+        tool = str(p.get('tool') or '')
+        if tool in ('', 'final'):
+            if last:
+                return last
+            break
+        if tool not in TOOLS:
+            break
+        result = call(m, u, tool, p.get('args') or {})
+        if result.get('proposal'):
+            return result
+        last = result
+        observations.append({'tool': tool, 'args': p.get('args') or {},
+                             'answer': str(result.get('answer') or '')[:300],
+                             'items': [str(i.get('title')) for i in (result.get('items') or [])][:8]})
+    if last:
+        return last
 
     rules = (
         (('用户', '账号', '成员', '谁'), 'users', lambda: {'q': _keyword(q)}),

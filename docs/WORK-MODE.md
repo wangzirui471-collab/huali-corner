@@ -43,6 +43,7 @@
 | `user_credit` | 危险 | 基于已结案工单调整信誉分 |
 | `product_promote` | 写 | 平台置顶 1/3/7 天（模拟支付） |
 | `product_batch_delist` | 危险 | 整店下架某卖家全部在售商品 |
+| `product_bulk_moderate` | 危险 | 按关键词/分类/卖家批量下架或恢复（最多 50 件） |
 | `content_remove` | 危险 | 移除帖子 / 评论 |
 | `demo_cleanup` | 危险 | 删除全部 `virtual` 演示商品 |
 | `backup` | 写 | 打包数据库与上传文件到 `backups/` |
@@ -50,7 +51,7 @@
 | `ai_settings` | 危险 | 开关 AI、调整每日额度 |
 | `demo_publish` | 写 | 批量入库演示商品（virtual） |
 
-当前共 **35 个工具**（16 读 + 19 写）。新增工具只需在 `app/support/work.py` 的 `TOOLS` 注册，并实现 `READ` 或 `_execute` 分支。
+当前共 **36 个工具**（19 读 + 17 写）。新增工具只需在 `app/support/work.py` 的 `TOOLS` 注册，并实现 `READ` 或 `_execute` 分支。
 
 ## 3. 接口
 
@@ -67,14 +68,18 @@
 
 ```
 用户一句话
-  → 先认账号动作（降级/注销/下线）→ 直接出 proposal
-  → 否则让 AI 规划器选工具（ai_service /plan，输出 {"tool","args"}）
-        · 规划器只能从工具目录里选，不能编造
-        · 模型不可用/超时 → 退回关键词规则路由
-  → 执行读工具，返回 answer + items + tool
-  → 写工具只返回 proposal + 一次性 token（10 分钟有效）
+  → 先认账号动作（降级/注销/封禁/下线）→ 直接出 proposal
+  → 否则进入 ReAct 循环（最多 3 步）：
+      1. /plan：问题 + 工具目录 + 已执行步骤摘要 → {"tool","args"} 或 {"tool":"final"}
+      2. 执行读工具，结果摘要回填 observations
+      3. 规划器决定下一步（可能从「查商品」衔接到「批量下架」）
+      4. 写工具只返回 proposal + 一次性 token（10 分钟）
+  → 模型不可用/超时 → 退回关键词规则路由
   → owner 在浏览器二次确认 → /api/ai/work/confirm → 执行 + 审计
 ```
+
+示例：「把卖假货的商品全部下架」
+`products(q=假货)` → 看到候选 → `product_bulk_moderate(q=假货, action=delist)` → 确认卡。
 
 规划器提示词要求「待办→tickets、订单→orders、用户→users、商品→products」，
 只有宽泛的“平台怎么样”才选 overview。
@@ -101,7 +106,9 @@
 ```powershell
 cd E:\zi\huali-corner-trial\tests
 ..\.venv-trial\Scripts\python.exe -m unittest test_owner_office test_work_mode -v
+..\.venv-trial\Scripts\python.exe eval_work_agent.py
 ```
 
 覆盖：工具目录、概览/用户/工单/趋势/会话/治理/信誉/账本查询、写操作 proposal→confirm、
-owner 保护、非 owner 403、无效 token、Agent 动作路由、封禁与注销语义区分。
+owner 保护、非 owner 403、无效 token、Agent 动作路由、封禁与注销语义区分、
+多步「查询→批量下架」、批量操作不落库。评测集 8/8。

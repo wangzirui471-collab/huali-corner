@@ -95,6 +95,32 @@ class WorkModeTests(unittest.TestCase):
         with self.assertRaises(DomainError):
             self.m.work_confirm(self.owner, 'not-a-token')
 
+    def test_multi_step_read_then_write(self):
+        import app.support.ai as ai
+        original = ai.plan
+
+        def fake(question, tools, history=None):
+            if not history:
+                return {'tool': 'products', 'args': {'q': '宿舍', 'limit': 5}}
+            return {'tool': 'product_bulk_moderate',
+                    'args': {'q': '宿舍', 'action': 'delist', 'reason': '测试'}}
+
+        ai.plan = fake
+        try:
+            r = self.m.work_chat(self.owner, '把宿舍好物全部下架')
+            self.assertEqual((r.get('proposal') or {}).get('tool'), 'product_bulk_moderate')
+            self.assertIsNotNone(r.get('token'))
+        finally:
+            ai.plan = original
+
+    def test_bulk_moderate_proposal_has_no_side_effect(self):
+        before = int(self.m.row("SELECT COUNT(*) n FROM products WHERE status='available'")['n'])
+        r = self.m.work_call(self.owner, 'product_bulk_moderate',
+                             {'q': '宿舍', 'action': 'delist', 'reason': '测试'})
+        self.assertIsNotNone(r.get('token'))
+        after = int(self.m.row("SELECT COUNT(*) n FROM products WHERE status='available'")['n'])
+        self.assertEqual(before, after)
+
     def test_ban_is_not_disable(self):
         r = self.m.work_chat(self.owner, '封禁 小陈同学')
         self.assertIn('封禁', r['proposal']['summary'])

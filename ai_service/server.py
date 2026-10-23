@@ -192,7 +192,7 @@ class Handler(BaseHTTPRequestHandler):
             if not question:
                 return self._send({'error': '缺少 question'}, 400)
             try:
-                return self._send(rag.plan(question, data.get('tools') or []))
+                return self._send(rag.plan(question, data.get('tools') or [], data.get('history') or []))
             except Exception:  # noqa: BLE001 - 规划失败由后端退回规则路由
                 return self._send({'error': '规划服务暂不可用'}, 503)
         if path != '/reply':
