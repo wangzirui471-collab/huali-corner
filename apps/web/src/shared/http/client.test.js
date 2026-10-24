@@ -24,6 +24,25 @@ function envelope(
 }
 
 describe('v1 HTTP 协议', () => {
+  /** 兼容入口已配置和全站已迁移是不同事实，解码时不丢失这两个标记。 */
+  it('区分兼容入口配置与完整业务就绪', () => {
+    expect(
+      decodeHealth({
+        status: 'ok',
+        environment: 'test',
+        business_ready: false,
+        compat_enabled: true,
+      }).compat_enabled,
+    ).toBe(true);
+    expect(() =>
+      decodeHealth({
+        status: 'ok',
+        environment: 'test',
+        business_ready: false,
+        compat_enabled: 'true',
+      }),
+    ).toThrow();
+  });
   /** 正常响应经运行时解码，并且携带同源 Cookie 策略。 */
   it('解码成功数据并携带同源凭据', async () => {
     const fetcher = vi.fn().mockResolvedValue(Response.json(envelope()));

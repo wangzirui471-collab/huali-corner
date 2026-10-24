@@ -4,6 +4,206 @@
  */
 
 export interface paths {
+    "/api/v1/compat/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login
+         * @description 只把已选择的凭据交给旧登录用例；本模块不保存密码或签发另一套 token。
+         */
+        post: operations["login_api_v1_compat_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/compat/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logout
+         * @description 撤销原会话，不仅清除本机页面的登录外观。
+         */
+        post: operations["logout_api_v1_compat_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/compat/auth/salt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Password Parameters
+         * @description 原样返回现有盐与 KDF 轮数，不把不存在账号与已存在账号作额外区分。
+         */
+        get: operations["password_parameters_api_v1_compat_auth_salt_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/compat/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Checkout
+         * @description 原请求键只转发一次；头与正文不一致时拒绝，不在网络异常后自动生成新键。
+         */
+        post: operations["checkout_api_v1_compat_checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/compat/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Me
+         * @description 身份由原会话接口核实，前端缓存的角色不能构成授权。
+         */
+        get: operations["me_api_v1_compat_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/compat/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Order
+         * @description 按编号查询详情，交易方、客服或其他身份的可见范围仍由旧服务核验。
+         */
+        get: operations["order_api_v1_compat_order_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/compat/order/action": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Order Action
+         * @description 买卖双方动作沿用旧状态机，不根据页面按钮直接改变订单字段。
+         */
+        post: operations["order_action_api_v1_compat_order_action_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/compat/order/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Order Change
+         * @description 确认或拒绝已有改约，由原服务校验当前账号和请求状态。
+         */
+        post: operations["order_change_api_v1_compat_order_change_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/compat/order/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Order Update
+         * @description 提交原字段与原单位，不写新的订单表或账本。
+         */
+        post: operations["order_update_api_v1_compat_order_update_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/compat/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Orders
+         * @description 查询当前账号的买卖订单，不增加可指定其他用户的查询参数。
+         */
+        get: operations["orders_api_v1_compat_orders_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -28,11 +228,74 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * ActionInput
+         * @description 动作白名单仅选择旧用例；退款仍通过既有售后工单办理。
+         */
+        ActionInput: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "pay" | "cancel" | "confirm_schedule" | "deliver" | "handover" | "receive" | "reschedule";
+            /** Address */
+            address?: string | null;
+            /** Appointment */
+            appointment?: (number) | null;
+            /** Id */
+            id: number;
+        };
+        /**
+         * ChangeInput
+         * @description 只允许对已有改约作出决定，不接受客户端指定审批人。
+         */
+        ChangeInput: {
+            /** Accept */
+            accept: boolean;
+            /** Id */
+            id: number;
+        };
+        /**
+         * CheckoutInput
+         * @description 下单只接收商品、预约和原请求键，价格、卖家与状态均由旧 writer 决定。
+         */
+        CheckoutInput: {
+            /**
+             * Address
+             * @default
+             */
+            address: string;
+            /** Appointment */
+            appointment: number;
+            /**
+             * Delivery
+             * @enum {string}
+             */
+            delivery: "pickup" | "delivery";
+            /** Key */
+            key: string;
+            /** Product Ids */
+            product_ids: number[];
+            /** Want Id */
+            want_id?: number | null;
+        };
         /** Envelope[HealthData] */
         Envelope_HealthData_: {
             /** Code */
             code: string;
             data?: components["schemas"]["HealthData"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /** Message */
+            message: string;
+            meta?: components["schemas"]["Metadata"];
+            /** Request Id */
+            request_id: string;
+        };
+        /** Envelope[JsonValue] */
+        Envelope_JsonValue_: {
+            /** Code */
+            code: string;
+            data?: components["schemas"]["JsonValue"] | null;
             error?: components["schemas"]["ErrorDetail"] | null;
             /** Message */
             message: string;
@@ -83,6 +346,11 @@ export interface components {
              */
             business_ready: false;
             /**
+             * Compat Enabled
+             * @default false
+             */
+            compat_enabled: boolean;
+            /**
              * Environment
              * @enum {string}
              */
@@ -93,6 +361,19 @@ export interface components {
              * @constant
              */
             status: "ok";
+        };
+        JsonValue: unknown;
+        /**
+         * LoginInput
+         * @description 兼容旧明文口令模式或客户端 KDF 摘要模式，严格二选一。
+         */
+        LoginInput: {
+            /** Digest */
+            digest?: string | null;
+            /** Password */
+            password?: string | null;
+            /** Phone */
+            phone: string;
         };
         /**
          * Metadata
@@ -112,6 +393,22 @@ export interface components {
              */
             simulation: true;
         };
+        /**
+         * UpdateInput
+         * @description 付款前修改仍由旧服务核验归属、状态与可变字段。
+         */
+        UpdateInput: {
+            /** Address */
+            address?: string | null;
+            /** Appointment */
+            appointment: number;
+            /** Delivery */
+            delivery?: ("pickup" | "delivery") | null;
+            /** Id */
+            id: number;
+            /** Product Ids */
+            product_ids?: number[] | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -121,6 +418,412 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    login_api_v1_compat_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_JsonValue_"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+        };
+    };
+    logout_api_v1_compat_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_JsonValue_"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+        };
+    };
+    password_parameters_api_v1_compat_auth_salt_get: {
+        parameters: {
+            query?: {
+                phone?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_JsonValue_"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+        };
+    };
+    checkout_api_v1_compat_checkout_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckoutInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_JsonValue_"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+        };
+    };
+    me_api_v1_compat_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_JsonValue_"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+        };
+    };
+    order_api_v1_compat_order_get: {
+        parameters: {
+            query: {
+                id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_JsonValue_"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+        };
+    };
+    order_action_api_v1_compat_order_action_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActionInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_JsonValue_"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+        };
+    };
+    order_change_api_v1_compat_order_change_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_JsonValue_"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+        };
+    };
+    order_update_api_v1_compat_order_update_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_JsonValue_"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+        };
+    };
+    orders_api_v1_compat_orders_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_JsonValue_"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+        };
+    };
     health_api_v1_health_get: {
         parameters: {
             query?: never;

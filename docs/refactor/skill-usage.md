@@ -24,3 +24,17 @@
 该 skill 要求先调用 `codebase-design`，随后以子代理扫描、HTML 候选报告和用户选择进入 `grilling`，并使用 `domain-modeling` 维护术语。当前本机未发现这三个依赖 skill。该独立评审流程暂未启动，不能声称已完成它的架构评审；继续按六份重构文档推进已授权的实现与 UI 工作。
 
 `find-skills` 用于了解技能发现方式；本轮已找到适用的本地 UI/UX skill，没有为凑齐工具而安装其他技能。
+
+## 2026-10-23 首页独立评审与用户确认后应用
+
+本机 ui-ux-pro-max：先读完整 SKILL.md，`campus marketplace compact browsing --design-system` 偏宣传页，收窄为 `marketplace directory --domain product` 匹配 P2P Marketplace 与 Directory。采用商品发现、筛选和清楚卡片层级；不覆盖 04 已确认的紫色/暖黄/中文系统字体。
+
+`carousel pause controls --domain ux` 命中自动内容暂停、前后控制、焦点/悬停/减少动态效果；`error summary validation --domain ux` 命中字段错误关联，后者保留为后续发布表单切片建议。本轮不新增表单库。
+
+实际使用的测试 skill 为 `.codex/skills/test-driven-development/SKILL.md`；正式新增 9 个行为用例，按失败证据补齐轮播、追加恢复、收藏和媒体边界。先做 artifacts 中独立 Vue 预览，用户确认后才修改业务组件；视觉检查使用浏览器和合成接口，不将它等同真实业务验收。
+
+### 2026-10-24 页面辨识度候选
+
+继续使用本机 UI UX Pro Max。`visual hierarchy grouping --domain ux` 返回 hover、面包屑和标题层级，不能作为论坛布局的精确匹配；收窄为 `forum discussion --domain product`，首项命中 Forum / Discussion Board，采用 feed/thread、板块与信息对齐建议。只在论坛标题区域使用深紫，保留项目原定紫色 ZJ、暖黄操作色和中文系统字体，不把通用深色建议直接覆盖整站。
+
+按 TDD 先验证两项新交互失败，再实现独立评审副本；追加失败保留草稿回归。最终仅报告独立预览测试、候选类型和构建结果。浏览器访问策略阻止本轮视觉观察，不补写截图或手机验收通过。

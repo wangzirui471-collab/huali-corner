@@ -1,6 +1,160 @@
 {
   "components": {
     "schemas": {
+      "ActionInput": {
+        "additionalProperties": false,
+        "description": "动作白名单仅选择旧用例；退款仍通过既有售后工单办理。",
+        "properties": {
+          "action": {
+            "enum": [
+              "pay",
+              "cancel",
+              "confirm_schedule",
+              "deliver",
+              "handover",
+              "receive",
+              "reschedule"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "maxLength": 150,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "appointment": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "ge": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Appointment"
+          },
+          "id": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "action"
+        ],
+        "title": "ActionInput",
+        "type": "object"
+      },
+      "ChangeInput": {
+        "additionalProperties": false,
+        "description": "只允许对已有改约作出决定，不接受客户端指定审批人。",
+        "properties": {
+          "accept": {
+            "title": "Accept",
+            "type": "boolean"
+          },
+          "id": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "accept"
+        ],
+        "title": "ChangeInput",
+        "type": "object"
+      },
+      "CheckoutInput": {
+        "additionalProperties": false,
+        "description": "下单只接收商品、预约和原请求键，价格、卖家与状态均由旧 writer 决定。",
+        "properties": {
+          "address": {
+            "default": "",
+            "maxLength": 150,
+            "title": "Address",
+            "type": "string"
+          },
+          "appointment": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "ge": 0,
+            "title": "Appointment"
+          },
+          "delivery": {
+            "enum": [
+              "pickup",
+              "delivery"
+            ],
+            "title": "Delivery",
+            "type": "string"
+          },
+          "key": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "product_ids": {
+            "items": {
+              "exclusiveMinimum": 0.0,
+              "maximum": 9007199254740991.0,
+              "type": "integer"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Product Ids",
+            "type": "array"
+          },
+          "want_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 9007199254740991.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Want Id"
+          }
+        },
+        "required": [
+          "product_ids",
+          "key",
+          "delivery",
+          "appointment"
+        ],
+        "title": "CheckoutInput",
+        "type": "object"
+      },
       "Envelope_HealthData_": {
         "properties": {
           "code": {
@@ -45,6 +199,52 @@
           "request_id"
         ],
         "title": "Envelope[HealthData]",
+        "type": "object"
+      },
+      "Envelope_JsonValue_": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JsonValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Metadata"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "request_id"
+        ],
+        "title": "Envelope[JsonValue]",
         "type": "object"
       },
       "Envelope_NoneType_": {
@@ -129,6 +329,11 @@
             "title": "Business Ready",
             "type": "boolean"
           },
+          "compat_enabled": {
+            "default": false,
+            "title": "Compat Enabled",
+            "type": "boolean"
+          },
           "environment": {
             "enum": [
               "local",
@@ -151,6 +356,51 @@
         "title": "HealthData",
         "type": "object"
       },
+      "JsonValue": {},
+      "LoginInput": {
+        "additionalProperties": false,
+        "description": "兼容旧明文口令模式或客户端 KDF 摘要模式，严格二选一。",
+        "properties": {
+          "digest": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-fA-F]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Digest"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "format": "password",
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "phone": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Phone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone"
+        ],
+        "title": "LoginInput",
+        "type": "object"
+      },
       "Metadata": {
         "description": "协议版本与模拟交易标记；后续兼容转换据此选择 mapper。",
         "properties": {
@@ -169,6 +419,81 @@
         },
         "title": "Metadata",
         "type": "object"
+      },
+      "UpdateInput": {
+        "additionalProperties": false,
+        "description": "付款前修改仍由旧服务核验归属、状态与可变字段。",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "maxLength": 150,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "appointment": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "ge": 0,
+            "title": "Appointment"
+          },
+          "delivery": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pickup",
+                  "delivery"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery"
+          },
+          "id": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Id",
+            "type": "integer"
+          },
+          "product_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "exclusiveMinimum": 0.0,
+                  "maximum": 9007199254740991.0,
+                  "type": "integer"
+                },
+                "maxItems": 20,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Ids"
+          }
+        },
+        "required": [
+          "id",
+          "appointment"
+        ],
+        "title": "UpdateInput",
+        "type": "object"
       }
     }
   },
@@ -178,6 +503,528 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/compat/auth/login": {
+      "post": {
+        "description": "只把已选择的凭据交给旧登录用例；本模块不保存密码或签发另一套 token。",
+        "operationId": "login_api_v1_compat_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_JsonValue_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Login",
+        "tags": [
+          "compat-identity-trade"
+        ]
+      }
+    },
+    "/api/v1/compat/auth/logout": {
+      "post": {
+        "description": "撤销原会话，不仅清除本机页面的登录外观。",
+        "operationId": "logout_api_v1_compat_auth_logout_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_JsonValue_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Logout",
+        "tags": [
+          "compat-identity-trade"
+        ]
+      }
+    },
+    "/api/v1/compat/auth/salt": {
+      "get": {
+        "description": "原样返回现有盐与 KDF 轮数，不把不存在账号与已存在账号作额外区分。",
+        "operationId": "password_parameters_api_v1_compat_auth_salt_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "phone",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Phone"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_JsonValue_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Password Parameters",
+        "tags": [
+          "compat-identity-trade"
+        ]
+      }
+    },
+    "/api/v1/compat/checkout": {
+      "post": {
+        "description": "原请求键只转发一次；头与正文不一致时拒绝，不在网络异常后自动生成新键。",
+        "operationId": "checkout_api_v1_compat_checkout_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_JsonValue_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Checkout",
+        "tags": [
+          "compat-identity-trade"
+        ]
+      }
+    },
+    "/api/v1/compat/me": {
+      "get": {
+        "description": "身份由原会话接口核实，前端缓存的角色不能构成授权。",
+        "operationId": "me_api_v1_compat_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_JsonValue_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Me",
+        "tags": [
+          "compat-identity-trade"
+        ]
+      }
+    },
+    "/api/v1/compat/order": {
+      "get": {
+        "description": "按编号查询详情，交易方、客服或其他身份的可见范围仍由旧服务核验。",
+        "operationId": "order_api_v1_compat_order_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_JsonValue_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Order",
+        "tags": [
+          "compat-identity-trade"
+        ]
+      }
+    },
+    "/api/v1/compat/order/action": {
+      "post": {
+        "description": "买卖双方动作沿用旧状态机，不根据页面按钮直接改变订单字段。",
+        "operationId": "order_action_api_v1_compat_order_action_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_JsonValue_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Order Action",
+        "tags": [
+          "compat-identity-trade"
+        ]
+      }
+    },
+    "/api/v1/compat/order/change": {
+      "post": {
+        "description": "确认或拒绝已有改约，由原服务校验当前账号和请求状态。",
+        "operationId": "order_change_api_v1_compat_order_change_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_JsonValue_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Order Change",
+        "tags": [
+          "compat-identity-trade"
+        ]
+      }
+    },
+    "/api/v1/compat/order/update": {
+      "post": {
+        "description": "提交原字段与原单位，不写新的订单表或账本。",
+        "operationId": "order_update_api_v1_compat_order_update_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_JsonValue_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Order Update",
+        "tags": [
+          "compat-identity-trade"
+        ]
+      }
+    },
+    "/api/v1/compat/orders": {
+      "get": {
+        "description": "查询当前账号的买卖订单，不增加可指定其他用户的查询参数。",
+        "operationId": "orders_api_v1_compat_orders_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_JsonValue_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Orders",
+        "tags": [
+          "compat-identity-trade"
+        ]
+      }
+    },
     "/api/v1/health": {
       "get": {
         "description": "返回进程存活与环境；明确标记业务尚未就绪，避免误切线上流量。",

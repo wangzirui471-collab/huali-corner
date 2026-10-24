@@ -1,5 +1,10 @@
 /* 来自重构文档 04 的语义令牌；Logo 源文件保留自己的紫色与黄色。 */
 :root {
+  /* 紧凑双专题的背景与正文配色，经首页预览确认。 */
+  --color-topic-study-bg: #eee8f4;
+  --color-topic-study-ink: #56426f;
+  --color-topic-campus-bg: #f5ecd5;
+  --color-topic-campus-ink: #685338;
   --color-brand-mark: #7f68af;
   --color-action: #f5ca54;
   --color-action-hover: #e9bc42;

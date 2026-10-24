@@ -5,7 +5,7 @@ import prettier from 'eslint-config-prettier';
 import { methodComments } from './eslint-rules.js';
 
 export default [
-  { ignores: ['dist/**', 'node_modules/**', 'src/shared/http/generated.d.ts'] },
+  { ignores: ['dist/**', 'dist-trial/**', 'node_modules/**', 'src/shared/http/generated.d.ts'] },
   js.configs.recommended,
   ...vue.configs['flat/recommended'],
   {
@@ -14,8 +14,22 @@ export default [
       globals: {
         fetch: 'readonly',
         AbortController: 'readonly',
+        AbortSignal: 'readonly',
         Headers: 'readonly',
         Response: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
+        window: 'readonly',
+        document: 'readonly',
+        localStorage: 'readonly',
+        sessionStorage: 'readonly',
+        FileReader: 'readonly',
+        crypto: 'readonly',
+        TextEncoder: 'readonly',
+        DOMException: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        setTimeout: 'readonly',
       },
     },
   },
@@ -24,5 +38,6 @@ export default [
     plugins: { huali: { rules: { 'method-comments': methodComments } } },
     rules: { 'huali/method-comments': 'error' },
   },
+  { files: ['vite.config.js'], languageOptions: { globals: { process: 'readonly' } } },
   prettier,
 ];

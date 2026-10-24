@@ -20,6 +20,7 @@ class ApplicationError(Exception):
         message: str,
         status: int = 409,
         fields: tuple[FieldError, ...] = (),
+        retry_after: str | None = None,
     ) -> None:
         """记录错误码、展示文案、HTTP 状态及字段错误，不包装底层敏感信息。"""
         super().__init__(message)
@@ -27,3 +28,4 @@ class ApplicationError(Exception):
         self.message = message
         self.status = status
         self.fields = fields
+        self.retry_after = retry_after

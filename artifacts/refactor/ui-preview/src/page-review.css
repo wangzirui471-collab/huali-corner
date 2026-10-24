@@ -1,0 +1,1251 @@
+/* 仅用于本机评审副本：品牌令牌保持一致，按阅读、讨论、会话和交易分别组织信息。 */
+:root {
+  --review-paper: #fffdf8;
+  --review-rule: #dedbd5;
+  --review-plum: #493759;
+  --review-lilac: #eee8f4;
+  --review-sage: #e9f0e9;
+  --review-muted: #66616b;
+}
+.social-review,
+.orders-review,
+.messages-review {
+  min-width: 0;
+}
+.social-review button,
+.orders-review button {
+  cursor: pointer;
+}
+.review-kicker {
+  display: block;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  color: var(--review-muted);
+}
+.social-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 0 36px;
+}
+.market-main .social-title h1,
+.market-main .orders-title h1 {
+  font-size: clamp(28px, 3vw, 38px);
+  letter-spacing: -0.045em;
+  margin: 12px 0 16px;
+}
+.social-title p,
+.orders-title p {
+  color: var(--review-muted);
+  margin-bottom: 0;
+}
+.social-symbol {
+  width: 106px;
+  height: 106px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  background: var(--review-lilac);
+  color: var(--color-link);
+  border-radius: 50% 50% 16% 50%;
+  transform: rotate(-7deg);
+}
+.social-columns {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 48px;
+  align-items: start;
+}
+.social-rail {
+  position: sticky;
+  top: 24px;
+  min-width: 0;
+}
+.rail-profile {
+  padding: 24px 16px;
+  background: var(--review-lilac);
+  border-radius: 12px 12px 0 0;
+}
+.review-avatar {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--review-lilac);
+  color: var(--color-link);
+  text-decoration: none;
+  font-weight: 700;
+}
+.rail-profile .review-avatar {
+  width: 56px;
+  height: 56px;
+  background: var(--color-surface);
+  font-size: 22px;
+  margin-bottom: 16px;
+}
+.market-main .rail-profile h2 {
+  margin-bottom: 6px;
+  font-size: 18px;
+}
+.rail-profile p {
+  margin: 0;
+  color: var(--review-muted);
+  font-size: 13px;
+}
+.social-rail nav {
+  display: grid;
+  gap: 4px;
+  padding: 16px 0;
+}
+.community-review .social-rail nav {
+  background: var(--review-lilac);
+  padding: 0 12px 16px;
+  border-radius: 0 0 12px 12px;
+}
+.social-rail nav a {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  color: var(--color-text-secondary);
+  padding: 12px;
+  min-height: 48px;
+  text-decoration: none;
+  border-radius: 8px;
+}
+.social-rail nav a[aria-current="page"] {
+  background: var(--color-surface);
+  color: var(--color-link);
+  font-weight: 650;
+}
+.social-rail nav a:hover {
+  background: var(--color-surface);
+}
+.rail-note {
+  padding: 28px 12px;
+  font-size: 14px;
+  color: var(--review-muted);
+}
+.rail-note .note-mark {
+  color: var(--review-plum);
+  display: block;
+  font-size: 16px;
+  font-weight: 650;
+  margin-bottom: 12px;
+}
+.rail-note a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 14px;
+}
+.social-content {
+  min-width: 0;
+}
+.social-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  padding-bottom: 20px;
+}
+.market-main .social-toolbar h2 {
+  font-size: 23px;
+  margin: 8px 0 0;
+}
+.social-toolbar h2 small {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--review-muted);
+  margin-left: 12px;
+}
+.review-primary {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--color-action);
+  color: var(--color-action-ink);
+  padding: 10px 18px;
+  white-space: nowrap;
+  font-weight: 650;
+}
+.review-primary:hover {
+  background: var(--color-action-hover);
+}
+.review-search {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  border-bottom: 1px solid var(--review-rule);
+  padding: 8px 0;
+  color: var(--review-muted);
+}
+.review-search input {
+  border: 0;
+  outline-offset: -3px;
+  background: transparent;
+  flex: 1;
+  width: 0;
+  min-width: 0;
+  padding: 12px 0;
+  font-size: 16px;
+}
+.review-search button {
+  border: 0;
+  background: transparent;
+  color: var(--color-link);
+  min-height: 44px;
+  padding: 8px 12px;
+}
+.review-compose {
+  padding: 24px;
+  border-left: 3px solid var(--color-brand-mark);
+  background: var(--review-lilac);
+  margin-bottom: 20px;
+}
+.review-compose h3 {
+  margin-bottom: 8px;
+}
+.compose-bottom {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+.compose-bottom > span {
+  color: var(--review-muted);
+  font-size: 13px;
+}
+.review-moment {
+  position: relative;
+  display: flex;
+  gap: 16px;
+  padding: 28px 0;
+  border-bottom: 1px solid var(--review-rule);
+}
+.review-moment:nth-of-type(2n) > .review-avatar {
+  background: var(--review-sage);
+  color: var(--color-success);
+}
+.post-copy {
+  min-width: 0;
+  flex: 1;
+}
+.post-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 12px;
+  color: var(--review-muted);
+}
+.post-meta a {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--color-text);
+  text-decoration: none;
+}
+.topic-label {
+  margin-left: auto;
+  color: var(--color-link);
+}
+.post-title {
+  color: var(--color-text);
+  text-decoration: none;
+  display: block;
+}
+.market-main .post-title h3 {
+  font-size: 19px;
+  line-height: 1.5;
+  margin: 14px 0 10px;
+}
+.post-title:hover {
+  color: var(--color-link);
+}
+.post-description {
+  white-space: pre-wrap;
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  line-height: 1.85;
+  margin-bottom: 14px;
+}
+.post-copy footer {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  font-size: 13px;
+}
+.post-copy footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  text-decoration: none;
+}
+.post-copy footer .post-report {
+  color: var(--review-muted);
+  margin-left: auto;
+}
+.social-end {
+  text-align: center;
+  color: var(--review-muted);
+  font-size: 13px;
+  margin: 32px 0;
+}
+/* 论坛采用板块导航与横向主题行；回复数独立对齐，区别于校园动态。 */
+.forum-review .social-title {
+  background: var(--review-plum);
+  color: var(--color-surface);
+  padding: 30px 36px;
+  border-radius: 12px;
+  margin-bottom: 32px;
+}
+.forum-review .social-title p,
+.forum-review .social-title .review-kicker {
+  color: #e1d7eb;
+}
+.forum-review .social-symbol {
+  background: transparent;
+  color: #e1d7eb;
+  border: 1px solid #897694;
+  border-radius: 16px;
+  transform: none;
+}
+.forum-review .social-columns {
+  gap: 36px;
+  grid-template-columns: 200px minmax(0, 1fr);
+}
+.forum-review .social-rail > .review-kicker {
+  padding: 8px 12px 0;
+}
+.forum-review .social-rail nav a[aria-current="page"] {
+  background: var(--review-lilac);
+}
+.forum-review .rail-note {
+  background: var(--color-topic-campus-bg);
+  padding: 20px;
+  margin-top: 12px;
+  border-radius: 0 16px 16px 16px;
+}
+.thread-caption {
+  display: flex;
+  justify-content: space-between;
+  padding: 16px 0 12px;
+  color: var(--review-muted);
+  font-size: 12px;
+  border-bottom: 1px solid var(--review-rule);
+}
+.thread-caption > span:last-child {
+  width: 85px;
+  text-align: center;
+}
+.review-thread {
+  display: flex;
+  gap: 16px;
+  padding: 24px 0;
+  align-items: center;
+  border-bottom: 1px solid var(--review-rule);
+}
+.review-thread .review-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+.review-thread .post-meta time {
+  font-size: 12px;
+}
+.review-thread .post-title h3 {
+  margin: 8px 0;
+  font-size: 18px;
+}
+.review-thread .post-description {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 14px;
+}
+.review-thread .post-copy footer {
+  gap: 12px;
+}
+.thread-count {
+  min-width: 85px;
+  text-align: center;
+  color: var(--review-plum);
+  text-decoration: none;
+}
+.thread-count b {
+  display: block;
+  font-size: 24px;
+  font-weight: 550;
+  line-height: 1.3;
+}
+.thread-count span {
+  font-size: 12px;
+  color: var(--review-muted);
+}
+/* 订单以一张连续单据承载信息；状态、金额、下一步与次要账本分层。 */
+.orders-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 0 36px;
+}
+.orders-title .text-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  white-space: nowrap;
+  font-size: 14px;
+}
+.orders-columns {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 40px;
+}
+.order-filters {
+  min-width: 0;
+}
+.order-filters nav {
+  display: grid;
+  gap: 4px;
+  margin: 16px 0 24px;
+}
+.order-filters nav button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 0;
+  padding: 12px 16px;
+  min-height: 48px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-radius: 8px;
+  text-align: left;
+  font-size: 14px;
+  gap: 12px;
+}
+.order-filters nav button[aria-pressed="true"] {
+  background: var(--review-plum);
+  color: var(--color-surface);
+  font-weight: 650;
+}
+.order-filters nav button:hover:not([aria-pressed="true"]) {
+  background: var(--review-lilac);
+}
+.order-filters nav b {
+  font-weight: 500;
+  font-size: 12px;
+}
+.order-simulation {
+  border-top: 1px solid var(--review-rule);
+  padding: 20px 12px 0;
+  color: var(--review-muted);
+  font-size: 13px;
+}
+.order-simulation svg {
+  display: block;
+  margin-bottom: 8px;
+}
+.order-filters > a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-left: 12px;
+  font-size: 13px;
+}
+.orders-content {
+  min-width: 0;
+}
+.order-role {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  border-bottom: 1px solid var(--review-rule);
+  margin-bottom: 24px;
+}
+.order-role button {
+  border: 0;
+  background: transparent;
+  padding: 12px 0;
+  min-height: 48px;
+  color: var(--review-muted);
+  border-bottom: 3px solid transparent;
+  font-size: 15px;
+}
+.order-role button[aria-pressed="true"] {
+  color: var(--color-link);
+  border-bottom-color: var(--color-brand-mark);
+  font-weight: 650;
+}
+.order-role > span {
+  margin-left: auto;
+  color: var(--review-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.order-paper {
+  background: var(--review-paper);
+  border-radius: 8px;
+  padding: 0 28px;
+}
+.review-order {
+  padding: 28px 0 20px;
+  border-bottom: 1px dashed var(--review-rule);
+}
+.review-order:last-child {
+  border-bottom: 0;
+}
+.order-top,
+.order-top > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.order-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--color-text-secondary);
+  font-weight: 650;
+  font-size: 14px;
+}
+.order-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.review-order[data-state="awaiting_payment"] .order-status {
+  color: var(--color-warning-ink);
+}
+.review-order[data-state="awaiting_receipt"] .order-status {
+  color: var(--color-link);
+}
+.review-order[data-state="completed"] .order-status {
+  color: var(--color-success);
+}
+.order-side,
+.order-number {
+  color: var(--review-muted);
+  font-size: 12px;
+}
+.order-side {
+  border-left: 1px solid var(--review-rule);
+  padding-left: 12px;
+}
+.order-items {
+  padding: 24px 0 18px;
+}
+.order-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+.order-item > div {
+  flex: 1;
+  min-width: 0;
+}
+.order-item-symbol {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  height: 68px;
+  width: 58px;
+  background: var(--review-lilac);
+  color: var(--color-link);
+  border-radius: 4px;
+}
+.order-item a {
+  text-decoration: none;
+  color: var(--color-text);
+}
+.market-main .order-item h2 {
+  font-size: 17px;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+.order-item p {
+  color: var(--review-muted);
+  font-size: 12px;
+  margin: 0;
+}
+.order-item > b {
+  font-size: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+  align-self: start;
+}
+.delivery-line {
+  display: flex;
+  gap: 12px 20px;
+  flex-wrap: wrap;
+  color: var(--review-muted);
+  font-size: 12px;
+}
+.delivery-line span {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.delivery-line svg {
+  flex: 0 0 auto;
+}
+.order-next {
+  display: grid;
+  gap: 4px;
+  margin-top: 18px;
+  padding: 12px 16px;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-ink);
+  border-left: 2px solid var(--color-action);
+  font-size: 13px;
+}
+.review-order[data-state="awaiting_receipt"] .order-next {
+  background: var(--review-lilac);
+  color: var(--review-plum);
+  border-left-color: var(--color-brand-mark);
+}
+.order-next > span {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.order-complete {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 18px;
+  font-size: 13px;
+  color: var(--color-success);
+}
+.order-bottom {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 0 12px;
+}
+.order-total {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.order-total small {
+  color: var(--review-muted);
+  font-size: 12px;
+}
+.order-total b {
+  font-size: 23px;
+  letter-spacing: -0.03em;
+}
+.order-total > span {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--review-muted);
+}
+.order-bottom .actions {
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0;
+}
+.order-ledger {
+  color: var(--review-muted);
+  font-size: 12px;
+}
+.order-ledger summary {
+  cursor: pointer;
+  padding: 8px 0;
+  min-height: 36px;
+}
+.order-ledger p {
+  margin: 8px 0;
+}
+.offer-records {
+  margin-top: 24px;
+  padding: 16px 0;
+  border-block: 1px solid var(--review-rule);
+}
+.offer-records summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 15px;
+}
+.offer-records summary span {
+  color: var(--review-muted);
+  font-size: 13px;
+}
+/* 消息采用连续的双栏窗口；会话、消息气泡和输入区各有明确视觉位置。 */
+.messages-review > .section-heading {
+  margin-bottom: 24px;
+}
+.messages-review .message-subtitle {
+  color: var(--review-muted);
+  font-size: 14px;
+  margin: 12px 0 0;
+}
+.messages-review .chat-layout {
+  gap: 0;
+  grid-template-columns: 290px minmax(0, 1fr);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--review-rule);
+  background: var(--review-paper);
+}
+.messages-review .panel {
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+  margin: 0;
+}
+.messages-review .room-list {
+  background: var(--review-lilac);
+  padding: 20px 12px;
+}
+.messages-review .room-row {
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: transparent;
+  padding: 16px 12px;
+  min-height: 72px;
+  color: var(--review-plum);
+  text-align: left;
+  font-size: 14px;
+  text-decoration: none;
+  cursor: pointer;
+}
+.messages-review .room-row:hover,
+.messages-review .room-row[aria-current="page"],
+.messages-review .room-row.router-link-active {
+  background: var(--color-surface);
+}
+.room-avatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: #ddd2e8;
+  flex: 0 0 auto;
+  color: var(--review-plum);
+  font-weight: 650;
+}
+.room-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+.room-copy b {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.messages-review .room-copy small {
+  font-size: 12px;
+  color: var(--review-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 172px;
+}
+.messages-review .room-list .form-stack {
+  padding: 20px 8px 0;
+  margin-top: 16px;
+  border-top: 1px solid #d8cee1;
+}
+.messages-review .room-list .app-button {
+  background: transparent;
+  border: 0;
+  color: var(--color-link);
+  font-size: 13px;
+  justify-content: start;
+}
+.messages-review .chat-main {
+  background: var(--review-paper);
+  min-height: 620px;
+  padding: 0;
+}
+.messages-review .chat-heading {
+  padding: 20px 28px;
+  background: var(--review-paper);
+  border-bottom: 1px solid var(--review-rule);
+  align-items: center;
+  margin-bottom: 0;
+}
+.messages-review .chat-heading h2 {
+  font-size: 18px;
+  margin: 0;
+}
+.messages-review .chat-heading > details {
+  font-size: 12px;
+}
+.messages-review .chat-heading > details > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.messages-review .chat-heading > details[open] .actions {
+  flex-wrap: wrap;
+}
+.messages-review .chat-main > .muted {
+  font-size: 12px;
+  text-align: center;
+  margin: 0;
+  padding: 16px 24px 4px;
+}
+.messages-review .message-list {
+  padding: 20px 28px;
+  min-height: 350px;
+  max-height: 52vh;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  background: var(--review-paper);
+}
+.messages-review .message {
+  width: fit-content;
+  max-width: 78%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  margin: 0;
+  align-self: flex-start;
+}
+.messages-review .message > small {
+  display: block;
+  color: var(--review-muted);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.messages-review .message > p {
+  padding: 12px 16px;
+  border-radius: 0 12px 12px 12px;
+  background: #eeece8;
+  margin: 0 0 6px;
+  font-size: 15px;
+  line-height: 1.7;
+}
+.messages-review .message.message-own {
+  align-self: flex-end;
+  margin-left: auto;
+  text-align: right;
+}
+.messages-review .message.message-own > p {
+  background: var(--review-lilac);
+  color: var(--review-plum);
+  border-radius: 12px 0 12px 12px;
+  text-align: left;
+}
+.messages-review .message-tools {
+  display: block;
+  font-size: 12px;
+  color: var(--review-muted);
+}
+.messages-review .message-tools summary {
+  min-height: 32px;
+  cursor: pointer;
+  width: fit-content;
+}
+.messages-review .message-own .message-tools summary {
+  margin-left: auto;
+}
+.messages-review .message-tools .actions {
+  padding: 8px 0;
+  gap: 8px;
+}
+.messages-review .message-tools button {
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid var(--review-rule);
+  background: var(--color-surface);
+  border-radius: 6px;
+}
+.messages-review .message-composer {
+  padding: 16px 24px 20px;
+  margin: 0;
+  border-top: 1px solid var(--review-rule);
+  background: var(--color-surface);
+  display: flex;
+  align-items: end;
+  gap: 16px;
+}
+.messages-review .message-composer textarea {
+  border: 0;
+  resize: vertical;
+  flex: 1;
+  min-width: 0;
+  width: 0;
+  padding: 8px;
+  font-size: 16px;
+  background: transparent;
+}
+.messages-review .chat-welcome {
+  min-height: 600px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px;
+  text-align: center;
+}
+.messages-review .chat-welcome h2,
+.messages-review .chat-welcome p {
+  margin: 0;
+}
+.messages-review .chat-welcome p {
+  color: var(--review-muted);
+  font-size: 14px;
+}
+.welcome-symbol {
+  width: 112px;
+  height: 112px;
+  background: var(--review-lilac);
+  border-radius: 50% 50% 16% 50%;
+  display: grid;
+  place-items: center;
+  color: var(--color-link);
+  margin-bottom: 16px;
+}
+.messages-review .timeline-entry {
+  margin: 20px 28px;
+  padding: 12px 0 20px 20px;
+  border-left: 2px solid var(--color-brand-mark);
+  background: transparent;
+}
+@media (max-width: 1023px) {
+  .social-columns {
+    grid-template-columns: 180px minmax(0, 1fr);
+    gap: 28px;
+  }
+  .forum-review .social-columns {
+    grid-template-columns: 170px minmax(0, 1fr);
+    gap: 24px;
+  }
+  .orders-columns {
+    grid-template-columns: 160px minmax(0, 1fr);
+    gap: 24px;
+  }
+  .order-paper {
+    padding-inline: 20px;
+  }
+  .order-bottom {
+    align-items: start;
+    flex-direction: column;
+  }
+  .order-bottom .actions {
+    justify-content: flex-start;
+  }
+  .order-total > span {
+    flex-basis: auto;
+    margin-left: 4px;
+  }
+  .messages-review .chat-layout {
+    grid-template-columns: 230px minmax(0, 1fr);
+  }
+  .messages-review .room-copy small {
+    max-width: 126px;
+  }
+}
+@media (max-width: 767px) {
+  .social-title,
+  .orders-title {
+    padding: 4px 0 24px;
+    align-items: start;
+    gap: 12px;
+  }
+  .market-main .social-title h1,
+  .market-main .orders-title h1 {
+    font-size: 28px;
+    line-height: 1.35;
+    margin: 10px 0 12px;
+  }
+  .social-title p,
+  .orders-title p {
+    font-size: 14px;
+  }
+  .social-symbol {
+    width: 64px;
+    height: 64px;
+    margin-top: 24px;
+  }
+  .social-symbol svg {
+    width: 32px;
+    height: 32px;
+  }
+  .social-columns,
+  .forum-review .social-columns,
+  .orders-columns {
+    display: block;
+  }
+  .social-rail {
+    position: static;
+  }
+  .community-review .rail-profile,
+  .social-rail .rail-note {
+    display: none;
+  }
+  .community-review .social-rail nav {
+    display: flex;
+    background: transparent;
+    border-radius: 0;
+    padding: 0 0 16px;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .social-rail nav a {
+    min-height: 44px;
+    padding: 8px;
+    gap: 6px;
+    font-size: 13px;
+  }
+  .social-rail nav a[aria-current="page"] {
+    background: var(--review-lilac);
+  }
+  .social-toolbar {
+    gap: 12px;
+    padding-bottom: 12px;
+  }
+  .market-main .social-toolbar h2 {
+    font-size: 21px;
+  }
+  .social-toolbar h2 small {
+    display: block;
+    margin: 6px 0 0;
+    font-size: 12px;
+  }
+  .review-primary {
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+  .review-moment {
+    gap: 10px;
+    padding: 24px 0;
+  }
+  .review-moment > .review-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+  .post-meta {
+    gap: 4px 8px;
+  }
+  .post-meta time {
+    flex-basis: 100%;
+    order: 2;
+  }
+  .post-meta .topic-label {
+    font-size: 12px;
+  }
+  .market-main .post-title h3 {
+    font-size: 17px;
+    margin-top: 12px;
+  }
+  .post-description {
+    font-size: 14px;
+  }
+  .review-compose {
+    padding: 16px;
+  }
+  .compose-bottom {
+    align-items: start;
+  }
+  .compose-bottom > span {
+    font-size: 12px;
+  }
+  .forum-review .social-title {
+    padding: 24px 20px;
+    margin-bottom: 20px;
+  }
+  .forum-review .social-symbol {
+    display: none;
+  }
+  .forum-review .social-rail > .review-kicker {
+    display: none;
+  }
+  .forum-review .social-rail nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 0 0 20px;
+  }
+  .forum-review .social-rail nav a {
+    padding: 8px 10px;
+  }
+  .forum-review .social-rail nav a svg {
+    display: none;
+  }
+  .review-thread {
+    gap: 10px;
+    padding: 20px 0;
+    align-items: start;
+  }
+  .review-thread > .review-avatar {
+    display: none;
+  }
+  .review-thread .post-description {
+    font-size: 13px;
+  }
+  .thread-count,
+  .thread-caption > span:last-child {
+    min-width: 56px;
+    width: 56px;
+  }
+  .thread-count {
+    padding-top: 30px;
+  }
+  .thread-count b {
+    font-size: 20px;
+  }
+  .orders-title {
+    display: block;
+  }
+  .orders-title .text-action {
+    margin-top: 12px;
+  }
+  .orders-title p > span {
+    display: block;
+    margin-top: 8px;
+  }
+  .order-filters > .review-kicker,
+  .order-simulation,
+  .order-filters > a {
+    display: none;
+  }
+  .order-filters nav {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 0 0 20px;
+  }
+  .order-filters nav button {
+    padding: 8px 10px;
+    font-size: 13px;
+    gap: 7px;
+    min-height: 44px;
+  }
+  .order-role {
+    gap: 18px;
+    margin-bottom: 16px;
+  }
+  .order-role button {
+    font-size: 14px;
+  }
+  .order-role > span {
+    display: none;
+  }
+  .order-paper {
+    padding: 0 16px;
+    margin-inline: -4px;
+  }
+  .review-order {
+    padding-block: 20px 16px;
+  }
+  .order-top {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .order-top > div {
+    gap: 8px;
+  }
+  .order-item {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .order-item > b {
+    margin-left: 70px;
+    margin-top: -4px;
+  }
+  .order-item-symbol {
+    height: 66px;
+  }
+  .market-main .order-item h2 {
+    font-size: 16px;
+  }
+  .order-bottom {
+    gap: 12px;
+  }
+  .order-next {
+    padding: 12px;
+  }
+  .order-complete {
+    align-items: start;
+  }
+  .order-complete svg {
+    flex: 0 0 auto;
+  }
+  .messages-review .chat-layout {
+    grid-template-columns: minmax(0, 1fr);
+    border-radius: 8px;
+  }
+  .messages-review .room-copy small {
+    max-width: 200px;
+  }
+  .messages-review .chat-main {
+    display: none;
+    min-height: 0;
+  }
+  .messages-review .chat-detail .room-list {
+    display: none;
+  }
+  .messages-review .chat-detail .chat-main {
+    display: flex;
+    flex-direction: column;
+    min-height: 60vh;
+  }
+  .messages-review .chat-heading {
+    padding: 12px 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .messages-review .chat-heading h2 {
+    font-size: 17px;
+  }
+  .messages-review .message-list {
+    padding: 16px;
+    min-height: 260px;
+    max-height: 45vh;
+    gap: 20px;
+  }
+  .messages-review .message {
+    max-width: 85%;
+  }
+  .messages-review .message > small {
+    font-size: 12px;
+  }
+  .messages-review .message > p {
+    font-size: 14px;
+    padding: 10px 12px;
+  }
+  .messages-review .message-composer {
+    padding: 12px;
+    gap: 8px;
+  }
+  .messages-review .message-composer textarea {
+    min-height: 88px;
+  }
+  .messages-review .timeline-entry {
+    margin: 16px;
+  }
+}

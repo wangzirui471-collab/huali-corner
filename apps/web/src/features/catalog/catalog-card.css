@@ -1,0 +1,315 @@
+/* 共享商品卡片作用域：不覆盖订单及工作台的价格、行布局和按钮。 */
+
+.catalog-card {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: 11px;
+  overflow: hidden;
+  min-width: 0;
+  transition:
+    box-shadow 0.16s,
+    border-color 0.16s;
+}
+.catalog-card:hover {
+  border-color: #d3c8e2;
+  box-shadow: 0 6px 20px #37234809;
+}
+.catalog-card .cover-wrap {
+  position: relative;
+}
+.catalog-card .product-cover {
+  width: 100%;
+  aspect-ratio: 1;
+  display: block;
+  padding: 0;
+  background: #ebe8e2;
+}
+.catalog-card .favorite-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #ffffffed;
+  position: absolute;
+  right: 9px;
+  top: 9px;
+  color: var(--color-text-muted);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 2px 8px #00000005;
+}
+.catalog-card .favorite-button.saved {
+  color: var(--color-brand-mark);
+}
+.catalog-card .favorite-button.saved svg {
+  fill: #e9e0f4;
+}
+.catalog-card .favorite-button:hover {
+  background: var(--color-surface);
+  color: var(--color-link);
+}
+.catalog-card .product-copy {
+  padding: 14px 15px 12px;
+}
+.catalog-card .product-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 46px;
+  text-align: left;
+  line-height: 1.6;
+  font-size: 15px;
+  font-weight: 550;
+  padding: 0;
+  width: 100%;
+  letter-spacing: -0.02em;
+}
+.catalog-card .product-title:hover {
+  color: var(--color-link);
+}
+.catalog-card .condition-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin: 8px 0 10px;
+  min-width: 0;
+}
+.catalog-card .place {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.catalog-card .price-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.catalog-card .price-line b {
+  font-size: 25px;
+  color: var(--color-price);
+  line-height: 1.35;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.catalog-card .price-line b > small {
+  font-size: 14px;
+  margin-right: 2px;
+}
+.catalog-card .price-line b > span {
+  font-size: 14px;
+  margin-left: 1px;
+}
+.catalog-card .price-line .free-price {
+  font-size: 22px;
+  color: var(--color-success);
+}
+.catalog-card .price-line del {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+.catalog-card .delivery-line {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+  min-height: 20px;
+}
+.catalog-card .seller-line {
+  border-top: 1px solid var(--color-border);
+  margin-top: 12px;
+  padding-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.catalog-card .seller-avatar {
+  width: 23px;
+  height: 23px;
+  display: grid;
+  place-items: center;
+  background: #f0edf5;
+  color: #8c7ba0;
+  border-radius: 50%;
+  font-size: 11px;
+}
+.catalog-card .seller-line time {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+@media (max-width: 1023px) {
+  .catalog-card .condition-line {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 767px) {
+  .catalog-card {
+    border-radius: 10px;
+  }
+  .catalog-card .favorite-button {
+    width: 44px;
+    height: 44px;
+    right: 4px;
+    top: 4px;
+    background: #ffffffeb;
+  }
+  .catalog-card .favorite-button > svg {
+    width: 19px;
+  }
+  .catalog-card .product-copy {
+    padding: 10px 10px 9px;
+  }
+  .catalog-card .product-title {
+    font-size: 14px;
+    min-height: 45px;
+    line-height: 1.6;
+  }
+  .catalog-card .condition-line {
+    font-size: 12px;
+    gap: 2px;
+    margin: 6px 0 8px;
+    display: block;
+  }
+  .catalog-card .condition-line .place {
+    display: none;
+  }
+  .catalog-card .price-line {
+    gap: 5px;
+  }
+  .catalog-card .price-line b {
+    font-size: 23px;
+  }
+  .catalog-card .price-line b > small,
+  .catalog-card .price-line b > span {
+    font-size: 12px;
+  }
+  .catalog-card .price-line del {
+    font-size: 10px;
+  }
+  .catalog-card .price-line .free-price {
+    font-size: 20px;
+  }
+  .catalog-card .delivery-line {
+    font-size: 12px;
+    min-height: 19px;
+  }
+  .catalog-card .seller-line {
+    margin-top: 8px;
+    padding-top: 8px;
+    gap: 5px;
+    font-size: 12px;
+    flex-wrap: wrap;
+  }
+  .catalog-card .seller-avatar {
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+  }
+  .catalog-card .seller-line time {
+    font-size: 10px;
+  }
+}
+@media (max-width: 359px) {
+  .catalog-card .product-copy {
+    padding: 9px 8px;
+  }
+  .catalog-card .seller-line time {
+    display: none;
+  }
+  .catalog-card .product-title {
+    font-size: 14px;
+  }
+  .catalog-card .delivery-line {
+    font-size: 11px;
+  }
+}
+.catalog-card .condition-line {
+  font-size: 12px;
+}
+.catalog-card .product-title {
+  text-decoration: none;
+  color: inherit;
+}
+.catalog-card p {
+  margin-bottom: 0;
+}
+.catalog-card .seller-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.catalog-card .seller-trusted {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--color-success);
+}
+.catalog-card .card-status {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-left: auto;
+}
+.catalog-card .card-error {
+  font-size: 12px;
+  color: var(--color-danger);
+  padding-top: 8px;
+}
+.catalog-card .card-error button {
+  border: 0;
+  background: transparent;
+  text-decoration: underline;
+  min-height: 44px;
+  color: inherit;
+  cursor: pointer;
+}
+.catalog-card .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.catalog-card .favorite-button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.catalog-card .favorite-button {
+  border: 0;
+  cursor: pointer;
+}
+.catalog-card .demo-tag {
+  font-size: 11px;
+  max-width: calc(100% - 70px);
+}
+
+/* 长标题、长版次与最高限价保持局部换行，不将整页撑宽。 */
+.catalog-card .product-title {
+  overflow-wrap: anywhere;
+}
+.catalog-card .price-line {
+  flex-wrap: wrap;
+}
+.catalog-card .condition-line > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.catalog-card .delivery-line {
+  font-size: 12px;
+}

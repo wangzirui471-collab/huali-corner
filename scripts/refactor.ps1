@@ -3,14 +3,18 @@
   重构工程的统一任务入口，支持 Windows 中文与空格目录。
 .DESCRIPTION
   Setup 安装锁定依赖；Check 检查新工程；Contracts 生成协议；
-  Api 启动本地新 API；Web 启动本地组件预览。每项任务遇到失败即停止。
+  Api 启动本地新 API；Web 启动隔离业务前端和组件预览。每项任务遇到失败即停止。
   不执行真实数据迁移、部署或资源绑定操作。
 .EXAMPLE
   .\scripts\refactor.ps1 -Task Check
+.EXAMPLE
+  .\scripts\refactor.ps1 -Task Setup -PythonExecutable 'D:\developTools\python.exe'
+  复用已有 Python 3.13/3.14，仅安装项目依赖，不下载解释器。
 #>
 param(
     [ValidateSet('Setup', 'Check', 'Contracts', 'Api', 'Web')]
-    [string]$Task = 'Check'
+    [string]$Task = 'Check',
+    [string]$PythonExecutable = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -40,14 +44,27 @@ function Get-UvExecutable {
 Push-Location $projectRoot
 $previousPythonPath = $env:PYTHONPATH
 $previousPythonUtf8 = $env:PYTHONUTF8
+$previousUvCache = $env:UV_CACHE_DIR
+$previousUvPythonInstall = $env:UV_PYTHON_INSTALL_DIR
 $env:PYTHONUTF8 = '1'
 try {
     switch ($Task) {
         'Setup' {
+            # 显式本机路径错误时立即停止，避免静默回退成下载另一个 Python。
+            $pythonSelection = '3.13'
+            $pythonOptions = @()
+            if ($PythonExecutable) {
+                if (-not (Test-Path -LiteralPath $PythonExecutable -PathType Leaf)) {
+                    throw "Python 解释器不存在：$PythonExecutable"
+                }
+                $pythonSelection = (Resolve-Path -LiteralPath $PythonExecutable).Path
+                $pythonOptions = @('--no-python-downloads')
+            }
             # 从锁文件安装到项目独立环境，不改变旧服务的依赖。
             $env:UV_CACHE_DIR = Join-Path $projectRoot '.uv-cache'
             $env:UV_PYTHON_INSTALL_DIR = Join-Path $projectRoot '.uv-python'
-            Invoke-TaskCommand (Get-UvExecutable) @('sync', '--locked', '--project', $apiRoot, '--python', '3.13')
+            $syncArguments = @('sync', '--locked', '--project', $apiRoot, '--python', $pythonSelection) + $pythonOptions
+            Invoke-TaskCommand (Get-UvExecutable) $syncArguments
             Invoke-TaskCommand 'npm.cmd' @('--prefix', $webRoot, 'ci')
         }
         'Check' {
@@ -61,7 +78,7 @@ try {
                 Invoke-TaskCommand $apiPython @('-B', '-X', 'utf8', '-m', 'unittest', 'discover', '-s', 'tests', '-p', 'test_*.py')
             } finally { Pop-Location }
             # 前端检查格式、模板类型、异常与控件行为，最后生成默认构建。
-            foreach ($webTask in @('lint', 'typecheck', 'test:unit', 'build')) {
+            foreach ($webTask in @('lint', 'typecheck', 'test:unit', 'build', 'build:trial')) {
                 Invoke-TaskCommand 'npm.cmd' @('--prefix', $webRoot, 'run', $webTask)
             }
         }
@@ -76,11 +93,14 @@ try {
             Invoke-TaskCommand $apiPython @('-m', 'uvicorn', 'huali.main:app', '--app-dir', (Join-Path $apiRoot 'src'), '--host', '127.0.0.1', '--port', '8001')
         }
         'Web' {
-            # Vite 的开发路由只用于组件预览；业务页面按后续切片迁移。
+            # 业务请求仅代理本机旧后端；新 API 的 business_ready 仍为 false。
             Invoke-TaskCommand 'npm.cmd' @('--prefix', $webRoot, 'run', 'dev')
         }
     }
 } finally {
+    # 任务只临时选用项目缓存；返回原终端后不干扰其他项目的工具配置。
+    $env:UV_CACHE_DIR = $previousUvCache
+    $env:UV_PYTHON_INSTALL_DIR = $previousUvPythonInstall
     $env:PYTHONPATH = $previousPythonPath
     $env:PYTHONUTF8 = $previousPythonUtf8
     Pop-Location

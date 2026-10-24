@@ -44,7 +44,14 @@ async def application_error_handler(
 ) -> JSONResponse:
     """保留业务稳定错误码，让客户端区分冲突、无权与可修正的字段。"""
     fields = [FieldIssue(path=item.path, message=item.message) for item in error.fields]
-    return error_response(request, error.code, error.message, error.status, fields)
+    response = error_response(request, error.code, error.message, error.status, fields)
+    if (
+        error.retry_after
+        and error.retry_after.isdigit()
+        and len(error.retry_after) <= 6
+    ):
+        response.headers["Retry-After"] = error.retry_after
+    return response
 
 
 async def validation_error_handler(

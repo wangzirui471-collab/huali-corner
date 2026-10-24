@@ -44,3 +44,4 @@ class HealthData(BaseModel):
     status: Literal["ok"] = "ok"
     environment: Environment
     business_ready: Literal[False] = False
+    compat_enabled: bool = False

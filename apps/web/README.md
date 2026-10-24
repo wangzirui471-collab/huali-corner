@@ -1,27 +1,29 @@
-# JavaScript + Vue 3 + Element Plus 骨架
+# 华立转角 Vue 前端候选
 
-要求 Node.js 22.12+。在本目录运行：
+手写 JavaScript + Vue 3 + Element Plus，Node.js 22.12+。本轮覆盖 T03–T07 前端页面，完整阶段、浏览器和平台验收仍未完成。默认保留旧 `/api/*`；可显式设置 `VITE_HUALI_COMPAT_API=1`，把已实现的身份/订单操作切到新 FastAPI `/api/v1/compat/*`，底层仍为同一个旧 writer。其他领域不切换。
+
+新前后端与智能客服完整接手见 [给下一位 AI 的交接](../../docs/refactor/AI-TAKEOVER-AND-INTEGRATION.md)。该开关在 Vite 开发启动或构建时生效，不能在构建后临时改变；必须另启 8001 新 API 与 8081 隔离旧服务。5198 界面评审不启用这个真实业务开关。
+
+完整换机说明、隔离数据启动、接口边界和测试清单见 [前端候选换机手册](../../docs/refactor/FRONTEND-TRIAL-HANDOFF.md)。
 
 ```powershell
 npm ci
 npm run dev
 ```
 
-打开 `http://127.0.0.1:5173/_dev/components`。样板包含 Element Plus 按钮、输入框、表单、标签、持久反馈和键盘弹窗，以及六类页面状态。表单支持提交校验、错误汇总聚焦、链接定位字段、修正后反馈，并保留输入。品牌 SVG 复制自旧客户端源素材；没有测试账号或真实业务写入。端口被占用时可用 `npm run dev -- --port 5186`。
+开发入口 `http://127.0.0.1:5173/`，组件样板 `/_dev/components`。旧业务 API 默认代理本机 8081，新 `/api/v1` 代理本机 8001。业务预览需要单独启动隔离旧服务，不使用真实数据库或旧 remote:true 配置。
 
-| 任务命令                | 执行内容                              |
+| 命令                    | 用途                                  |
 | ----------------------- | ------------------------------------- |
-| `npm run lint`          | ESLint 与 Prettier 检查               |
-| `npm run typecheck`     | JavaScript JSDoc 与 Vue 模板类型检查  |
-| `npm run test:unit`     | HTTP 异常、迟到响应和基础控件行为测试 |
-| `npm run build`         | 默认构建，关闭开发样板路由            |
-| `npm run build:preview` | 显式隔离预览构建，开放样板路由        |
-| `npm run generate:api`  | 从服务端 OpenAPI 生成 DTO 类型        |
+| `npm run lint`          | ESLint、中文方法注释、Prettier        |
+| `npm run typecheck`     | JavaScript/checkJs 与 Vue 模板        |
+| `npm run test:unit`     | 协议、身份/取消、恢复、控件与页面行为 |
+| `npm run build`         | 默认构建，保持业务未上线              |
+| `npm run build:preview` | 仅组件样板的隔离构建                  |
+| `npm run build:trial`   | 业务前端候选，输出 dist-trial         |
+| `npm run preview:trial` | 本机 4173 预览业务候选，含回环代理    |
+| `npm run generate:api`  | 从新服务端 OpenAPI 生成声明           |
 
-API 代理只指向本机 8001 的新骨架。组件不直接 fetch；HTTP 统一处理同源凭据、幂等键、CSRF 头、未知写入结果和错误封套。账号切换及页面销毁时调用 RequestScope.reset，使已取消或迟到响应不能污染新上下文。登录模块后续负责明确 401 的身份处置，5xx 不自动清会话。
+`shared/legacy` 保留旧数组/数字编号、Bearer 会话与唯一业务 writer；`shared/http` 保留新 v1 封套协议。页面通过 `useLegacyApi` 绑定身份和生命周期，500/HTML 不清会话，401 明确退出。只有同源允许媒体会尝试认证 Blob，离开时释放。
 
-所有手写方法用中文 JSDoc 说明用途；生成文件不手工改。当前未实现业务页面，未接入生产 API，完整首页、五槽导航和旧 hash 兼容在 T03 业务切片验收。
-
-新装 skill 的使用与取舍见 `docs/refactor/skill-usage.md`。Vitest 对 Element Plus 启用 inline 转换，避免原生 Node 的 CJS 默认导出使 async-validator 失效；不要通过 mock 校验或删掉失败断言绕过此配置。
-
-手写源代码全部使用 JavaScript。TypeScript 仅作为开发检查工具；`generated.d.ts` 由 OpenAPI 自动生成，仅供编辑器检查与提示，不是 TypeScript 业务实现。
+品牌令牌、紫色 ZJ、暖黄操作、独立双专题和手机五槽保留。响应式规则已写，业务页面四尺寸截图仍由另一台电脑验收；旧组件截图不能替代本轮业务视觉证据。所有手写函数加中文 JSDoc，生成 `.d.ts` 不手改。

@@ -1,0 +1,13 @@
+{
+  "extends": "../../../apps/web/jsconfig.json",
+  "compilerOptions": {
+    "types": [],
+    "paths": {
+      "@/*": ["src/*"],
+      "vue": ["node_modules/vue"],
+      "vue-router": ["node_modules/vue-router"],
+      "element-plus": ["node_modules/element-plus"]
+    }
+  },
+  "include": ["src/pages/**/*.vue"]
+}

@@ -1,4 +1,8 @@
 * text=auto
+# 新前端格式检查要求 LF；Windows 开启 autocrlf 时也保持一致。
+apps/web/** text eol=lf
+# 显式交付的独立评审源码同样保持 LF，运行产物仍忽略。
+artifacts/refactor/ui-preview/** text eol=lf
 *.bat text eol=crlf
 *.png binary
 *.jpg binary
