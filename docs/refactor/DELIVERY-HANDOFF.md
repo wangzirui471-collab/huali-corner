@@ -363,3 +363,80 @@ FRONTEND-TRIAL-HANDOFF.md，再读 README/01–05 与决策 0001–0005。
 可复现的打包入口为 `artifacts/refactor/package_handoff.py`，基于 e611c310 生成增量，不要求 HEAD 停在旧基线；包内 SOURCE-REVISION.txt 记录实际打包提交，包外同名 sha256 校验传输。ZIP 和 trial 产物仍在本机交接包内，Git 推送交付源码，不发布生产或自动迁移数据。
 
 完成后的提交/远端核对及 CI 状态以本次交付汇报为准；源码中的健康标记与遗留门槛不因获得推送授权而改变。
+
+## 17. 2026-10-24 本机接管与公开 FAQ 第一片
+
+本轮按用户最新要求先同步和核验，再开发。独立副本为 `C:\Users\21203\Desktop\huali-corner-refactor-20261024`，起始提交及再次核对的远端 release 分支均为 `c92567d03e988ee2337e75cb8c41a3ce981cd951`。本机开发分支 `feat/assistant-faq-20261024`；本轮修改保存在该副本，未提交、推送或部署。
+
+旧 `D:\zi\huali-corner-trial` 的 `fix/auth-client-kdf@aeb421b` 有未提交修改，完整保留；独立 AI 工作区 `D:\zi\huali-corner-ai` 的 `ai/borrow-open-source@6edfc13814581c3fdd1b7a241bfe6b3a94a5aa38` 只读。没有 reset、clean、整目录覆盖或导入其数据库/环境。AI 源码按提交逐文件保留，详细盘点见 [AI 模块盘点](./AI-MODULE-INVENTORY-20261024.md) 和 `ai_service/PROVENANCE.md`。
+
+交付提交远端 [CI 40054035800](https://github.com/wangzirui471-collab/huali-corner/actions/runs/40054035800) 的新工程与 Windows 中文路径 job 通过，旧业务合同 job 失败在“验证旧后端业务与迁移合同”，后续旧客户端脚本被跳过。公开日志正文受登录/访问限额限制，不能确认远端 traceback。当前本机合成旧业务 483 项通过不代表修复了远端失败。
+
+### 本轮已接通的范围
+
+- 新 `POST /api/v1/support/assistant/answer` 已实现，合同从实际 schema 生成；输入仅 UUID `client_turn_id` 与问题。`support/assistant` 应用服务通过 IdentityPort 调同一 LegacyGateway 的原 `/api/me` 核实会话，模型没有旧 Bearer 或业务 writer。
+- KnowledgePort 只使用 `ai_service/approved_faq.json` 的五条审核规则：模拟付款、同卖家合并送货费、三图、30分钟待付款、工单前置人工入口。旧全量 FAQ 和模型自报来源不视为已审核资料。
+- 复用原 AI 的生成/摘录函数，新增仅回环且须服务认证的 `/faq/answer` 内部入口。实际验收使用 `HC_AI_PROVIDER=mock`，不加载真实密钥、不调用收费模型、不开放旧 agent 商品工具或历史。原始自由输入只在本站筛选；送入内部服务/供应商的仅是公开规则标题和公开正文。
+- 前端仅在现有客服列表页插入问答面板，保持首页、五槽导航和未批准评审稿。严格的同源 Bearer 适配、纯文本来源、失败留输入、原轮次重试、成功后同问题继续用原轮次、账号切换/卸载取消均已落地。
+- “转人工”只将用户原问题放入当前账号的一次性内存草稿，再进入 `/support/new`，由用户检查并提交。未自动建工单、写订单、调用退款、认领客服或写死 room_id。
+- 浏览器实际发现 v1 代理简写会改变 Host，导致 compat 登录403；现将该代理改成显式 `changeOrigin:false`，保留严格同源校验。另修复身份与 AI 适配对坏 HTTP 状态行的故障映射；上游异常按503保留会话。
+
+架构及恢复边界见 [0007](./decisions/0007-public-faq-assistant.md)。同轮去重、配额与回答仅保存在本进程：同账号原键异内容409，十分钟内成功/未知失败不自动重复生成；明确未调用模型的知识/配置故障可原键重试。每账号滚动24小时30轮、两秒间隔，缓存重放不消耗新配额。重启、到期与多进程没有持久去重保证，不能承诺跨进程绝不重复计费。
+
+### 本机运行与恢复
+
+当前验收入口为 `http://127.0.0.1:5173/support`；旧8081的数据是本轮新建 `artifacts/acceptance-20261024-181454/synthetic-data`，不是原真实库。API8001、FAQ8093、Vue5173全部回环监听。过程记录在忽略目录 `.local-config/acceptance-processes.json`，只包含本轮进程号与合成目录，不含密钥。
+
+换机仍按主交接文档三个终端启动，并额外启动 FAQ8093：在 API 与 FAQ 两个终端分别配置同一个**新生成的内部服务令牌** `HC_AI_TOKEN`；FAQ设置 `HC_AI_PROVIDER=mock`、`HC_AI_MOCK=1` 并执行 `apps/api/.venv/Scripts/python.exe ai_service/faq_server.py`；API另设置 `HC_AI_URL=http://127.0.0.1:8093`。不要把令牌值放进文档、Git或VITE变量。其余身份/订单开关与旧 writer保持原方案。
+
+本机 Node24.18.0；项目 uv0.13.4、新 API Python3.13.16，旧业务独立 Python3.12.5。Store Python3.13.14创建环境因Windows加密属性失败，失败的新环境保留在忽略目录，改用项目受管解释器；没有安装全局包、Docker、WSL或复制他人环境。依赖按锁文件重建。
+
+最终检查、失败和浏览器证据见 [验证记录最新节](./verification.md)。本轮仍未完成本地 checkout 幂等差异修复、原生领域迁移、Worker TLS/图片路线、真实D1/R2、微信真机、T08/T09或生产切流；`business_ready` 仍为 false。旧 agent 的FAQ检索 tuple/dict缺陷登记保留，新入口不经过该路径。
+
+## 18. 2026-10-25：Vue前端上线与保留原AI的宠物流式切片
+
+本节覆盖用户本轮新增的发布授权；§17的“未部署”是前轮事实。前轮公开FAQ、未提交成果、两个旧工作区均保留，没有reset、clean、整目录覆盖或倒退到旧AI版本。当前本地仍是 `feat/assistant-faq-20261024`、HEAD `c92567d03e988ee2337e75cb8c41a3ce981cd951` 加未提交改动；本轮未提交或推送Git，也没有新的远端CI通过证明。
+
+### 已发布内容与原AI保留
+
+- 原网址：[华立转角](https://zhuanjiao.wangzirui471.workers.dev)。上线的是 `apps/web` 已实现的Vue业务前端，线上trial构建使用 `VITE_HUALI_COMPAT_API=0`、`VITE_HUALI_ASSISTANT_MODE=legacy-stream`，继续原同源 `/api`，没有将线上请求指向用户电脑8001/8081。
+- 用户选择的三项已加入：宠物点击/摸摸反馈及拖动、标题可拖动且限制在视口内的对话窗、真实供应商SSE增量回答。支持停止、失败留输入/未完成提示、账号切换清理、Escape归还焦点、移动导航避让、减少动画偏好。原角色/大小/隐藏/自定义形象偏好继续同一接口；原读取失败不会覆盖已存偏好。
+- 宠物窗口“完整 AI / 高级设置”打开 [原AI完整入口](https://zhuanjiao.wangzirui471.workers.dev/legacy-ai.html#home)。原办公/工作、AI配置、发布辅助等尚未迁为Vue的能力保留原UI与原后端，不拿简化问答替换。原资源来自本项目自身公开站点；未下载安装或复制 `MerZlin/dsh-pet-indesktop` 项目/素材。
+- 原线上后端版本 `5e7bd074-0fe4-42ba-887a-2f5347a7479e` 比本地旧AI新。218模块只读备份后，仅调整 `worker.py`、`app/cloudflare/ai_support.py`，新增两个流模块，216原模块保持原字节。新接口复用旧AI调度、知识、权限、配置和完整DTO，原非流接口继续保留。线上新增 `owner` 角色在Vue仅修正前端角色排序，实际权限仍由原服务端核实。
+
+### 版本、清单与回退
+
+| 项目 | 实际记录 |
+| --- | --- |
+| 已发布版本 | `a59bc6a0-2d16-4437-bd57-e2115ffa9343`，原网址100% |
+| 部署ID | `d4cc18d5-ab00-4387-9535-82284a52e98e` |
+| 候选预览 | `https://a59bc6a0-zhuanjiao.wangzirui471.workers.dev`，预览通过后才切原网址 |
+| 原版本/回退目标 | `5e7bd074-0fe4-42ba-887a-2f5347a7479e` |
+| 发布清单摘要 | `15556bbc29ec3ca2c14d3954a640eed0d6727ea9f2cc79688f871f82604084ee` |
+| 资源 | 220后端模块、129公开静态文件；线上逐SHA复核 |
+| 本机原备份 | `.local-config/live-worker-5e7bd074/`（忽略目录，不含真实数据库或上传私密图片） |
+| 本机证据 | `artifacts/pet-stream-stage/` 的发布清单、上传/切流回执、候选/正式只读结果、模块绑定核验及截图 |
+
+发布脚本 `infra/cloudflare/pet-stream/release-worker.cjs` 默认plan不触网；upload不切流；activate/rollback单独执行。回退命令 `node infra/cloudflare/pet-stream/release-worker.cjs rollback` 只恢复上述原版本100%流量，并核对当前仍为本轮版本；若已有他人新部署会拒绝覆盖。无需迁库，不以回退为由改真实额度。备份/产物目录不进Git，换机需保留完整交付目录或重新只读核对当时线上版本，不能使用本地旧后端替代。
+
+原 `ASSETS`、`CACHE`、`DB`、`MEDIA` 绑定保留；`HC_AI_API_KEY` 通过strict inherit继承且未读取明文。原配置名称 `HC_AI_API_URL`、`HC_AI_MODEL`、`HC_AI_DAILY_LIMIT`、`HC_AI_MODEL_OWNER` 保留。原兼容日期/标记、scheduled处理器及五分钟Cron保留。没有真实数据库合并/迁移、依赖降级、TLS绕过或新收费资源。
+
+### 验收及限制
+
+前端ESLint/Prettier、vue-tsc、trial构建通过；Vitest 23文件81项；Worker流切片16项及Ruff通过。本机真实workerd + 合成SQLite/D1/R2/KV状态 + 本机SSE供应商替身，真实KDF登录，首段105ms、完成862ms，首段早于完成，原非流返回200。四屏宽360/390/768/1440完整交互通过；候选和正式网址相同四屏宽公开浏览器通过。129资源在候选及正式均SHA/MIME一致；新旧AI未登录均401 JSON；线上220模块、存储/密钥绑定与Cron复查通过。
+
+线上只读检查不代表真实登录、模型质量/供应商、真实业务写入、D1/R2读写事务或微信真机验收；未调用收费模型。原并发quota检查/计数竞态保留，UUID不表示持久去重；失败或停止后手动再发可能再次消耗额度。高级AI仍是保留原UI入口，不是完整Vue迁移。原FastAPI公开FAQ仍为本机切片，`business_ready` 仍为false，T08/T09、原生迁移及checkout历史幂等差异未完成。详见[决策0008](./decisions/0008-live-pet-stream-compat.md)。
+
+## 19. 2026-10-25：按用户要求完整恢复旧站并保存开发成果
+
+用户最新要求“全部返回旧界面，包括AI功能”，并要求把此前成果同步Git远程。本节覆盖§18的上线状态：正式网址现已100%恢复到 **`5e7bd074-0fe4-42ba-887a-2f5347a7479e`**，部署ID **`0547f892-e58f-46db-912e-7094f5118014`**，时间2026-10-25 09:22:07北京时间。恢复的是完整旧Worker版本及原静态资源，包括旧界面、旧宠物、原AI/办公/工作/设置；新流式适配不再是正式流量入口。
+
+回退只切版本流量，没有reset/clean本地仓库、删除重构代码、迁移数据库或修改业务记录。首次因Wrangler旧OAuth过期返回401，使用已有Wrangler自动刷新同一账号认证后重试成功；没有输出模型密钥或更换账号/数据库。
+
+恢复验收：当前部署确认旧版本100%；通过**指定版本**模块API逐SHA比较218项，全部与上线前备份相同；9绑定名称/类型、DB/R2/KV、原AI配置及五分钟Cron保留；原站79个公开资源的SHA/MIME与备份一致。360/390/768/1440四屏宽旧界面正常，未再挂载新Vue宠物，pageerror为0；原AI配置开启，未登录调用原AI返回401 JSON。没有真实账号登录、收费模型或生产业务写测试。
+
+本地Vue/FAQ/宠物SSE源码及公开原AI兼容资源继续保留，远程保存目标为 [feat/assistant-faq-20261024](https://github.com/wangzirui471-collab/huali-corner/tree/feat/assistant-faq-20261024)，基于交付c92567d，合并目标仍 `release/2026-10-trial-hotfix`；不强推、不覆盖其他远程分支，不擅自合入主分支。仓库现有CI只检查、不含Cloudflare部署，本轮同步不应触发新界面重新上线。暂不自动合并，因本轮额外旧后端全套复查中途停滞，没有新的完整通过结论。
+
+电脑Git凭据实际为另一账号turemangodfly，push dry-run被403拒绝，因此使用已连接的仓库所有者GitHub应用保存Git对象，没有改电脑其他账号的凭据。自动审批拒绝了两张未能确认公开授权的验收截图上传；采用纯代码交付，五张本轮截图仅本机保留并从远程目标树排除。前文截图链接是本机证据位置，不保证GitHub上可下载；源码、业务公开素材与文字记录继续保存，不绕过图片拒绝。
+
+提交前重新执行 `scripts/refactor.ps1 -Task Check` 退出0：API Ruff/格式/mypy及53项测试，前端ESLint/Prettier/vue-tsc/81项测试，默认与trial构建均通过；流模块16项再次通过。额外旧套件在catalog测试附近长期停滞，已停止本轮对应测试进程，不把历史483项通过当作本轮结果。所有未完成CI、真实业务/模型及真机范围仍如实保留。详见验证记录最新节。

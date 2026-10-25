@@ -224,6 +224,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/support/assistant/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer
+         * @description 处理一次公开提问；不信任客户端自报用户或角色。
+         */
+        post: operations["answer_api_v1_support_assistant_answer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -244,6 +264,37 @@ export interface components {
             appointment?: (number) | null;
             /** Id */
             id: number;
+        };
+        /**
+         * AnswerData
+         * @description 问答结果保留轮次，答案、来源和转人工建议均为只读数据。
+         */
+        AnswerData: {
+            /** Answer Text */
+            answer_text: string;
+            /** Client Turn Id */
+            client_turn_id: string;
+            handoff: components["schemas"]["Handoff"];
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "mock" | "llm" | "handoff";
+            /** Sources */
+            sources: components["schemas"]["Source"][];
+        };
+        /**
+         * AnswerInput
+         * @description 同一问题显式重试沿用 UUID；不接受 history、role 或上下文。
+         */
+        AnswerInput: {
+            /**
+             * Client Turn Id
+             * Format: uuid
+             */
+            client_turn_id: string;
+            /** Question */
+            question: string;
         };
         /**
          * ChangeInput
@@ -278,6 +329,18 @@ export interface components {
             product_ids: number[];
             /** Want Id */
             want_id?: number | null;
+        };
+        /** Envelope[AnswerData] */
+        Envelope_AnswerData_: {
+            /** Code */
+            code: string;
+            data?: components["schemas"]["AnswerData"] | null;
+            error?: components["schemas"]["ErrorDetail"] | null;
+            /** Message */
+            message: string;
+            meta?: components["schemas"]["Metadata"];
+            /** Request Id */
+            request_id: string;
         };
         /** Envelope[HealthData] */
         Envelope_HealthData_: {
@@ -333,6 +396,25 @@ export interface components {
             message: string;
             /** Path */
             path: string;
+        };
+        /**
+         * Handoff
+         * @description 建议人工入口只导航到工单草稿，不表示已创建工单或分配客服。
+         */
+        Handoff: {
+            /**
+             * Next Path
+             * @default /support/new
+             * @constant
+             */
+            next_path: "/support/new";
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Recommended */
+            recommended: boolean;
         };
         /**
          * HealthData
@@ -392,6 +474,20 @@ export interface components {
              * @constant
              */
             simulation: true;
+        };
+        /**
+         * Source
+         * @description 可信来源只由审核清单构造，正文供用户直接核对。
+         */
+        Source: {
+            /** Content */
+            content: string;
+            /** Document Id */
+            document_id: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version: string;
         };
         /**
          * UpdateInput
@@ -840,6 +936,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope_HealthData_"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_NoneType_"];
+                };
+            };
+        };
+    };
+    answer_api_v1_support_assistant_answer_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope_AnswerData_"];
                 };
             };
             /** @description Unprocessable Content */

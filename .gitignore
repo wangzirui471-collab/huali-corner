@@ -40,6 +40,7 @@ repair-wheels/
 Backend mission/python_modules/
 python_modules/
 Backend mission/.wrangler/
+.wrangler/
 experiments/worker-poc/.wrangler/
 .venv-trial-broken-*/
 
@@ -50,3 +51,7 @@ experiments/worker-poc/src/vendor/
 experiments/worker-poc/src/huali/
 _ui_messages.png
 d1out.json
+
+# 本轮验收截图仅留本地；远程保存源码和文字证据，不绕过图片上传审批。
+docs/refactor/evidence/assistant-faq-*-20261024.png
+docs/refactor/evidence/pet-*-20261025.png

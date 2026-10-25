@@ -1,6 +1,9 @@
 * text=auto
 # 新前端格式检查要求 LF；Windows 开启 autocrlf 时也保持一致。
 apps/web/** text eol=lf
+# 线上原版兼容资源是留存快照，禁止Git转换换行而改变原字节摘要。
+apps/web/public/legacy-runtime/** -text whitespace=cr-at-eol
+apps/web/public/assets/** -text whitespace=cr-at-eol
 # 显式交付的独立评审源码同样保持 LF，运行产物仍忽略。
 artifacts/refactor/ui-preview/** text eol=lf
 *.bat text eol=crlf

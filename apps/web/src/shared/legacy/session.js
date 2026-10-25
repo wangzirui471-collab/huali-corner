@@ -138,11 +138,11 @@ export function syncSession(event) {
   session.token = initialToken();
   void initializeSession();
 }
-/** 将四级平台权限归一化；群角色不构成平台权限。 @param {Row|null} [user] 当前身份。 */
+/** 保留线上已有owner身份；群角色不构成平台权限，真实授权仍由后端核实。 @param {Row|null} [user] 当前身份。 */
 export function roleRank(user = session.me) {
   return (
-    { user: 0, support: 1, admin: 2, developer: 3 }[
-      /** @type {'user'|'support'|'admin'|'developer'} */ (text(user, 'role'))
+    { user: 0, support: 1, admin: 2, developer: 3, owner: 4 }[
+      /** @type {'user'|'support'|'admin'|'developer'|'owner'} */ (text(user, 'role'))
     ] || 0
   );
 }

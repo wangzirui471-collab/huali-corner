@@ -225,3 +225,99 @@ AI 智能客服代码在对方电脑，未取得、未运行、未调用模型�
 用户明确授权本批提交推送。只读核对 origin 的原 release 分支仍为 e611c310，未发现远端新提交；已有工作区差异保持。独立评审源码、配置和公开合成资源本次显式纳入 Git，运行产物和日志不纳入；新增评审 README。打包脚本改为相对基线列差异，并记录 SOURCE-REVISION，支持交付提交后重建。此前 172 条为授权前的包，最终条目与摘要按最新包中 manifest/包外 sha256 核对。
 
 本次不修改业务逻辑；沿用上一节刚运行的 API 30 项、正式前端 41 项与构建结果，不声称本次再跑全部业务测试。提交前检查暂存文件、敏感内容标记、格式空白和包内 CRC/字节/摘要，提交后核对远端分支 SHA。GitHub CI 需区分已触发/运行中/实际通过，不把本机结果写成远端 CI 通过。
+
+## 2026-10-24 另一台电脑接管与公开 FAQ 联调
+
+基线 `c92567d03e988ee2337e75cb8c41a3ce981cd951`，全新副本 `C:\Users\21203\Desktop\huali-corner-refactor-20261024`，本机分支 `feat/assistant-faq-20261024`。以下是本轮实测，不沿用其他电脑的结果。
+
+### 远端与原提交核对
+
+- `git ls-remote` 首次和开发后均核对 release 分支仍为上述完整SHA。原试用脏工作区和AI独立工作区未写入；未使用真实库或 remote:true。
+- 公开GitHub API核对 CI run40054035800：新工程Windows中文路径成功；旧后端业务与迁移合同步骤失败，后续旧Web/小程序步骤跳过。日志正文登录/限额受限，远端具体根因未确定。本机通过不能改写该远端状态。
+- 从指定提交 `git archive` 导出独立源码快照，使用本项目新虚拟环境运行原API测试：**30项通过，3.910秒**，日志 `artifacts/setup/baseline-api-clean.log`。
+- 新副本旧业务 `.venv-trial` Python3.12.5 + Pillow12.3.0/PyMySQL1.2.3，清空该子进程真实数据配置，完整 `unittest discover -s tests -p test_*.py`：**483项通过，345.744秒**。日志 `artifacts/refactor/takeover-ci-audit/legacy-local-full.log`。无真实8081遗留或生产写入。
+
+### 新切片的失败与修复
+
+- 新增未登录/隐藏上下文两项测试先因接口404失败，再实现严格schema与三端口用例，拒绝客户端自报身份或任意上下文。
+- 独立审查复现上游 `BadStatusLine` 漏成500，补 `HTTPException` 故障映射后对应9项审查测试通过。另将知识/模型未配置等明确调用前故障移出终态缓存，使恢复后可安全沿用原键；模型结果未知仍不自动重做。
+- 前端审查发现同问题成功后重复点击创建新UUID，已改为问题未编辑就沿用原轮次，补组件回归；账号切换、明确401、卸载、原键失败重试、内存草稿与HTML纯文本均有测试。
+- 浏览器首轮因脚本选择两个同名“登录”按钮失败，缩小到登录表单提交按钮。随后真实 compat 登录403；定位到 Vite v1代理简写改变Host，改为显式保留Host后实际登录200，不关闭服务端同源检查。
+- Setup先选中Store Python3.13.14，创建venv出现os error6000；保留失败的新目录后用项目管理Python3.13.16建立环境，锁定安装完成。首个并行Check碰到新增的两项失败测试，明确不作为基线结果；之后独立原提交30项及当前完整检查分别执行。
+
+### 真实回环浏览器证据
+
+使用本机Edge + 已有Playwright-core1.58.2，无浏览器下载。实际访问5173Vue→8001FastAPI→8081合成身份；8001→8093内部FAQ仅mock摘录。新建合成账号，不读取旧账号或真实会话。
+
+320、390、768、1440四档均实测：真实登录、FAQ回答、展开审核来源；注入一次HTML503后问题与会话不丢；显式重试使用同UUID并成功；转人工到 `/support/new` 仅预填原问题，POST工单计数为0。四档页面横向溢出均false，pageerror均空。
+
+脚本与原始结果保存在忽略目录 `.local-config/browser-acceptance.cjs`、`artifacts/acceptance-20261024-181454/browser/result.json`。已逐张查看手机390和桌面1440实际截图；可随源码携带的合成截图为 [手机](./evidence/assistant-faq-390-20261024.png)、[桌面](./evidence/assistant-faq-1440-20261024.png)。浏览器屏幕模拟不代表微信或手机真机验收。
+
+### 当前检查与限制
+
+新API完整统一检查及前端最终计数将在本节末补记；受控AI内部服务单独 **9项真实回环HTTP测试通过，0.666秒**，模拟provider测试阻断外部网络，新两文件Ruff检查/格式通过。没有实际模型供应商请求、收费、真实数据迁移、Worker/D1/R2、生产或微信验收。
+
+mock按最相关公开资料摘录，遇到多问题可能只覆盖首条；本次展示的是候选公开参考资料，不是模型逐句事实核验。未审核的旧FAQ和agent工具未启用。十分钟进程内去重和滚动24小时配额不具备重启/多进程持久性；不宣称跨重启不会重复计费。
+
+### 最终补记
+
+- `scripts/refactor.ps1 -Task Check` 完整退出0：API Ruff check/format、mypy（30源码文件）、unittest **53项通过，8.288秒**；前端ESLint/Prettier、vue-tsc、Vitest **18文件57项通过，18.30秒**；默认构建及trial构建成功。日志 `artifacts/setup/final-check.log`。
+- 随后另用**构建时** `VITE_HUALI_COMPAT_API=1` 生成最终trial产物，结果见 `artifacts/setup/final-trial-compat-build.log`；Check默认产物不自动表示已开启兼容开关。正式生产默认构建仍未开放业务。
+- 补跑远端被跳过的 `tests/*.test.mjs`、`tests/*.test.js`：**11个脚本全部退出0**，包含旧Web/小程序、媒体、会话和55模块加载检查。
+- 新内部服务的9项HTTP测试在最终代码再次通过；Ruff check与format --check通过。HTTP边界故意捕获供应商未知异常并明确返回502，已在该行说明原因，不吞故障或改成成功。
+- 独立复核新增9项API用例，已包含在53项：知识/配置恢复后原键重试、取消等待与四并发仅一次模型调用、缓存后重新核实身份、配额/过期边界及坏HTTP响应。前端同问题成功后原键保留已纳入最终57项。
+- 本轮仅本地工作副本有代码与文档改动，未提交、推送或部署；远端CI仍是原c92567d的失败状态，不因本机全绿改写。
+
+## 2026-10-25：原网址发布Vue与宠物流式回答
+
+本节是新一轮用户授权的上线任务，前节“未部署”只描述2026-10-24公开FAQ轮次。未回滚/覆盖旧成果；本地HEAD仍c92567d，加两轮未提交修改，没有新的Git提交/推送或远端CI通过结果。
+
+### 本机执行
+
+- `npm --prefix apps/web run lint`：ESLint和Prettier退出0，日志 `artifacts/pet-stream-stage/web-lint.log`。仅保留的原版公开资源/已编译office bundle排除机械格式化，新Vue源码继续检查。
+- `npm --prefix apps/web run test:unit`：23文件 **81项通过**，20.53秒，日志 `web-tests.log`。
+- 构建时设置 `VITE_HUALI_COMPAT_API=0`、`VITE_HUALI_ASSISTANT_MODE=legacy-stream`，`npm --prefix apps/web run build:trial`：vue-tsc退出0，Vite成功，日志 `web-online-build.log`。未将默认production未开放入口误作线上包，也未用本机compat=1构建发布。
+- `apps/api/.venv/Scripts/python.exe -m unittest discover -s infra/cloudflare/pet-stream/tests -v`：**16项通过，8.288秒**；Ruff check与format --check退出0（8文件）。覆盖原真实ai_chat调度、原JSON接口、ContextVar隔离、原配置/DTO、规则免扣与模型预留一次、SSE逐字节UTF8/EOF/取消、思考隐藏、跨块指纹/Markdown与长编码串防泄漏。日志 `worker-tests.log`。本轮未修改或重复声称执行上一轮53项FastAPI全量/483项旧后端测试。
+- 严格stage清单：218原模块摘要校验，216不变、2修改、2新增，共220；清单sha `5693505448e361a8b47778e159dd0faf8d9314d286570e119d3147a3e84e763f`。
+- 运行本机workerd `127.0.0.1:8798`，所有D1/R2/KV为本轮local资源，未使用remote:true。schema来自原代码初始化空合成Store，并补本机pet_prefs表及合成账户/商品，导入local D1成功47条命令；这不是生产迁移。供应商替身只监听 `127.0.0.1:8095`，按250ms/1s实际发送三段SSE，无外网模型请求。
+- `.local-config/check-worker-stream.cjs`：实际客户端600000轮KDF合成登录；最终模块首段 **105ms**、done **862ms**，原DTO support保留；旧非流AI200 rule。结果 `runtime-result.json`。此前86ms/849ms为安全过滤最后修订前测量，最终采用105ms/862ms。
+- `.local-config/check-pet-browser.cjs` 使用已有Playwright-core1.58.2和本机Edge，无浏览器下载。360/390/768/1440×900四宽度均完整通过：页面登录、摸摸、宠物/窗拖动及边界、首段在生成中显示、完成正文、停止保留草稿与未完成标记、无自动重试、Escape焦点、角色与隐藏/恢复偏好、原AI完整入口。pageerror与失败请求为0。结果 `browser-results.json`；合成截图 `pet-stream-{width}.png`。公开证据副本见下方链接。另一次同样本机复查也通过，属于重复验证，无新增生产写入。
+
+### 上传、预览与正式验收
+
+原版本 `5e7bd074-0fe4-42ba-887a-2f5347a7479e` 218模块及公开UI先只读备份。模型密钥值未读取；Wrangler已有OAuth仅内存使用且只发官方固定API。参考桌面宠物仓库只在线阅读README，没有clone、安装或复制代码/素材；保留的是本项目自身线上公开资源。
+
+`node infra/cloudflare/pet-stream/release-worker.cjs plan`：129公开文件，7,894,456字节；计划摘要 `15556bbc29ec3ca2c14d3954a640eed0d6727ea9f2cc79688f871f82604084ee`。upload前核对当前100%部署、最新上传版本和原绑定，strict继承secret；先创建新版本不切流，handlers含fetch/scheduled。候选预览检查通过后activate，再做正式检查。
+
+| 项目 | 实测结果 |
+| --- | --- |
+| 新版本 | `a59bc6a0-2d16-4437-bd57-e2115ffa9343` |
+| 部署 | `d4cc18d5-ab00-4387-9535-82284a52e98e`，原网址100% |
+| 候选/正式129资源 | 各129项SHA和MIME全部一致，包括Vue、原AI模块、office bundle与宠物素材 |
+| Vue深链接 | `/orders` 返回构建Vue入口；四档浏览器旧 `#staff` 最终转 `/workspace` |
+| 原AI配置 | ai开关仍true，原client_kdf保持；未读取密钥值 |
+| 鉴权拒绝 | `/api/ai/chat` 与 `/api/ai/chat/stream` 未登录均401 JSON，未返回HTML |
+| 候选/正式公开浏览器 | 各四屏宽均显示新前端、宠物及登录入口，无横向溢出、pageerror或失败API |
+| 线上模块 | 从正式content/v2内存逐SHA复核 **220项一致**，216原模块仍原字节 |
+| 原资源/运行时 | 9绑定名称/类型与DB/R2/KV目标、原secret继承、原兼容日期/标记与五分钟Cron核实保留 |
+
+原始结果在 `artifacts/pet-stream-stage/{upload-receipt,activate-receipt,preview-smoke,production-smoke,preview-browser,production-browser,deployed-module-verification}.json`，均不含认证秘密。初次公开浏览器脚本未等待同页hash导航完成而误报书签失败；补等待后四屏宽通过，没有为此更改业务路由。证据：[合成手机流式](./evidence/pet-stream-390-20261025.png)、[合成桌面流式](./evidence/pet-stream-1440-20261025.png)、[正式手机未登录入口](./evidence/pet-public-390-20261025.png)。
+
+### 未验收与恢复边界
+
+没有生产登录、真实模型请求、业务写测试、私密上传下载、真实D1/R2事务/故障回滚、微信真机或跨实例幂等验收；不把合成模型回答当作实际供应商质量保证。新UUID用于流关联，未新增持久幂等表；原quota并发竞态未修，取消已开始模型不退次数，手动重试可能再次消耗次数。旧AI完整入口已保留且正常加载，不等于每个高级写功能均在生产重新执行过。
+
+回退目标 `5e7bd074-0fe4-42ba-887a-2f5347a7479e`。脚本rollback先核对仍是本轮生产版本再切100%，不迁库、不修改真实额度。本轮没有实际执行回退或宣称生产回退演练完成。原生领域迁移、checkout历史幂等、FastAPI上线和business_ready=false边界不变。
+
+## 2026-10-25 09:22：用户要求恢复完整旧版及Git远程保存
+
+本节取代前节的当前线上状态。`release-worker.cjs rollback` 第一次GET部署因OAuth过期401，未切流；已有Wrangler whoami自动刷新后重试成功，正式100%恢复 `5e7bd074-0fe4-42ba-887a-2f5347a7479e`。新回退部署ID `0547f892-e58f-46db-912e-7094f5118014`，执行时间 `2026-10-25T01:22:07.200Z` 即北京时间09:22:07。
+
+- `.local-config/verify-rollback.cjs`：当前部署旧版本100%，使用 `GET /workers/workers/zhuanjiao/versions/5e7bd074-0fe4-42ba-887a-2f5347a7479e?include=modules` 逐SHA比较 **218原模块全部一致**；原AI、DB/R2/KV等9绑定及原Cron/兼容配置保留。最初复用 `/content/v2` 误读到最新上传的220模块而报告不匹配；没有再次覆盖部署，改用指定版本接口后验证通过，明确区分最新上传和当前服务版本。
+- `.local-config/check-rollback-public.cjs`：**79原站公开资源SHA/MIME全部一致**，旧首页/JS/CSS/办公bundle/宠物素材恢复。原AI仍开启、client_kdf不变；未登录原AI401 JSON。360/390/768/1440四宽度旧界面正常、新Vue宠物缺席、pageerror均0。没有生产登录、模型请求或业务写入。
+- 原始回执在 `artifacts/pet-stream-stage/rollback-receipt.json`、`rollback-module-verification.json`、`rollback-public-verification.json`；旧界面截图 `rollback-public-{width}.png`。本机忽略目录，不含真实库或密钥明文。
+- 提交前 `scripts/refactor.ps1 -Task Check` 再次完整退出0：API风格/格式、mypy30文件、**53测试（6.752秒）**；前端风格/格式、类型、**81测试/23文件（33.22秒）**、默认和trial构建通过。日志 `git-sync-check.log`。此任务重新生成的是本机默认构建，不代表重新上线任何版本。
+- 流式兼容候选16测试再次通过，10.025秒，日志 `git-sync-stream-check.log`。额外旧后端 `unittest discover -s tests` 在catalog测试附近数分钟无新进度，被明确停止；没有完整结果，不能宣称本轮483项通过。停止时后续排队的流测试已启动，第二次抢写同日志失败；以原任务最终16项退出0为准，未把该写入失败当成新的测试执行。
+- 同步目标是独立开发分支 `feat/assistant-faq-20261024`，不强推/合并主分支。已核对远端release/hotfix仍c92567d，现有workflow只运行检查。源码、公开素材和文档可提交，虚拟环境、node_modules、真实数据、上传私密文件、.local-config、artifacts及认证不提交。实际远程SHA和合并请求以最终交付链接为准；不得把push或PR创建当作远端CI通过。
+
+同步补记：电脑Git当前账号turemangodfly无仓库写权限，dry-run为403；使用已连接GitHub账号保存，不修改电脑全局凭据。自动审批拒绝两张验收截图的公开上传后，没有换编码或通道绕过；五张本轮截图全部仅留本机，不纳入远程目标树。源码及项目既有公开素材仍可同步；前文证据图片链接为本机位置。`.gitattributes` 对原版兼容资源设置-text及cr-at-eol，避免Git换行转换改变保留字节。

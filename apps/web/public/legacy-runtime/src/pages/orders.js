@@ -1,0 +1,66 @@
+'use strict';
+// 页面层 · 我的订单、订单按钮与「付款前改订单」弹窗
+import { $, e, icon } from '../core/dom.js';
+import { money, date, toLocalInput } from '../core/format.js';
+import { state, statusNames } from '../core/state.js';
+import { api } from '../core/http.js';
+import { shell, heading, empty, modal } from '../core/shell.js';
+import { field, selectField } from '../components/forms.js';
+import { productPicture, shipLabel } from '../components/product-card.js';
+import { needLogin } from '../auth/login.js';
+
+export function orderButtons(o){const buyer=o.buyer_id===state.me.id,s=o.status;return `${buyer&&s==='awaiting_payment'?`<button class="btn primary" data-action="order" data-id="${o.id}" data-value="pay">模拟付款</button>`:''}${buyer&&['awaiting_payment','paid'].includes(s)?`<button class="btn secondary" data-action="order" data-id="${o.id}" data-value="cancel">取消订单</button>`:""}${s==='awaiting_payment'?`<button class="btn secondary" data-action="order-edit" data-id="${o.id}">修改订单</button>`:''}${!buyer&&s==='paid'&&!o.schedule_confirmed?`<button class="btn secondary" data-action="order" data-id="${o.id}" data-value="confirm_schedule">确认交付时间</button>`:''}${!buyer&&s==='paid'?`<button class="btn primary" data-action="order" data-id="${o.id}" data-value="deliver">标记已交付</button>`:''}${buyer&&s==='awaiting_handover'?`<button class="btn secondary" data-action="order" data-id="${o.id}" data-value="handover">核对交接 · 开始24小时计时</button>`:''}${buyer&&s==='awaiting_receipt'?`<button class="btn primary" data-action="order" data-id="${o.id}" data-value="receive">确认收货</button>`:''}${buyer&&['paid','awaiting_handover','awaiting_receipt','completed'].includes(s)?`<button class="btn secondary" data-action="refund" data-id="${o.id}">申请售后</button>`:''}${['paid','awaiting_handover'].includes(s)?`<button class="btn secondary" data-action="reschedule" data-id="${o.id}">申请改约</button>`:''}${s==='completed'?`<button class="btn secondary" data-action="review" data-id="${o.id}">评价订单</button>`:''}`;}
+
+// --- 筛选窗口 ---------------------------------------------------------------
+// 「我的」页的每个宫格都通到这里的一个预筛视图：
+//   待付款   → orders/?role=buy&f=to_pay
+//   待收货   → orders/?role=buy&f=receiving
+//   退款/售后 → orders/?role=buy&f=aftersale
+//   待发货   → orders/?role=sell&f=to_ship
+// 口径必须与 me.js 的宫格计数完全一致，否则「宫格写着 1，点进去却是 0」。
+const ORDER_GROUPS = {
+  to_pay:    { label: '待付款',    statuses: ['awaiting_payment'] },
+  receiving: { label: '待收货',    statuses: ['paid', 'awaiting_handover', 'awaiting_receipt'] },
+  to_ship:   { label: '待发货',    statuses: ['paid', 'awaiting_handover'] },
+  aftersale: { label: '退款/售后', statuses: ['disputed', 'refunded', 'partial_refunded'] },
+  completed: { label: '已完成',    statuses: ['completed'] }
+};
+
+export async function orders(raw=''){
+  if(!needLogin())return;
+  const [,qs]=String(raw||'').split('?');
+  const params=new URLSearchParams(qs||'');
+  const role=['buy','sell'].includes(params.get('role'))?params.get('role'):'';
+  const f=Object.keys(ORDER_GROUPS).includes(params.get('f'))?params.get('f'):'';
+  const [os,offers]=await Promise.all([api('/orders'),api('/offers')]);
+  const me=state.me.id;
+
+  // 计数与筛选共用同一套判断，保证标签上的数字就是点进去的条数。
+  const match=(o,r,g)=>(!r||(r==='buy'?o.buyer_id===me:o.seller_id===me))&&(!g||ORDER_GROUPS[g].statuses.includes(o.status));
+  const countIn=(r,g)=>os.filter(o=>match(o,r,g)).length;
+
+  const goFor=(r,g)=>'orders/'+[
+    r||g?'?':'',
+    r?`role=${r}`:'',
+    r&&g?'&':'',
+    g?`f=${g}`:''
+  ].join('');
+
+  const tabBar=`<nav class="orders-tabs" aria-label="订单视角">${[['','全部'],['buy','我买到的'],['sell','我卖出的']].map(([k,t])=>
+    `<button class="orders-tab ${role===k?'active':''}" data-go="${goFor(k,f)}">${t}<small>${countIn(k,f)}</small></button>`).join('')}</nav>`;
+
+  const chipBar=`<div class="orders-chips" aria-label="订单状态筛选">${[['','全部状态'],...Object.entries(ORDER_GROUPS).map(([k,g])=>[k,g.label])].map(([k,t])=>
+    `<button class="chip ${f===k?'active':''}" data-go="${goFor(role,k)}">${t}<small>${countIn(role,k)}</small></button>`).join('')}</div>`;
+
+  const list=os.filter(o=>match(o,role,f));
+  const scope=[ORDER_GROUPS[f]?.label,role==='buy'?'我买到的':role==='sell'?'我卖出的':''].filter(Boolean).join(' · ');
+
+  shell(`${heading('EVERY STEP MATTERS','我的订单','每一笔支付、退款与结算都有独立记录；当前全部为模拟。')}
+    <section class="panel orders-filter">${tabBar}${chipBar}</section>
+    ${offers.length?`<section class="panel"><h2>出价记录</h2>${offers.map(o=>`<div class="offer-row"><span>${e(o.title)} · ¥${money(o.amount)} · ${e(statusNames[o.status])}</span>${o.seller_id===state.me.id&&o.status==='pending'?`<button class="btn secondary" data-action="accept-offer" data-id="${o.id}" data-value="true">接受出价</button><button class="text-button" data-action="accept-offer" data-id="${o.id}" data-value="false">拒绝</button>`:''}</div>`).join('')}</section>`:''}
+    ${list.length?`<p class="muted orders-scope">当前视图：${e(scope||'全部订单')}，共 <b>${list.length}</b> 单</p><div class="orders-list">${list.map(o=>`<section class="panel order-card"><div class="order-top"><b>订单 #${o.id} · ${o.buyer_id===state.me.id?'我买到的':'我卖出的'}</b><span class="tag">${e(statusNames[o.status])}</span></div>${o.items.map(p=>`<div class="cart-item"><img src="${e(p.photo)}" alt=""><div><h3>${e(p.title)}</h3><p>${e(p.edition)} · ${e(p.notes)} · ${e(p.missing)} · ${e(p.accessories)}</p></div><b>¥${money(p.price)}</b></div>`).join('')}<div class="order-details"><span>${o.delivery==='pickup'?'自提':'卖家送货'} · ${e(o.address||o.items[0].region)}</span><span>${icon('clock')}${date(o.appointment)}</span><b>合计 ¥${money(o.total)}（送货 ¥${money(o.delivery_fee)}）</b></div>${o.handover_at&&o.status==='awaiting_receipt'?`<div class="notice">交接后24小时自动收货：${date(o.handover_at+86400)}。有异议请及时申请售后，处理期间暂停结算。</div>`:''}<div class="ledger">${o.ledger.map(x=>`<span>模拟${{payment:'支付',settlement:'结算',refund:'退款',settlement_reversal:'结算冲回',service_fee:'撮合服务费',service_fee_reversal:'服务费冲回'}[x.kind]} ¥${money(x.amount)} · ${date(x.created)}</span>`).join('')||'尚无资金记录'}</div><div class="order-actions">${orderButtons(o)}</div>${(o.changes||[]).filter(c=>c.status==='pending').map(c=>`<div class="notice">待确认改约：${date(c.appointment)} · ${e(c.address)} ${c.proposer!==state.me.id?`<button class="text-button" data-action="respond-change" data-id="${c.id}" data-value="true">接受改约</button><button class="text-button" data-action="respond-change" data-id="${c.id}" data-value="false">拒绝</button>`:'等待对方确认'}</div>`).join('')}${(o.notes||[]).map(n=>`<div class="notice">${n.user_id===0?'系统':(n.user_id===state.me.id?'我':'对方')} · ${e(n.body)}</div>`).join('')}</section>`).join('')}</div>`
+      :empty(scope?`暂无「${scope}」的订单`:'还没有订单','换个筛选条件看看，或先去逛逛首页。')}`,'orders');
+}
+
+export async function myProducts(){if(!needLogin())return;const ps=await api('/my-products');const groups=[['available','在售'],['removed','已下架'],['reserved','已预留'],['sold','已售出']];const st=Object.fromEntries(groups.map(x=>[x[0],ps.filter(p=>p.status===x[0]).length]));shell(`${heading('MY LISTINGS','我发布的','下架不会删除商品，随时可以重新上架。')}<div class="mine-stats">${groups.map(([k,t])=>`<div class="stat-cell"><b>${st[k]}</b><span>${t}</span></div>`).join('')}</div>${ps.length?groups.map(([k,t])=>{const list=ps.filter(p=>p.status===k);if(!list.length)return '';return `<section class="panel listing-group"><div class="section-heading"><h2>${t} <small>${list.length} 件</small></h2></div><div class="listing-list">${list.map(p=>`<div class="listing-row"><button class="listing-photo" data-go="product/${p.id}" aria-label="查看${e(p.title)}">${productPicture(p)}</button><div class="listing-info"><button class="listing-title" data-go="product/${p.id}">${e(p.title)}</button><div class="price-line"><i class="cur">¥</i><b>${money(p.price)}</b></div><small>${e(p.region)} · ${shipLabel(p)}</small></div><div class="listing-actions">${k==='available'?`<button class="btn secondary sm" data-action="delist" data-id="${p.id}">${icon('down')}下架</button>`:''}${k==='removed'?`<button class="btn primary sm" data-action="relist" data-id="${p.id}">${icon('refresh')}重新上架</button>`:''}${['reserved','sold'].includes(k)?`<span class="tag">${e(statusNames[k])}</span>`:''}</div></div>`).join('')}</div></section>`;}).join(''):empty('还没有发布过商品','给闲置找一个新主人，从发布第一件开始。')}<div class="submit-row"><button class="btn primary" data-go="publish">${icon('plus')}发布新商品</button><button class="btn secondary" data-go="orders">${icon('bag')}我卖出的订单</button></div>`,'me');}
+export function orderEditModal(o){const buyer=o.buyer_id===state.me.id;if(!buyer){modal(`<h2>修改订单 #${o.id}</h2><p class="muted">卖家只能调整交付时间；商品、交付方式和地点由买家决定，改动会通知买家重新核对。</p><form id="order-edit-form" data-id="${o.id}" data-role="seller">${field('交付时间','appointment','datetime-local',toLocalInput(o.appointment),'required')}<button class="btn primary full">保存修改</button></form>`);return;}modal(`<h2>修改订单 #${o.id}</h2><p class="muted">付款前可调整商品、交付方式、地点和时间。取消勾选的商品会退出订单并回到在售。</p><form id="order-edit-form" data-id="${o.id}" data-role="buyer"><div class="field"><span>订单内商品</span><div class="edit-items">${o.items.map(i=>`<label class="edit-item"><input type="checkbox" name="keep" value="${i.id}" checked><img src="${e(i.photo)}" alt=""><span><b>${e(i.title)}</b><small>¥${money(i.price)}</small></span></label>`).join('')}</div></div>${selectField('交付方式','delivery',[['pickup','自提，不收送货费'],['delivery','卖家送货，合并收一次']])}${field('收货地点（送货必填）','address','text',o.address||'','maxlength="150"')}${field('交付时间','appointment','datetime-local',toLocalInput(o.appointment),'required')}<p class="muted">保存后会重新计算小计、送货费与合计。</p><button class="btn primary full">保存修改</button></form>`);const sel=document.querySelector('#order-edit-form [name=delivery]');if(sel)sel.value=o.delivery;}

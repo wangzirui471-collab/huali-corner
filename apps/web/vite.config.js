@@ -6,7 +6,7 @@ import { localBackend } from './src/app/navigation.js';
 const legacyOrigin = localBackend(process.env.HUALI_LEGACY_ORIGIN || 'http://127.0.0.1:8081');
 // 保留浏览器 Host 与 Origin 的对应关系，由旧服务继续校验同源写入。
 const proxy = {
-  '/api/v1': 'http://127.0.0.1:8001',
+  '/api/v1': { target: 'http://127.0.0.1:8001', changeOrigin: false },
   '/api': { target: legacyOrigin, changeOrigin: false },
   '/media': { target: legacyOrigin, changeOrigin: false },
 };

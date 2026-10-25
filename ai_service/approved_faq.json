@@ -1,0 +1,39 @@
+{
+  "documents": [
+    {
+      "document_id": "public-faq-simulated-payment",
+      "title": "付款会真实扣款吗",
+      "version": "2026-10-24-c92567d",
+      "content": "当前试用版订单付款和账务结算都是模拟操作，不产生真实扣款。不要向任何人提供支付密码、账号密码、恢复码或登录令牌。",
+      "source": "Backend mission/app/trade/service.py"
+    },
+    {
+      "document_id": "public-faq-combined-delivery-fee",
+      "title": "同一卖家合并下单的送货费怎么算",
+      "version": "2026-10-24-c92567d",
+      "content": "同一订单只能合并同一卖家的商品。选择卖家送货时，送货费按所选商品中最高的一笔收取一次；选择自提时送货费为零。实际总额以下单页面和服务端核算结果为准。",
+      "source": "Backend mission/app/trade/service.py"
+    },
+    {
+      "document_id": "public-faq-publish-photos",
+      "title": "发布闲置为什么需要三张不同角度照片",
+      "version": "2026-10-24-c92567d",
+      "content": "发布商品需要三至九张本人上传的公开实拍图，必须包含正面、侧面和顶部角度。重复图片不能凑数，请补齐不同角度后再提交。",
+      "source": "Backend mission/app/catalog/service.py"
+    },
+    {
+      "document_id": "public-faq-payment-timeout",
+      "title": "待付款订单多久关闭",
+      "version": "2026-10-24-c92567d",
+      "content": "待付款订单的付款时限为创建后30分钟。超过时限不能继续付款，系统超时任务会关闭订单并按商品当前状态释放可恢复的库存。请以订单页面的实际状态为准。",
+      "source": "Backend mission/app/trade/service.py"
+    },
+    {
+      "document_id": "public-faq-human-support-entry",
+      "title": "怎样联系人工客服，需要先提交工单吗",
+      "version": "2026-10-24-c92567d",
+      "content": "普通用户联系在线人工客服前，需要先有本人待处理的工单；已结案或已驳回工单不满足这个条件。请到帮助与客服页面填写并自行确认提交问题，再按页面入口联系在线客服。AI只能提供入口，不会替你自动创建工单或认领客服会话。",
+      "source": "Backend mission/app/community/service.py"
+    }
+  ]
+}

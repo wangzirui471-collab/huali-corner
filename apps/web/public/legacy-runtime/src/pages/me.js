@@ -1,0 +1,244 @@
+'use strict';
+// 页面层 · 我的转角 与 同学公开主页
+//
+// 「我的」页参考主流二手 App 的信息架构重排（2026-10-17）：
+//   头像卡 → 通知条 → 五格数据 → 购买/出售宫格 → 发布横幅 → 服务宫格 → 资料与信誉。
+// 没有的功能（红包、足迹、钱包、分期）一律不放占位——空格子比没有格子更糟。
+// 所有数字都来自已有接口，不为此新增后端。
+//
+// 分工提示：本文件属协作者领地（见 docs/前端协作规范.md），
+// 本轮由平台端侧代为重构，协作者后续在此文件内继续迭代即可。
+
+import { e, icon } from '../core/dom.js';
+import { date, money } from '../core/format.js';
+import { state, statusNames } from '../core/state.js';
+import { api } from '../core/http.js';
+import { shell, heading } from '../core/shell.js';
+import { card } from '../components/product-card.js';
+import { userAvatar } from '../components/user-avatar.js';
+import { userProfileSummary, userProfileForm, userAvatarForm } from '../components/user-profile.js';
+import { needLogin } from '../auth/login.js';
+
+// 公开主页。看别人的时候是只读的；看自己的时候，资料与头像就在这里——
+// 「我的」页改版后不再放表单，编辑资料回到它归属的地方：主页。
+//
+// 自己这版按「设置页」组织：标题行（sticky 保存）→ 资料预览 → 基本信息 → 我的头像 → 底部操作。
+// 分区靠 1px 分割线，不再用大圆角卡片包住整块内容。
+export async function profile(id){
+  const r=await api('/profile?id='+id),u=r.user;
+  const own=state.me&&state.me.id===u.id;
+  // 自己的主页读 /user/profile：只有它带 profile_version，改昵称、换头像都靠
+  // 这个版本号发现「另一个标签页已经改过」。别人的主页走公开接口，不带版本。
+  const self=own&&!window.HUALI_STATIC_DEMO?await api('/user/profile'):null;
+  const products=r.products.filter(p=>p.status==='available').map(card).join('');
+  if(self){
+    // 版心两栏：左边「账号设置」导航，右边资料内容。
+    // data-user-center 必须包住所有表单控件：事件层用它定位作用域与账号归属
+    // （导航是普通跳转，放在它外面，不参与「提交中锁定」）。
+    shell(`<div class="uc-page">
+      <div class="uc-layout">
+        <nav class="uc-nav" aria-label="账号设置">
+          <div class="uc-nav-who">
+            ${userAvatar(self, 'small')}
+            <div class="uc-nav-who-main">
+              <b>${e(self.nickname)}</b>
+              <small>${e(self.college || '学院未填写')}</small>
+            </div>
+          </div>
+          <p class="uc-nav-title">个人资料</p>
+          <div class="uc-nav-group">
+            <button type="button" class="uc-nav-link is-active" data-action="uc-scroll" data-target="uc-preview">${icon('user')}<span>资料预览</span></button>
+            <button type="button" class="uc-nav-link" data-action="uc-scroll" data-target="uc-basic">${icon('list')}<span>基本信息</span></button>
+            <button type="button" class="uc-nav-link" data-action="uc-scroll" data-target="uc-avatar">${icon('camera')}<span>我的头像</span></button>
+            <button type="button" class="uc-nav-link" data-action="uc-scroll" data-target="uc-products">${icon('tag')}<span>在售商品</span></button>
+          </div>
+          <p class="uc-nav-title">账号</p>
+          <div class="uc-nav-group">
+            <button type="button" class="uc-nav-link" data-action="uc-security">${icon('shield')}<span>账号与安全</span><small>密码 / 注销</small></button>
+          </div>
+          <a class="uc-nav-back" href="#me">${icon('arrow')}返回我的</a>
+        </nav>
+        <div class="uc-main user-center" data-user-center data-user-owner="${u.id}">
+          <header class="uc-head">
+            <div class="uc-head-main"><h1>个人资料</h1><p>资料会展示在你的公开主页，随时可以修改。</p></div>
+            <button class="uc-btn is-primary uc-head-save" type="submit" form="user-profile-form" data-user-control>保存</button>
+          </header>
+          <section class="uc-sec" id="uc-preview">
+            <div class="uc-sec-head"><h2>资料预览</h2><span>公开主页展示的样子</span></div>
+            <div data-user-summary>${userProfileSummary(self)}</div>
+          </section>
+          <section class="uc-sec" id="uc-basic">
+            <div class="uc-sec-head"><h2>基本信息</h2><span>带 * 为必填</span></div>
+            ${userProfileForm(self)}
+          </section>
+          <section class="uc-sec" id="uc-avatar">
+            <div class="uc-sec-head"><h2>我的头像</h2><span>上传后先预览，确认才公开</span></div>
+            ${userAvatarForm(self)}
+          </section>
+          <div class="uc-foot">
+            <button class="uc-btn" type="button" data-action="user-profile-reset" data-user-control>重新载入资料</button>
+            <span class="uc-foot-tip">保存前不会公开任何修改</span>
+          </div>
+        </div>
+      </div>
+      <section class="uc-products" id="uc-products"><h2>在售商品</h2><div class="product-grid">${products}</div></section>
+    </div>`,'me');
+    return;
+  }
+  // 私聊要先是好友（2026-10 好友门禁）：非好友只给「加好友」，
+  // 已经是好友才给「发私信」。以前这里只有一个「发私信」，现在点下去
+  // 会被门禁拦，反而让人不知道下一步该干嘛。
+  const friendState = own ? 'self'
+    : ((await api('/friend/state?user_id=' + u.id).catch(() => ({state: 'none'}))).state || 'none');
+  const connectBtn = friendState === 'accepted'
+    ? `<button class="btn primary" data-action="chat" data-id="${u.id}">发私信</button>`
+    : friendState === 'pending_out'
+      ? `<button class="btn secondary" data-action="add-friend" data-id="${u.id}" data-name="${e(u.nickname)}">已申请，等对方同意</button>`
+      : friendState === 'pending_in'
+        ? `<button class="btn primary" data-action="add-friend" data-id="${u.id}" data-name="${e(u.nickname)}">对方申请了你，点此处理</button>`
+        : `<button class="btn primary" data-action="add-friend" data-id="${u.id}" data-name="${e(u.nickname)}">加好友</button>`;
+
+  shell(`${heading('NICE TO MEET YOU','同学的转角','看看这位同学的公开信息和在售好物。')}
+  <section class="panel profile-card">
+    ${userAvatar(u,'large')}
+    <div><h2>${e(u.nickname)}${u.trusted?'<span class="trusted-pill">诚信客户</span>':''}</h2><p>${e(u.college)} · ${e(u.major)} · ${e(u.education)}</p><p>${e(u.bio||'让闲置遇到真正需要它的人。')}</p><span class="tag">信誉 ${u.score}/100 · 不是交易担保</span></div>
+    ${connectBtn}
+  </section>
+  <h2>在售商品</h2>
+  <div class="product-grid">${products}</div>`,'me');
+}
+
+// --- 「我的」页 ------------------------------------------------------------
+
+// 宫格小方块。count>0 时出红点数字，0 时安静——满屏的 0 会把真正的待办淹没。
+// 红点只给「待办」：看完或处理完就该消失。收藏数、在售数这类存量不是消息，
+// 传 alert=false 只留安静的小入口，否则红点永远亮着，把真正的待办淹没。
+// go 为空时用 extra 提供行为（data-action="..."），这类方块不带跳转。
+// tone='danger' 用于注销/退出这类不可逆操作，文字转红以示区别。
+function tile(go, ic, label, count, extra = '', tone = '', alert = true) {
+  const badge = alert && count > 0 ? `<i class="me-badge">${count > 99 ? '99+' : count}</i>` : '';
+  const attrs = go ? `data-go="${go}"` : extra;
+  return `<button class="me-tile ${tone}" ${attrs}>
+    <span class="me-tile-icon">${icon(ic)}</span><small>${e(label)}</small>${badge}</button>`;
+}
+
+// 内容分区标题：左侧标题、右侧「查看全部」。空数据时不出「查看全部」——
+// 指向一个空列表的链接是负体验。
+const secHead = (title, go, label = '查看全部') =>
+  `<header class="me-sec-head"><h3>${e(title)}</h3>${go ? `<button class="text-button" data-go="${go}">${e(label)}${icon('arrow')}</button>` : ''}</header>`;
+
+const meEmpty = text => `<p class="me-empty">${e(text)}</p>`;
+
+// 最近订单预览行。整行可点进订单页；缩略图取第一件商品，多件时标「等 N 件」。
+function orderRow(o) {
+  const first = o.items && o.items[0] ? o.items[0] : {};
+  const more = o.items && o.items.length > 1 ? ` 等${o.items.length}件` : '';
+  const role = o.buyer_id === state.me.id ? '我买到的' : '我卖出的';
+  return `<div class="me-order-row" data-go="orders">
+    <img src="${e(first.photo || '')}" alt="" loading="lazy">
+    <div class="me-order-main"><b>${e(first.title || '订单 #'+o.id)}${more}</b>
+      <small>${e(statusNames[o.status] || o.status)} · ${role} · ${date(o.created)}</small></div>
+    <b class="me-order-amount">¥${money(o.total)}</b></div>`;
+}
+
+export async function mine(){
+  if(!needLogin())return;
+  state.me=await api('/me');
+  const [myList,favList,myOrders,notices]=await Promise.all([
+    api('/my-products'),api('/products?favorite=1'),api('/orders'),api('/notifications')
+  ]);
+  const me=state.me.id;
+  // 按「我是买家还是卖家 + 订单状态」计数。口径与订单页一致：
+  //   待收货 = 已付款未确认收货；售后 = 争议或已退款；待发货 = 卖家已收款未交付。
+  const countBy=(role,statuses)=>myOrders.filter(o=>o[role+'_id']===me&&statuses.includes(o.status)).length;
+  const listingCount=myList.filter(x=>x.status==='available').length;
+  const favoriteCount=favList.length;
+  const cells=[
+    ['收藏',favoriteCount,'favorites'],
+    ['取货清单',state.cart.length,'cart'],
+    ['通知',notices.unread,'messages/notice'],
+    ['在售',listingCount,'listings']
+  ];
+
+  // 购买 / 出售宫格。每个格子通到订单页的一个**预筛视图**（orders.js 的
+  // 查询参数），而不是一律甩到全部订单列表——「退款/售后 1」点进去就该
+  // 只看到那一单。口径必须与 orders.js 的 ORDER_GROUPS 完全一致。
+  // 红点口径 = 「需要我动作的」：
+  //   待付款/待收货/待发货 跟订单状态走，处理完自动消失；
+  //   售后只数进行中的争议（disputed）——refunded 是已处理完的终态，
+  //   钱都退完了还亮红点，用户会以为还有事没办完。
+  //   我卖出的/我发布的 是存量不是待办，不配红点。
+  const buy=[
+    ['待付款',countBy('buyer',['awaiting_payment']),'wallet','orders/?role=buy&f=to_pay'],
+    ['待收货',countBy('buyer',['paid','awaiting_handover','awaiting_receipt']),'truck','orders/?role=buy&f=receiving'],
+    ['退款/售后',countBy('buyer',['disputed']),'refresh','orders/?role=buy&f=aftersale']
+  ];
+  const sell=[
+    ['待发货',countBy('seller',['paid','awaiting_handover']),'bag','orders/?role=sell&f=to_ship'],
+    ['我卖出的',myOrders.filter(o=>o.seller_id===me).length,'tag','orders/?role=sell',false],
+    ['我发布的',myList.length,'plus','listings',false]
+  ];
+  const tileOf=([label,n,ic,go,alert])=>tile(go,ic,label,n,'','',alert!==false);
+
+  // 刻意不放 heading：参考的二手 App「我的」页没有大标题，头像卡就是页首。
+  shell(`
+  <div class="me-page">
+    <section class="me-card me-hero">
+      ${userAvatar(state.me,'large')}
+      <div class="me-hero-main">
+        <h2>${e(state.me.nickname)}</h2>
+        <p>${e(state.me.college||'学院未填写')}${state.me.education?` · ${e(state.me.education)}`:''}</p>
+        <span class="tag ${state.me.score<60?'danger':''}">信誉 ${state.me.score}/100${state.me.score<60?' · 暂不能发布':''}</span>
+      </div>
+      <div class="me-hero-side">
+        <button class="me-round" data-go="messages/notice" aria-label="订单与售后通知">${icon('bell')}</button>
+        ${state.config.trial?`<button class="me-round" data-action="change-password" aria-label="修改密码">${icon('shield')}</button>`:''}
+      </div>
+    </section>
+
+    ${notices.unread
+      ? `<button class="me-notice alert" data-go="messages/notice">${icon('bell')}你有 <b>${notices.unread}</b> 条未读订单通知，点击查看</button>`
+      : `<div class="me-notice">${icon('shield')}模拟交易试用 · 不扣真实款项 · 平台依据规则保障双方权益</div>`}
+
+    <section class="me-card me-stats">
+      ${cells.map(([label,n,go])=>`<button data-go="${go}"><small>${label}</small><b>${n}</b></button>`).join('')}
+      <div><small>信誉分</small><b>${state.me.score}</b></div>
+    </section>
+
+    <section class="me-card me-orders">
+      <div class="me-orders-head"><b>购买</b><span class="me-vline"></span><b>出售</b><button class="text-button me-orders-all" data-go="orders">全部订单${icon('arrow')}</button></div>
+      <div class="me-orders-body">
+        <div class="me-half">${buy.map(tileOf).join('')}</div>
+        <span class="me-vline"></span>
+        <div class="me-half">${sell.map(tileOf).join('')}</div>
+      </div>
+      <div class="me-orders-more">
+        ${tile('favorites','heart','我的收藏',favoriteCount,'','',false)}
+        ${tile('listings','tag','在售商品',listingCount,'','',false)}
+        ${tile('messages/notice','bell','消息通知',notices.unread)}
+      </div>
+    </section>
+
+    <section class="me-banner">
+      <span class="me-banner-icon">${icon('plus')}</span>
+      <div><b>有闲置要出？</b><small>拍三张照片，一分钟挂上转角</small></div>
+      <button class="btn primary" data-go="publish">去发布</button>
+    </section>
+
+    <section class="me-card me-sec">
+      ${secHead('最近订单', myOrders.length ? 'orders' : '')}
+      ${myOrders.length ? myOrders.slice(0,3).map(orderRow).join('') : meEmpty('还没有订单。逛逛首页，看中的直接下单一分钟搞定。')}
+    </section>
+
+    <section class="me-card me-tools">
+      ${tile('forum/account','book','我的帖子',0,'','',false)}
+      ${tile('forum','community','校园论坛',0,'','',false)}
+      ${tile('profile/'+state.me.id,'user','公开主页',0)}
+      ${state.config.trial?tile('','shield','账号与安全',0,'data-action="change-password"'):''}
+      ${tile('','ai','桌宠设置',0,'data-action="pet-settings"')}
+      ${tile('support','message','帮助与客服',0)}
+      ${tile('credit','chart','信誉与申诉',0)}
+      ${tile('','close','退出登录',0,'data-action="logout"','danger')}
+      ${tile('','trash','注销账号',0,'data-action="deactivate"','danger')}
+    </section>
+  </div>`,'me');}

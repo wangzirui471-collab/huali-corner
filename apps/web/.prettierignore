@@ -4,3 +4,6 @@ node_modules
 package-lock.json
 src/shared/http/generated.d.ts
 public/brand
+public/assets
+public/legacy-runtime
+public/legacy-ai.html

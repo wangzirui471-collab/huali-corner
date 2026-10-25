@@ -15,10 +15,14 @@ import {
 import { useLoad, useAction } from '@/shared/legacy/use-task.js';
 import { useLegacyApi } from '@/shared/legacy/use-task.js';
 const api = useLegacyApi();
+// 本机FAQ经新FastAPI；线上宠物流构建保留原AI后端，避免请求尚未发布的本机端口。
+const localFaqEnabled = import.meta.env.VITE_HUALI_ASSISTANT_MODE !== 'legacy-stream';
 import AppButton from '@/shared/ui/AppButton.vue';
 import LoadBoundary from '@/shared/ui/LoadBoundary.vue';
 import TaskFeedback from '@/shared/ui/TaskFeedback.vue';
 import { yuanToCents } from '@/features/trade/checkout.js';
+import AssistantPanel from './assistant/AssistantPanel.vue';
+import { consumeAssistantDraft } from './assistant/handoff-draft.js';
 const route = useRoute(),
   router = useRouter(),
   action = useAction();
@@ -27,7 +31,7 @@ const creating = route.path.endsWith('/new'),
 const form = reactive({
   type: String(route.query.type || 'other'),
   subject: '',
-  body: '',
+  body: creating ? consumeAssistantDraft() : '',
   order_id: String(route.query.order || ''),
   product_id: Number(route.query.product) || 0,
   reason: '',
@@ -271,7 +275,8 @@ async function contact() {
       </aside>
     </div></LoadBoundary
   ><template v-else
-    ><div class="panel tabs">
+    ><AssistantPanel v-if="localFaqEnabled" />
+    <div class="panel tabs">
       <button
         v-for="status in ['', 'open', 'processing', 'review', 'resolved']"
         :key="status"

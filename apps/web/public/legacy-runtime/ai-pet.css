@@ -1,0 +1,809 @@
+/* AI 助手「小转」：全站悬浮桌宠 + 对话面板
+   图集默认是 assets/ai-pet/xiaozhuan-atlas.webp（8 列 × 9 行，单帧 120×147）。
+   换皮肤时由 pet-skins.js 改写下面这组变量——尺寸、图集、色调都不再写死，
+   所以就着一份 CSS 能跑任意一只宠物。帧动画也搬到了 JS（见 applySkinFrame），
+   因为每只宠物的行数和帧数都不一样，用 @keyframes 就得一只抄一套。 */
+
+.ai-pet{
+  --pet-cell-w: 120px;    /* 单帧尺寸 */
+  --pet-cell-h: 147px;
+  --pet-atlas-w: 960px;   /* 整张图集尺寸，等于 cell × 列/行 */
+  --pet-atlas-h: 1323px;
+  --pet-s: .68;           /* 显示缩放，由 JS 按「显示高度 100px」算出来 */
+  --pet-atlas: url('/assets/ai-pet/xiaozhuan-atlas.webp');
+  --pet-tint: none;       /* 没有独立素材的皮肤用调色区分 */
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 60;            /* 高于导航(40)，低于弹窗(100) */
+  --pet-w: calc(var(--pet-cell-w) * var(--pet-s));
+  --pet-h: calc(var(--pet-cell-h) * var(--pet-s));
+}
+.ai-pet[hidden]{ display: none; }
+
+.ai-pet-body{
+  position: relative;
+  display: block;
+  width: var(--pet-w);
+  height: var(--pet-h);
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: grab;
+  touch-action: none;                 /* 手机上拖动不要触发页面滚动 */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  filter: drop-shadow(0 10px 16px rgba(46, 34, 72, .20));
+  transition: filter .18s ease;
+}
+.ai-pet-body:hover{ filter: drop-shadow(0 14px 22px rgba(46, 34, 72, .26)); }
+.ai-pet-body:active,
+.ai-pet.is-dragging .ai-pet-body{ cursor: grabbing; filter: drop-shadow(0 18px 26px rgba(46, 34, 72, .30)); }
+.ai-pet-body:focus-visible{ outline: 3px solid #7f68af80; outline-offset: 4px; border-radius: 12px; }
+.ai-pet-body::before,
+.ai-pet-body::after{
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+}
+.ai-pet-body::before{ content: '✦'; top: 8%; right: 13%; color: #f0b429; font-size: 20px; }
+.ai-pet-body::after{ content: '♥'; top: 23%; left: 12%; color: #d78ca9; font-size: 16px; }
+.ai-pet.is-petted .ai-pet-body::before{ animation: pet-sparkle .9s ease-out both; }
+.ai-pet.is-petted .ai-pet-body::after{ animation: pet-sparkle .9s .12s ease-out both; }
+@keyframes pet-sparkle{
+  0%{ opacity: 0; transform: translateY(8px) scale(.5) rotate(-18deg); }
+  30%{ opacity: 1; }
+  100%{ opacity: 0; transform: translateY(-25px) scale(1.2) rotate(18deg); }
+}
+
+.ai-pet-reaction{
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: calc(100% - 5px);
+  padding: 7px 11px;
+  border: 1px solid #f3e5b3;
+  border-radius: 12px 12px 12px 4px;
+  background: #fffdf4;
+  box-shadow: 0 6px 18px rgba(46, 34, 72, .13);
+  color: #6c578d;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(-50%, 7px) scale(.92);
+  transform-origin: bottom center;
+}
+.ai-pet.is-petted .ai-pet-reaction{
+  visibility: visible;
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+  animation: pet-say .3s ease-out both;
+}
+@keyframes pet-say{
+  from{ opacity: 0; transform: translate(-50%, 7px) scale(.92); }
+  to{ opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+.ai-pet-sprite{
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--pet-cell-w);
+  height: var(--pet-cell-h);
+  background-image: var(--pet-atlas);
+  background-repeat: no-repeat;
+  background-size: var(--pet-atlas-w) var(--pet-atlas-h);
+  background-position: 0 0;
+  filter: var(--pet-tint);
+  transform: scale(var(--pet-s));
+  transform-origin: 0 0;
+}
+
+/* 图集里没有单独的「向左」动作时，把向右那段水平翻过来用。
+   翻转后图形落在 x<0 一侧，靠 left 平移到原位。 */
+.ai-pet.is-flip .ai-pet-sprite{
+  left: var(--pet-w);
+  transform: scale(calc(-1 * var(--pet-s)), var(--pet-s));
+}
+
+/* 只有一张图的形象（自定义、以及还没有动作表的小转）没有帧序列，
+   用呼吸动效让它看起来是活的。 */
+.ai-pet.is-static .ai-pet-sprite{ animation: pet-breathe 3.6s ease-in-out infinite; }
+@keyframes pet-breathe{
+  0%, 100%{ transform: scale(var(--pet-s)) translateY(0); }
+  50%{ transform: scale(calc(var(--pet-s) * 1.03)) translateY(calc(-1px * var(--pet-s) * 3)); }
+}
+
+/* 图集加载失败时的降级：一个小圆钮，功能不丢 */
+.ai-pet-fallback{ display: none; }
+.ai-pet.is-fallback .ai-pet-sprite{ display: none; }
+.ai-pet.is-fallback .ai-pet-body{
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #7f68af;
+  color: #fff;
+  font-size: 24px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 10px 24px rgba(46, 34, 72, .28);
+}
+.ai-pet.is-fallback .ai-pet-fallback{ display: block; }
+
+/* --- 动作状态 ---------------------------------------------------------- */
+/* 帧序列由 applySkinFrame 用 background-position 驱动（见 pet-skins.js）。
+   这里只保留状态本身，方便调试时看面板当前在做什么动作。 */
+.ai-pet[data-state="right"] .ai-pet-sprite,
+.ai-pet[data-state="run"] .ai-pet-sprite{ will-change: background-position; }
+
+/* --- 首次提示 ---------------------------------------------------------- */
+.ai-pet-hint{
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #2b2c30;
+  color: #fff;
+  font-size: 11.5px;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 8px 20px rgba(24, 24, 28, .22);
+}
+.ai-pet-hint[hidden]{ display: none; }
+.ai-pet-hint::after{
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border: 5px solid transparent;
+  border-top-color: #2b2c30;
+}
+
+/* --- 对话面板 ---------------------------------------------------------- */
+.ai-pet-panel{
+  position: fixed;
+  width: min(372px, calc(100vw - 24px));
+  /* dvh 跟移动端地址栏收放走；老浏览器退回 vh。 */
+  max-height: min(560px, calc(100vh - 24px));
+  max-height: min(560px, calc(100dvh - 24px));
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #ececf0;
+  border-radius: 16px;
+  box-shadow: 0 20px 54px rgba(24, 24, 28, .22);
+  overflow: hidden;
+}
+.ai-pet-panel[hidden]{ display: none; }
+/* 头、快捷问、模式、输入框、隐私提示都是固定高度：只有消息区伸缩。
+   少了这条，消息一长就把底部挤出面板，被 overflow:hidden 切掉。 */
+.ai-pet-head,
+.ai-pet-chips,
+.ai-pet-chips-head,
+.ai-pet-mode,
+.ai-pet-form,
+.ai-pet-note{ flex: none; }
+
+/* 最大化：铺满视口留 12px 边。尺寸/位置由类控制，拖拽产生的内联样式在切换时清掉。 */
+.ai-pet-panel.is-max{
+  left: 12px;
+  top: 12px;
+  width: calc(100vw - 24px);
+  height: calc(100vh - 24px);
+  height: calc(100dvh - 24px);
+  max-height: none;
+  border-radius: 12px;
+}
+.ai-pet-panel.is-max .ai-pet-rs{ display: none; }
+/* 最大化后不要把两个模式按钮拉成半屏宽，消息也别排成一行 1300px。 */
+.ai-pet-panel.is-max .ai-pet-mode{ width: min(100%, 420px); }
+.ai-pet-panel.is-max .ai-pet-msg{ max-width: min(88%, 720px); }
+.ai-pet-panel.is-resizing{ user-select: none; }
+
+/* 八向拖拽手柄：贴着边框内侧，4~14px 的透明条，靠光标提示可拖。 */
+.ai-pet-rs{ position: absolute; z-index: 4; touch-action: none; }
+.ai-pet-rs[data-dir="n"]{ top: 0; left: 14px; right: 14px; height: 5px; cursor: ns-resize; }
+.ai-pet-rs[data-dir="s"]{ bottom: 0; left: 14px; right: 14px; height: 5px; cursor: ns-resize; }
+.ai-pet-rs[data-dir="w"]{ left: 0; top: 14px; bottom: 14px; width: 5px; cursor: ew-resize; }
+.ai-pet-rs[data-dir="e"]{ right: 0; top: 14px; bottom: 14px; width: 5px; cursor: ew-resize; }
+.ai-pet-rs[data-dir="nw"]{ left: 0; top: 0; width: 14px; height: 14px; cursor: nwse-resize; }
+.ai-pet-rs[data-dir="ne"]{ right: 0; top: 0; width: 14px; height: 14px; cursor: nesw-resize; }
+.ai-pet-rs[data-dir="sw"]{ left: 0; bottom: 0; width: 14px; height: 14px; cursor: nesw-resize; }
+.ai-pet-rs[data-dir="se"]{ right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; }
+/* 右下角给一个可见的小握把，不然没人知道能拖 */
+.ai-pet-rs[data-dir="se"]::after{
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid #cfc8e0;
+  border-bottom: 2px solid #cfc8e0;
+  border-radius: 0 0 2px 0;
+  opacity: .85;
+}
+
+.ai-pet-head{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f2;
+  background: #fff;
+}
+.ai-pet-avatar{
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #f3f0fa;
+  border: 1px solid #e6e0f4;
+  overflow: hidden;
+  flex: none;
+}
+.ai-pet-avatar img{ width: 100%; height: 100%; object-fit: cover; }
+.ai-pet-head b{ display: block; font-size: 14px; color: #1a1a1a; }
+.ai-pet-head small{ display: block; margin-top: 2px; font-size: 11px; color: #8a8a93; }
+.ai-pet-pat{
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #fff7dc;
+  color: #7f68af;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.ai-pet-pat:hover{ background: #ffefbb; transform: scale(1.06); }
+.ai-pet-pat:focus-visible{ outline: 2px solid #7f68af; outline-offset: 2px; }
+/* 齿轮把「放大」推到右边：先占住 margin-left:auto，后者紧跟其后 */
+.ai-pet-gear{
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #f5f5f7;
+  color: #6b6f77;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.ai-pet-gear:hover{ background: #eeeef2; color: #4d5158; }
+.ai-pet-gear + .ai-pet-max{ margin-left: 0; }
+
+.ai-pet-max{
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #f5f5f7;
+  color: #6b6f77;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.ai-pet-max:hover{ background: #ececf0; }
+.ai-pet-max.is-max{ background: #f3f0fa; color: #6a53a0; }
+.ai-pet-close{
+  margin-left: 4px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: #f5f5f7;
+  color: #6b6f77;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ai-pet-close:hover{ background: #ececf0; }
+
+.ai-pet-log{
+  flex: 1 1 auto;
+  min-height: 96px;          /* 只留一个下限，剩下的交给 flex 收缩，别把底部顶出去 */
+  overflow-y: auto;
+  padding: 14px;
+  background: #fafafb;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ai-pet-msg{
+  max-width: 88%;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #2b2c30;
+  overflow-wrap: anywhere;
+}
+.ai-pet-msg.bot{ align-self: flex-start; background: #fff; border: 1px solid #ececf0; border-bottom-left-radius: 4px; }
+.ai-pet-msg.user{ align-self: flex-end; background: #7f68af; color: #fff; border-bottom-right-radius: 4px; }
+.ai-pet-typing{ color: #8a8a93; }
+.ai-pet-src{ margin-top: 6px; font-size: 11px; color: #8a8a93; line-height: 1.5; }
+.ai-pet-transfer{
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid #ffd9cf;
+  border-radius: 10px;
+  background: #fff7f4;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ai-pet-transfer b{ display: block; margin-bottom: 2px; color: #a83a28; }
+.ai-pet-transfer p{ margin: 0 0 8px; color: #6b6f77; }
+
+/* 快捷问放不下就换行，不要横向滚动：滚动条是隐藏的，桌面端用鼠标
+   滑不到后面的按钮（办公行加到 6 个后就溢出了，只能看到前 5 个）。 */
+.ai-pet-chips{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px 0;
+  background: #fff;
+}
+.ai-pet-chips button{
+  flex: none;
+  padding: 5px 10px;
+  border: 1px solid #ececf0;
+  border-radius: 999px;
+  background: #fff;
+  color: #5c5c66;
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ai-pet-chips button:hover{ border-color: #7f68af; background: #f7f4fd; }
+
+/* 「快捷指令 14 个」的标题行：右边那颗就是收起/展开。
+   收起来后只留这一行，消息区能多出四五行的位置。 */
+.ai-pet-chips-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 12px 0;
+  background: #fff;
+}
+.ai-pet-chips-head[hidden]{ display: none; }
+.ai-pet-chips-head span{ font-size: 11px; color: #8a8a93; }
+.ai-pet-chips-head button{
+  flex: none;
+  padding: 3px 10px;
+  border: 1px solid #ececf0;
+  border-radius: 999px;
+  background: #fff;
+  color: #5c5c66;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.ai-pet-chips-head button:hover{ border-color: #7f68af; background: #f7f4fd; color: #5b4a86; }
+
+.ai-pet-form{
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px 6px;
+  background: #fff;
+}
+.ai-pet-form textarea{
+  flex: 1;
+  min-height: 38px;
+  max-height: 92px;
+  padding: 9px 10px;
+  border: 1px solid #e6e6e9;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #1a1a1a;
+  resize: none;
+  outline: none;
+}
+.ai-pet-form textarea:focus{ border-color: #7f68af; }
+.ai-pet-send{
+  height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: #7f68af;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: none;
+}
+.ai-pet-send:disabled{ opacity: .55; cursor: wait; }
+.ai-pet-note{ margin: 0; padding: 0 12px 10px; font-size: 10.5px; color: #b4b4bb; background: #fff; }
+.ai-pet-sr{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+@media (max-width: 850px){
+  .ai-pet{ --s: .66; }
+  .ai-pet-panel{ width: min(340px, calc(100vw - 20px)); max-height: min(68vh, calc(100dvh - 20px)); }
+}
+@media (max-width: 420px){
+  .ai-pet{ --s: .58; }
+}
+
+/* 视口特别矮（横屏手机、小窗）时，固定行加起来都放不下：
+   让整块面板自己可滚，也比把底部直接裁掉强。 */
+@media (max-height: 460px){
+  .ai-pet-panel{ overflow-y: auto; }
+  .ai-pet-log{ min-height: 64px; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .ai-pet-sprite{ animation: none !important; }
+  .ai-pet-body{ transition: none; }
+  .ai-pet-body::before,
+  .ai-pet-body::after{ animation: none !important; }
+  .ai-pet.is-petted .ai-pet-reaction{ animation: none; }
+}
+
+/* 回答里的跳转文字链接：客户看完规则可直接去对应页面执行。 */
+.ai-pet-links{ display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ai-pet-link{
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 5px 11px; border-radius: 999px;
+  background: #fff6d8; border: 1px solid #f0e2ae; color: #7a5c07;
+  font-size: 12px; font-weight: 650; text-decoration: none;
+  transition: background .15s, transform .15s;
+}
+.ai-pet-link:hover{ background: #ffefb8; transform: translateY(-1px); }
+/* 链接做成按钮时继承字体与指针 */
+button.ai-pet-link{ cursor: pointer; font-family: inherit; }
+
+/* 购买意图的商品小卡：点卡片直接进详情 */
+.ai-pet-prods{ display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.ai-pet-prod{
+  display: flex; align-items: center; gap: 8px; padding: 6px;
+  border-radius: 10px; background: #fff; border: 1px solid #f0e2ae;
+  text-decoration: none; color: inherit;
+}
+.ai-pet-prod:hover{ background: #fffaf0; }
+.ai-pet-prod-img{
+  width: 44px; height: 44px; border-radius: 8px; flex: none;
+  background: #f4f4f6 center / cover no-repeat;
+}
+.ai-pet-prod-txt{ display: flex; flex-direction: column; min-width: 0; }
+.ai-pet-prod-txt b{ font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-pet-prod-txt small{ font-size: 11px; color: #d8451f; font-weight: 650; }
+
+/* 所有者办公：动作确认卡（不可逆操作，需要 L1 再次确认） */
+.ai-pet-office{ border-top: 1px dashed #eee; padding-top: 8px; }
+.ai-pet-action{
+  margin-top: 8px; padding: 10px; border: 1px solid #f3c9c0; border-radius: 10px;
+  background: #fff7f4; font-size: 12px; line-height: 1.6;
+}
+.ai-pet-action b{ display: block; color: #b23c1e; margin-bottom: 2px; }
+.ai-pet-action p{ margin: 0 0 6px; color: #6b4a42; }
+.ai-pet-action .btn{ font-size: 12px; }
+
+/* 办公数据查询的结果列表：一行一个账号/订单/商品，比一大段文字好扫。 */
+.ai-pet-rows{ display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.ai-pet-row{
+  padding: 6px 8px; border: 1px solid #eef0f3; border-radius: 8px;
+  background: #fff; font-size: 12px; line-height: 1.5;
+}
+.ai-pet-row b{ display: block; font-size: 12.5px; font-weight: 650; color: #2b2c30; }
+.ai-pet-row small{ display: block; color: #8a8a93; font-size: 11px; overflow-wrap: anywhere; }
+
+/* 所有者面板的模式切换：客服问答 / 办公 */
+.ai-pet-mode{ display: flex; gap: 6px; padding: 0 12px 6px; }
+.ai-pet-mode button{
+  flex: 1; padding: 4px 0; font-size: 11.5px; border-radius: 999px;
+  border: 1px solid #e6e6ea; background: #fff; color: #666;
+  cursor: pointer; font-family: inherit;
+}
+.ai-pet-mode button.active{ background: #fff6d8; border-color: #f0e2ae; color: #7a5c07; font-weight: 650; }
+
+/* 售后：订单选择卡 */
+.ai-pet-orders{ display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.ai-pet-order{
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 8px 10px; border: 1px solid #e3e6ea; border-radius: 10px;
+  background: #fff; cursor: pointer; text-align: left; font-family: inherit;
+}
+.ai-pet-order:hover{ border-color: #d8451f; }
+.ai-pet-order b{ font-size: 12.5px; color: #2b2b33; }
+.ai-pet-order small{ font-size: 11px; color: #8a8a93; }
+
+/* 常见服务推荐 */
+.ai-pet-sugs{ display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ai-pet-sug{
+  padding: 4px 9px; border-radius: 999px; border: 1px solid #ececf0;
+  background: #f7f8fa; color: #4a4f57; font-size: 11.5px; cursor: pointer;
+  font-family: inherit;
+}
+.ai-pet-sug:hover{ background: #fff6d8; border-color: #f0e2ae; color: #7a5c07; }
+
+/* 客服状态灯：面板标题下的小字。在线=绿，已下班=灰，一眼看得出现在能不能找人。 */
+.ai-pet-head small#ai-pet-duty::before{
+  content: ''; display: inline-block; width: 6px; height: 6px;
+  border-radius: 50%; margin-right: 5px; vertical-align: 1px;
+  background: #b9b9c0;
+}
+.ai-pet-head small#ai-pet-duty[data-online="true"]{ color: #1f9d55; }
+.ai-pet-head small#ai-pet-duty[data-online="true"]::before{ background: #1f9d55; }
+.ai-pet-head small#ai-pet-duty[data-online="false"]{ color: #8a8a93; }
+
+/* 客服已下班时的留言卡：说明「消息会排着，上班后处理」，不给跳转按钮，
+   因为在线客服入口这时候点了也没人。 */
+.ai-pet-offline{
+  margin-top: 8px; padding: 10px; border: 1px solid #e3e6ea; border-radius: 10px;
+  background: #f7f8fa; font-size: 12px; line-height: 1.6;
+}
+.ai-pet-offline b{ display: block; margin-bottom: 2px; color: #4a4f57; }
+.ai-pet-offline p{ margin: 0 0 8px; color: #6b6f77; }
+.ai-pet-offline .btn{ font-size: 12px; }
+
+/* 办公 / 工作快捷行按页签显隐：.ai-pet-chips 的 display:flex 会盖掉 [hidden] */
+.ai-pet-chips[hidden]{ display: none !important; }
+
+/* ======================================================================
+   桌宠设置面板 + 用户须知
+   布局按桌面端设置的习惯：左边一列分区，右边一组一组卡片。
+   手机上没有横向空间，分区折到顶部变成标签行。
+   ====================================================================== */
+
+.ps-layer{ position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: 24px; }
+.ps-layer[hidden]{ display: none; }
+.ps-backdrop{ position: absolute; inset: 0; background: #26332555; backdrop-filter: blur(3px); }
+
+.ps-sheet{
+  position: relative;
+  display: grid;
+  grid-template-columns: 172px minmax(0, 1fr);
+  width: min(880px, 100%);
+  height: min(640px, 88vh);
+  height: min(640px, 88dvh);
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 30px 100px #1b2b2333;
+  overflow: hidden;
+}
+
+.ps-nav{
+  background: #fafbf7;
+  border-right: 1px solid var(--line, #e8e9e1);
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ps-nav header{ font-size: 13px; font-weight: 800; letter-spacing: .4px; padding: 4px 10px 14px; color: #272c28; }
+.ps-nav button{
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 9px;
+  font-size: 13px;
+  color: #6f7568;
+  transition: background .15s, color .15s;
+}
+.ps-nav button:hover{ background: #f1f3ea; }
+.ps-nav button.active{ background: #fff0e8; color: #d15730; font-weight: 700; }
+
+.ps-body{ position: relative; min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+.ps-panes{ overflow-y: auto; padding: 26px 28px 30px; }
+.ps-x{
+  position: absolute; top: 12px; right: 12px; z-index: 3;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: #f5f5f7; color: #6b6f77; font-size: 17px; line-height: 1;
+  display: grid; place-items: center;
+}
+.ps-x:hover{ background: #ededf1; color: #3f4349; }
+
+.ps-pane[hidden]{ display: none; }
+.ps-head h3{ font-size: 19px; margin: 0 0 6px; letter-spacing: -.3px; }
+.ps-head p{ font-size: 12px; color: #7d8279; line-height: 1.8; margin: 0 0 18px; max-width: 58ch; }
+
+/* 一组设置 = 一张卡片，卡片里每项是「标题/说明 + 右侧控件」 */
+.ps-card{
+  border: 1px solid #eaebe3;
+  border-radius: 13px;
+  background: #fff;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.ps-row{
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 15px 18px;
+  border-bottom: 1px solid #f2f3ec;
+}
+.ps-row:last-child{ border-bottom: 0; }
+.ps-row-txt{ flex: 1; min-width: 0; }
+.ps-row-txt b{ display: block; font-size: 13px; font-weight: 650; color: #2b312c; margin-bottom: 4px; }
+.ps-row-txt small{ display: block; font-size: 11px; color: #8b9184; line-height: 1.75; }
+.ps-ctl{ flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+.ps-ctl .btn{ font-size: 12px; padding: 8px 14px; }
+.ps-hint{ font-size: 11px; color: #9aa08f; }
+.ps-row-file{ cursor: pointer; }
+
+/* 桌宠选择：一行一张卡，选中态给勾和橙边 */
+.ps-skins{ display: grid; gap: 8px; padding: 12px; }
+.ps-skin{
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 11px 14px;
+  border: 1px solid #eceee5;
+  border-radius: 11px;
+  background: #fdfdfa;
+  text-align: left;
+  transition: border-color .15s, background .15s, transform .12s;
+}
+.ps-skin:hover{ border-color: #d9dfcd; background: #fff; }
+.ps-skin.is-on{ border-color: #ed7046; background: #fff8f3; }
+.ps-skin-pic{
+  width: 46px; height: 46px; flex-shrink: 0;
+  border-radius: 10px;
+  background: #f3f4ec center/contain no-repeat;
+  display: grid; place-items: center;
+  color: #a6ac9a; font-size: 20px;
+  overflow: hidden;
+}
+.ps-skin-pic img{ width: 100%; height: 100%; object-fit: contain; }
+.ps-skin-pic.is-empty{ border: 1px dashed #cfd6c4; background: #fafbf6; }
+.ps-skin-txt{ flex: 1; min-width: 0; }
+.ps-skin-txt b{ display: block; font-size: 13.5px; margin-bottom: 3px; }
+.ps-skin-txt small{ display: block; font-size: 11px; color: #8e9487; line-height: 1.6; }
+.ps-tick{ color: #ed7046; font-weight: 800; opacity: 0; transition: opacity .15s; }
+.ps-skin.is-on .ps-tick{ opacity: 1; }
+
+/* 开关：纯 CSS，避免为一个开关引入库 */
+.ps-switch{ position: relative; display: inline-block; width: 42px; height: 24px; flex-shrink: 0; }
+.ps-switch input{ position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.ps-switch i{
+  position: absolute; inset: 0;
+  background: #d7dccc;
+  border-radius: 999px;
+  transition: background .18s;
+}
+.ps-switch i::after{
+  content: '';
+  position: absolute; top: 3px; left: 3px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px #0002;
+  transition: transform .18s;
+}
+.ps-switch input:checked + i{ background: #ed7046; }
+.ps-switch input:checked + i::after{ transform: translateX(18px); }
+.ps-switch input:focus-visible + i{ box-shadow: 0 0 0 3px #ed704680; }
+/* 视觉层必须让开点击：它盖在 input 上面，pointer-events 不关的话
+   命中测试会落在 i 上，键盘/自动化点不到真正的复选框。 */
+.ps-switch i{ pointer-events: none; }
+
+/* 滑块尽量朴素：范围由 JS 夹在 60–160% */
+.ps-ctl input[type="range"]{
+  width: 170px;
+  accent-color: #ed7046;
+  cursor: pointer;
+}
+
+/* --- 用户须知 --------------------------------------------------------- */
+.pn-layer{ position: fixed; inset: 0; z-index: 130; display: grid; place-items: center; padding: 24px; }
+.pn-layer[hidden]{ display: none; }
+.pn-backdrop{ position: absolute; inset: 0; background: #1e2a2144; backdrop-filter: blur(3px); }
+.pn-sheet{
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(600px, 100%);
+  max-height: min(760px, 90vh);
+  max-height: min(760px, 90dvh);
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 30px 100px #1b2b2333;
+  overflow: hidden;
+}
+.pn-head{
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid #f0f1ea;
+  background: #fff;
+}
+.pn-head b{ display: block; font-size: 16px; letter-spacing: -.2px; }
+.pn-head small{ display: block; font-size: 11px; color: #949a8b; margin-top: 5px; }
+.pn-x{
+  margin-left: auto; width: 28px; height: 28px; border-radius: 50%;
+  background: #f5f5f7; color: #6b6f77; font-size: 16px; line-height: 1;
+  display: grid; place-items: center; flex-shrink: 0;
+}
+.pn-body{
+  padding: 20px 24px 8px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.95;
+  color: #3d443d;
+  overscroll-behavior: contain;
+}
+.pn-body h4{
+  font-size: 13.5px;
+  margin: 22px 0 8px;
+  color: #23291f;
+  padding-left: 9px;
+  border-left: 3px solid #ed7046;
+  line-height: 1.5;
+}
+.pn-body h4:first-of-type{ margin-top: 12px; }
+.pn-body p{ margin: 0 0 9px; }
+.pn-body b{ color: #1f251c; }
+.pn-lead{ color: #5d6459; }
+.pn-foot{
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 22px;
+  border-top: 1px solid #f0f1ea;
+  background: #fcfdf8;
+}
+.pn-foot small{ font-size: 11px; color: #9aa08f; flex: 1; }
+.pn-foot .btn{ font-size: 12px; padding: 10px 18px; }
+
+/* --- 窄屏 ------------------------------------------------------------- */
+@media (max-width: 720px){
+  .ps-layer{ padding: 0; }
+  .ps-sheet{
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    width: 100%;
+    height: 100dvh;
+    border-radius: 0;
+  }
+  .ps-nav{
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 6px;
+    padding: 10px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line, #e8e9e1);
+    scrollbar-width: none;
+  }
+  .ps-nav::-webkit-scrollbar{ display: none; }
+  .ps-nav header{ display: none; }
+  .ps-nav button{ flex-shrink: 0; padding: 8px 14px; border-radius: 999px; background: #f4f5ee; }
+  .ps-nav button.active{ background: #fff0e8; }
+  .ps-panes{ padding: 18px 16px 26px; }
+  .ps-x{ top: 8px; right: 10px; }
+  .ps-head h3{ font-size: 17px; padding-right: 36px; }
+  .ps-row{ gap: 10px; padding: 13px 14px; }
+  /* 手机上按钮和开关仍与文字同行：换行后按钮会掉到说明下面，
+     看起来像「这条设置没做完」。只有滑块和文件选择占满整行。 */
+  .ps-row .ps-ctl input[type="range"]{ width: 108px; }
+  .ps-row-file{ flex-wrap: wrap; }
+  .ps-row-file .ps-ctl{ width: 100%; justify-content: flex-start; }
+  .ps-skins{ padding: 10px; }
+  .ps-skin{ padding: 10px; gap: 10px; }
+  .ps-skin-pic{ width: 40px; height: 40px; }
+  .pn-layer{ padding: 0; }
+  .pn-sheet{ width: 100%; height: 100dvh; max-height: none; border-radius: 0; }
+  .pn-body{ font-size: 12.5px; padding: 16px 18px 8px; }
+  .pn-head{ padding: 16px 18px 13px; }
+}
+
+/* 形象还没画好的角色：占位但不可选，置灰而不是隐藏——
+   让人知道「有这么一只，只是还没做」，比凭空少一个位置清楚。 */
+.ps-skin.is-pending{ opacity: .62; cursor: not-allowed; background: #fbfbf9; }
+.ps-skin.is-pending:hover{ border-color: #eceee5; background: #fbfbf9; }
+.ps-skin.is-pending .ps-skin-pic{ color: #b9bfae; }

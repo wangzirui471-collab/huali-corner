@@ -1,0 +1,73 @@
+/* 客服 AI 建议回复（只在工单页、客服角色、config.ai 为真时出现） */
+.ai-reply{
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border: 1px solid #e6e6e9;
+  border-radius: 10px;
+  background: #fafafb;
+}
+.ai-reply-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ai-reply-head b{ font-size: 14px; color: #1a1a1a; }
+.ai-reply-head small{ display: block; margin-top: 2px; font-size: 11.5px; color: #8a8a93; }
+.ai-reply-body{ margin-top: 12px; }
+.ai-reply-loading{ margin: 0; font-size: 13px; color: #8a8a93; }
+.ai-reply-error{ margin: 0; font-size: 13px; color: #a83a28; }
+.ai-reply-badge{
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #fff3cc;
+  color: #7a5f00;
+  font-size: 11.5px;
+}
+.ai-reply-badge.is-transfer{ background: #fff1ee; color: #a83a28; }
+.ai-reply-text{
+  font-size: 14px;
+  line-height: 1.8;
+  color: #2b2c30;
+  white-space: pre-wrap;
+}
+.ai-reply-notice{ margin: 8px 0 0; font-size: 11.5px; color: #8a8a93; }
+.ai-reply-meta{ margin-top: 6px; font-size: 11px; color: #b4b4bb; }
+.ai-reply-sources{ margin-top: 8px; font-size: 12px; color: #6b6f77; }
+.ai-reply-sources summary{ cursor: pointer; }
+.ai-reply-sources ol{ margin: 6px 0 0; padding-left: 18px; }
+.ai-reply-actions{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+@media (max-width: 600px){
+  .ai-reply{ padding: 12px; }
+  .ai-reply-head{ align-items: flex-start; flex-direction: column; }
+  .ai-reply-actions .btn{ flex: 1 1 45%; }
+}
+
+/* 管理员后台 · AI 客服设置 */
+.ai-admin .desk-panel-head{ margin-bottom: 14px; }
+.ai-settings-form{ padding: 14px; border: 1px solid #f0f0f2; border-radius: 10px; background: #fafafb; }
+.ai-limit-grid{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 12px 0; }
+.ai-admin-grid{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
+.ai-admin-card{ padding: 14px; border: 1px solid #f0f0f2; border-radius: 10px; background: #fff; }
+.ai-admin-card h3{ margin: 0 0 4px; font-size: 13px; color: #6b6f77; font-weight: 600; }
+.ai-big{ margin: 4px 0 8px; font-size: 26px; line-height: 1.2; font-weight: 700; color: #1a1a1a; }
+.ai-big small{ margin-left: 4px; font-size: 11px; font-weight: 400; color: #8a8a93; }
+.ai-usage-days{ display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.ai-usage-day{ flex: none; min-width: 34px; padding: 6px 4px; border-radius: 8px; background: #fafafb; text-align: center; }
+.ai-usage-day b{ display: block; font-size: 14px; color: #1a1a1a; }
+.ai-usage-day small{ display: block; font-size: 10px; color: #8a8a93; }
+.ai-top{ margin: 4px 0 0; padding-left: 18px; font-size: 13px; color: #3f3f46; }
+.ai-top li{ display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
+.ai-top b{ color: #1a1a1a; }
+.ai-matrix-title{ margin: 20px 0 8px; font-size: 14px; color: #1a1a1a; }
+.ai-matrix-wrap{ overflow-x: auto; border: 1px solid #f0f0f2; border-radius: 10px; }
+.ai-matrix{ width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 560px; }
+.ai-matrix th, .ai-matrix td{ padding: 8px 10px; border-bottom: 1px solid #f0f0f2; text-align: left; white-space: nowrap; }
+.ai-matrix th{ font-size: 11.5px; color: #8a8a93; font-weight: 600; background: #fafafb; }
+.ai-matrix td:not(:first-child), .ai-matrix th:not(:first-child){ text-align: center; }
+.ai-matrix tr:last-child td{ border-bottom: 0; }
+.ai-footnote{ margin: 10px 0 0; font-size: 11.5px; line-height: 1.6; }
+@media (max-width: 900px){ .ai-admin-grid{ grid-template-columns: 1fr; } }
+@media (max-width: 700px){ .ai-limit-grid{ grid-template-columns: 1fr; } }

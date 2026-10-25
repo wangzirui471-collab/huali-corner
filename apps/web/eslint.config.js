@@ -5,7 +5,17 @@ import prettier from 'eslint-config-prettier';
 import { methodComments } from './eslint-rules.js';
 
 export default [
-  { ignores: ['dist/**', 'dist-trial/**', 'node_modules/**', 'src/shared/http/generated.d.ts'] },
+  {
+    // 线上原版兼容资源按摘要保留；新Vue源码继续严格检查，不重排已发布旧模块。
+    ignores: [
+      'dist/**',
+      'dist-trial/**',
+      'node_modules/**',
+      'src/shared/http/generated.d.ts',
+      'public/legacy-runtime/**',
+      'public/assets/**',
+    ],
+  },
   js.configs.recommended,
   ...vue.configs['flat/recommended'],
   {
@@ -26,6 +36,8 @@ export default [
         FileReader: 'readonly',
         crypto: 'readonly',
         TextEncoder: 'readonly',
+        TextDecoder: 'readonly',
+        ReadableStream: 'readonly',
         DOMException: 'readonly',
         setInterval: 'readonly',
         clearInterval: 'readonly',

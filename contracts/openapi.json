@@ -63,6 +63,70 @@
         "title": "ActionInput",
         "type": "object"
       },
+      "AnswerData": {
+        "description": "问答结果保留轮次，答案、来源和转人工建议均为只读数据。",
+        "properties": {
+          "answer_text": {
+            "title": "Answer Text",
+            "type": "string"
+          },
+          "client_turn_id": {
+            "title": "Client Turn Id",
+            "type": "string"
+          },
+          "handoff": {
+            "$ref": "#/components/schemas/Handoff"
+          },
+          "mode": {
+            "enum": [
+              "mock",
+              "llm",
+              "handoff"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/Source"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "client_turn_id",
+          "answer_text",
+          "mode",
+          "sources",
+          "handoff"
+        ],
+        "title": "AnswerData",
+        "type": "object"
+      },
+      "AnswerInput": {
+        "additionalProperties": false,
+        "description": "同一问题显式重试沿用 UUID；不接受 history、role 或上下文。",
+        "properties": {
+          "client_turn_id": {
+            "format": "uuid",
+            "title": "Client Turn Id",
+            "type": "string"
+          },
+          "question": {
+            "maxLength": 800,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_turn_id",
+          "question"
+        ],
+        "title": "AnswerInput",
+        "type": "object"
+      },
       "ChangeInput": {
         "additionalProperties": false,
         "description": "只允许对已有改约作出决定，不接受客户端指定审批人。",
@@ -153,6 +217,52 @@
           "appointment"
         ],
         "title": "CheckoutInput",
+        "type": "object"
+      },
+      "Envelope_AnswerData_": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswerData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Metadata"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "request_id"
+        ],
+        "title": "Envelope[AnswerData]",
         "type": "object"
       },
       "Envelope_HealthData_": {
@@ -320,6 +430,31 @@
         "title": "FieldIssue",
         "type": "object"
       },
+      "Handoff": {
+        "description": "建议人工入口只导航到工单草稿，不表示已创建工单或分配客服。",
+        "properties": {
+          "next_path": {
+            "const": "/support/new",
+            "default": "/support/new",
+            "title": "Next Path",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "recommended": {
+            "title": "Recommended",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "recommended"
+        ],
+        "title": "Handoff",
+        "type": "object"
+      },
       "HealthData": {
         "description": "健康检查只证明新服务存活，business_ready 不冒充业务迁移已完成。",
         "properties": {
@@ -418,6 +553,35 @@
           }
         },
         "title": "Metadata",
+        "type": "object"
+      },
+      "Source": {
+        "description": "可信来源只由审核清单构造，正文供用户直接核对。",
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "document_id": {
+            "title": "Document Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id",
+          "title",
+          "version",
+          "content"
+        ],
+        "title": "Source",
         "type": "object"
       },
       "UpdateInput": {
@@ -1064,6 +1228,76 @@
         "summary": "Health",
         "tags": [
           "ops"
+        ]
+      }
+    },
+    "/api/v1/support/assistant/answer": {
+      "post": {
+        "description": "处理一次公开提问；不信任客户端自报用户或角色。",
+        "operationId": "answer_api_v1_support_assistant_answer_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_AnswerData_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_NoneType_"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Answer",
+        "tags": [
+          "support"
         ]
       }
     }

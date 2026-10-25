@@ -2,13 +2,16 @@
 import './business.css';
 import './market-chrome.css';
 import AppIcon from '@/shared/ui/AppIcon.vue';
-import { onMounted, onScopeDispose, ref, watch } from 'vue';
+import { defineAsyncComponent, onMounted, onScopeDispose, ref, watch } from 'vue';
 import { RouterLink, RouterView, useRouter, useRoute } from 'vue-router';
 import { api, initializeSession, session, syncSession, roleRank } from '@/shared/legacy/session.js';
 import { row, number, text } from '@/shared/legacy/dto.js';
 import AppButton from '@/shared/ui/AppButton.vue';
 import AppDialog from '@/shared/ui/AppDialog.vue';
 import PageState from '@/shared/ui/PageState.vue';
+// 只有部署显式选择旧服务流模式才挂载宠物，默认公开FAQ切片保持原入口。
+const petEnabled = import.meta.env.VITE_HUALI_ASSISTANT_MODE === 'legacy-stream';
+const PetWidget = defineAsyncComponent(() => import('@/features/support/pet/PetWidget.vue'));
 const router = useRouter(),
   route = useRoute(),
   query = ref('');
@@ -181,4 +184,5 @@ onScopeDispose(() => {
       >我已保存</AppButton
     >
   </AppDialog>
+  <PetWidget v-if="petEnabled" />
 </template>

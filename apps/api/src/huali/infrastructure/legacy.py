@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from http.client import HTTPException
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
@@ -90,7 +91,7 @@ class LocalLegacyGateway:
                 return LegacyResponse(
                     response.status, value, response.headers.get("Retry-After")
                 )
-        except (URLError, OSError, ValueError) as error:
+        except (URLError, OSError, ValueError, HTTPException) as error:
             raise ApplicationError(
                 "LEGACY_UNAVAILABLE", "旧服务连接中断；写操作结果需要核对", 502
             ) from error
