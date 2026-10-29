@@ -111,3 +111,28 @@ test('prefetch fills the cache without throwing', async () => {
   assert.deepEqual(got, [{ id: 9 }]);
   assert.equal(calls, 1, 'prefetch should warm the cache');
 });
+
+test('page entry data is cached: me / product / profile / order', async () => {
+  // 线上一次往返 0.7–3 秒，这些是切页入口接口，必须命中缓存才算达标。
+  state.token = 'entry-user';
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; return Response.json({ ok: true }); };
+  for (const path of ['/me', '/product?id=5', '/profile?id=9003', '/order?id=8', '/want?id=3', '/ticket?id=2']){
+    await api(path);
+    await api(path);
+  }
+  assert.equal(calls, 6, 'each entry endpoint should be fetched exactly once');
+});
+
+test('concurrent identical GETs share one request', async () => {
+  state.token = 'dedupe-user';
+  let calls = 0, release;
+  globalThis.fetch = () => { calls++; return new Promise(resolve => { release = resolve; }); };
+  const first = api('/product?id=77');
+  const second = api('/product?id=77');
+  await new Promise(r => setTimeout(r, 10));
+  assert.equal(calls, 1, 'in-flight request must be reused');
+  release(Response.json({ id: 77 }));
+  assert.deepEqual(await first, { id: 77 });
+  assert.deepEqual(await second, { id: 77 });
+});

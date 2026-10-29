@@ -25,11 +25,19 @@ import { needLogin } from '../auth/login.js';
 // 自己这版按「设置页」组织：标题行（sticky 保存）→ 资料预览 → 基本信息 → 我的头像 → 底部操作。
 // 分区靠 1px 分割线，不再用大圆角卡片包住整块内容。
 export async function profile(id){
-  const r=await api('/profile?id='+id),u=r.user;
-  const own=state.me&&state.me.id===u.id;
+  // 自己的主页要额外读 /user/profile（只有它带 profile_version）；别人的主页要读
+  // 好友关系。两者都与 /profile 无依赖，并行发，切页只等最慢的那个。
+  const own=!!(state.me&&String(state.me.id)===String(id));
+  const [r,extra]=await Promise.all([
+    api('/profile?id='+id),
+    own
+      ? (window.HUALI_STATIC_DEMO?Promise.resolve(null):api('/user/profile'))
+      : api('/friend/state?user_id=' + id).catch(() => ({state: 'none'}))
+  ]);
+  const u=r.user;
   // 自己的主页读 /user/profile：只有它带 profile_version，改昵称、换头像都靠
   // 这个版本号发现「另一个标签页已经改过」。别人的主页走公开接口，不带版本。
-  const self=own&&!window.HUALI_STATIC_DEMO?await api('/user/profile'):null;
+  const self=own?extra:null;
   const products=r.products.filter(p=>p.status==='available').map(card).join('');
   if(self){
     // 版心两栏：左边「账号设置」导航，右边资料内容。
@@ -89,7 +97,7 @@ export async function profile(id){
   // 已经是好友才给「发私信」。以前这里只有一个「发私信」，现在点下去
   // 会被门禁拦，反而让人不知道下一步该干嘛。
   const friendState = own ? 'self'
-    : ((await api('/friend/state?user_id=' + u.id).catch(() => ({state: 'none'}))).state || 'none');
+    : ((extra&&extra.state) || 'none');
   const connectBtn = friendState === 'accepted'
     ? `<button class="btn primary" data-action="chat" data-id="${u.id}">发私信</button>`
     : friendState === 'pending_out'
@@ -143,14 +151,15 @@ function orderRow(o) {
 
 export async function mine(){
   if(!needLogin())return;
-  state.me=await api('/me');
-  const [myList,favList,myOrders,notices]=await Promise.all([
-    api('/my-products'),api('/products?favorite=1'),api('/orders'),api('/notifications')
+  // 五个接口互不依赖，必须一起发：线上一次往返 1–3 秒，串行就是白等两轮。
+  const [me,myList,favList,myOrders,notices]=await Promise.all([
+    api('/me'),api('/my-products'),api('/products?favorite=1'),api('/orders'),api('/notifications')
   ]);
-  const me=state.me.id;
+  state.me=me;
+  const meId=me.id;
   // 按「我是买家还是卖家 + 订单状态」计数。口径与订单页一致：
   //   待收货 = 已付款未确认收货；售后 = 争议或已退款；待发货 = 卖家已收款未交付。
-  const countBy=(role,statuses)=>myOrders.filter(o=>o[role+'_id']===me&&statuses.includes(o.status)).length;
+  const countBy=(role,statuses)=>myOrders.filter(o=>o[role+'_id']===meId&&statuses.includes(o.status)).length;
   const listingCount=myList.filter(x=>x.status==='available').length;
   const favoriteCount=favList.length;
   const cells=[
@@ -175,7 +184,7 @@ export async function mine(){
   ];
   const sell=[
     ['待发货',countBy('seller',['paid','awaiting_handover']),'bag','orders/?role=sell&f=to_ship'],
-    ['我卖出的',myOrders.filter(o=>o.seller_id===me).length,'tag','orders/?role=sell',false],
+    ['我卖出的',myOrders.filter(o=>o.seller_id===meId).length,'tag','orders/?role=sell',false],
     ['我发布的',myList.length,'plus','listings',false]
   ];
   const tileOf=([label,n,ic,go,alert])=>tile(go,ic,label,n,'','',alert!==false);

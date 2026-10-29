@@ -40,6 +40,39 @@ window.addEventListener('resize', () => {
   if (m) document.documentElement.style.setProperty('--header-h', m.offsetHeight+'px');
 });
 
+// 切页预热：把目标页的首屏数据在「用户还没点下去」时取回来。
+// 线上一次接口往返 0.7–3 秒，等点击后再发就来不及；hover / 触摸 / Tab 聚焦都算意图。
+// 只预热可缓存接口，5 秒内同一路由只发一次，失败静默。
+const PAGE_WARM = {
+  home: () => prefetch(productsURL()),
+  community: () => prefetch('/posts?limit=20'),
+  me: () => prefetch('/me'),
+  orders: () => prefetch('/orders'),
+  listings: () => prefetch('/my-products'),
+  favorites: () => prefetch(productsURL(true)),
+  credit: () => prefetch('/credit/history'),
+  support: () => prefetch('/tickets'),
+};
+const PUBLIC_WARM = ['home', 'community'];
+const warmedAt = new Map();
+function warmRoute(route){
+  const run = PAGE_WARM[route];
+  if (!run) return;
+  if (!state.token && !PUBLIC_WARM.includes(route)) return;
+  const now = Date.now();
+  if (now - (warmedAt.get(route) || 0) < 5000) return;
+  warmedAt.set(route, now);
+  try { run(); } catch {}
+}
+function warmFromEvent(ev){
+  const el = ev.target && ev.target.closest ? ev.target.closest('[data-go]') : null;
+  if (!el) return;
+  warmRoute(String(el.dataset.go || '').split('/')[0]);
+}
+document.addEventListener('pointerover', warmFromEvent, {passive: true});
+document.addEventListener('pointerdown', warmFromEvent, {passive: true});
+document.addEventListener('focusin', warmFromEvent);
+
 // 切页后空闲预取另一页的首屏列表，让第一次切换也能直接命中缓存。
 // 只填缓存、不渲染，失败静默；跨页时 api() 的 renderId 守卫会自行放弃，不会盖错页面。
 function schedulePrefetch(){
@@ -54,6 +87,8 @@ function schedulePrefetch(){
     try {
       if (h.startsWith('community')) prefetch(productsURL());
       else if (h.startsWith('home') || h === '') prefetch('/posts?limit=20');
+      // 登录后最高频的两个去向，空闲时顺手预热；已经缓存过的会直接跳过。
+      if (state.token && !h.startsWith('me')) prefetch('/me');
     } catch {}
   };
   if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 1200 });
