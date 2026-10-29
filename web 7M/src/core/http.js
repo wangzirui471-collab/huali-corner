@@ -9,12 +9,13 @@ import { state } from './state.js';
 // - 轮询接口（/messages、/rooms）不在此列，聊天和通知不能被缓存住。
 // 新增页面入口接口时必须在 CACHE_RULES 登记，否则切页会多等一个完整往返。
 const CACHE_RULES = [
-  [/^\/(products|posts)(\?|$)/, 30000],
-  [/^\/(product|profile|user\/profile)(\?|$)/, 60000],
-  [/^\/(my-products|orders|offers|me)(\?|$)/, 30000],
-  [/^\/(order|want|friend\/state|notifications)(\?|$)/, 15000],
-  [/^\/(comments|ticket|user\/dossier|credit\/history)(\?|$)/, 15000],
-  [/^\/(admin|tickets|reconcile|support\/sessions|product\/removed)(\?|$)/, 10000],
+  // TTL 只决定「多久后需要重新取」，任何 POST 都会立刻清空，不必为了新鲜度把 TTL 压得很短。
+  [/^\/(products|posts)(\?|$)/, 60000],
+  [/^\/(product|profile|user\/profile)(\?|$)/, 120000],
+  [/^\/(my-products|orders|offers|me)(\?|$)/, 60000],
+  [/^\/(order|want|friend\/state|notifications)(\?|$)/, 30000],
+  [/^\/(comments|ticket|user\/dossier|credit\/history)(\?|$)/, 30000],
+  [/^\/(admin|tickets|reconcile|support\/sessions|product\/removed)(\?|$)/, 15000],
 ];
 const listCache = new Map();
 // 并发去重：同一份数据在飞的时候，第二个调用者等同一个 Promise，
