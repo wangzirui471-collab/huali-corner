@@ -129,8 +129,18 @@ class StaffApi:
         uid = await self.page_user(request)
         if request.method == 'GET':
             role = await self.db.scalar('SELECT role FROM users WHERE id=?', (uid,))
-            rows = await self.db.all('SELECT t.id FROM tickets t LEFT JOIN orders o ON o.id=t.order_id WHERE ?=1 OR t.user_id=? OR o.buyer_id=? OR o.seller_id=? ORDER BY t.id DESC', (int(role in STAFF), uid, uid, uid))
-            return json_response([await self.cf_staff_ticket_dto(uid, r['id']) for r in rows])
+            # 一条查询出列表。原实现按工单逐条取 DTO（工单/角色/订单/消息/最近客服动作），
+            # 几十张单就是上百次 D1 往返，帮助与客服页要等数秒；列表也不展示消息正文。
+            rows = await self.db.all(
+                'SELECT t.*,u.nickname,'
+                "(SELECT MAX(m.created) FROM ticket_messages m JOIN users mu ON mu.id=m.user_id "
+                "WHERE m.ticket_id=t.id AND mu.role IN ('support','admin','developer','owner')) last_staff_at "
+                'FROM tickets t JOIN users u ON u.id=t.user_id LEFT JOIN orders o ON o.id=t.order_id '
+                'WHERE ?=1 OR t.user_id=? OR o.buyer_id=? OR o.seller_id=? ORDER BY t.id DESC',
+                (int(role in STAFF), uid, uid, uid))
+            for row in rows:
+                row['sla'] = ticket_sla(row['status'], row['created'], row.pop('last_staff_at', None))
+            return json_response(rows)
         d = await json_body(request)
         typ = d.get('type', 'other'); require(typ in ('refund', 'report', 'appeal', 'reschedule', 'other'), '工单类型错误')
         subject = text(d.get('subject'), 80, '问题标题'); body = text(d.get('body'), 3000, '问题说明')

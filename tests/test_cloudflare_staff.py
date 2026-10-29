@@ -44,7 +44,9 @@ class StaffTests(CloudCase):
         self.assertEqual((await self.post('/api/ticket/reply',{'id':10,'body':'越权备注','internal':True},uid=2)).status,403)
         r=await self.post('/api/ticket/reply',{'id':10,'body':'公开回复'},uid=4); self.assertEqual(r.status,200,r.body)
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM notifications WHERE kind='ticket_reply'").fetchone()[0],2)
-        rows=(await self.req('/api/tickets')).body; self.assertEqual(len(rows),1); self.assertTrue(all(not m['internal'] for m in rows[0]['messages']))
+        # 列表改为轻量载荷：不再逐张带消息，正文只从工单详情取（内部备注因此也不会外泄）。
+        rows=(await self.req('/api/tickets')).body; self.assertEqual(len(rows),1); self.assertNotIn('messages',rows[0])
+        self.assertEqual((await self.req('/api/ticket?id=10')).body['messages'][-1]['body'],'公开回复')
 
     async def test_refund_creation_duplicate_and_product_order_matching(self):
         r=await self.post('/api/tickets',{'type':'refund','order_id':10,'product_id':10,'subject':'退款','body':'有问题'},uid=2)

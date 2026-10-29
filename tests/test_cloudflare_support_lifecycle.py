@@ -166,6 +166,7 @@ class CloudflareSupportLifecycle(unittest.IsolatedAsyncioTestCase):
         ticket = next(x for x in res.body if x['id'] == self.tid)
         self.assertEqual(ticket['sla']['stage'], 'first_reply')
         self.assertTrue(ticket['sla']['overdue'])
+        self.assertNotIn('messages', ticket)   # 列表是轻量载荷，正文只在详情接口
 
         self.assertGreaterEqual(await self.api.cf_ticket_sla_notices(), 1)
         rows = self.c.execute("SELECT user_id FROM notifications WHERE ticket_id=? AND kind='ticket_overdue'",

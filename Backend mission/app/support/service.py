@@ -184,9 +184,24 @@ class SupportService(ValidationMixin):
         return sent
 
     def tickets(self,u):
-        if self.profile(u)['role'] in ['admin','support','developer']:ids=self.rows('SELECT id FROM tickets ORDER BY id DESC')
-        else:ids=self.rows('SELECT t.id FROM tickets t LEFT JOIN orders o ON o.id=t.order_id WHERE t.user_id=? OR o.seller_id=? OR o.buyer_id=? ORDER BY t.id DESC',(u,u,u))
-        return [self.ticket(u,r['id']) for r in ids]
+        """工单列表：一条查询搞定，不再逐张查消息。
+
+        这页每次切页都要拉，原来按工单逐条 ticket() 会变成 4N 次查询
+        （工单、消息、账号角色、SLA），线上 D1 每跳几十毫秒，几十张单就是几秒。
+        列表本来也不展示消息正文，正文由工单详情接口单独取。
+        """
+        staff=self.profile(u)['role'] in ['support','admin','developer','owner']
+        last="(SELECT MAX(m.created) FROM ticket_messages m JOIN users mu ON mu.id=m.user_id "\
+             "WHERE m.ticket_id=t.id AND mu.role IN ('support','admin','developer','owner')) last_staff_at"
+        if staff:
+            rows=self.rows('SELECT t.*,u.nickname,'+last+' FROM tickets t JOIN users u ON u.id=t.user_id ORDER BY t.id DESC')
+        else:
+            rows=self.rows('SELECT t.*,u.nickname,'+last+' FROM tickets t JOIN users u ON u.id=t.user_id '
+                           'LEFT JOIN orders o ON o.id=t.order_id WHERE t.user_id=? OR o.seller_id=? OR o.buyer_id=? '
+                           'ORDER BY t.id DESC',(u,u,u))
+        for r in rows:
+            r['sla']=ticket_sla(r['status'],r['created'],r.pop('last_staff_at',None))
+        return rows
 
     def reply_ticket(self,u,tid,d):
         self.ticket(u,tid);internal=bool(d.get('internal',False))
