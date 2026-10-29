@@ -11,7 +11,7 @@ import { subscribeSession } from '../core/session.js';
 import { isOwner } from '../core/roles.js';
 import { field } from '../components/forms.js';
 import { ticketModal } from '../pages/support.js';
-import { setPetState, togglePetPanel, paintDuty } from '../components/ai-pet.js';
+import { setPetState, togglePetPanel, paintDuty, applyPetChips, togglePetChips } from '../components/ai-pet.js';
 import { openOfficeTickets } from '../components/office-tickets.js';
 import { loginModal } from '../auth/login.js';
 
@@ -41,10 +41,11 @@ function clearPetAccount(){
   if (log) log.textContent = '我是小转，需要帮助可以重新提问。';
   const area = $('#ai-pet-q');
   if (area) area.value = '';
-  document.querySelectorAll('.ai-pet-mode, .ai-pet-chips.ai-pet-office').forEach(el => {
+  document.querySelectorAll('.ai-pet-mode').forEach(el => {
     el.hidden = !isOwner(state.me); el.style.display = isOwner(state.me) ? '' : 'none';
   });
   document.querySelectorAll('[data-action="ai-pet-mode"]').forEach(el => { el.classList.toggle('active', el.dataset.mode === 'chat'); });
+  applyPetChips('chat');   // 换号后回到客服问答：快捷指令按上次的收放状态重排
 }
 subscribeSession(clearPetAccount);
 
@@ -143,9 +144,8 @@ async function petOffice(q, mode){
 function setPetMode(mode){
   petMode = ['office','work'].includes(mode) ? mode : 'chat';
   document.querySelectorAll('.ai-pet-mode button').forEach(x => x.classList.toggle('active', x.dataset.mode === petMode));
-  const office = $('#ai-pet-office-chips'), work = $('#ai-pet-work-chips');
-  if (office) office.hidden = petMode !== 'office';
-  if (work) work.hidden = petMode !== 'work';
+  // 快捷指令的显隐统一交给 applyPetChips：切模式不能把用户收起的行又打开。
+  applyPetChips(petMode);
   const area = $('#ai-pet-q');
   if (area) area.placeholder = petMode === 'office'
     ? '问用户/订单/商品/工单，或说「把某某降为管理员」…'
@@ -375,6 +375,8 @@ export const clicks = {
   'ai-office': b => { setPetMode('office'); petOffice(b.dataset.q, b.dataset.mode || 'query'); },
   'ai-work': b => { setPetMode('work'); petWork(b.dataset.q); },
   'ai-pet-mode': b => setPetMode(b.dataset.mode),
+  // 收起/展开工作指令：状态存本地，重开面板不会又铺满
+  'ai-pet-chips-toggle': () => togglePetChips(petMode),
   'ai-work-confirm': async b => {
     if (!window.confirm('再次确认执行这个不可逆操作？')) return;
     b.disabled = true; b.textContent = '执行中…';
