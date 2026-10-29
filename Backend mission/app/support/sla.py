@@ -10,6 +10,9 @@ STAFF_ROLES = ('support', 'admin', 'developer', 'owner')
 ACTIVE_STATUSES = ('open', 'processing', 'review')
 FIRST_REPLY_SECONDS = 2 * 3600
 STALL_SECONDS = 12 * 3600
+# 超过这个时间的工单不再补发提醒：试用期里堆积的测试单（十几天前的）会一次性
+# 给全部客服刷出上百条，真正需要处理的近期工单反而被淹。工作台仍照常标超时。
+NOTICE_WINDOW_SECONDS = 7 * 86400
 NOTICE_KIND = {'first_reply': 'ticket_overdue', 'progress': 'ticket_stalled'}
 
 

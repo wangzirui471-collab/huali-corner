@@ -203,6 +203,14 @@ class CloudflareSupportLifecycle(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(ticket['sla'])
         self.assertEqual(await self.api.cf_ticket_sla_notices(), 0)
 
+    async def test_ticket_sla_stale_ticket_stays_silent(self):
+        self.backdate_ticket(10 * 86400)
+        ticket = next(x for x in (await self.staff_tickets()).body if x['id'] == self.tid)
+        self.assertTrue(ticket['sla']['overdue'])
+        self.assertEqual(await self.api.cf_ticket_sla_notices(), 0)
+        rows = self.c.execute("SELECT COUNT(*) n FROM notifications WHERE ticket_id=?", (self.tid,)).fetchone()['n']
+        self.assertEqual(rows, 0)
+
 
 if __name__ == '__main__':
     unittest.main()

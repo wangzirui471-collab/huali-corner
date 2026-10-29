@@ -128,6 +128,13 @@ class TicketSlaTests(unittest.TestCase):
         self.assertIsNone(self.m.ticket(self.staff, tid)['sla'])
         self.assertEqual(self.tick(), 0)
 
+    def test_stale_ticket_is_flagged_but_stays_silent(self):
+        # 十几天的历史测试单在工作台仍标超时，但不再补发提醒，避免一次刷屏。
+        tid = self.open_ticket(age=10 * 86400)
+        self.assertTrue(self.m.ticket(self.staff, tid)['sla']['overdue'])
+        self.assertEqual(self.tick(), 0)
+        self.assertEqual(self.notices('ticket_overdue'), [])
+
 
 if __name__ == '__main__':
     unittest.main()

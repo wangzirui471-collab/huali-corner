@@ -11,7 +11,7 @@ from .http import ApiError, int_param, json_body, json_response, path_of, query_
 from . import crypto
 from ..account.credit import (VIOLATION_BASE, VIOLATION_LABEL, suggest_penalty, AWARD_REASON_PREFIX,
     AWARD_DAILY_CAP, AWARD_MONTHLY_CAP, day_start, month_start)
-from ..support.sla import NOTICE_KIND, ticket_sla
+from ..support.sla import NOTICE_KIND, NOTICE_WINDOW_SECONDS, ticket_sla
 
 STAFF = ('support', 'admin', 'developer', 'owner')
 # 角色层级：参照 GitLab 的 Guest < Reporter < Developer < Maintainer < Owner。
@@ -91,6 +91,8 @@ class StaffApi:
             "FROM tickets t WHERE t.status IN ('open','processing','review')")
         sent = 0
         for row in rows:
+            if now - (row['created'] or now) > NOTICE_WINDOW_SECONDS:
+                continue
             sla = ticket_sla(row['status'], row['created'], row['last_staff_at'], now)
             if not sla or not sla['overdue']:
                 continue

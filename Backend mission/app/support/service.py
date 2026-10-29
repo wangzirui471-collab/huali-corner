@@ -15,7 +15,7 @@ AI_PERMISSIONS = [
 ]
 
 from ..account.credit import GOOD_REVIEW, AWARD_PER_REVIEW, AWARD_DAILY_CAP, AWARD_MONTHLY_CAP, AWARD_REASON_PREFIX, day_start, month_start, suggest_penalty, VIOLATION_BASE, VIOLATION_LABEL
-from .sla import NOTICE_KIND, ticket_sla
+from .sla import NOTICE_KIND, NOTICE_WINDOW_SECONDS, ticket_sla
 
 
 class _LocalDb:
@@ -167,6 +167,7 @@ class SupportService(ValidationMixin):
         if not staff:return 0
         sent=0
         for r in c.execute("SELECT id,status,assignee,created FROM tickets WHERE status IN ('open','processing','review')").fetchall():
+            if now-(r['created'] or now)>NOTICE_WINDOW_SECONDS:continue
             last=c.execute("SELECT MAX(m.created) t FROM ticket_messages m JOIN users u ON u.id=m.user_id "
                            "WHERE m.ticket_id=? AND u.role IN ('support','admin','developer','owner')",(r['id'],)).fetchone()['t']
             sla=ticket_sla(r['status'],r['created'],last,now)
