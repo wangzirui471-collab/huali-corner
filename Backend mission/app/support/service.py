@@ -15,6 +15,7 @@ AI_PERMISSIONS = [
 ]
 
 from ..account.credit import GOOD_REVIEW, AWARD_PER_REVIEW, AWARD_DAILY_CAP, AWARD_MONTHLY_CAP, AWARD_REASON_PREFIX, day_start, month_start, suggest_penalty, VIOLATION_BASE, VIOLATION_LABEL
+from .sla import NOTICE_KIND, ticket_sla
 
 
 class _LocalDb:
@@ -146,7 +147,40 @@ class SupportService(ValidationMixin):
             o=self.row('SELECT buyer_id,seller_id FROM orders WHERE id=?',(r['order_id'],));allowed=allowed or u in [o['buyer_id'],o['seller_id']]
         self.require(allowed or staff,'不能查看他人工单',403)
         r['messages']=self.rows('SELECT m.*,u.nickname FROM ticket_messages m JOIN users u ON u.id=m.user_id WHERE ticket_id=? AND (?=1 OR internal=0) ORDER BY m.id',(tid,int(staff)))
+        r['sla']=ticket_sla(r['status'],r['created'],self.ticket_last_staff(tid))
         return r
+
+    def ticket_last_staff(self,tid):
+        """最近一次客服侧动作时间，SLA 的停滞计时以它为准。"""
+        r=self.row("SELECT MAX(m.created) t FROM ticket_messages m JOIN users u ON u.id=m.user_id "
+                   "WHERE m.ticket_id=? AND u.role IN ('support','admin','developer','owner')",(tid,))
+        return r['t'] if r else None
+
+    def ticket_sla_notices(self,c,now=None):
+        """给超时工单补一条站内提醒，同一张单同一阶段只发一次。
+
+        去重不另建表：通知本身就带 ticket_id 与 kind，存在同 kind 就不再发，
+        因此脚本和定时任务重复执行也不会刷屏。
+        """
+        now=now or time.time()
+        staff=[r['id'] for r in c.execute("SELECT id FROM users WHERE status='active' AND role IN ('support','admin','developer','owner')").fetchall()]
+        if not staff:return 0
+        sent=0
+        for r in c.execute("SELECT id,status,assignee,created FROM tickets WHERE status IN ('open','processing','review')").fetchall():
+            last=c.execute("SELECT MAX(m.created) t FROM ticket_messages m JOIN users u ON u.id=m.user_id "
+                           "WHERE m.ticket_id=? AND u.role IN ('support','admin','developer','owner')",(r['id'],)).fetchone()['t']
+            sla=ticket_sla(r['status'],r['created'],last,now)
+            if not sla or not sla['overdue']:continue
+            kind=NOTICE_KIND[sla['stage']]
+            if c.execute('SELECT 1 FROM notifications WHERE ticket_id=? AND kind=?',(r['id'],kind)).fetchone():continue
+            hours=max(1,int(sla['overdue_seconds']//3600))
+            body=(f'工单 #{r["id"]} 待处理超过 2 小时（已超 {hours} 小时）仍无人认领，请尽快受理。'
+                  if sla['stage']=='first_reply'
+                  else f'工单 #{r["id"]} 处理中已停滞超过 12 小时（已超 {hours} 小时），请推进或转派。')
+            for uid in ([r['assignee']] if r['assignee'] in staff else staff):
+                self.notify(c,uid,kind,body,None,r['id'])
+            sent+=1
+        return sent
 
     def tickets(self,u):
         if self.profile(u)['role'] in ['admin','support','developer']:ids=self.rows('SELECT id FROM tickets ORDER BY id DESC')

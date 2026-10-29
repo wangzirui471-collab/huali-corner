@@ -147,6 +147,62 @@ class CloudflareSupportLifecycle(unittest.IsolatedAsyncioTestCase):
         rows = (await self.req('/api/support/sessions', uid=2)).body
         self.assertFalse(any(x['id'] == rid for x in rows))
 
+    # --- 工单 SLA：与本地 tests/test_ticket_sla.py 同一套语义 -------------
+    async def staff_tickets(self, uid=2):
+        async def text():
+            return ''
+        r = SimpleNamespace(url='https://test.invalid/api/tickets', method='GET', text=text,
+                            headers={'Authorization': f'Bearer test-{uid}'} if uid else {})
+        return await guard(lambda: self.api.cf_staff_tickets(r))
+
+    def backdate_ticket(self, age):
+        self.c.execute('UPDATE tickets SET created=? WHERE id=?', (time.time() - age, self.tid))
+        self.c.commit()
+
+    async def test_ticket_sla_flags_overdue_and_reminds_once(self):
+        self.backdate_ticket(3 * 3600)
+        res = await self.staff_tickets()
+        self.assertEqual(res.status, 200)
+        ticket = next(x for x in res.body if x['id'] == self.tid)
+        self.assertEqual(ticket['sla']['stage'], 'first_reply')
+        self.assertTrue(ticket['sla']['overdue'])
+
+        self.assertGreaterEqual(await self.api.cf_ticket_sla_notices(), 1)
+        rows = self.c.execute("SELECT user_id FROM notifications WHERE ticket_id=? AND kind='ticket_overdue'",
+                              (self.tid,)).fetchall()
+        self.assertTrue(any(r['user_id'] == 2 for r in rows))   # 客服收到
+        self.assertFalse(any(r['user_id'] == 1 for r in rows))  # 用户不该收到内部提醒
+        before = len(rows)
+
+        self.assertEqual(await self.api.cf_ticket_sla_notices(), 0)
+        after = self.c.execute("SELECT COUNT(*) n FROM notifications WHERE ticket_id=? AND kind='ticket_overdue'",
+                               (self.tid,)).fetchone()['n']
+        self.assertEqual(after, before)
+
+    async def test_ticket_sla_stall_only_notifies_assignee(self):
+        self.backdate_ticket(20 * 3600)
+        self.c.execute("UPDATE tickets SET status='processing',assignee=2 WHERE id=?", (self.tid,))
+        self.c.execute('INSERT INTO ticket_messages(ticket_id,user_id,body,internal,created) VALUES(?,?,?,?,?)',
+                       (self.tid, 2, '已收到', 0, time.time() - 13 * 3600))
+        self.c.commit()
+
+        ticket = next(x for x in (await self.staff_tickets()).body if x['id'] == self.tid)
+        self.assertEqual(ticket['sla']['stage'], 'progress')
+        self.assertTrue(ticket['sla']['overdue'])
+
+        self.assertGreaterEqual(await self.api.cf_ticket_sla_notices(), 1)
+        rows = self.c.execute("SELECT user_id FROM notifications WHERE ticket_id=? AND kind='ticket_stalled'",
+                              (self.tid,)).fetchall()
+        self.assertEqual([r['user_id'] for r in rows], [2])
+
+    async def test_ticket_sla_closed_ticket_has_none(self):
+        self.backdate_ticket(3 * 3600)
+        self.c.execute("UPDATE tickets SET status='resolved' WHERE id=?", (self.tid,))
+        self.c.commit()
+        ticket = next(x for x in (await self.staff_tickets()).body if x['id'] == self.tid)
+        self.assertIsNone(ticket['sla'])
+        self.assertEqual(await self.api.cf_ticket_sla_notices(), 0)
+
 
 if __name__ == '__main__':
     unittest.main()

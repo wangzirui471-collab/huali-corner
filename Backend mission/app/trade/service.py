@@ -279,3 +279,5 @@ class TradeService(ValidationMixin):
             for r in c.execute("SELECT * FROM rooms WHERE support=1 AND COALESCE(support_status,'open')='open'").fetchall():
                 last=c.execute('SELECT MAX(created) t FROM messages WHERE room_id=? AND removed<>3',(r['id'],)).fetchone()['t'] or r['created'] or now
                 if now-last>1800:self._close_support(c,dict(r),'timeout')
+            # 工单超时提醒跟着同一次定时任务跑，避免再开一个调度器。
+            self.ticket_sla_notices(c,now)

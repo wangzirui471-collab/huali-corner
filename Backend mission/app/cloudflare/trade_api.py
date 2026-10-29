@@ -341,6 +341,8 @@ class TradeApi:
              "AND COALESCE((SELECT MAX(created) FROM messages WHERE room_id=rooms.id AND removed<>3),0)<?", (now, now-1800)),
             ("UPDATE messages SET removed=3 WHERE removed IN (0,1) AND room_id IN "
              "(SELECT id FROM rooms WHERE support=1 AND support_status='closed' AND support_closed_by='timeout' AND support_closed_at=?)", (now,))])
+        # 工单 SLA 与订单超时共用这次定时任务，避免再开一个调度器。
+        await self.cf_ticket_sla_notices(now)
         return {'ok': True, 'processed': changed}
 
 

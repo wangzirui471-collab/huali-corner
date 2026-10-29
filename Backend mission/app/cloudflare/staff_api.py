@@ -11,6 +11,7 @@ from .http import ApiError, int_param, json_body, json_response, path_of, query_
 from . import crypto
 from ..account.credit import (VIOLATION_BASE, VIOLATION_LABEL, suggest_penalty, AWARD_REASON_PREFIX,
     AWARD_DAILY_CAP, AWARD_MONTHLY_CAP, day_start, month_start)
+from ..support.sla import NOTICE_KIND, ticket_sla
 
 STAFF = ('support', 'admin', 'developer', 'owner')
 # 角色层级：参照 GitLab 的 Guest < Reporter < Developer < Maintainer < Owner。
@@ -71,7 +72,41 @@ class StaffApi:
         o = await self.db.first('SELECT * FROM orders WHERE id=?', (t['order_id'],)) if t['order_id'] else None
         require(role in STAFF or uid == t['user_id'] or (o and uid in (o['buyer_id'], o['seller_id'])), '不能查看他人工单', 403)
         t['messages'] = await self.db.all('SELECT m.*,u.nickname FROM ticket_messages m JOIN users u ON u.id=m.user_id WHERE ticket_id=? AND (?=1 OR internal=0) ORDER BY m.id', (tid, int(role in STAFF)))
+        last = await self.db.scalar("SELECT MAX(m.created) FROM ticket_messages m JOIN users u ON u.id=m.user_id "
+                                    "WHERE m.ticket_id=? AND u.role IN ('support','admin','developer','owner')", (tid,))
+        t['sla'] = ticket_sla(t['status'], t['created'], last)
         return t
+
+    async def cf_ticket_sla_notices(self, now=None):
+        """工单超时提醒：同一张单同一阶段只发一次，靠守卫查重不建新表。"""
+        now = now or time.time()
+        staff = [r['id'] for r in await self.db.all(
+            "SELECT id FROM users WHERE status='active' AND role IN ('support','admin','developer','owner')")]
+        if not staff:
+            return 0
+        rows = await self.db.all(
+            "SELECT t.id,t.status,t.assignee,t.created,"
+            "(SELECT MAX(m.created) FROM ticket_messages m JOIN users u ON u.id=m.user_id "
+            "WHERE m.ticket_id=t.id AND u.role IN ('support','admin','developer','owner')) last_staff_at "
+            "FROM tickets t WHERE t.status IN ('open','processing','review')")
+        sent = 0
+        for row in rows:
+            sla = ticket_sla(row['status'], row['created'], row['last_staff_at'], now)
+            if not sla or not sla['overdue']:
+                continue
+            kind = NOTICE_KIND[sla['stage']]
+            hours = max(1, int(sla['overdue_seconds'] // 3600))
+            body = (f'工单 #{row["id"]} 待处理超过 2 小时（已超 {hours} 小时）仍无人认领，请尽快受理。'
+                    if sla['stage'] == 'first_reply'
+                    else f'工单 #{row["id"]} 处理中已停滞超过 12 小时（已超 {hours} 小时），请推进或转派。')
+            targets = [row['assignee']] if row['assignee'] in staff else staff
+            if await self.db.first('SELECT 1 FROM notifications WHERE ticket_id=? AND kind=?', (row['id'], kind)):
+                continue
+            await self.db.batch([
+                ('INSERT INTO notifications(user_id,kind,ticket_id,body,created) VALUES(?,?,?,?,?)',
+                 (uid, kind, row['id'], body, now)) for uid in targets])
+            sent += 1
+        return sent
 
     async def cf_staff_conflict(self, uid, t):
         require(uid != t['user_id'], '不能审核自己提交的工单', 403)

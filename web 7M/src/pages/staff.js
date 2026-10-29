@@ -182,10 +182,12 @@ function overviewSection({ tickets, admin, products }) {
   const banned = admin.users.filter(u => u.status === 'banned');
   const pending = tickets.filter(t => t.status === 'open');
   const busy = tickets.filter(t => ['processing', 'review'].includes(t.status));
+  const overdue = tickets.filter(t => t.sla && t.sla.overdue);
 
   const kpis = [
     ['待处理工单', pending.length, pending.length ? '等待认领' : '全部已认领', 'warn', 'message', 'staff/tickets'],
     ['处理中 / 待复核', busy.length, busy.length ? '需要推进或复核' : '没有积压', 'info', 'clock', 'staff/tickets'],
+    ['超时工单', overdue.length, overdue.length ? '超过 SLA 时限' : '全部在时限内', 'danger', 'alert', 'staff/tickets'],
     ['待人工复核商品', underReview.length, underReview.length ? '自动审核标记为中危' : '没有待审商品', 'violet', 'shield', 'staff/products'],
     ['已封禁账号', banned.length, banned.length ? '可在用户分区解封' : '没有封禁记录', 'danger', 'user', 'staff/users']
   ];
@@ -205,18 +207,28 @@ function overviewSection({ tickets, admin, products }) {
       : '');
 }
 
+// 超时只说两件事：超了多久、卡在哪个环节。阈值与后端 app/support/sla.py 一致。
+function slaTag(t) {
+  const hours = Math.max(1, Math.round((t.sla.overdue_seconds || 0) / 3600));
+  const why = t.sla.stage === 'first_reply' ? '待处理超过 2 小时无人认领' : '处理中超过 12 小时没有客服动作';
+  return `<span class="tag danger" title="${why}">超时 ${hours} 小时</span>`;
+}
+
 function ticketRow(t) {
   const type = TICKET_TYPES[t.type] || t.type;
   const tone = TICKET_TONE[t.type] || 'mute';
+  const overdue = !!(t.sla && t.sla.overdue);
+  const tags = [t.status, t.type];
+  if (overdue) tags.push('overdue');
   return row(
-    [t.status, t.type],
+    tags,
     { group: 'tickets', text: `#${t.id} ${t.subject} ${t.nickname}` },
     `<div class="desk-row-main">
        <b>${e(t.subject)}</b>
        <small><span class="mono">#${t.id}</span>${sepDot}${e(t.nickname)}${sepDot}${date(t.created)}${t.assignee ? `${sepDot}<span class="claimed">已认领</span>` : ''}</small>
      </div>
      <span class="type-chip" data-tone="${tone}">${e(type)}</span>
-     ${statePill(statusNames[t.status] || t.status, STATUS_TONE[t.status])}
+     ${overdue ? slaTag(t) : ''}${statePill(statusNames[t.status] || t.status, STATUS_TONE[t.status])}
      <button class="btn secondary" data-go="ticket/${t.id}">查看</button>`,
     { glyph: 'message', tone }
   );
@@ -224,15 +236,17 @@ function ticketRow(t) {
 
 function ticketsSection({ tickets }) {
   const open = tickets.filter(t => t.status === 'open').length;
+  const overdue = tickets.filter(t => t.sla && t.sla.overdue).length;
   const body = tickets.length
     ? `<div class="desk-list">${tickets.map(ticketRow).join('')}</div>`
     : deskEmpty('暂无工单', '用户从订单页或客服中心发起反馈后会出现在这里。');
   return `<div class="desk-summary">
       <span>共 <b>${tickets.length}</b> 条工单</span>
       ${open ? `<span class="desk-summary-flag">其中 <b>${open}</b> 条待认领</span>` : '<span class="muted">没有待认领的工单</span>'}
+      ${overdue ? `<span class="desk-summary-flag">其中 <b>${overdue}</b> 条超时</span>` : '<span class="muted">没有超时工单</span>'}
     </div>
     ${chips('tickets', [
-      ['open', '待处理'], ['processing', '处理中'], ['review', '待复核'], ['resolved', '已解决']
+      ['open', '待处理'], ['processing', '处理中'], ['review', '待复核'], ['resolved', '已解决'], ['overdue', '超时']
     ])}<section class="panel desk-panel">${body}</section>`;
 }
 

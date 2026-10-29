@@ -408,6 +408,7 @@ const NOTE_META = {
   ticket: ['shield', 'warn'], content_removed: ['alert', 'danger'],
   ticket_filed: ['shield', 'warn'], ticket_refund: ['shield', 'warn'],
   ticket_reply: ['shield', 'warn'], ticket_resolved: ['shield', 'ok'],
+  ticket_overdue: ['alert', 'danger'], ticket_stalled: ['clock', 'warn'],
   refund_done: ['refresh', 'ok'], credit: ['chart', 'warn'],
   order_updated: ['bag', 'info'], order_change_result: ['refresh', 'info'],
   order_reschedule: ['refresh', 'info'], order_handover: ['check', 'info'],
