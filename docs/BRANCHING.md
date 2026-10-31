@@ -1,27 +1,34 @@
-# 分支规范与里程碑（2026-10-20）
+# 分支规范与里程碑
 
-> 背景：原来的 `fix/f01-banned-seller-release` 已经装了 49 个提交（认证、好友、论坛、客服、管理端、商品详情、路由、个人资料…），
-> 早已超出 F-01 的范围。本文档把分支职责、功能里程碑和后续规则固定下来，避免再出现「一个分支装所有东西」的情况。
+> **2026-10-29 分支整理**：远端长期分支收敛为 3 条（`main` + 2 条副分支）。
+> 其余 14 条按「先归档、后删除」处理：先打 `archive/<原分支名>` 标签，再删分支，代码可随时恢复。
 
-## 一、分支职责
+## 一、分支职责（2026-10-29 起）
 
-| 分支 | 用途 | 规则 |
+| 分支 | 用途 | 当前提交 |
 |---|---|---|
-| `main` | 稳定/可发布 | 只接受来自 `release/*` 的合并；不直接提交 |
-| `release/2026-10-trial` | 2026-10 校园试用的集成分支 | 当前生产发布分支；功能合并到这里，验证后再进 `main` |
-| `feature/<模块>-<简短描述>` | 新功能 | 从 `release/2026-10-trial` 切出，PR 回合 |
-| `fix/<模块>-<简短描述>` | 缺陷修复 | 同上；不要再用 `fix/f01-*` 这种编号名装整批迭代 |
+| `main` | 稳定/可发布；线上部署的唯一来源 | `f8b1019` |
+| `release/2026-10-trial-hotfix` | 发布/回滚线；含 Vue + FastAPI 试验与 2026-10-25 回滚记录 | `c92567d` |
+| `refactor/spec-v1-structure` | 重构线（通知/评价/交易拆分），4 个提交尚未并入 `main` | `c4bb27a` |
 
-历史遗留的 `origin/fix/f01-banned-seller-release` 已被 `release/2026-10-trial` 完全包含，保留作为回滚备份；
-`main` 合并完成后可删除：
+规则：
+
+- 功能与修复分支从 `main` 切出，合并后即删，不再长期保留。
+- `main` 不改写历史、不强制推送；合并前先核对目标分支和工作区是否干净。
+- `master` 是整理前的 GitHub 默认分支，代码已归档为 `archive/master`；在仓库 Settings 把默认分支改成 `main` 后即可删除。
+
+### 历史分支怎么找回
 
 ```bash
-git push origin --delete fix/f01-banned-seller-release
+# 列出归档
+git ls-remote --tags origin | grep archive/
+# 从归档恢复成一条本地分支（例：恢复 master）
+git branch master archive/master
 ```
 
-## 二、功能里程碑
+## 二、功能里程碑（历史记录，截至 2026-10-20）
 
-当前 `release/2026-10-trial` = `83eabc3`，比 `main` 领先 **49 个提交**，落后 0 个。
+当时 `release/2026-10-trial` = `83eabc3`，比 `main` 领先 49 个提交。
 
 | 功能 | 提交 | 里程碑 tag |
 |---|---|---|
@@ -35,19 +42,17 @@ git push origin --delete fix/f01-banned-seller-release
 | 文档 + 测试工具 | `7394ea6` `0e51ee6` | 含在 `v2026.10-trial` |
 | 个人资料 / 头像改版 v1–v3 | `6219e90` `e648181` `7941fcc` `83eabc3` | `v2026.10-trial` |
 
-发布点：**`v2026.10-trial`**（annotated tag，指向 `83eabc3`）。
-
-### 为什么没有把 49 个提交拆成多个独立分支
+### 当时的取舍
 
 这些提交是**线性且互相依赖**的（好友依赖认证、论坛依赖路由、客服依赖好友门禁、管理端依赖客服会话）。
 在任意中间点切出的「独立功能分支」缺少后续依赖，单独检出跑不起来；强行拆必须改写历史、重排提交，
-风险远大于收益。因此采用**里程碑 tag** 做不可变检查点：既能按功能追溯/回滚，又不动历史。
+风险大于收益。因此采用**里程碑 tag** 做不可变检查点。
 
 ## 三、日常工作流
 
 ```bash
-# 1. 从发布分支切功能分支
-git switch release/2026-10-trial
+# 1. 从 main 切功能分支
+git switch main
 git pull --ff-only
 git switch -c feature/forum-pagination
 
@@ -55,22 +60,22 @@ git switch -c feature/forum-pagination
 git add <具体文件>
 git commit -m "feat(forum): 帖子分页改用 offset 游标"
 
-# 3. 推送并开 PR（目标：release/2026-10-trial）
+# 3. 推送并开 PR（目标：main）
 git push -u origin feature/forum-pagination
 
-# 4. 发布分支验证通过后，再合并 main 并打 tag
+# 4. 合并后删除功能分支
+git push origin --delete feature/forum-pagination
 ```
 
 ## 四、部署纪律
 
 - 只从**干净、已打 tag** 的提交部署；部署前 `git status` 必须无未提交改动。
-- 每次部署把 Cloudflare 的 Version ID 记进发布说明（`wrangler deployments list` 可查）。
-- 截至 2026-10-20 13:30，线上最新版本为 `97816388-d5e6-4bb1-9dd9-2141333ac66f`
-  （11:52 部署），比 `docs/SUPPORT_CONTEXT-2026-10-20.md` 记录的 `91e8bc37` 更新。
 - 前端资源与 Worker 必须同一次 `wrangler deploy` 一起上传；只更其中一半会出现「页面旧、接口新」的错位。
+- 当前线上版本以 `wrangler deployments status --name zhuanjiao` 为准，不把 Version ID 写死在文档里。
+- 每次交付记录「本地提交 SHA → GitHub 远程 SHA → Cloudflare Version ID → 线上核验结果」。
 
 ## 五、待办
 
-1. `main` 尚未合并这 49 个提交；合并前建议先在试用环境完整回归一轮（登录/发布/下单/客服/论坛/后台）。
-2. 合并完成后删除 `fix/f01-banned-seller-release` 远程分支。
+1. 在 GitHub Settings → Branches 把默认分支改为 `main`，然后删除 `master`（当前仍是默认分支，服务端拒绝删除）。
+2. `refactor/spec-v1-structure` 的 4 个提交尚未并入 `main`，合并前需先解决 Python 版本注解与事务语义的回归。
 3. 客服会话规则（是否「客服离线自动消失」）仍需产品确认，见 `docs/SUPPORT_CONTEXT-2026-10-20.md` 第六节。
