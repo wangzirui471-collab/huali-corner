@@ -29,10 +29,7 @@ with tempfile.TemporaryDirectory() as tmp:
             page.goto(base,wait_until='networkidle')
             expect(page.locator('.product-card')).to_have_count(9)
             expect(page.locator('.simulation-bar')).to_contain_text('公开演示')
-            # 主视觉岛在子路径托管下也要挂起来：轮播按文档基址解析，不是按模块目录。
-            expect(page.locator('.home-chrome .el-carousel__item')).to_have_count(6)
-            expect(page.locator('.hc-cats .hc-cat')).to_have_count(7)
-            page.locator('.hc-cat[data-value="books"]').click()
+            page.get_by_role('button',name='二手书',exact=True).first.click()
             expect(page.locator('.product-card')).to_have_count(6)
             page.get_by_role('searchbox',name='搜索商品').fill('Python')
             page.locator('#search-form').get_by_role('button',name='搜索',exact=True).click()

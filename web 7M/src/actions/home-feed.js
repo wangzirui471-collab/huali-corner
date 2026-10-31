@@ -5,17 +5,17 @@ import { card } from '../components/product-card.js';
 import { recCard } from '../components/rec-rail.js';
 
 // The router disposes the feed, listeners and carousel before changing pages.
-export function mountHomeFeed({root, feed, favorite, chrome}){
+export function mountHomeFeed({root, feed, favorite}){
   const epoch=state.renderId, token=state.token;
   const grid=root.querySelector('.product-grid');
   const more=root.querySelector('[data-action="load-more"]');
   const status=root.querySelector('[data-feed-status]');
   const count=root.querySelector('[data-feed-count]');
-  // Element Plus 岛挂好后会换掉兜底轮播，这里查到的就是空集合，不再另起定时器。
   const carousels=[...root.querySelectorAll('[data-home-carousel]')].map(element=>({
     element,
     slides:[...element.querySelectorAll('[data-promo-slide]')],
     dots:[...element.querySelectorAll('[data-action="home-slide"]')],
+    button:element.querySelector('[data-action="home-promo-open"]'),
     index:0
   }));
   const back=root.querySelector('[data-action="home-top"]');
@@ -33,6 +33,7 @@ export function mountHomeFeed({root, feed, favorite, chrome}){
     carousel.index=(next+carousel.slides.length)%carousel.slides.length;
     carousel.slides.forEach((slide,index)=>{slide.hidden=index!==carousel.index;});
     carousel.dots.forEach((dot,index)=>{dot.setAttribute('aria-pressed',String(index===carousel.index));});
+    carousel.button.setAttribute('aria-label',carousel.slides[carousel.index].dataset.title);
   }
   function updateCount(){ count.textContent=`已展示 ${grid.children.length} 件${favorite?'收藏':'商品'}`; }
   async function next(){
@@ -82,8 +83,6 @@ export function mountHomeFeed({root, feed, favorite, chrome}){
     dispose(){
       disposed=true; feed.dispose(); timers.forEach(clearInterval); observer?.disconnect();
       cleanup.forEach(fn=>fn());
-      // 主视觉岛是独立的应用实例，换页时必须显式卸载，否则会留一份 Vue 树。
-      chrome?.unmount();
       if(state.homeView===view) state.homeView=null;
     }
   };
@@ -95,8 +94,8 @@ export function mountHomeFeed({root, feed, favorite, chrome}){
     },{rootMargin:'350px 0px'});
     observer.observe(more);
   }
-  // 兜底轮播一直自动播：指针、键盘或跳页之后都不暂停（岛挂载后这里查不到节点，自然不起定时器）。
-  // prefers-reduced-motion 只去掉过渡动画，不换内容仍在轮播。
+  // Both windows keep playing after pointer, keyboard or manual navigation.
+  // Reduced motion removes visual transitions in CSS, not content rotation.
   carousels.forEach(carousel=>{
     if(carousel.slides.length>1) timers.push(setInterval(()=>select(carousel,carousel.index+1),Number(carousel.element.dataset.interval)));
   });

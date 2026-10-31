@@ -1,308 +1,199 @@
-/* ==========================================================================
-   首页 · 逛逛（薄荷青主题）
-   作用域只在首页：.home-page / .market-header-home / .market-main-home。
-   其他页面继续用 market.css 的品牌黄，改版不外溢。
-   主视觉两套实现共用这一套 class：Element Plus 岛（assets/home）与原生兜底轮播。
-   ========================================================================== */
-
-/* --- 1. 主题令牌 ---------------------------------------------------------- */
-/* 令牌要同时挂在首页主体、页头和底部导航上：.mobile-nav 是 .market-app 的兄弟节点，
-   不从 .market-main-home 继承变量，漏掉它下面所有 var(--mint-*) 都会失效。 */
-.home-page,
-.market-header-home,
-.market-main-home,
-.mobile-nav-home {
-  --mint-900: #0d3b32;
-  --mint-700: #146355;
-  --mint: #0f7b63;
-  --mint-500: #2f8f7a;
-  --mint-300: #7fbfae;
-  --mint-200: #bfe0d5;
-  --mint-100: #dff0ea;
-  --mint-50: #eff9f5;
-  --cta: #ff6a2b;
-  --cta-deep: #e8541a;
-  --home-ink: #16241f;
-  --home-ink-2: #3d4f49;
-  --home-muted: #6f817b;
-  --home-line: #e4efea;
-}
-
-.market-main-home { background: #f6faf8; }
-.home-page { color: var(--home-ink); }
-.home-page [hidden] { display: none !important; }
-.home-page :focus-visible { outline-color: var(--mint); }
-
-/* --- 2. 首页页头 ---------------------------------------------------------- */
-.market-header-home { border-bottom-color: var(--home-line); }
-.market-header-home .brand small { color: var(--mint-500); }
-.market-header-home .campus-switch { border-color: var(--mint-100); background: var(--mint-50); }
-.market-header-home .campus-switch:hover { border-color: var(--mint-200); background: #e6f4ee; }
-.market-header-home .campus-switch .icon { color: var(--mint); }
-.market-header-home .campus-switch span { color: var(--mint-700); }
-.market-header-home .campus-switch small { color: var(--home-muted); }
-
-.market-header-home .market-search { background: #fff; border-color: var(--mint-200); }
-.market-header-home .market-search:focus-within { border-color: var(--mint); box-shadow: 0 0 0 4px rgba(15, 123, 99, .14); }
-.market-header-home .market-search > .icon { color: var(--mint-500); }
-.market-header-home .market-search button { background: var(--cta); }
-.market-header-home .market-search button:hover { background: var(--cta-deep); }
-
-/* 小转AI 入口在薄荷主题里从「暗夜霓虹」换成「深绿玉石」，辉光动画一并停掉。 */
-.market-header-home .header-ai {
-  border-color: var(--mint-500);
-  background: linear-gradient(180deg, #10403694 0%, #0d3b32 100%), var(--mint-700);
-  box-shadow: 0 6px 18px -8px rgba(15, 123, 99, .6), inset 0 1px 0 rgba(255, 255, 255, .1);
-  animation: none;
-}
-.market-header-home .header-ai .icon,
-.market-header-home .header-ai .ai-tag { color: #7fe6c8; }
-.market-header-home .header-ai:hover { border-color: var(--mint-300); box-shadow: 0 10px 24px -8px rgba(15, 123, 99, .72), inset 0 1px 0 rgba(255, 255, 255, .16); }
-.market-header-home .header-ai::before { background: linear-gradient(100deg, transparent, rgba(180, 245, 220, .28), transparent); }
-
-.market-header-home .header-message:hover { background: var(--mint-50); color: var(--mint-700); }
-.market-header-home .cart-button { border-color: var(--mint-100); background: var(--mint-50); color: var(--mint-700); }
-.market-header-home .cart-button:hover { border-color: var(--mint-200); background: #e6f4ee; }
-.market-header-home .account-button { background: var(--mint-50); border: 1px solid var(--mint-100); box-shadow: none; color: var(--mint-700); display: inline-flex; align-items: center; gap: 7px; }
-.market-header-home .account-button:hover { border-color: var(--mint-200); background: #e6f4ee; }
+/* 首页 · 第一版布局 + 双窗口轮播。品牌暖黄，轻卡片，保持现有功能。 */
+.market-header .user-avatar-small { display: inline-grid; place-items: center; position: relative; overflow: hidden; width: 28px; height: 28px; flex: 0 0 28px; border-radius: 50%; background: #f6edda; color: #7f7055; }
+.market-header .user-avatar-fallback { grid-area: 1/1; font-size: 11px; }
+.market-header .user-avatar-small img { grid-area: 1/1; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.market-header .user-avatar-small img[hidden] { display: none; }
+.market-header-home .market-search { background: #fff; border-color: #ead9a7; }
+.market-header-home .market-search button { background: #f5ca54; color: #3e341b; }
+.market-header-home .market-search button:hover { background: #f8d773; }
+.market-header-home .account-button { background: #fff5d5; border: 1px solid #f0e3bb; box-shadow: none; display: inline-flex; align-items: center; gap: 7px; }
 .market-header-home .header-account-name { max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.market-header-home .user-avatar-small { background: var(--mint-100); color: var(--mint-700); }
-.market-header-home .user-avatar-fallback { grid-area: 1/1; font-size: 11px; }
-.market-header-home .user-avatar-small img { grid-area: 1/1; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.market-header-home .user-avatar-small img[hidden] { display: none; }
-.market-header-home .desktop-navigation .btn.primary { background: var(--mint-700); color: #fff; box-shadow: 0 6px 16px rgba(20, 99, 85, .22); }
-.market-header-home .desktop-navigation .btn.primary:hover { background: var(--mint); box-shadow: 0 10px 22px rgba(20, 99, 85, .26); }
+.market-header-home .cart-button { display: inline-flex; align-items: center; }
 .market-header-home .brand:hover .brand-mark { transform: none; }
-.simulation-bar-home { background: var(--mint-50); color: var(--mint-700); border-bottom: 1px solid var(--mint-100); }
-
-/* 首页把品牌黄的强调位置（导航选中、底部发布、收藏心标）换成薄荷青；
-   .mobile-nav 是 .market-app 的兄弟节点，只能自己带 home 标记来作用域化。 */
-.market-app-home .desktop-navigation .nav-item.active { background: var(--mint-50); color: var(--mint-700); }
-.mobile-nav-home .nav-item.active { color: var(--mint-900); }
-.mobile-nav-home .nav-item.active::before { background: var(--mint); }
-.mobile-nav-home .nav-item.active .icon { stroke: var(--mint); }
-.mobile-nav-home .mobile-publish .icon { background: linear-gradient(140deg, #17927a, var(--mint-700) 72%); color: #fff; box-shadow: 0 5px 12px rgba(20, 99, 85, .32); }
-.mobile-nav-home .mobile-publish:active .icon { box-shadow: 0 3px 8px rgba(20, 99, 85, .28); }
-.mobile-nav-home .mobile-publish span { color: var(--mint-700); }
-.market-app-home .card-title:hover { color: var(--mint-700); }
-.market-app-home .favorite-button.selected { color: var(--price); }
-
-/* --- 3. 主视觉轮播 + 一排频道 --------------------------------------------- */
-.home-chrome { margin: 4px 0 18px; }
-
-.hc-hero {
-  position: relative;
-  border-radius: 22px;
-  overflow: hidden;
-  border: 1px solid var(--mint-100);
-  box-shadow: 0 10px 30px rgba(16, 60, 50, .07);
-  background: #fff;
-}
-/* 岛挂载后由 el-carousel 提供容器高度；兜底轮播靠这里的 min-height 撑住同一档。 */
-.home-chrome .hc-hero { min-height: 244px; }
-.home-chrome .hc-slide { min-height: 244px; }
-
-.hc-slide {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 230px;
-  align-items: center;
-  gap: 18px;
-  width: 100%;
-  height: 100%;
-  padding: 26px 30px 34px;
-  text-align: left;
-  overflow: hidden;
-}
-.hc-tone-mint { background: linear-gradient(108deg, #d6efe5, #f1fbf6 58%, #e3f4ec); }
-.hc-tone-sage { background: linear-gradient(108deg, #dcefe0, #f5fbf4 58%, #eaf6ef); }
-.hc-tone-sky { background: linear-gradient(108deg, #d7eaf4, #f1f8fc 58%, #e6f4f1); }
-.hc-tone-sand { background: linear-gradient(108deg, #f3e7d2, #fbf6ec 58%, #edf5f0); }
-.hc-tone-blush { background: linear-gradient(108deg, #f9ded7, #fdf2ef 58%, #edf5f1); }
-.hc-tone-deep { background: linear-gradient(108deg, #0d3b32, #146355 68%, #1c7a67); }
-
-.hc-copy { position: relative; z-index: 2; max-width: 560px; display: block; }
-.hc-eyebrow { display: block; font-size: 11px; font-weight: 650; letter-spacing: .12em; color: var(--mint-500); }
-.hc-title { display: block; margin: 9px 0 8px; font-size: clamp(21px, 2.5vw, 31px); line-height: 1.28; font-weight: 800; letter-spacing: -.8px; color: var(--mint-900); }
-.hc-desc { display: block; font-size: 12.5px; line-height: 1.8; color: var(--home-muted); }
-.hc-cta { display: inline-flex; align-items: center; gap: 7px; margin-top: 15px; padding: 9px 18px; border-radius: 999px; background: var(--cta); color: #fff; font-size: 12.5px; font-weight: 700; box-shadow: 0 8px 18px rgba(255, 106, 43, .26); transition: background .2s var(--ease), transform .2s var(--ease); }
-.hc-slide:hover .hc-cta { background: var(--cta-deep); transform: translateX(2px); }
-.hc-cta-icon .icon { width: 14px; height: 14px; }
-.hc-tone-deep .hc-eyebrow { color: #8fe3c6; }
-.hc-tone-deep .hc-title { color: #fff; }
-.hc-tone-deep .hc-desc { color: #c9e6dc; }
-
-.hc-art { position: relative; z-index: 1; display: grid; place-items: center; align-self: center; height: 100%; }
-.hc-art .promo-books,
-.hc-art .promo-home { position: relative; right: auto; bottom: auto; margin: 0 auto; transform: scale(1.06); }
-.hc-art .hero-category-art { width: 148px; height: 148px; }
-.hc-art .hero-category-art .category-art { width: 100%; height: 100%; }
-.hc-art .hero-symbol { display: block; width: 118px; height: 118px; }
-.hero-symbol > span { display: grid; place-items: center; width: 88px; height: 88px; margin: 0 auto; border-radius: 26px; background: #ffffffcc; box-shadow: 6px 7px 0 rgba(15, 123, 99, .1); transform: rotate(8deg); color: var(--mint-500); }
-.hero-symbol .icon { width: 42px; height: 42px; stroke-width: 1.3; }
-.hero-symbol i { display: block; text-align: center; font-size: 9px; font-style: normal; color: var(--home-muted); margin-top: 12px; letter-spacing: .4px; }
-.hero-symbol-publish > span { background: #fff1e8; color: var(--cta); }
-.hc-tone-deep .hero-symbol > span { background: #ffffff1f; color: #d9f5ea; box-shadow: 6px 7px 0 rgba(0, 0, 0, .12); }
-.hc-tone-deep .hero-symbol i { color: #bfe0d5; }
-
-/* 兜底轮播的圆点：与 Element Plus 指示器同一套视觉。 */
-.hc-dots { display: flex; align-items: center; gap: 3px; position: absolute; left: 28px; bottom: 14px; z-index: 3; }
-.hc-dots button { width: 22px; height: 22px; padding: 0; display: grid; place-items: center; border-radius: 50%; }
-.hc-dots button::after { content: ''; width: 16px; height: 4px; border-radius: 4px; background: rgba(20, 99, 85, .2); transition: background .2s var(--ease); }
-.hc-dots button[aria-pressed="true"]::after { background: var(--mint); }
-
-.hc-cats { display: flex; flex-wrap: wrap; gap: 4px; margin: 14px 0 2px; padding-bottom: 12px; border-bottom: 1px solid var(--home-line); }
-.hc-cat { display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; border-radius: 12px; font-size: 13px; color: var(--home-ink-2); transition: background .18s var(--ease), color .18s var(--ease); }
-.hc-cat .icon { width: 17px; height: 17px; color: #9ab3aa; transition: color .18s var(--ease); }
-.hc-cat:hover { background: var(--mint-50); color: var(--mint-700); }
-.hc-cat.active { background: var(--mint-50); color: var(--mint-700); font-weight: 700; box-shadow: inset 0 -2px 0 var(--mint); }
-.hc-cat.active .icon { color: var(--mint); }
-
-/* --- 4. 小转推荐轨 -------------------------------------------------------- */
-.rec-rail { margin: 20px 0 30px; }
+.market-header-home .desktop-navigation .btn.primary { background: #f5ca54; box-shadow: 0 4px 12px #ad8a2520; }
+.home-page { --price: #b48232; --price-soft: #fbf4e6; }
+.home-page [hidden] { display: none !important; }
+.home-page .market-channels { margin-bottom: 16px; }
+.home-page .channel .category-art { filter: saturate(.78) drop-shadow(0 3px 4px #32382c0a); }
+.home-page .channel:hover .category-art { transform: translateY(-2px); }
+.home-page .category-grid { border-radius: 18px; padding-block: 22px; margin: 0 0 16px; }
+.home-page .category-chip { box-shadow: none; filter: saturate(.7); }
+.home-page .category-grid button:hover .category-chip { transform: translateY(-2px); box-shadow: 0 3px 10px #34382c0d; }
+.home-promos { gap: 18px; margin: 0 0 28px; }
+/* 「小转推荐」横滑轨：标题行 + 横向滚动卡带。
+   卡带用 scroll-snap + 隐藏滚动条：触屏一划一张，桌面端滚动条不添乱。 */
+.rec-rail { margin: 0 0 30px; }
 .rec-rail-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 15px; margin-bottom: 13px; }
-.rec-rail-head h2 { font-size: 22px; font-weight: 800; margin: 6px 0 0; letter-spacing: -.5px; color: var(--mint-900); }
-.rec-rail-head h2 small { font-size: 11px; font-weight: 400; color: var(--home-muted); margin-left: 14px; letter-spacing: 0; }
+.rec-rail-head h2 { font-size: 23px; font-weight: 750; margin: 6px 0 0; letter-spacing: -.5px; color: #37382f; }
+.rec-rail-head h2 small { font-size: 11px; font-weight: 400; color: #958363; margin-left: 14px; letter-spacing: 0; }
 .rec-refresh {
   display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
-  padding: 8px 14px; font-size: 12px; font-weight: 650; color: var(--mint-700);
-  background: var(--mint-50); border: 1.5px solid var(--mint-200); border-radius: 999px;
+  padding: 8px 14px; font-size: 12px; font-weight: 650; color: #7d5c07;
+  background: #fff6d8; border: 1.5px solid #f0b413; border-radius: 999px;
   transition: background .2s var(--ease), transform .2s var(--ease);
 }
-.rec-refresh:hover { background: #e2f2ec; }
+.rec-refresh:hover { background: #fff1c4; }
 .rec-refresh:active { transform: scale(.96); }
 .rec-refresh:disabled { opacity: .55; pointer-events: none; }
 .rec-refresh .icon { width: 14px; height: 14px; }
-.rec-rail-track { display: grid; grid-auto-flow: column; grid-auto-columns: 158px; gap: 12px; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 6px; scrollbar-width: none; }
+.rec-rail-track {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 158px; gap: 12px;
+  overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 6px;
+  scrollbar-width: none;
+}
 .rec-rail-track::-webkit-scrollbar { display: none; }
-.rec-card { scroll-snap-align: start; text-align: left; display: flex; flex-direction: column; background: #fff; border: 1px solid var(--home-line); border-radius: 14px; overflow: hidden; transition: transform .2s var(--ease), box-shadow .2s var(--ease); }
-.rec-card:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(16, 60, 50, .1); border-color: var(--mint-200); }
-.rec-card-img { position: relative; display: block; aspect-ratio: 1/1; background: var(--mint-50); }
+.rec-card {
+  scroll-snap-align: start; text-align: left; display: flex; flex-direction: column;
+  background: #fff; border: 1px solid #ead9a7; border-radius: 14px; overflow: hidden;
+  transition: transform .2s var(--ease), box-shadow .2s var(--ease);
+}
+.rec-card:hover { transform: translateY(-3px); box-shadow: 0 8px 18px #34382c14; }
+.rec-card-img { position: relative; display: block; aspect-ratio: 1/1; background: #f6f1e4; }
 .rec-card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .rec-card-img .photo-placeholder { min-height: 0; }
-.rec-reason { position: absolute; left: 7px; top: 7px; font-style: normal; font-size: 9.5px; font-weight: 650; color: var(--mint-700); background: #ffffffe6; border-radius: 999px; padding: 3px 8px; backdrop-filter: blur(4px); }
-.rec-card-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 12px; font-weight: 600; line-height: 1.45; color: var(--home-ink); padding: 9px 10px 0; }
+.rec-reason {
+  position: absolute; left: 7px; top: 7px; font-style: normal; font-size: 9.5px; font-weight: 650;
+  color: #7d5c07; background: #fff6d8e6; border-radius: 999px; padding: 3px 8px;
+  backdrop-filter: blur(4px);
+}
+.rec-card-title {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: 12px; font-weight: 600; line-height: 1.45; color: #37382f; padding: 9px 10px 0;
+}
 .rec-card-price { display: block; padding: 5px 10px 11px; font-size: 15px; font-weight: 750; color: var(--price); }
-
-/* --- 5. 商品流 ------------------------------------------------------------ */
+.home-promo-window { position: relative; min-width: 0; border-radius: 18px; box-shadow: 0 2px 5px #3e412b08; }
+.home-promo-window .campus-promo { padding: 0; min-height: 190px; width: 100%; display: block; border-radius: 18px; }
+.home-promo-window .book-promo { background: linear-gradient(105deg,#fff5df,#f8e7bf); border-color: #f0e2be; }
+.home-promo-window .graduate-promo { background: linear-gradient(105deg,#eff3fb,#e0e9f7); border-color: #e0e7f0; }
+.home-promo-window .campus-promo:hover { transform: translateY(-2px); box-shadow: 0 5px 14px #34382c0d; }
+.home-promo-slide { display: block; position: relative; width: 100%; min-height: 190px; padding: 27px 28px 42px; overflow: hidden; }
+.home-promo-copy { display: block; position: relative; z-index: 2; max-width: 65%; }
+.home-promo-copy .promo-eyebrow { display: block; font-size: 10px; letter-spacing: .5px; color: #9c8043; }
+.home-promo-title { display: block; color: #37382f; font-size: clamp(19px,2vw,26px); line-height: 1.35; font-weight: 750; margin: 10px 0 8px; letter-spacing: -.6px; }
+.home-promo-desc { display: block; color: #958363; font-size: 11px; line-height: 1.8; }
+.home-promo-copy .promo-link { font-size: 11px; margin-top: 14px; color: #897143; }
+.graduate-promo .promo-eyebrow { color: #8294ab; }
+.graduate-promo .home-promo-desc { color: #8392a6; }
+.graduate-promo .promo-link { color: #7b8fa7; }
+.home-promo-window .promo-books { right: 20px; bottom: 35px; transform: scale(1.05); transform-origin: right bottom; }
+.home-promo-window .promo-home { right: 30px; bottom: 28px; }
+.home-promo-dots { display: flex; align-items: center; position: absolute; bottom: 10px; left: 24px; gap: 3px; }
+.home-promo-dots button { padding: 0; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; }
+.home-promo-dots button::after { content: ''; width: 4px; height: 4px; border-radius: 4px; background: #a79e884d; }
+.home-promo-dots button[aria-pressed="true"]::after { width: 15px; background: #ab8b46; }
+.home-promo-window:nth-child(2) .home-promo-dots button[aria-pressed="true"]::after { background: #879cb4; }
+.home-promo-category-art { position: absolute; right: 24px; bottom: 24px; width: 145px; height: 145px; }
+.home-promo-category-art .category-art { width: 100%; height: 100%; filter: saturate(.72); }
+.home-promo-symbol { position: absolute; bottom: 30px; right: 30px; width: 120px; height: 120px; }
+.home-promo-symbol > span { display: grid; place-items: center; width: 91px; height: 91px; margin: 0 auto; border-radius: 24px; background: #f8f5e7; box-shadow: 5px 6px 0 #afb8be1a; transform: rotate(8deg); color: #a5ab91; }
+.home-promo-symbol .icon { width: 44px; height: 44px; stroke-width: 1.3; }
+.home-promo-symbol i { display: block; text-align: center; font-size: 8px; font-style: normal; color: #8d9aa7; margin-top: 13px; letter-spacing: .5px; }
+.home-promo-symbol-publish > span { background: #fff3cc; color: #c1a257; }
 .home-feed-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 15px; }
-.home-section-kicker { font-size: 9px; letter-spacing: 2px; color: var(--mint-500); font-weight: 700; }
-.home-feed h2 { font-size: 23px; font-weight: 800; margin: 6px 0 0; letter-spacing: -.5px; color: var(--mint-900); }
-.home-feed h2 small { font-size: 11px; font-weight: 400; color: var(--home-muted); margin-left: 16px; letter-spacing: 0; }
+.home-section-kicker { font-size: 9px; letter-spacing: 2px; color: #979d90; }
+.home-feed h2 { font-size: 23px; font-weight: 750; margin: 6px 0 0; letter-spacing: -.5px; }
+.home-feed h2 small { font-size: 11px; font-weight: 400; color: var(--muted); margin-left: 16px; letter-spacing: 0; }
 .home-feed-tools { display: flex; align-items: center; gap: 7px; }
-.home-feed-tools > button { padding: 7px 13px; font-size: 12px; color: var(--home-muted); border: 1px solid transparent; border-radius: 999px; transition: background .18s var(--ease), color .18s var(--ease); }
-.home-feed-tools > button.active { background: var(--mint-50); color: var(--mint-700); font-weight: 650; box-shadow: inset 0 0 0 1px var(--mint-200); }
-.home-feed-tools .feed-filter { display: inline-flex; align-items: center; background: #fff; border-color: var(--home-line); box-shadow: none; gap: 4px; color: var(--home-ink-2); }
-.home-feed-tools .feed-filter:hover { border-color: var(--mint-200); background: var(--mint-50); }
-.home-feed-tools .feed-filter .icon { width: 13px; height: 13px; }
-.home-feed-context { display: flex; justify-content: space-between; gap: 15px; margin: 13px 0 18px; color: var(--home-muted); font-size: 11px; }
+.home-feed-tools > button { padding: 7px 12px; font-size: 12px; color: var(--muted); border: 1px solid transparent; border-radius: 7px; }
+.home-feed-tools > button.active { background: #fff4d2; color: #87691e; }
+.home-feed-tools .feed-filter { background: #fff; border-color: var(--line-2); box-shadow: none; gap: 4px; }
+.home-feed-context { display: flex; justify-content: space-between; gap: 15px; margin: 13px 0 18px; color: var(--muted); font-size: 11px; }
 .home-feed-context small { font-size: 11px; white-space: nowrap; }
-
 .home-page .product-grid { gap: 20px; align-items: stretch; }
-.home-page .product-card { display: flex; flex-direction: column; border-radius: 15px; border-color: var(--home-line); box-shadow: 0 2px 8px rgba(16, 60, 50, .05); }
-.home-page .product-card:hover { transform: translateY(-3px); box-shadow: 0 12px 24px rgba(16, 60, 50, .1); border-color: var(--mint-200); }
-.home-page .card-photo { aspect-ratio: 1; border-radius: 0; background: var(--mint-50); }
+.home-page .product-card { display: flex; flex-direction: column; border-radius: 14px; box-shadow: 0 2px 6px #252b2010; }
+.home-page .product-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px #252b2014; border-color: #dcded6; }
+.home-page .card-photo { aspect-ratio: 1; border-radius: 0; background: #f1f2ee; }
 .home-page .card-photo img { width: 100%; height: 100%; object-fit: cover; }
 .home-page .card-content { display: flex; flex-direction: column; flex: 1; padding: 15px 15px 12px; }
-.home-page .card-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; min-height: 44px; max-height: 44px; padding: 0; font-size: 14px; font-weight: 600; line-height: 22px; color: var(--home-ink); text-align: left; }
-.home-page .book-meta { font-size: 11px; min-height: 17px; line-height: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--home-muted); margin-top: 5px; }
+.home-page .card-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; min-height: 44px; max-height: 44px; padding: 0; font-size: 14px; font-weight: 600; line-height: 22px; color: #30342e; text-align: left; }
+.home-page .book-meta { font-size: 11px; min-height: 17px; line-height: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #8b8d85; margin-top: 5px; }
 .home-page .price-line { margin: 12px 0 0; min-height: 25px; gap: 3px; }
-.home-page .price-line b { font-size: 23px; font-weight: 750; }
-.home-page .price-line em { background: transparent; padding: 0; font-size: 10px; font-weight: 500; color: var(--mint-500); }
+.home-page .price-line b { font-size: 23px; font-weight: 700; }
+.home-page .price-line em { background: transparent; padding: 0; font-size: 10px; font-weight: 500; }
 .home-page .price-line s { font-size: 10px; }
 .home-page .card-tags { margin-top: 10px; gap: 5px; min-height: 38px; align-content: flex-start; }
-.home-page .mini-tag { font-size: 10px; background: var(--mint-50); color: var(--mint-700); font-weight: 500; padding: 3px 6px; border-radius: 6px; }
-.home-page .mini-tag.ghost { background: #f4f7f5; color: var(--home-muted); max-width: 100%; }
-.home-page .card-user { margin-top: auto; padding-top: 10px; border-top: 1px solid #f0f4f2; }
-.home-page .card-user > button:first-child { max-width: calc(100% - 34px); overflow: hidden; white-space: nowrap; font-size: 11px; font-weight: 400; gap: 6px; color: var(--home-ink-2); }
-.home-page .avatar { width: 22px; height: 22px; flex: 0 0 22px; font-size: 10px; background: var(--mint-100); color: var(--mint-700); }
+.home-page .mini-tag { font-size: 10px; background: #faf4e5; color: #8b7440; font-weight: 500; padding: 3px 5px; }
+.home-page .mini-tag.ghost { background: #f7f8f5; color: #7b8178; max-width: 100%; }
+.home-page .card-user { margin-top: auto; padding-top: 10px; border-top: 1px solid #f0f1ed; }
+.home-page .card-user > button:first-child { max-width: calc(100% - 34px); overflow: hidden; white-space: nowrap; font-size: 11px; font-weight: 400; gap: 6px; }
+.home-page .avatar { width: 22px; height: 22px; flex: 0 0 22px; font-size: 10px; }
 .home-page .favorite-button { width: 32px; height: 32px; padding: 7px; flex: 0 0 32px; }
 .home-page .favorite-button .icon { width: 18px; height: 18px; }
-.home-page .cond-badge { background: #ffffffed; color: var(--home-ink-2); font-weight: 500; font-size: 10px; top: 10px; left: 10px; padding: 4px 7px; border: 1px solid #fff; border-radius: 6px; backdrop-filter: none; }
-.home-page .trusted-tag { background: var(--mint-50); color: var(--mint-700); }
+.home-page .cond-badge { background: #ffffffed; color: #5d655b; font-weight: 500; font-size: 10px; top: 10px; left: 10px; padding: 4px 7px; border: 1px solid #ffffff; border-radius: 6px; backdrop-filter: none; }
 .home-feed-end { text-align: center; padding: 24px 0 10px; }
-.home-feed-end p { font-size: 11px; color: var(--home-muted); margin: 0 0 14px; }
+.home-feed-end p { font-size: 11px; color: var(--muted); margin: 0 0 14px; }
 .home-feed-end .load-more { margin: 0 auto; width: auto; min-width: 180px; font-size: 12px; padding: 11px 24px; box-shadow: none; }
-
-/* --- 6. 收尾召唤 + 回到顶部 ------------------------------------------------ */
-.home-cta { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin: 30px 0 6px; padding: 22px 26px; border-radius: 18px; border: 1px solid var(--mint-100); background: linear-gradient(100deg, #e6f5ee, #f7fcfa 60%, #eef8f3); }
-.home-cta strong { display: block; font-size: 18px; font-weight: 800; letter-spacing: -.4px; color: var(--mint-900); }
-.home-cta small { display: block; margin-top: 5px; font-size: 11.5px; color: var(--home-muted); }
-.home-cta-main { display: inline-flex; align-items: center; gap: 6px; padding: 11px 20px; border-radius: 999px; background: var(--mint-700); color: #fff; font-size: 13px; font-weight: 700; box-shadow: 0 8px 18px rgba(20, 99, 85, .22); transition: background .2s var(--ease); }
-.home-cta-main:hover { background: var(--mint); }
-.home-cta-main .icon { width: 15px; height: 15px; }
-.home-cta-ghost { padding: 11px 18px; border-radius: 999px; border: 1px solid var(--mint-200); background: #fff; color: var(--mint-700); font-size: 13px; font-weight: 650; }
-.home-cta-ghost:hover { background: var(--mint-50); }
-
-.home-back-top { position: fixed; right: max(16px, calc((100vw - var(--wrap))/2 - 48px)); bottom: 42px; width: 46px; height: 58px; z-index: 25; background: #fff; border: 1px solid var(--home-line); border-radius: 11px; box-shadow: 0 6px 18px rgba(16, 60, 50, .1); flex-direction: column; gap: 0; font-size: 23px; color: var(--mint-700); }
+.home-back-top { position: fixed; right: max(16px,calc((100vw - var(--wrap))/2 - 48px)); bottom: 42px; width: 46px; height: 58px; z-index: 25; background: #fff; border: 1px solid var(--line-2); border-radius: 11px; box-shadow: var(--sh-2); flex-direction: column; gap: 0; font-size: 23px; color: #737b6c; }
 .home-back-top span { font-size: 9px; }
-.home-back-top:hover { border-color: var(--mint-200); background: var(--mint-50); }
 
-/* --- 7. 筛选弹窗里的快捷搜索 ----------------------------------------------- */
-.filter-shortcuts { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 4px 0 16px; }
-.filter-shortcuts > span { width: 100%; font-size: 11px; color: var(--home-muted); margin-bottom: 2px; }
-.filter-shortcuts button { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--mint-200); background: var(--mint-50); color: var(--mint-700); font-size: 12px; }
-.filter-shortcuts button:hover { background: #e2f2ec; }
-
-/* --- 8. 断点 -------------------------------------------------------------- */
-@media (max-width: 1100px){
-  .hc-slide { grid-template-columns: minmax(0, 1fr) 180px; padding: 24px 24px 34px; }
-  .hc-copy { max-width: 100%; }
-  .hc-art .promo-books, .hc-art .promo-home { transform: scale(.88); }
-  .hc-art .hero-category-art { width: 122px; height: 122px; }
+@media(max-width:1100px){
+  .home-promo-copy { max-width: 67%; }
+  .home-promo-window .promo-books { transform: scale(.85); right: 10px; }
+  .home-promo-window .promo-home { transform: scale(.85); right: 8px; transform-origin: right bottom; }
+  .home-promo-category-art { width: 120px; height: 120px; right: 12px; }
+  .home-promo-symbol { transform: scale(.85); transform-origin: right bottom; right: 15px; }
 }
-
-@media (max-width: 850px){
+@media(max-width:850px){
   .market-header-home .header-actions { gap: 8px; }
-  .home-chrome { margin-bottom: 14px; }
-  .hc-slide { grid-template-columns: minmax(0, 1fr) 150px; padding: 22px 20px 36px; }
-  .hc-title { font-size: 22px; }
-  .hc-desc { font-size: 11.5px; }
-  .hc-cat { padding: 8px 11px; font-size: 12.5px; }
-  .rec-rail { margin-bottom: 25px; }
+  .home-page .market-channels { margin-bottom: 12px; }
+  .home-page .category-grid { margin-bottom: 13px; padding-block: 20px; }
+  .home-promos { gap: 12px; margin-bottom: 25px; }
+  .home-promo-window .campus-promo,.home-promo-slide { min-height: 182px; }
+  .home-promo-slide { padding: 23px 20px 38px; }
+  .home-promo-title { font-size: 20px; }
+  .home-promo-copy { max-width: 80%; }
+  .home-promo-desc { font-size: 10px; max-width: 170px; }
+  .home-promo-dots { left: 16px; bottom: 8px; }
+  .home-promo-window .promo-books { transform: scale(.58); right: 5px; bottom: 38px; opacity: .82; }
+  .home-promo-window .promo-home { transform: scale(.6); right: 5px; bottom: 30px; opacity: .82; }
+  .home-promo-category-art { width: 86px; height: 86px; right: 8px; bottom: 30px; opacity: .75; }
+  .home-promo-symbol { transform: scale(.6); right: 8px; bottom: 28px; opacity: .82; }
+  .home-feed h2 small { display: none; }
   .home-page .product-grid { gap: 15px; }
   .home-back-top { bottom: 98px; right: 12px; }
 }
-
-@media (max-width: 580px){
+@media(max-width:580px){
   .market-header-home .header-inner { gap: 9px; }
   .market-header-home .header-actions { gap: 6px; }
   .market-header-home .header-message { display: flex; padding: 5px; }
   .market-header-home .header-message .icon { width: 19px; height: 19px; }
-  .market-header-home .cart-button { padding: 5px; border: 0; background: transparent; }
+  .market-header-home .cart-button { padding: 5px; border: 0; }
   .market-header-home .cart-button .icon { display: block; }
   .market-header-home .cart-button span { display: none; }
-  .market-header-home .account-button { padding: 3px; border: 0; font-size: 10px; gap: 4px; background: transparent; }
+  .market-header-home .account-button { padding: 3px; border: 0; font-size: 10px; gap: 4px; }
   .market-header-home .header-account-name { max-width: 40px; }
-
-  .home-chrome .hc-hero, .home-chrome .hc-slide { min-height: 252px; }
-  .hc-slide { grid-template-columns: minmax(0, 1fr); align-content: center; padding: 20px 18px 40px; }
-  .hc-title { font-size: 20px; }
-  .hc-copy { max-width: 78%; }
-  .hc-art { position: absolute; right: 8px; bottom: 26px; height: auto; opacity: .9; }
-  .hc-art .promo-books { transform: scale(.62); }
-  .hc-art .promo-home { transform: scale(.64); }
-  .hc-art .hero-category-art { width: 88px; height: 88px; }
-  .hc-art .hero-symbol { transform: scale(.66); transform-origin: right bottom; }
-  .hc-dots { left: 18px; }
-  .hc-cats { gap: 2px; margin: 10px 0 0; padding-bottom: 10px; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
-  .hc-cats::-webkit-scrollbar { display: none; }
-  .hc-cat { flex: 0 0 auto; padding: 8px 10px; font-size: 12px; gap: 5px; }
-  .hc-cat .icon { width: 15px; height: 15px; }
-
+  .home-page .category-grid { grid-template-columns: repeat(5,minmax(0,1fr)); overflow: visible; gap: 18px 5px; padding: 19px 6px; border-radius: 14px; }
+  .home-page .category-grid button { font-size: 10px; gap: 7px; }
+  .home-page .category-chip { width: 36px; height: 36px; }
+  .home-page .category-chip .icon { width: 22px; height: 22px; }
+  .home-promos { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin-bottom: 23px; }
+  /* 手机端推荐卡收窄一档，一屏能看出「还有下一张」；标题行留呼吸。 */
   .rec-rail { margin-bottom: 24px; }
   .rec-rail-head { align-items: center; }
   .rec-rail-head h2 { font-size: 19px; }
   .rec-rail-head h2 small { display: none; }
   .rec-rail-track { grid-auto-columns: 138px; gap: 10px; }
   .rec-card-price { font-size: 14px; }
-
+  .home-promo-window,.home-promo-window .campus-promo { border-radius: 13px; }
+  .home-promo-window .campus-promo,.home-promo-slide { min-height: 200px; }
+  .home-promo-slide { padding: 17px 12px 35px; }
+  .home-promo-copy { max-width: 100%; }
+  .home-promo-copy .promo-eyebrow { font-size: 8px; line-height: 1.5; letter-spacing: 0; }
+  .home-promo-title { font-size: 17px; margin: 8px 0 7px; min-height: 46px; max-width: 145px; line-height: 1.35; }
+  .home-promo-desc { font-size: 9px; line-height: 1.6; max-width: 145px; min-height: 29px; }
+  .home-promo-copy .promo-link { margin-top: 11px; font-size: 9px; max-width: 120px; gap: 3px; }
+  .home-promo-copy .promo-link .icon { width: 10px; height: 10px; }
+  .home-promo-window .promo-books,.home-promo-window .promo-home,.home-promo-category-art,.home-promo-symbol { display: none; }
+  .home-promo-window .promo-books { display: block; transform: scale(.44); right: 8px; bottom: 30px; opacity: .85; }
+  .home-promo-window .promo-home { display: block; transform: scale(.45); right: 8px; bottom: 28px; opacity: .85; }
+  .home-promo-category-art { display: block; width: 65px; height: 65px; right: 8px; bottom: 25px; opacity: .8; }
+  .home-promo-symbol { display: block; transform: scale(.46); right: 8px; bottom: 28px; opacity: .85; }
+  .home-promo-dots { left: 9px; bottom: 7px; }
   .home-feed-heading { gap: 5px; }
   .home-section-kicker { font-size: 8px; letter-spacing: 1.5px; }
   .home-feed h2 { font-size: 21px; }
-  .home-feed h2 small { display: none; }
   .home-feed-tools { gap: 1px; }
-  .home-feed-tools > button { font-size: 10px; padding: 6px 9px; }
+  .home-feed-tools > button { font-size: 10px; padding: 6px 8px; }
   .home-feed-context { font-size: 10px; gap: 4px; margin: 12px 0; }
   .home-feed-context small { font-size: 9px; }
   .home-page .product-grid { gap: 12px 9px; }
@@ -318,18 +209,14 @@
   .home-page .mini-tag { font-size: 9px; }
   .home-page .cond-badge { font-size: 9px; padding: 3px 5px; left: 7px; top: 7px; }
   .home-page .card-user > button:first-child { font-size: 10px; }
-  .home-cta { padding: 18px; border-radius: 15px; }
-  .home-cta strong { font-size: 16px; }
   .home-back-top { width: 40px; height: 48px; }
 }
-
-@media (max-width: 380px){
+@media(max-width:380px){
   .market-header-home .header-account-name { display: none; }
-  .hc-copy { max-width: 70%; }
-  .hc-title { font-size: 18px; }
-  .hc-art .promo-books, .hc-art .promo-home { display: none; }
+  .home-promo-title { font-size: 15px; min-height: 41px; }
+  .home-promo-window .campus-promo,.home-promo-slide { min-height: 207px; }
+  .home-promo-window .promo-books,.home-promo-window .promo-home,.home-promo-category-art,.home-promo-symbol { display: none; }
 }
-
-@media (prefers-reduced-motion: reduce){
+@media(prefers-reduced-motion:reduce){
   .home-page *, .market-header-home * { transition: none !important; animation: none !important; }
 }

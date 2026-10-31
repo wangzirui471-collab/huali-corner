@@ -48,8 +48,7 @@ export const clicks = {
     finally{ b.disabled = false; b.textContent = label; }
   },
   'market-channel': b => { state.filter.category = b.dataset.value; state.filter.q = ''; state.freeShelf = false; state.homeLimit = 40; go('home'); },
-  // 关键词快捷既出现在主视觉，也出现在「筛选」弹窗里；从弹窗点时要顺手关掉弹窗。
-  'market-shortcut': b => { closeModal(); state.filter.category = b.dataset.value; state.filter.q = b.dataset.q || ''; state.freeShelf = false; state.homeLimit = 40; go('home'); },
+  'market-shortcut': b => { state.filter.category = b.dataset.value; state.filter.q = b.dataset.q || ''; state.freeShelf = false; state.homeLimit = 40; go('home'); },
   'free-shelf': () => { state.filter.category = ''; state.filter.q = ''; state.freeShelf = true; state.homeLimit = 40; go('home'); },
   category: b => { state.filter.category = b.dataset.value; state.filter.q = ''; state.freeShelf = false; state.homeLimit = 40; go('home'); },
   'feed-tab': b => {
@@ -64,6 +63,13 @@ export const clicks = {
   'load-more': () => state.homeView?.next(),
   'rec-refresh': b => state.homeView?.recRefresh(b),
   'home-slide': b => state.homeView?.slide(b),
+  'home-promo-open': b => {
+    const slide=b.querySelector('[data-promo-slide]:not([hidden])');
+    if (!slide) return;
+    if (slide.dataset.route) go(slide.dataset.route);
+    else if (slide.dataset.free) clicks['free-shelf']();
+    else clicks['market-shortcut']({dataset:{value:slide.dataset.category}});
+  },
   'home-top': () => state.homeView?.top(),
 
   async favorite(b, id){
