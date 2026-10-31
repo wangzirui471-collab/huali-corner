@@ -13,13 +13,12 @@
 .market-header-home .desktop-navigation .btn.primary { background: #f5ca54; box-shadow: 0 4px 12px #ad8a2520; }
 .home-page { --price: #b48232; --price-soft: #fbf4e6; }
 .home-page [hidden] { display: none !important; }
-.home-page .market-channels { margin-bottom: 16px; }
+/* 频道行是首页唯一的分类入口（6 个：5 分类 + 免费送），快捷宫格已删。 */
+.home-page .market-channels { grid-template-columns: repeat(6,1fr); margin-bottom: 16px; }
 .home-page .channel .category-art { filter: saturate(.78) drop-shadow(0 3px 4px #32382c0a); }
 .home-page .channel:hover .category-art { transform: translateY(-2px); }
-.home-page .category-grid { border-radius: 18px; padding-block: 22px; margin: 0 0 16px; }
-.home-page .category-chip { box-shadow: none; filter: saturate(.7); }
-.home-page .category-grid button:hover .category-chip { transform: translateY(-2px); box-shadow: 0 3px 10px #34382c0d; }
-.home-promos { gap: 18px; margin: 0 0 28px; }
+/* 只剩一条专题轮播，铺满整行；两张并排的旧布局会挤出自相矛盾的两个入口。 */
+.home-promos { grid-template-columns: 1fr; gap: 18px; margin: 0 0 28px; }
 /* 「小转推荐」横滑轨：标题行 + 横向滚动卡带。
    卡带用 scroll-snap + 隐藏滚动条：触屏一划一张，桌面端滚动条不添乱。 */
 .rec-rail { margin: 0 0 30px; }
@@ -136,7 +135,7 @@
 @media(max-width:850px){
   .market-header-home .header-actions { gap: 8px; }
   .home-page .market-channels { margin-bottom: 12px; }
-  .home-page .category-grid { margin-bottom: 13px; padding-block: 20px; }
+  .home-page .channel { font-size: 14px; }
   .home-promos { gap: 12px; margin-bottom: 25px; }
   .home-promo-window .campus-promo,.home-promo-slide { min-height: 182px; }
   .home-promo-slide { padding: 23px 20px 38px; }
@@ -162,11 +161,10 @@
   .market-header-home .cart-button span { display: none; }
   .market-header-home .account-button { padding: 3px; border: 0; font-size: 10px; gap: 4px; }
   .market-header-home .header-account-name { max-width: 40px; }
-  .home-page .category-grid { grid-template-columns: repeat(5,minmax(0,1fr)); overflow: visible; gap: 18px 5px; padding: 19px 6px; border-radius: 14px; }
-  .home-page .category-grid button { font-size: 10px; gap: 7px; }
-  .home-page .category-chip { width: 36px; height: 36px; }
-  .home-page .category-chip .icon { width: 22px; height: 22px; }
-  .home-promos { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin-bottom: 23px; }
+  /* 六个频道挤在一屏：插画缩一档、字号收一点，避免出现横向滚动。 */
+  .home-page .channel { font-size: 11.5px; padding-left: 2px; padding-right: 2px; }
+  .home-page .channel .category-art { width: 40px; height: 40px; }
+  .home-promos { gap: 10px; margin-bottom: 23px; }
   /* 手机端推荐卡收窄一档，一屏能看出「还有下一张」；标题行留呼吸。 */
   .rec-rail { margin-bottom: 24px; }
   .rec-rail-head { align-items: center; }

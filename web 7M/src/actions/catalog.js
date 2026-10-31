@@ -63,12 +63,10 @@ export const clicks = {
   'load-more': () => state.homeView?.next(),
   'rec-refresh': b => state.homeView?.recRefresh(b),
   'home-slide': b => state.homeView?.slide(b),
+  // 专题卡只承载「分类 + 关键词」的窄口径搜索；点当前显示的那张。
   'home-promo-open': b => {
     const slide=b.querySelector('[data-promo-slide]:not([hidden])');
-    if (!slide) return;
-    if (slide.dataset.route) go(slide.dataset.route);
-    else if (slide.dataset.free) clicks['free-shelf']();
-    else clicks['market-shortcut']({dataset:{value:slide.dataset.category}});
+    if (slide) clicks['market-shortcut']({dataset:{value:slide.dataset.category, q:slide.dataset.q}});
   },
   'home-top': () => state.homeView?.top(),
 

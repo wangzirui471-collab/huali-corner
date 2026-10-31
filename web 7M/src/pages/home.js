@@ -12,12 +12,25 @@ import { categoryArt } from '../components/category-art.js';
 import { homePromos } from '../components/home-promos.js';
 
 const PAGE_SIZE=24;
-const channels=[['','推荐'],['books','二手书'],['living','宿舍生活'],['sports','运动好物'],['electronics','电子产品']];
-const shortcuts=[['books','教材书籍','book',''],['electronics','电子产品','device',''],['living','宿舍桌椅','chair','凳'],['living','台灯照明','home','灯'],['living','收纳用品','bag','收纳'],['sports','球拍运动','ball','']];
+// 一个去处只留一个入口：分类走 market-channel，免费送走 free-shelf（它是价格过滤，不是分类）。
+// 原来的九格快捷宫格里，「教材书籍 / 电子产品 / 球拍运动」与这一行同页，
+// 「校园求购 / 发布闲置」与顶栏同页，全部删掉；真正更窄的三个关键词（台灯 / 收纳 / 桌椅）挪进专题轮播。
+const channels=[
+  ['','推荐','all','market-channel'],
+  ['books','二手书','books','market-channel'],
+  ['living','宿舍生活','living','market-channel'],
+  ['sports','运动好物','sports','market-channel'],
+  ['electronics','电子产品','electronics','market-channel'],
+  ['free','免费送','free','free-shelf']
+];
 
 function navigation(){
-  return `<nav class="market-channels home-channels" aria-label="商品频道">${channels.map(([key,label])=>`<button class="channel ${state.filter.category===key&&!state.freeShelf?'active':''}" data-action="market-channel" data-value="${key}" aria-pressed="${state.filter.category===key&&!state.freeShelf}">${categoryArt(key||'all')}<span>${label}</span></button>`).join('')}</nav>
-    <section class="category-grid home-shortcuts" data-home-shortcuts aria-label="快捷分类">${shortcuts.map(([category,label,ic,q],index)=>`<button data-action="market-shortcut" data-value="${category}" data-q="${q}"><span class="category-chip ${['coral','steel','gold','mint','blue','lilac'][index]}">${icon(ic)}</span>${label}</button>`).join('')}<button data-action="free-shelf"><span class="category-chip pink">${icon('heart')}</span>免费送</button><button data-go="community"><span class="category-chip sky">${icon('message')}</span>校园求购</button><button data-go="publish"><span class="category-chip apricot">${icon('plus')}</span>发布闲置</button></section>`;
+  return `<nav class="market-channels home-channels" aria-label="商品频道">${channels.map(([key,label,art,action])=>{
+    const active=action==='free-shelf'?state.freeShelf:(state.filter.category===key&&!state.freeShelf);
+    // 免费送没有「分类值」可带，不写 data-value，免得和「推荐」频道长得一模一样难区分。
+    const value=action==='market-channel'?` data-value="${key}"`:'';
+    return `<button class="channel ${active?'active':''}" data-action="${action}"${value} aria-pressed="${active}">${categoryArt(art)}<span>${label}</span></button>`;
+  }).join('')}</nav>`;
 }
 
 // 首屏商品列表的查询串：home 与 main.js 的空闲预取共用，保证预取命中同一份缓存。

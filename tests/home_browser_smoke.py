@@ -53,12 +53,23 @@ def run():
                 page.add_init_script('sessionStorage.setItem("hc-token",'+json.dumps(buyer['token'])+');')
                 page.goto(base+'/#home', wait_until='networkidle')
                 expect(page.locator('.product-card')).to_have_count(24)
-                expect(page.locator('[data-home-carousel]')).to_have_count(2)
-                expect(page.locator('[data-promo-slide]')).to_have_count(6)
-                expect(page.locator('[data-promo-slide]:visible')).to_have_count(2)
+                expect(page.locator('[data-home-carousel]')).to_have_count(1)
+                expect(page.locator('[data-promo-slide]')).to_have_count(3)
+                expect(page.locator('[data-promo-slide]:visible')).to_have_count(1)
                 expect(page.locator('[data-action="home-pause"]')).to_have_count(0)
-                assert page.locator('.home-channels').bounding_box()['y'] < page.locator('.home-shortcuts').bounding_box()['y'] < page.locator('.home-promos').bounding_box()['y'] < page.locator('.home-feed').bounding_box()['y']
-                expect(page.locator('.home-shortcuts button')).to_have_count(9)
+                assert page.locator('.home-channels').bounding_box()['y'] < page.locator('.home-promos').bounding_box()['y'] < page.locator('.home-feed').bounding_box()['y']
+                # 九格快捷宫格整行删掉：其中六个和频道行、顶栏跳同一页。
+                expect(page.locator('.home-shortcuts')).to_have_count(0)
+                expect(page.locator('.home-channels .channel')).to_have_count(6)
+                # 去重硬约束：首页每个去处只许有一个入口。专题卡是「分类+关键词」，
+                # 与纯分类频道不算同一去处，所以按 action|value|q|go 整体比。
+                entries = page.evaluate("""()=>[...document.querySelectorAll(
+                    '.home-page .home-channels button, .home-page .home-promos [data-promo-slide]')]
+                    .map(el=>[el.dataset.action||'', el.dataset.value ?? el.dataset.category ?? '',
+                              el.dataset.q||'', el.dataset.go||''].join('|'))""")
+                assert len(entries)==len(set(entries)), f'首页仍有重复入口：{[x for x in set(entries) if entries.count(x)>1]}'
+                # 顶栏已有的去处（社区、发布闲置），首页不许再摆第二个入口。
+                assert page.evaluate("""()=>document.querySelectorAll('.home-page .home-channels [data-go], .home-page .home-promos [data-go]').length""")==0
                 expect(page.locator('.product-card [data-action="delist"],.product-card [data-action="moderate-product"]')).to_have_count(0)
                 for route in ['home','community','forum','me','publish']:
                     expect(page.locator('.desktop-navigation [data-go="'+route+'"]').first).to_be_visible()
@@ -100,9 +111,11 @@ def run():
                 expect(page.get_by_role('heading',name='暂时没有匹配的商品')).to_be_visible()
                 page.locator('.home-channels [data-value="books"]').click()
                 expect(page.locator('.product-card')).to_have_count(24)
-                page.locator('[data-action="free-shelf"]').click()
+                page.locator('.home-channels [data-action="free-shelf"]').click()
                 expect(page.locator('.product-card')).to_have_count(1)
                 expect(page.locator('.home-feed h2')).to_contain_text('免费好物')
+                expect(page.locator('.home-channels [data-action="free-shelf"]')).to_have_attribute('aria-pressed','true')
+                expect(page.locator('.home-channels [data-value="books"]')).to_have_attribute('aria-pressed','false')
 
                 # A delayed old request must not replace a newer route.
                 pending=[]
@@ -167,59 +180,50 @@ def run():
                 fallback.clock.install()
                 fallback.goto(base+'/#home',wait_until='networkidle')
                 expect(fallback.locator('.product-card')).to_have_count(24)
-                left=fallback.locator('[data-home-carousel="study"]')
-                right=fallback.locator('[data-home-carousel="campus"]')
-                def active(window, index):
+                window=fallback.locator('[data-home-carousel="dorm"]')
+                def active(index):
                     expect(window.locator('[data-promo-slide="'+str(index)+'"]')).to_be_visible()
-                left.hover()
+                    expect(window.locator('[data-promo-slide]:visible')).to_have_count(1)
+                window.hover()
                 fallback.clock.fast_forward(7100)
-                active(left,1); active(right,0)
-                right.locator('[data-action="home-promo-open"]').focus()
+                active(1)
                 fallback.clock.fast_forward(7100)
-                active(left,2); active(right,1)
+                active(2)
                 fallback.clock.fast_forward(7100)
-                active(left,0); active(right,2)
+                active(0)
+                # 圆点选页，定时器继续走（没有暂停键）。
+                window.locator('[data-action="home-slide"][data-index="1"]').click()
+                active(1)
                 fallback.clock.fast_forward(7100)
-                active(left,1); active(right,0)
-                # Dots select a page without pausing either timer.
-                left.locator('[data-action="home-slide"][data-index="0"]').click()
-                active(left,0)
-                fallback.clock.fast_forward(7100)
-                active(left,1); active(right,1)
-                for index in [1,2]:
-                    left.locator('[data-action="home-slide"][data-index="'+str(index)+'"]').click()
-                    right.locator('[data-action="home-slide"][data-index="'+str(index)+'"]').click()
-                    fallback.screenshot(path=str(output/f'home-desktop-themes-{index+1}.png'))
-                left.locator('[data-action="home-slide"][data-index="1"]').click()
-                # One stable button opens the currently displayed destination.
-                left.locator('[data-action="home-promo-open"]').click()
+                active(2)
+                fallback.screenshot(path=str(output/'home-desktop-themes-2.png'))
+                # 一个稳定按钮打开当前那张：带着关键词去搜，而不是退回纯分类。
+                # 先点圆点定住要看的那张，再点开启——中间不推进时钟，避免断言打到别的专题上。
+                window.locator('[data-action="home-slide"][data-index="1"]').click()
+                active(1)
+                window.locator('[data-action="home-promo-open"]').click()
                 expect(fallback.locator('.home-channels [data-value="living"]')).to_have_attribute('aria-pressed','true')
+                expect(fallback.locator('.home-feed-context')).to_contain_text('搜索：收纳')
                 fallback.locator('.home-channels [data-value=""]').click()
                 expect(fallback.locator('.product-card')).to_have_count(24)
                 fallback.locator('[data-action="load-more"]').click()
                 expect(fallback.locator('.product-card')).to_have_count(48)
-                for index, category in enumerate(['books','living','sports']):
-                    panel=fallback.locator('[data-home-carousel="study"]')
-                    panel.locator('[data-action="home-slide"][data-index="'+str(index)+'"]').click()
-                    panel.locator('[data-action="home-promo-open"]').click()
-                    expect(fallback.locator('.home-channels [data-value="'+category+'"]').first).to_have_attribute('aria-pressed','true')
-                panel=fallback.locator('[data-home-carousel="campus"]')
-                panel.locator('[data-action="home-slide"][data-index="1"]').click()
-                panel.locator('[data-action="home-promo-open"]').click()
-                expect(fallback.locator('.home-feed h2')).to_contain_text('免费好物')
-                panel.locator('[data-action="home-slide"][data-index="0"]').click()
-                panel.locator('[data-action="home-promo-open"]').click()
-                expect(fallback.locator('.community-hub')).to_be_visible()
-                fallback.locator('.brand').click()
-                panel=fallback.locator('[data-home-carousel="campus"]')
-                panel.locator('[data-action="home-slide"][data-index="2"]').click()
-                panel.locator('[data-action="home-promo-open"]').click()
+                for index, keyword in enumerate(['灯','收纳','凳']):
+                    window=fallback.locator('[data-home-carousel="dorm"]')
+                    window.locator('[data-action="home-slide"][data-index="'+str(index)+'"]').click()
+                    window.locator('[data-action="home-promo-open"]').click()
+                    expect(fallback.locator('.home-feed-context')).to_contain_text('搜索：'+keyword)
+                    expect(fallback.locator('.home-channels [data-value="living"]').first).to_have_attribute('aria-pressed','true')
+                # 首页不再有第二个「发布闲置」；顶栏那个仍然拦住未登录用户。
+                fallback.locator('.home-channels [data-value=""]').click()
+                expect(fallback.locator('.home-page [data-go="publish"]')).to_have_count(0)
+                fallback.locator('.desktop-navigation [data-go="publish"]').click()
                 expect(fallback.locator('[data-public-demo-feature]')).to_have_count(0)
                 # Guest publish correctly opens the existing login guard.
                 expect(fallback.get_by_role('dialog')).to_be_visible()
                 assert not errors, errors
                 browser.close()
-                print('PASS: original layout, dual three-slide autoplay, hover/focus/manual continuation, six destinations, paging/favorites, stale isolation, three mobile widths, centered five-slot nav, upper My Account, retained community hub and owner/staff functions')
+                print('PASS: single three-slide carousel, six channels as the only category entry, no shortcut grid, unique destination per entry, paging/favorites, stale isolation, three mobile widths, centered five-slot nav, upper My Account, retained community hub and owner/staff functions')
                 print('Screenshots: '+str(output))
         finally:
             server.shutdown()
