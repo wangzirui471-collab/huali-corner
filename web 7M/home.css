@@ -6,9 +6,12 @@
    ========================================================================== */
 
 /* --- 1. 主题令牌 ---------------------------------------------------------- */
+/* 令牌要同时挂在首页主体、页头和底部导航上：.mobile-nav 是 .market-app 的兄弟节点，
+   不从 .market-main-home 继承变量，漏掉它下面所有 var(--mint-*) 都会失效。 */
 .home-page,
 .market-header-home,
-.market-main-home {
+.market-main-home,
+.mobile-nav-home {
   --mint-900: #0d3b32;
   --mint-700: #146355;
   --mint: #0f7b63;
@@ -73,14 +76,14 @@
 .simulation-bar-home { background: var(--mint-50); color: var(--mint-700); border-bottom: 1px solid var(--mint-100); }
 
 /* 首页把品牌黄的强调位置（导航选中、底部发布、收藏心标）换成薄荷青；
-   只作用于 .market-app-home，其他页面仍是原来的品牌黄。 */
+   .mobile-nav 是 .market-app 的兄弟节点，只能自己带 home 标记来作用域化。 */
 .market-app-home .desktop-navigation .nav-item.active { background: var(--mint-50); color: var(--mint-700); }
-.market-app-home .mobile-nav .nav-item.active { color: var(--mint-900); }
-.market-app-home .mobile-nav .nav-item.active::before { background: var(--mint); }
-.market-app-home .mobile-nav .nav-item.active .icon { stroke: var(--mint); }
-.market-app-home .mobile-nav .mobile-publish .icon { background: linear-gradient(140deg, #17927a, var(--mint-700) 72%); color: #fff; box-shadow: 0 5px 12px rgba(20, 99, 85, .32); }
-.market-app-home .mobile-nav .mobile-publish:active .icon { box-shadow: 0 3px 8px rgba(20, 99, 85, .28); }
-.market-app-home .mobile-nav .mobile-publish span { color: var(--mint-700); }
+.mobile-nav-home .nav-item.active { color: var(--mint-900); }
+.mobile-nav-home .nav-item.active::before { background: var(--mint); }
+.mobile-nav-home .nav-item.active .icon { stroke: var(--mint); }
+.mobile-nav-home .mobile-publish .icon { background: linear-gradient(140deg, #17927a, var(--mint-700) 72%); color: #fff; box-shadow: 0 5px 12px rgba(20, 99, 85, .32); }
+.mobile-nav-home .mobile-publish:active .icon { box-shadow: 0 3px 8px rgba(20, 99, 85, .28); }
+.mobile-nav-home .mobile-publish span { color: var(--mint-700); }
 .market-app-home .card-title:hover { color: var(--mint-700); }
 .market-app-home .favorite-button.selected { color: var(--price); }
 

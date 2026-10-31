@@ -168,6 +168,12 @@ def run():
                     nav=page.locator('.mobile-publish').bounding_box()
                     assert abs(nav['x']+nav['width']/2-width/2)<=1
                     expect(page.locator('.account-button[data-go="me"]')).to_be_visible()
+                    # 首页底栏不能再留品牌黄：.mobile-nav 不在 .market-app 里，靠自己的 home 标记。
+                    expect(page.locator('.mobile-nav.mobile-nav-home')).to_have_count(1)
+                    ink = page.evaluate("getComputedStyle(document.querySelector('.mobile-nav .nav-item.active')).color")
+                    assert ink == 'rgb(13, 59, 50)', f'首页底栏选中色仍是 {ink}'
+                    fab = page.evaluate("getComputedStyle(document.querySelector('.mobile-nav .mobile-publish .icon')).backgroundImage")
+                    assert 'rgb(20, 99, 85)' in fab, f'首页发布按钮仍是品牌黄：{fab}'
                     page.screenshot(path=str(output/f'home-mobile-{width}.png'))
                 page.set_viewport_size({'width':1440,'height':1100})
                 page.goto(base+'/#favorites',wait_until='networkidle')
