@@ -39,6 +39,12 @@ def build(output):
                  +['item%d.svg'%n for n in range(3)]
                  +['electronics%d.jpg'%n for n in range(4)]):
         shutil.copy2(ASSETS/name,assets/name)
+    # 首页主视觉岛（Vue + Element Plus 产物）：缺文件时首页会退回原生轮播，但演示版应当看到同一套界面。
+    for name in ['home-island.js','home-island.css','THIRD-PARTY-NOTICES.txt']:
+        source=ASSETS/'home'/name
+        if source.exists():
+            (assets/'home').mkdir(exist_ok=True)
+            shutil.copy2(source,assets/'home'/name)
     html=(WEB/'index.html').read_text(encoding='utf-8')
     # 注意：不要匹配到结尾的引号。资源引用带 ?v= 版本号查询串，
     # 写成 src="/src/main.js" 会在加版本号之后失配，导致下面 public-demo.js 注入不进去。

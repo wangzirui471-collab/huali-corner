@@ -42,6 +42,7 @@ Backend mission/.wrangler/
 # 本地依赖与运行产物（不随仓库提交）
 Backend mission/node_modules/
 office-ui/node_modules/
+home-ui/node_modules/
 _ui_messages.png
 d1out.json
 

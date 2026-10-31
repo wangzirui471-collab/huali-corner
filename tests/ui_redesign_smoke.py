@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory() as root:
    assert page.get_by_role('searchbox',name='搜索商品').is_visible()
    assert page.get_by_role('searchbox',name='搜索商品').bounding_box()['y']<140
    assert page.locator('.product-card').first.bounding_box()['y']<600,'Real product feed should start within the first screen'
-   page.get_by_role('button',name='二手书',exact=True).first.click()
+   page.locator('.hc-cat[data-value="books"]').click()
    expect(page.locator('.product-card')).to_have_count(6)
    page.get_by_role('searchbox',name='搜索商品').fill('Python')
    page.locator('#search-form').get_by_role('button',name='搜索',exact=True).click()
@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory() as root:
    page.get_by_role('button',name='返回逛逛',exact=False).click()
    page.get_by_role('searchbox',name='搜索商品').fill('')
    page.locator('#search-form').get_by_role('button',name='搜索',exact=True).click()
-   page.get_by_role('button',name='推荐',exact=True).click()
+   page.locator('.hc-cat[data-value=""]').click()
    expect(page.locator('.product-card')).to_have_count(9)
    artifacts=Path('/workspace/campus-market/artifacts');artifacts.mkdir(exist_ok=True)
    for width,height,label in [(375,812,'small-mobile'),(390,844,'mobile'),(768,1024,'tablet'),(1440,1000,'desktop')]:
