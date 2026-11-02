@@ -11,7 +11,54 @@
 import { api } from '../core/http.js';
 import { state } from '../core/state.js';
 
+const GPT_POSE = '/assets/ai-pet/gpt/poses/';
+
 export const SKINS = {
+  // 龙娘（GPT 娘）：62 张透明姿势图，一张图一个动作。
+  // 与图集皮肤的区别只在渲染：这里不切格子，直接换整张背景图。
+  // 素材来自 longniang-desktop-pet，许可 CC BY-NC-SA 4.0（仅限非商业），
+  // 授权原文见 assets/ai-pet/gpt/ATTRIBUTION.md，换商业版前必须替换这套图。
+  gpt: {
+    id: 'gpt',
+    name: '小转',
+    note: '龙娘 · 62 种姿势',
+    avatar: GPT_POSE + 'happy.webp',
+    atlas: GPT_POSE + 'idle.webp',
+    mode: 'poses',
+    poseBase: GPT_POSE,
+    cell: [120, 147],
+    cols: 1,
+    rows: 1,
+    acts: {
+      idle: { src: GPT_POSE + 'idle.webp' },
+      idle2: { src: GPT_POSE + 'idle-2.webp' },
+      idle3: { src: GPT_POSE + 'idle-3.webp' },
+      blink: { src: GPT_POSE + 'idle-blink.webp' },
+      greet: { src: GPT_POSE + 'happy.webp', once: true },
+      look: { src: GPT_POSE + 'listening.webp' },
+      lie: { src: GPT_POSE + 'sleeping.webp' },
+      think: { src: GPT_POSE + 'thinking.webp' },
+      write: { src: GPT_POSE + 'writing.webp' },
+      fail: { src: GPT_POSE + 'oops.webp', once: true },
+      move: { src: GPT_POSE + 'running.webp' },
+      moveLeft: { src: GPT_POSE + 'running.webp', flip: true },
+      pat: { src: GPT_POSE + 'pat.webp' },
+    },
+    // 状态名→动作名，只给这只宠物用：图集皮肤没有 think/write 这两格。
+    stateAct: { review: 'think', waiting: 'think', typing: 'write', point: 'look', wave: 'greet' },
+    // 节日装扮：当天命中就换这身，过期自动回到待机。
+    seasonal: {
+      spring: 'fest_spring.webp',
+      lantern: 'fest_lantern.webp',
+      dragonboat: 'fest_dragonboat.webp',
+      midautumn: 'fest_midautumn.webp',
+      national: 'fest_national.webp',
+      halloween: 'fest_halloween.webp',
+      christmas: 'fest_christmas.webp',
+      newyear: 'fest_newyear.webp',
+    },
+  },
+
   // 女角色。图集沿用旧文件名（xiaozhuan-atlas），换名字只改这里，不动物理文件，
   // 免得 CDN 上多一份重复的大图。
   daqiao: {
@@ -38,7 +85,7 @@ export const SKINS = {
   // 以后作者给了分镜表，把 static 去掉、补 acts 即可，调用方不用改。
   zhuan: {
     id: 'zhuan',
-    name: '小转',
+    name: '团子小转',
     note: '橙团子 · 一只在等人的小兽',
     avatar: '/assets/ai-pet/xiaozhuan-pet.png',
     atlas: '/assets/ai-pet/xiaozhuan-pet.png',
@@ -76,8 +123,21 @@ export const SKINS = {
 // 有了素材就在 SKINS 里加一条同 id 的记录，这里自然不再出现。
 export const PENDING_SKINS = [];
 
-export const SKIN_LIST = [SKINS.zhuan, SKINS.daqiao, SKINS.xiaomao];
-export const DEFAULT_SKIN = 'daqiao';
+// 龙娘排第一：它是现在的默认形象（旧默认大乔留在列表里，想换回去随时能换）。
+export const SKIN_LIST = [SKINS.gpt, SKINS.zhuan, SKINS.daqiao, SKINS.xiaomao];
+export const DEFAULT_SKIN = 'gpt';
+
+// 老版本默认是大乔。升级后第一次进来如果还停在大乔，说明用户没主动选过，
+// 直接落到龙娘；选过小转/小毛/自定义的保持不动。只迁移一次。
+const MIGRATE_KEY = 'hc-pet-skin-v2';
+function migrateSkin(){
+  try{
+    if (localStorage.getItem(MIGRATE_KEY)) return;
+    if (localStorage.getItem('hc-pet-skin') === 'daqiao') localStorage.setItem('hc-pet-skin', 'gpt');
+    localStorage.setItem(MIGRATE_KEY, '1');
+  }catch(_){ }
+}
+migrateSkin();
 
 const SKIN_KEY = 'hc-pet-skin';
 const CUSTOM_KEY = 'hc-pet-custom';
@@ -158,6 +218,27 @@ export function getScale(){
 
 export function setScale(v){ write(SIZE_KEY, String(Math.min(1.6, Math.max(.6, Number(v) || 1)))); }
 
+// 不透明度 10%–100%：桌面版有的滑杆，网页这版同样落到 style.opacity。
+const OPACITY_KEY = 'hc-pet-opacity';
+export function getOpacity(){
+  const v = Number(read(OPACITY_KEY, '1'));
+  return Number.isFinite(v) ? Math.min(1, Math.max(.1, v)) : 1;
+}
+export function setOpacity(v){ write(OPACITY_KEY, String(Math.min(1, Math.max(.1, Number(v) || 1)))); }
+
+// 锁定位置 / 必须按 SHIFT 才拖得动：和桌面版同一套语义。
+const LOCK_KEY = 'hc-pet-lock';
+const SHIFT_KEY = 'hc-pet-shift-drag';
+export function getLocked(){ return read(LOCK_KEY, '0') === '1'; }
+export function setLocked(on){ write(LOCK_KEY, on ? '1' : '0'); }
+export function getShiftDrag(){ return read(SHIFT_KEY, '0') === '1'; }
+export function setShiftDrag(on){ write(SHIFT_KEY, on ? '1' : '0'); }
+
+// 自言自语：待机久了冒一句内置台词。
+const TALK_KEY = 'hc-pet-selftalk';
+export function getSelfTalk(){ return read(TALK_KEY, '1') !== '0'; }
+export function setSelfTalk(on){ write(TALK_KEY, on ? '1' : '0'); }
+
 export function getLife(){ return read(LIFE_KEY, '1') !== '0'; }
 export function setLife(on){ write(LIFE_KEY, on ? '1' : '0'); }
 
@@ -186,11 +267,20 @@ export function stopFrames(){
 export function applySkinFrame(sprite, skin, actName){
   if (!sprite || !skin) return;
   const act = skin.acts[actName] || skin.acts.idle;
+  stopFrames();
+  if (skin.mode === 'poses'){
+    // 姿势皮肤没有帧：换整张背景图即可。同一张不重复赋值，避免闪一下。
+    const src = (actName === 'seasonal' && seasonalSrc(skin)) || act.src || skin.acts.idle.src;
+    if (sprite.dataset.pose !== src){
+      sprite.dataset.pose = src;
+      sprite.style.backgroundImage = `url("${src}")`;
+    }
+    return;
+  }
   const [cw, ch] = skin.cell;
   const paint = i => {
     sprite.style.backgroundPosition = `${-i * cw}px ${-act.row * ch}px`;
   };
-  stopFrames();
   paint(0);
   const n = Math.max(1, act.n || 1);
   const ms = Math.max(60, act.ms || 160);
@@ -218,7 +308,45 @@ export function applySkinVars(el, skin, userScale){
   el.dataset.skin = skin.id;
   el.classList.toggle('is-custom', !!skin.custom);
   el.classList.toggle('is-static', !!skin.static || !!skin.custom);
-  applySkinFrame(el.querySelector('.ai-pet-sprite'), skin, 'idle');
+  const poses = skin.mode === 'poses';
+  el.classList.toggle('is-poses', poses);
+  const sprite = el.querySelector('.ai-pet-sprite');
+  if (sprite){
+    // 姿势图按「整张 contain、底部对齐」画：各张宽高比不同，切边会缺胳膊。
+    sprite.style.backgroundSize = poses ? 'contain' : '';
+    sprite.style.backgroundPosition = poses ? 'center bottom' : '';
+    if (!poses) delete sprite.dataset.pose;
+  }
+  applySkinFrame(sprite, skin, 'idle');
+}
+
+// 节日装扮：只对声明了 seasonal 的皮肤生效（目前只有龙娘有节日图）。
+// 农历节日没有运行时库，这里按已知日期给 ±2 天窗口，过期就返回空。
+const FESTIVALS = [
+  { key: 'spring', month: 2, day: 17 },     // 2026 春节
+  { key: 'lantern', month: 3, day: 3 },     // 2026 元宵
+  { key: 'dragonboat', month: 6, day: 19 }, // 2026 端午
+  { key: 'midautumn', month: 9, day: 25 },  // 2026 中秋
+  { key: 'national', month: 10, day: 1, span: 7 },
+  { key: 'halloween', month: 10, day: 31 },
+  { key: 'christmas', month: 12, day: 25 },
+  { key: 'newyear', month: 1, day: 1 },
+];
+
+function seasonalSrc(skin, date = new Date()){
+  if (!skin || !skin.seasonal) return '';
+  const m = date.getMonth() + 1, d = date.getDate();
+  const hit = FESTIVALS.find(f => {
+    const span = f.span || 2;
+    return f.month === m && Math.abs(d - f.day) <= span;
+  }) || ((m === 12 && d === 31) ? { key: 'newyear' } : null);
+  const file = hit && skin.seasonal[hit.key];
+  return file ? (skin.poseBase || '') + file : '';
+}
+
+/** 今天是节日就返回节日动作名，否则空串。调用方用它决定要不要换装扮。 */
+export function festivalAct(skin, date = new Date()){
+  return seasonalSrc(skin, date) ? 'seasonal' : '';
 }
 
 // 状态名 → 动作名。桌宠的状态来自各处调用（拖动、点开面板、等接口、出错），
@@ -238,7 +366,9 @@ const STATE_TO_ACT = {
 
 export function resolveAct(skin, state){
   if (!skin || !skin.acts) return { act: 'idle', flip: false };
-  const want = STATE_TO_ACT[state] || state;
+  // 皮肤可以自己改状态映射：龙娘有 think / write，图集皮肤没有这两格。
+  const want = (skin.stateAct && skin.stateAct[state]) || STATE_TO_ACT[state] || state;
+  if (want === 'seasonal' && skin.seasonal) return { act: 'seasonal', flip: false };
   if (skin.acts[want]) return { act: want, flip: !!skin.acts[want].flip };
   // 图集里没有单独的「向左」，就把「向右」那段翻过来用。
   if (want === 'moveLeft' && skin.acts.move) return { act: 'move', flip: true };

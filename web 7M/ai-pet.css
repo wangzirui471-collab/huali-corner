@@ -807,3 +807,64 @@ button.ai-pet-link{ cursor: pointer; font-family: inherit; }
 .ps-skin.is-pending{ opacity: .62; cursor: not-allowed; background: #fbfbf9; }
 .ps-skin.is-pending:hover{ border-color: #eceee5; background: #fbfbf9; }
 .ps-skin.is-pending .ps-skin-pic{ color: #b9bfae; }
+
+/* --- 龙娘：姿势模式 + 右键菜单 + 语音 ----------------------------------- */
+/* 姿势皮肤的背景图由 JS 设成 contain / 底部对齐，这里补一张卡片的呼吸阴影。 */
+.ai-pet.is-poses .ai-pet-sprite{ background-repeat: no-repeat; }
+.ai-pet.is-poses.is-static .ai-pet-sprite{ animation: pet-breathe 4.6s ease-in-out infinite; }
+
+/* 气泡：默认只给「摸摸」用（nowrap 那条）；自言自语和问候也复用它，
+   要能换行，不然「有闲置要出的话，挂上来试试？」会撑出屏幕。 */
+.ai-pet-reaction.is-on{
+  visibility: visible;
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+  animation: pet-say .3s ease-out both;
+  white-space: normal;
+  max-width: 190px;
+  text-align: left;
+}
+
+.ai-pet-menu{
+  position: fixed;
+  z-index: 210;
+  min-width: 148px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: rgba(255, 255, 255, .96);
+  border: 1px solid #e8e2f4;
+  border-radius: 13px;
+  box-shadow: 0 16px 40px rgba(46, 34, 72, .18);
+  backdrop-filter: blur(10px);
+}
+.ai-pet-menu button{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 11px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: #463c62;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.ai-pet-menu button:hover{ background: #f4f0fb; }
+.ai-pet-menu button span{ width: 12px; color: #7a5fd0; font-weight: 700; }
+
+/* 设置面板里的下拉框：原来只有滑杆和开关，语音页要选音色。 */
+.ps-ctl select{
+  min-width: 150px;
+  max-width: 220px;
+  padding: 7px 9px;
+  border: 1px solid #e3ddf2;
+  border-radius: 9px;
+  background: #fff;
+  color: #3f3757;
+  font-size: 12px;
+}
+.ps-ctl select:focus{ outline: 2px solid #b9a5f0; outline-offset: 1px; }
+.ps-ctl select:disabled{ background: #f6f5f2; color: #a6a1b4; }

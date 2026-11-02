@@ -13,14 +13,22 @@ import {
   SKINS, SKIN_LIST, PENDING_SKINS, DEFAULT_SKIN, currentSkin, customSkin,
   saveCustomSkin, clearCustomSkin, getSkinId, setSkinId,
   getScale, setScale, getLife, setLife, getHidden, setHidden,
+  getOpacity, setOpacity, getLocked, setLocked, getShiftDrag, setShiftDrag,
+  getSelfTalk, setSelfTalk,
   hasReadNotice, markNoticeRead, forgetPosition,
   pullPetPrefs, schedulePushPetPrefs, uploadCustomSkin,
 } from './pet-skins.js';
+import {
+  voiceSupported, getVoiceOn, setVoiceOn, getVoiceRate, setVoiceRate,
+  getVoiceName, setVoiceName, listVoices, primeVoices, speak,
+} from './pet-voice.js';
+import { getSoundOn, setSoundOn, playPetClick } from './pet-sound.js';
 
 const TABS = [
   ['pet', '桌宠'],
   ['look', '外观'],
   ['behave', '行为'],
+  ['voice', '语音'],
   ['about', '须知'],
 ];
 
@@ -47,7 +55,7 @@ const NOTICE = `
 <p>1. <b>平台问答</b>：发布、下单、付款、面交、退款、售后、好友、信誉、客服时间等规则问题，按平台现行规则回答。</p>
 <p>2. <b>开放闲聊</b>：跟校园生活、二手行情、心情有关的话题都可以聊，它也会接话。</p>
 <p>3. <b>发布助手</b>：帮你写商品描述、给出参考估价区间。</p>
-<p>你可以随时换掉它的形象（小转 / 大乔 / 小毛 / 自己上传），换形象不影响它回答的内容。</p>
+<p>你可以随时换掉它的形象（小转·龙娘 / 团子小转 / 大乔 / 小毛 / 自己上传），换形象不影响它回答的内容。语音朗读、点击音效、自言自语都在「设置 → 语音 / 行为」里开关。</p>
 
 <h4>二、谁能用</h4>
 <p>1. 本服务面向已注册的转角用户。注册即表示你具备使用本服务所需的行为能力。</p>
@@ -71,12 +79,16 @@ const NOTICE = `
 <p>3. 若部署为本地模型模式，问题不会离开本机，面板底部会注明。</p>
 <p>4. 提问次数有每日上限，用于控制成本；上限在设置页可以看到。</p>
 
-<h4>六、自定义形象</h4>
+<h4>六、形象与语音</h4>
+<p>1. <b>小转·龙娘</b>（GPT 娘）姿势素材来自开源项目，许可为 CC BY-NC-SA 4.0，<b>仅限非商业使用</b>，署名为 CrossPet、ZipZipPipe；素材说明见 <code>assets/ai-pet/gpt/ATTRIBUTION.md</code>。</p>
+<p>2. 语音朗读使用<b>浏览器自带</b>的语音合成，声音来自你设备的系统语音库，不上传文本、不产生额外费用；可用音色与语速以本机语音库为准。</p>
+
+<h4>七、自定义形象</h4>
 <p>1. 上传的图片<b>仅保存在你自己的浏览器</b>，不上传服务器，也不对其他用户可见。</p>
 <p>2. 你应确保对该图片拥有使用权，不得上传他人肖像、涉密或违法内容。</p>
 <p>3. 换设备、清缓存后自定义形象会丢失，需要重新上传。</p>
 
-<h4>七、其他</h4>
+<h4>八、其他</h4>
 <p>1. 本服务可能因模型故障、网络、额度耗尽而暂时不可用，此时可以直接说「转人工」或提交工单。</p>
 <p>2. 我们会按需更新本须知，更新后在设置页重新打开即可看到。继续使用即视为接受更新后的内容。</p>
 <p>3. 本须知未尽事项，适用《转角用户协议》与《转角隐私政策》。</p>
@@ -113,6 +125,15 @@ function skinCards(){
   return cards.join('');
 }
 
+function voiceOptions(){
+  const cur = getVoiceName();
+  const opts = ['<option value="">自动（中文优先）</option>'];
+  for (const v of listVoices()){
+    opts.push(`<option value="${esc(v.name)}"${v.name === cur ? ' selected' : ''}>${esc(v.name)}${v.lang ? ' · ' + esc(v.lang) : ''}</option>`);
+  }
+  return opts.join('');
+}
+
 function panelHtml(){
   const scale = getScale();
   return `
@@ -143,6 +164,10 @@ function panelHtml(){
         <span class="ps-ctl"><input type="range" min="60" max="160" step="5" value="${Math.round(scale * 100)}" id="ps-scale" aria-label="桌宠大小"></span>
       </div>
       <div class="ps-row">
+        <span class="ps-row-txt"><b>不透明度</b><small><span id="ps-opacity-val">${Math.round(getOpacity() * 100)}</span>%　调低后更不挡内容，点击和拖动照旧。</small></span>
+        <span class="ps-ctl"><input type="range" min="10" max="100" step="5" value="${Math.round(getOpacity() * 100)}" id="ps-opacity" aria-label="桌宠不透明度"></span>
+      </div>
+      <div class="ps-row">
         <span class="ps-row-txt"><b>显示桌宠</b><small>关掉之后，随时可以从「我的 → 桌宠设置」重新打开。</small></span>
         <span class="ps-ctl"><label class="ps-switch"><input type="checkbox" id="ps-show"${getHidden() ? '' : ' checked'}><i></i></label></span>
       </div>
@@ -161,8 +186,46 @@ function panelHtml(){
         <span class="ps-ctl"><label class="ps-switch"><input type="checkbox" id="ps-life"${getLife() ? ' checked' : ''}><i></i></label></span>
       </div>
       <div class="ps-row">
+        <span class="ps-row-txt"><b>自言自语</b><small>待机久了自己冒一句台词。关掉后只在你操作时说话。</small></span>
+        <span class="ps-ctl"><label class="ps-switch"><input type="checkbox" id="ps-talk"${getSelfTalk() ? ' checked' : ''}><i></i></label></span>
+      </div>
+      <div class="ps-row">
+        <span class="ps-row-txt"><b>点击音效</b><small>点它、摸摸它时有一声很短的「啵」，由浏览器合成，不下载音频。</small></span>
+        <span class="ps-ctl"><label class="ps-switch"><input type="checkbox" id="ps-sound"${getSoundOn() ? ' checked' : ''}><i></i></label></span>
+      </div>
+      <div class="ps-row">
+        <span class="ps-row-txt"><b>锁定位置</b><small>锁定后拖不动，点击互动照旧。想挪位置先解锁。</small></span>
+        <span class="ps-ctl"><label class="ps-switch"><input type="checkbox" id="ps-lock"${getLocked() ? ' checked' : ''}><i></i></label></span>
+      </div>
+      <div class="ps-row">
+        <span class="ps-row-txt"><b>按住 SHIFT 才能拖动</b><small>防止浏览页面时误拖。手机上不生效。</small></span>
+        <span class="ps-ctl"><label class="ps-switch"><input type="checkbox" id="ps-shift"${getShiftDrag() ? ' checked' : ''}><i></i></label></span>
+      </div>
+      <div class="ps-row">
         <span class="ps-row-txt"><b>拖动后记住位置</b><small>位置存在这台设备上，换设备不跟随。</small></span>
         <span class="ps-ctl"><span class="ps-hint">已开启</span></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="ps-pane" data-pane="voice"${activeTab === 'voice' ? '' : ' hidden'}>
+    <header class="ps-head"><h3>语音</h3><p>让它把回答读出来。用的是浏览器自带的语音，不联网、不额外收费。</p></header>
+    <div class="ps-card">
+      <div class="ps-row">
+        <span class="ps-row-txt"><b>朗读回答</b><small>${voiceSupported() ? 'AI 回答出现后自动读一遍。' : '当前浏览器不支持语音朗读。'}</small></span>
+        <span class="ps-ctl"><label class="ps-switch"><input type="checkbox" id="ps-voice-on"${getVoiceOn() ? ' checked' : ''}${voiceSupported() ? '' : ' disabled'}><i></i></label></span>
+      </div>
+      <div class="ps-row">
+        <span class="ps-row-txt"><b>音色</b><small>来自系统语音库；没装中文语音时可能只有一两个可选。</small></span>
+        <span class="ps-ctl"><select id="ps-voice-name" aria-label="语音音色">${voiceOptions()}</select></span>
+      </div>
+      <div class="ps-row">
+        <span class="ps-row-txt"><b>语速</b><small><span id="ps-rate-val">${Math.round(getVoiceRate() * 100)}</span>%　慢一点更清楚，快一点不拖沓。</small></span>
+        <span class="ps-ctl"><input type="range" min="80" max="140" step="5" value="${Math.round(getVoiceRate() * 100)}" id="ps-voice-rate" aria-label="朗读语速"></span>
+      </div>
+      <div class="ps-row">
+        <span class="ps-row-txt"><b>试听</b><small>先听一句，再决定开不开。</small></span>
+        <span class="ps-ctl"><button type="button" class="btn secondary" data-ps="voice-test">听一句</button></span>
       </div>
     </div>
   </section>
@@ -236,6 +299,10 @@ function bind(){
       emit('position');
       return;
     }
+    if (kind === 'voice-test'){
+      speak('你好，我是小转。有闲置要出的话，挂上来试试。', { force: true });
+      return;
+    }
     if (kind === 'del-custom'){
       clearCustomSkin();
       schedulePushPetPrefs(0);
@@ -301,6 +368,68 @@ function bindPanes(){
       schedulePushPetPrefs();
       emit('life');
     };
+  }
+
+  const opacity = root.querySelector('#ps-opacity');
+  if (opacity){
+    opacity.oninput = () => {
+      const v = Number(opacity.value) / 100;
+      setOpacity(v);
+      const label = root.querySelector('#ps-opacity-val');
+      if (label) label.textContent = String(Math.round(v * 100));
+      emit('opacity');
+    };
+  }
+
+  const talk = root.querySelector('#ps-talk');
+  if (talk) talk.onchange = () => setSelfTalk(talk.checked);
+
+  const sound = root.querySelector('#ps-sound');
+  if (sound){
+    sound.onchange = () => {
+      setSoundOn(sound.checked);
+      if (sound.checked) playPetClick();
+    };
+  }
+
+  const lock = root.querySelector('#ps-lock');
+  if (lock) lock.onchange = () => setLocked(lock.checked);
+
+  const shift = root.querySelector('#ps-shift');
+  if (shift) shift.onchange = () => setShiftDrag(shift.checked);
+
+  const voiceOn = root.querySelector('#ps-voice-on');
+  if (voiceOn){
+    voiceOn.onchange = () => {
+      setVoiceOn(voiceOn.checked);
+      if (voiceOn.checked) speak('好的，我会把回答读出来。', { force: true });
+    };
+  }
+
+  const voiceName = root.querySelector('#ps-voice-name');
+  if (voiceName){
+    // 语音列表是异步加载的：先按当前能拿到的渲染，加载完再补一遍。
+    primeVoices(() => {
+      if (!voiceName.isConnected) return;
+      const keep = voiceName.value;
+      voiceName.innerHTML = voiceOptions();
+      voiceName.value = keep;
+    });
+    voiceName.onchange = () => {
+      setVoiceName(voiceName.value);
+      speak('这个音色听起来怎么样？', { force: true });
+    };
+  }
+
+  const rate = root.querySelector('#ps-voice-rate');
+  if (rate){
+    rate.oninput = () => {
+      const v = Number(rate.value) / 100;
+      setVoiceRate(v);
+      const label = root.querySelector('#ps-rate-val');
+      if (label) label.textContent = String(Math.round(v * 100));
+    };
+    rate.onchange = () => speak('这是现在的语速。', { force: true });
   }
 }
 

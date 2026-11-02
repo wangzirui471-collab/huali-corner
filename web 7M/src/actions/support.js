@@ -12,6 +12,7 @@ import { isOwner } from '../core/roles.js';
 import { field } from '../components/forms.js';
 import { ticketModal } from '../pages/support.js';
 import { setPetState, togglePetPanel, paintDuty, applyPetChips, togglePetChips } from '../components/ai-pet.js';
+import { speak } from '../components/pet-voice.js';
 import { openOfficeTickets } from '../components/office-tickets.js';
 import { loginModal } from '../auth/login.js';
 
@@ -87,6 +88,8 @@ async function petAsk(q, extra){
       ${sug?`<div class="ai-pet-sugs">${sug}</div>`:''}
       ${src?`<div class="ai-pet-src">来源：${src}</div>`:''}
       ${r.notice?`<div class="ai-pet-src">${e(r.notice)}</div>`:''}`;
+    // 语音朗读：只读客服问答的正文，机器表格和办公数据不念。
+    if (r.answer) speak(r.answer);
     paintDuty(r.support);          // 状态灯以服务端为准，避免和回答内容打架
     // 历史只留 role/content：情绪分桶已经删掉，没有需要跨轮继承的标签了。
     petHistory.push(

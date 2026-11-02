@@ -14,8 +14,11 @@ import { isOwner } from '../core/roles.js';
 import {
   currentSkin, getScale, getLife, getHidden, setHidden,
   applySkinVars, applySkinFrame, resolveAct, stopFrames, pullPetPrefs,
+  getOpacity, getLocked, setLocked, getShiftDrag, getSelfTalk,
+  festivalAct,
 } from './pet-skins.js';
 import { openPetSettings, onPetPrefChange } from './pet-settings.js';
+import { playPetClick } from './pet-sound.js';
 
 const SPRITE_W = 120;          // 旧图集的单帧宽，只在图集还没接管尺寸前兜底
 const SPRITE_H = 147;
@@ -207,6 +210,7 @@ export function setPetState(name, holdMs){
 // 摸摸时给小转一个短暂的挥袖反馈；连续触发会重新播放动画并轮换一句回应。
 function petReaction(){
   if (!petEl) return;
+  playPetClick();
   clearTimeout(petFeedbackTimer);
   const messages = ['被你摸到啦，好开心！', '转一圈，电量回满！', '嘿嘿，我也摸摸你！'];
   const bubble = $('#ai-pet-reaction');
@@ -467,6 +471,9 @@ export function togglePetPanel(open){
 function bindDrag(body){
   body.addEventListener('pointerdown', ev => {
     if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+    // 锁定位置时只是不能拖，点击开面板照旧；开了「必须按住 SHIFT」没按也不拖。
+    if (getLocked()) return;
+    if (getShiftDrag() && !ev.shiftKey) return;
     const r = petEl.getBoundingClientRect();
     drag = { id: ev.pointerId, sx: ev.clientX, sy: ev.clientY, ox: r.left, oy: r.top, moved: false, petted: false };
     const activeDrag = drag;
@@ -516,6 +523,7 @@ function bindDrag(body){
   body.addEventListener('click', ev => {
     if (performance.now() < suppressPetClickUntil){ ev.preventDefault(); ev.stopPropagation(); return; }
     if (performance.now() - lastDragEnd < 320){ ev.preventDefault(); ev.stopPropagation(); return; }
+    playPetClick();
     togglePetPanel();
   });
 }
@@ -525,10 +533,136 @@ function scheduleLife(){
   clearTimeout(lifeTimer);
   lifeTimer = setTimeout(() => {
     if (getLife() && petEl && !drag && !petEl.classList.contains('is-open')){
-      setPetState(Math.random() < .55 ? 'greet' : 'look', 1400);
+      // 龙娘没有动画帧，靠「换姿势」显得活着：眨眼最便宜，偶尔抬头/挥手。
+      const skin = currentSkin();
+      const poses = skin && skin.mode === 'poses';
+      const roll = Math.random();
+      if (poses && roll < .45) setPetState('blink', 420);
+      else setPetState(roll < .78 ? 'look' : 'greet', 1400);
     }
     scheduleLife();
   }, 11000 + Math.random() * 9000);
+}
+
+// --- 自言自语 -----------------------------------------------------------
+// 桌面版会在待机时冒一句内置台词；这里按同一思路给几句和校园二手有关的话。
+const SELF_TALK = [
+  '有闲置要出的话，挂上来试试？',
+  '教材别急着扔，下一届的同学正缺。',
+  '面交约在图书馆门口，人多也安全。',
+  '价格写清楚，问的人会多一点。',
+  '宿舍腾地方，顺手把好物转给同学。',
+];
+let talkTimer = 0;
+let bubbleTimer = 0;
+
+function petBubble(text, ms = 7000){
+  const bubble = $('#ai-pet-reaction');
+  if (!bubble) return;
+  bubble.textContent = text;
+  bubble.classList.add('is-on');
+  clearTimeout(bubbleTimer);
+  bubbleTimer = setTimeout(() => bubble.classList.remove('is-on'), ms);
+}
+
+function scheduleTalk(){
+  clearTimeout(talkTimer);
+  talkTimer = setTimeout(() => {
+    const open = petEl?.classList.contains('is-open');
+    if (getSelfTalk() && !open && !drag && petEl && !petEl.hidden){
+      petBubble(SELF_TALK[Math.floor(Math.random() * SELF_TALK.length)]);
+      setPetState('look', 1200);
+    }
+    scheduleTalk();
+  }, 38000 + Math.random() * 37000);
+}
+
+// --- 时段问候 + 节日装扮 ------------------------------------------------
+function greetingLine(){
+  const h = new Date().getHours();
+  if (h < 6) return '这么晚还没睡，灯记得关。';
+  if (h < 11) return '早安，今天有要出的闲置吗？';
+  if (h < 14) return '午安，吃饭了吗？';
+  if (h < 18) return '下午好，逛逛有没有想收的。';
+  if (h < 23) return '晚上好，宿舍灯下最好拍照。';
+  return '夜深了，早点休息。';
+}
+
+function greetOnce(){
+  const skin = currentSkin();
+  if (!skin || !petEl) return;
+  let seen = '';
+  try{ seen = sessionStorage.getItem('hc-pet-greeted') || ''; }catch(_){ }
+  if (seen === skin.id) return;
+  try{ sessionStorage.setItem('hc-pet-greeted', skin.id); }catch(_){ }
+  const fest = festivalAct(skin);
+  petBubble(fest ? `${greetingLine()} 今天过节，换身衣服。` : greetingLine(), 8000);
+  setPetState(fest || 'greet', 4200);
+}
+
+// --- 右键菜单 -----------------------------------------------------------
+// 桌面版右键菜单有十几项，网页这版只留桌宠自己的事：换形象、语音音效、锁定、隐藏、复位。
+let menuEl = null;
+
+function closePetMenu(){
+  if (menuEl){ menuEl.remove(); menuEl = null; }
+}
+
+function petToast(msg){
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(petToast._t);
+  petToast._t = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+function openPetMenu(x, y){
+  closePetMenu();
+  menuEl = document.createElement('div');
+  menuEl.className = 'ai-pet-menu';
+  menuEl.setAttribute('role', 'menu');
+  menuEl.innerHTML = `
+    <button type="button" role="menuitem" data-m="skin">换形象…</button>
+    <button type="button" role="menuitem" data-m="voice">语音与音效…</button>
+    <button type="button" role="menuitem" data-m="lock"><span>${getLocked() ? '✓' : ''}</span>锁定位置</button>
+    <button type="button" role="menuitem" data-m="reset">复位位置</button>
+    <button type="button" role="menuitem" data-m="hide">隐藏桌宠</button>`;
+  document.body.appendChild(menuEl);
+  const box = menuEl.getBoundingClientRect();
+  menuEl.style.left = Math.max(8, Math.min(x, window.innerWidth - box.width - 8)) + 'px';
+  menuEl.style.top = Math.max(8, Math.min(y, window.innerHeight - box.height - 8)) + 'px';
+  menuEl.addEventListener('click', ev => {
+    const btn = ev.target.closest('[data-m]');
+    if (!btn) return;
+    const kind = btn.dataset.m;
+    closePetMenu();
+    if (kind === 'skin'){ openPetSettings('pet'); return; }
+    if (kind === 'voice'){ openPetSettings('voice'); return; }
+    if (kind === 'lock'){
+      setLocked(!getLocked());
+      petToast(getLocked() ? '已锁定位置，点击互动照旧' : '可以拖动了');
+      return;
+    }
+    if (kind === 'reset'){
+      try{ localStorage.removeItem(POS_KEY); }catch(_){ }
+      restorePos(); placePanel(); petToast('已回到右下角');
+      return;
+    }
+    if (kind === 'hide'){ setHidden(true); if (petEl) petEl.hidden = true; petToast('已隐藏，可从「我的 → 桌宠设置」打开'); }
+  });
+}
+
+function bindPetMenu(body){
+  body.addEventListener('contextmenu', ev => {
+    ev.preventDefault();
+    openPetMenu(ev.clientX, ev.clientY);
+  });
+  document.addEventListener('click', ev => {
+    if (menuEl && !menuEl.contains(ev.target)) closePetMenu();
+  });
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closePetMenu(); });
+  window.addEventListener('scroll', closePetMenu, true);
 }
 
 // --- 皮肤 ---------------------------------------------------------------
@@ -545,6 +679,7 @@ function applySkin(){
   const body = $('#ai-pet-body');
   if (body) body.setAttribute('aria-label', `AI 助手${skin.name}，点一下聊天，长按摸摸，拖动移动`);
   petEl.hidden = getHidden();
+  petEl.style.opacity = String(getOpacity());
 
   // 图集（或用户上传的图）能不能解码，决定用精灵还是降级成字钮。
   const probe = new Image();
@@ -571,6 +706,7 @@ export function mountPet(){
   applySkin();
   restorePos();
   bindDrag(body);
+  bindPetMenu(body);
   bindPanelResize($('#ai-pet-panel'));
   $('#ai-pet-pat')?.addEventListener('click', petReaction);
   $('#ai-pet-close')?.addEventListener('click', () => togglePetPanel(false));
@@ -591,6 +727,7 @@ export function mountPet(){
       return;
     }
     if (what === 'scale'){ applySkin(); return; }
+    if (what === 'opacity'){ petEl.style.opacity = String(getOpacity()); return; }
     if (what === 'life'){ scheduleLife(); return; }
     if (what === 'skin'){ applySkin(); return; }
   });
@@ -649,6 +786,9 @@ export function mountPet(){
   }catch(_){ }
 
   scheduleLife();
+  scheduleTalk();
+  // 第一次见到这只宠物时打个招呼：按时段问候，赶上节日就换装扮。
+  setTimeout(greetOnce, 1200);
 
   window.addEventListener('resize', () => {
     if (!petEl) return;
