@@ -47,41 +47,26 @@ export const clicks = {
     }catch(err){ toast(err.message || '估价失败'); }
     finally{ b.disabled = false; b.textContent = label; }
   },
-  // 逛逛页的频道行：每个频道都有自己的地址（#home/books / #home/free），
-  // 点哪个就落到哪个，浏览器返回键能退回上一个频道；
-  // 不再像旧版那样所有入口都 go('home')，让用户觉得「点什么都是同一个页面」。
-  'home-channel': b => {
-    const value = b.dataset.value || '';
-    state.filter.q = '';
-    state.filter.category = value && value !== 'free' ? value : '';
-    state.freeShelf = value === 'free';
-    state.homeLimit = 40;
-    go(value ? 'home/' + value : 'home');
-  },
-  category: b => {
-    const value = b.dataset.value || '';
-    state.filter.category = value;
-    state.filter.q = '';
-    state.freeShelf = false;
-    state.homeLimit = 40;
-    go(value ? 'home/' + value : 'home');
-  },
+  'market-channel': b => { state.filter.category = b.dataset.value; state.filter.q = ''; state.freeShelf = false; state.homeLimit = 40; go('home'); },
+  'market-shortcut': b => { state.filter.category = b.dataset.value; state.filter.q = b.dataset.q || ''; state.freeShelf = false; state.homeLimit = 40; go('home'); },
+  'free-shelf': () => { state.filter.category = ''; state.filter.q = ''; state.freeShelf = true; state.homeLimit = 40; go('home'); },
+  category: b => { state.filter.category = b.dataset.value; state.filter.q = ''; state.freeShelf = false; state.homeLimit = 40; go('home'); },
   'feed-tab': b => {
     state.filter.sort = '';
     state.filter.q = '';
     state.freeShelf = b.dataset.free === '1';
-    state.filter.category = state.freeShelf ? '' : (b.dataset.value || '');
+    state.filter.category = state.freeShelf ? '' : b.dataset.value;
     state.homeLimit = 40;
-    go(state.freeShelf ? 'home/free' : (state.filter.category ? 'home/' + state.filter.category : 'home'));
+    go('home');
   },
-  // 排序只改查询条件，不改频道：留在当前地址上重画，教材频道里排序仍是教材。
-  'feed-sort': b => { state.filter.sort = b.dataset.value; state.homeLimit = 40; go(location.hash.slice(1) || 'home'); },
+  'feed-sort': b => { state.filter.sort = b.dataset.value; go('home'); },
   'load-more': () => state.homeView?.next(),
+  'rec-refresh': b => state.homeView?.recRefresh(b),
   'home-slide': b => state.homeView?.slide(b),
-  // 主视觉整卡是一个按钮，按「当前可见的那张」跳它自己的去处。
+  // 专题卡只承载「分类 + 关键词」的窄口径搜索；点当前显示的那张。
   'home-promo-open': b => {
-    const slide = b.querySelector('[data-promo-slide]:not([hidden])');
-    if (slide?.dataset.go) go(slide.dataset.go);
+    const slide=b.querySelector('[data-promo-slide]:not([hidden])');
+    if (slide) clicks['market-shortcut']({dataset:{value:slide.dataset.category, q:slide.dataset.q}});
   },
   'home-top': () => state.homeView?.top(),
 
@@ -201,7 +186,7 @@ export const submits = {
     state.freeShelf = false;
     state.homeLimit = 40;
     closeModal();
-    go(d.category ? 'home/' + d.category : 'home');
+    go('home');
   },
   'offer-form': async ({ form, d }) => {
     await api('/offer', {product_id:Number(form.dataset.id), amount:Math.round(Number(d.amount)*100)});

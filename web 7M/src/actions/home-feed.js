@@ -1,12 +1,8 @@
 'use strict';
-// 事件层 · 逛逛页的商品流、主视觉轮播与回到顶部
-//
-// 页面只负责渲染，这里负责把渲染好的 DOM 挂上行为：
-// 商品流分页（IntersectionObserver + 显式按钮）、两张主视觉卡的自动播放与圆点切换、
-// 回到顶部的显隐。路由切页前会调用 dispose()，把观察器、计时器和监听全部释放。
-
 import { state } from '../core/state.js';
+import { api } from '../core/http.js';
 import { card } from '../components/product-card.js';
+import { recCard } from '../components/rec-rail.js';
 
 // The router disposes the feed, listeners and carousel before changing pages.
 export function mountHomeFeed({root, feed, favorite}){
@@ -37,8 +33,7 @@ export function mountHomeFeed({root, feed, favorite}){
     carousel.index=(next+carousel.slides.length)%carousel.slides.length;
     carousel.slides.forEach((slide,index)=>{slide.hidden=index!==carousel.index;});
     carousel.dots.forEach((dot,index)=>{dot.setAttribute('aria-pressed',String(index===carousel.index));});
-    // 整卡是一个按钮，读屏读到的标题必须跟着当前那张走。
-    carousel.button?.setAttribute('aria-label',carousel.slides[carousel.index].dataset.title||'');
+    carousel.button.setAttribute('aria-label',carousel.slides[carousel.index].dataset.title);
   }
   function updateCount(){ count.textContent=`已展示 ${grid.children.length} 件${favorite?'收藏':'商品'}`; }
   async function next(){
@@ -63,9 +58,26 @@ export function mountHomeFeed({root, feed, favorite}){
       }
     }
   }
+  // 「小转推荐」换一批：后端按 rec 打分排序，翻页就是下一批；
+  // 翻过第 3 页回第 1 页（在售商品通常没那么多页，翻到空反而像坏了）。
+  async function recRefresh(b){
+    if (!alive() || !b) return;
+    const track = root.querySelector('.rec-rail-track');
+    if (!track) return;
+    const page = (Number(b.dataset.page) || 1) + 1;
+    b.disabled = true;
+    try{
+      const items = await api('/products?rec=1&limit=8&page=' + page);
+      if (!alive() || !Array.isArray(items) || !items.length) return;
+      track.innerHTML = items.map(recCard).join('');
+      b.dataset.page = String(page >= 3 ? 1 : page);
+    }catch(_){ /* 换一批失败就保持当前这批，不打扰用户 */ }
+    finally{ if (alive()) b.disabled = false; }
+  }
   const view={
     retainFavorite:!favorite,
     next,
+    recRefresh,
     slide(button){ select(carousels.find(carousel=>carousel.element.dataset.homeCarousel===button.dataset.window),Number(button.dataset.index)); },
     top(){ window.scrollTo({top:0,behavior:motion.matches?'instant':'smooth'}); },
     dispose(){
@@ -82,8 +94,8 @@ export function mountHomeFeed({root, feed, favorite}){
     },{rootMargin:'350px 0px'});
     observer.observe(more);
   }
-  // 两张卡各自轮播；指针移入不移出也不暂停——旧版这里没有暂停控件，
-  // 需要停下来看时点圆点即可。减速偏好只去掉 CSS 过渡，不改变内容轮换。
+  // Both windows keep playing after pointer, keyboard or manual navigation.
+  // Reduced motion removes visual transitions in CSS, not content rotation.
   carousels.forEach(carousel=>{
     if(carousel.slides.length>1) timers.push(setInterval(()=>select(carousel,carousel.index+1),Number(carousel.element.dataset.interval)));
   });
