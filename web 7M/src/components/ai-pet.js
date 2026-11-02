@@ -617,17 +617,35 @@ function petToast(msg){
   petToast._t = setTimeout(() => el.classList.remove('show'), 1800);
 }
 
+// 菜单图标：内联线性 SVG，和站点其它图标同一套笔触（1.6px 圆头）。
+const MENU_ICONS = {
+  skin: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="14" height="12" rx="2.2"/><circle cx="7.6" cy="8.6" r="1.5"/><path d="M4 14.2l3.6-3.6 2.4 2.4 2-2 4 3.2"/></svg>',
+  voice: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8v4h2.6L11 16V4L6.6 8H4z"/><path d="M13.6 8c1.1 1.1 1.1 2.9 0 4"/><path d="M15.4 6c2 2 2 6 0 8"/></svg>',
+  lock: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="9" width="10" height="7" rx="2"/><path d="M7.5 9V7a2.5 2.5 0 0 1 5 0v2"/><circle cx="10" cy="12.5" r="1"/></svg>',
+  reset: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17s-5-4.4-5-8a5 5 0 0 1 10 0c0 3.6-5 8-5 8z"/><circle cx="10" cy="9" r="1.8"/></svg>',
+  hide: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.2 10s3.1-5 7.8-5 7.8 5 7.8 5-3.1 5-7.8 5-7.8-5-7.8-5z"/><circle cx="10" cy="10" r="2"/><path d="M3.5 3.5l13 13"/></svg>',
+};
+
 function openPetMenu(x, y){
   closePetMenu();
+  const locked = getLocked();
   menuEl = document.createElement('div');
   menuEl.className = 'ai-pet-menu';
   menuEl.setAttribute('role', 'menu');
   menuEl.innerHTML = `
-    <button type="button" role="menuitem" data-m="skin">换形象…</button>
-    <button type="button" role="menuitem" data-m="voice">语音与音效…</button>
-    <button type="button" role="menuitem" data-m="lock"><span>${getLocked() ? '✓' : ''}</span>锁定位置</button>
-    <button type="button" role="menuitem" data-m="reset">复位位置</button>
-    <button type="button" role="menuitem" data-m="hide">隐藏桌宠</button>`;
+    <div class="ai-pet-menu-group">
+      <button type="button" role="menuitem" data-m="skin"><i class="icon">${MENU_ICONS.skin}</i>换形象</button>
+      <button type="button" role="menuitem" data-m="voice"><i class="icon">${MENU_ICONS.voice}</i>语音与音效</button>
+    </div>
+    <div class="ai-pet-menu-sep" role="separator"></div>
+    <div class="ai-pet-menu-group">
+      <button type="button" role="menuitemcheckbox" data-m="lock" aria-checked="${locked}" class="${locked ? 'is-on' : ''}"><i class="icon">${MENU_ICONS.lock}</i>锁定位置<i class="ai-pet-menu-check" aria-hidden="true">✓</i></button>
+      <button type="button" role="menuitem" data-m="reset"><i class="icon">${MENU_ICONS.reset}</i>复位位置</button>
+    </div>
+    <div class="ai-pet-menu-sep" role="separator"></div>
+    <div class="ai-pet-menu-group">
+      <button type="button" role="menuitem" data-m="hide" class="is-danger"><i class="icon">${MENU_ICONS.hide}</i>隐藏桌宠</button>
+    </div>`;
   document.body.appendChild(menuEl);
   const box = menuEl.getBoundingClientRect();
   menuEl.style.left = Math.max(8, Math.min(x, window.innerWidth - box.width - 8)) + 'px';
