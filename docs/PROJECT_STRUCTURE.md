@@ -22,7 +22,9 @@
 - `var-*/`：覆盖 `var-load/`、`var-cloud/` 及未来任意 `var-xxx/`；`var/`（演示）与 `var-trial/`（试用）原本已忽略。
 - `.wrangler/`：根目录 wrangler 缓存含 `wrangler-account.json` 账号信息，任何位置都不提交。
 
-**根目录当前只应出现**：`Backend mission/`、`web 7M/`、`docs/`、`scripts/`、`tests/`、`downloads/`、`var/`、`var-trial/`、`repair-wheels/`、`tools/`、`.venv-trial/`、`_local/`、`_local-run/`、`start-*.bat`、`README.md`、`UPDATE-WINDOWS.txt`。出现其它 `var-*`、`_backup-*`、`*broken*` 目录时，应直接归入 `_local/archive/<日期>/`，不要留在根目录。
+**根目录当前只应出现**：`Backend mission/`、`web 7M/`、`docs/`、`scripts/`、`tests/`、`var/`、`var-trial/`、`repair-wheels/`、`tools/`、`.venv-trial/`、`start-*.bat`、`README.md`、`UPDATE-WINDOWS.txt`。出现其它 `var-*`、`_backup-*`、`*broken*` 目录时，不要留在根目录：归档到仓库外或直接删除。
+
+> 2026-11-02 清理：`downloads/`（godfly 工具 zip，源码在 `scripts/demote_staff.py`）、`_local/`（历史草稿 261M）、`_local-run/`、`_shots/`（测试截图）与 Windows 事故文件 `nul` 已删除；其中唯一有价值的 `_local/godfly-demotion-evidence-2026-10-19.md`（降权核实证据）移入 `docs/`。`repair-wheels/` 被 `scripts/launch_trial.py` 与 README 引用，保留。
 
 **启动脚本分工（6 个都在用，不是重复入口）**：`start-trial-8081.bat` 常规试用主入口；`start-trial-lan-8081.bat` 局域网访问；`start-mysql-8081.bat` MySQL 数据源；`start-public-8081.bat` Cloudflare 临时隧道；`启动转角.bat` 参数化启动（可传端口与数据目录）；`start-trial.bat` 早期 8080 版本，仅兼容旧习惯。
 
@@ -59,14 +61,11 @@ huali-corner-trial/
 │   ├── references/            用户提供资料的来源副本
 │   ├── research/              学校目录等资料
 │   └── superpowers/           specs 与 plans
-├── downloads/                 既有下载制品，不是业务源码入口
 ├── start-*.bat                兼容现有用户习惯，保留根目录启动入口
 ├── var/                       演示数据，禁止提交
 ├── var-trial/                 已有试用数据，禁止删除或提交
 ├── repair-wheels/             离线依赖，启动器依赖此固定位置
 ├── .venv-trial/               本地隔离 Python 环境
-├── _local-run/                本次后台服务日志，不提交
-└── _local/                    本地保留资料，不提交
     ├── legacy-flat/           旧平铺 Python 模块、旧网页 app.js
     ├── startup-repair/        启动修复说明与原 ZIP
     └── organization-manifest.json  原位置、归档位置和 SHA256
