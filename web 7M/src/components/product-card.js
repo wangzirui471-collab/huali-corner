@@ -6,14 +6,11 @@
 import { e, icon } from '../core/dom.js';
 import { money } from '../core/format.js';
 import { statusNames } from '../core/state.js';
+import { demoPhotoIndex } from './catalog-photo.js';
 
 // 返回拼图序号 0..8，不是演示图则返回 null。
 export function demoPhoto(p){
-  if (!p.simulation) return null;
-  const url = p.photos?.[0]?.url || '';
-  const b = url.match(/\/assets\/book([0-5])\.svg$/);
-  const i = url.match(/\/assets\/item([0-2])\.svg$/);
-  return b ? Number(b[1]) : i ? [6,7,8][Number(i[1])] : null;
+  return demoPhotoIndex(Boolean(p.simulation), p.photos?.[0]?.url || '');
 }
 
 // 书籍/宿舍用 AI 生成的拼图，电子产品用维基共享资源实拍 —— 署名要求不同，标注必须分开。
@@ -47,12 +44,19 @@ export function condBadge(p){
   return `<span class="cond-badge">${e(t)}</span>`;
 }
 
-export function card(p){
+export function card(p){ return renderCard(p, false); }
+
+/** 逛逛沿用重构商品卡的免费价签；交付方式、详情与收藏仍走现有组件。 */
+export function browseCard(p){ return renderCard(p, true); }
+
+/** 同一份卡片模板服务各入口，仅让逛逛使用新的价签。 */
+function renderCard(p, browse){
+  const free = browse && p.price === 0;
   const orig = Number(p.original_price) || 0;
   const rate = orig > p.price ? Math.round(p.price/orig*1000)/100 : 0;
   const trusted = p.seller_trusted ? '<span class="trusted-tag">诚信客户</span>' : '';
   // 诚信客户是「卖家身份」，不是商品属性。原来挂在图片左上角，和
   // .cond-badge（版次/成色）抢同一个绝对定位，绿色标签直接压在商品描述上。
   // 现在跟着卖家昵称走，语义正确，也不再和任何角标争位置。
-  return `<article class="product-card" data-product-id="${p.id}"><button class="card-photo" data-go="product/${p.id}" aria-label="查看${e(p.title)}">${productPicture(p)}${condBadge(p)}${p.under_review?`<span class="review-tag">审核中</span>`:''}${(p.promoted_until||0)>Date.now()/1000?`<span class="promote-tag">置顶</span>`:''}${p.simulation?`<span class="demo-tag">${demoTag(p)}</span>`:''}${p.status!=='available'?`<span class="sold-tag">${e(statusNames[p.status])}</span>`:''}</button><div class="card-content"><button class="card-title" data-go="product/${p.id}">${e(p.title)}</button><div class="book-meta">${e(p.category==='books'?[p.notes,p.missing].filter(Boolean).join(' · '):p.condition||'日常闲置')}</div><div class="price-line"><i class="cur">¥</i><b>${money(p.price)}</b>${orig>p.price?`<s>¥${money(orig)}</s><em>${rate}折</em>`:''}</div><div class="card-tags"><span class="mini-tag">${shipLabel(p)}</span><span class="mini-tag ghost">${icon('pin')}${e(p.region)}</span></div><div class="card-user"><button data-go="profile/${p.seller_id}"><span class="avatar">${e(p.nickname[0])}</span>${e(p.nickname)}${trusted}</button><button class="favorite-button ${p.favorited?'selected':''}" aria-label="${p.favorited?'取消收藏':'收藏'}${e(p.title)}" aria-pressed="${!!p.favorited}" data-title="${e(p.title)}" data-action="favorite" data-id="${p.id}" data-on="${!p.favorited}">${icon('heart')}</button></div></div></article>`;
+  return `<article class="product-card" data-product-id="${p.id}"><button class="card-photo" data-go="product/${p.id}" aria-label="查看${e(p.title)}">${productPicture(p)}${condBadge(p)}${p.under_review?`<span class="review-tag">审核中</span>`:''}${(p.promoted_until||0)>Date.now()/1000?`<span class="promote-tag">置顶</span>`:''}${p.simulation?`<span class="demo-tag">${demoTag(p)}</span>`:''}${p.status!=='available'?`<span class="sold-tag">${e(statusNames[p.status])}</span>`:''}</button><div class="card-content"><button class="card-title" data-go="product/${p.id}">${e(p.title)}</button><div class="book-meta">${e(p.category==='books'?[p.notes,p.missing].filter(Boolean).join(' · '):p.condition||'日常闲置')}</div><div class="price-line"><i class="cur" ${free?'hidden':''}>¥</i><b${free?' class="browse-free-price"':''}>${free?'免费送':money(p.price)}</b>${!free&&orig>p.price?`<s>¥${money(orig)}</s><em>${rate}折</em>`:''}</div><div class="card-tags"><span class="mini-tag">${shipLabel(p)}</span><span class="mini-tag ghost">${icon('pin')}${e(p.region)}</span></div><div class="card-user"><button data-go="profile/${p.seller_id}"><span class="avatar">${e(p.nickname[0])}</span>${e(p.nickname)}${trusted}</button><button class="favorite-button ${p.favorited?'selected':''}" aria-label="${p.favorited?'取消收藏':'收藏'}${e(p.title)}" aria-pressed="${!!p.favorited}" data-title="${e(p.title)}" data-action="favorite" data-id="${p.id}" data-on="${!p.favorited}">${icon('heart')}</button></div></div></article>`;
 }

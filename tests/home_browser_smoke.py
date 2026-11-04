@@ -53,10 +53,11 @@ def run():
                 page.add_init_script('sessionStorage.setItem("hc-token",'+json.dumps(buyer['token'])+');')
                 page.goto(base+'/#home', wait_until='networkidle')
                 expect(page.locator('.product-card')).to_have_count(24)
-                expect(page.locator('[data-home-carousel]')).to_have_count(2)
-                expect(page.locator('[data-promo-slide]')).to_have_count(6)
-                expect(page.locator('[data-promo-slide]:visible')).to_have_count(2)
-                expect(page.locator('[data-action="home-pause"]')).to_have_count(0)
+                # 主轮播使用真实 Element Plus，旁边两个快捷入口保持可见。
+                expect(page.locator('.mint-carousel .el-carousel__item')).to_have_count(4)
+                expect(page.locator('.mint-carousel .el-carousel__item.is-active')).to_have_count(1)
+                expect(page.locator('.mint-side button')).to_have_count(2)
+                expect(page.locator('.mint-play')).to_have_count(0)
                 # 参考图的版面顺序：主视觉 → 频道条 → 转角发现（商品流）。
                 assert page.locator('.home-hero').bounding_box()['y'] < page.locator('.home-channels').bounding_box()['y'] < page.locator('.home-feed').bounding_box()['y']
                 # 九格快捷宫格整行删掉：其中六个和频道行、顶栏跳同一页。
@@ -64,12 +65,10 @@ def run():
                 expect(page.locator('.home-channel')).to_have_count(7)
                 # 「小转推荐」整条轨下线。
                 expect(page.locator('.rec-rail')).to_have_count(0)
-                # 每个主视觉 slide 自带去处，且两张卡的去处互不相同——
-                # 旧版点哪个都落回同一个商品流，这里用 data-go 把「不同的页面」钉住。
-                slides = page.evaluate("""()=>[...document.querySelectorAll('.home-page .home-hero [data-promo-slide]')]
-                    .map(el=>el.dataset.go||'')""")
-                assert len(slides)==6 and all(slides), slides
-                assert len(set(slides))>=3, f'主视觉去处过于单一：{set(slides)}'
+                # 轮播里的宿舍、教材、求购、发布全部保留真实路由。
+                expect(page.locator('.mint-carousel .mint-topic-link')).to_have_count(4)
+                targets = page.locator('.mint-carousel .mint-topic-link').evaluate_all('(items)=>items.map(item=>item.dataset.go)')
+                assert set(targets) == {'home/living','home/books','forum/wants','publish'}, targets
                 # 频道行：六个商品频道各自带地址段，校园求购去论坛求购页。
                 channel_targets = page.evaluate("""()=>[...document.querySelectorAll('.home-page .home-channel')]
                     .map(el=>el.dataset.go || ('home/'+(el.dataset.value||'')))""")
@@ -118,10 +117,19 @@ def run():
                 expect(page).to_have_url(base+'/#home/books')
                 expect(page.locator('.product-card')).to_have_count(24)
                 expect(page.locator('.home-feed h2')).to_contain_text('教材书籍')
+                # 从筛选弹窗改用价格排序，免费教材应排在最前面。
+                page.locator('[data-action="open-filter"]').click()
+                page.locator('#filter-form [name=sort]').select_option('price')
+                page.locator('#filter-form').get_by_role('button', name='应用筛选').click()
+                expect(page.locator('#filter-form')).to_have_count(0)
+                expect(page.locator('.product-card').first.locator('.browse-free-price')).to_have_text('免费送')
                 page.locator('.home-channel[data-value="free"]').click()
                 expect(page).to_have_url(base+'/#home/free')
                 expect(page.locator('.product-card')).to_have_count(1)
                 expect(page.locator('.home-feed h2')).to_contain_text('免费好物')
+                expect(page.locator('.product-card .browse-free-price')).to_have_text('免费送')
+                expect(page.locator('.product-card .price-line s')).to_have_count(0)
+                expect(page.locator('.product-card .card-tags')).to_contain_text('自提/送货')
                 expect(page.locator('.home-channel[data-value="free"]')).to_have_attribute('aria-pressed','true')
                 expect(page.locator('.home-channel[data-value="books"]')).to_have_attribute('aria-pressed','false')
 
@@ -156,6 +164,15 @@ def run():
                     nav=page.locator('.mobile-publish').bounding_box()
                     assert abs(nav['x']+nav['width']/2-width/2)<=1
                     expect(page.locator('.account-button[data-go="me"]')).to_be_visible()
+                    # 小屏从原小转入口打开真实桌宠面板，测试不调用外部模型。
+                    assistant=page.get_by_role('button',name='问问小转AI')
+                    expect(assistant).to_be_visible()
+                    if width==320:
+                        assistant.click()
+                        expect(page.locator('#ai-pet-panel')).to_be_visible()
+                        expect(page.locator('#ai-pet-q')).to_be_visible()
+                        page.locator('#ai-pet-close').click()
+                        expect(page.locator('#ai-pet-panel')).to_be_hidden()
                     page.screenshot(path=str(output/f'home-mobile-{width}.png'))
                 page.set_viewport_size({'width':1440,'height':1100})
                 page.goto(base+'/#favorites',wait_until='networkidle')
@@ -188,41 +205,39 @@ def run():
                 fallback.clock.install()
                 fallback.goto(base+'/#home',wait_until='networkidle')
                 expect(fallback.locator('.product-card')).to_have_count(24)
-                window=fallback.locator('[data-home-carousel="books"]')
-                def active(index):
-                    expect(window.locator('[data-promo-slide="'+str(index)+'"]')).to_be_visible()
-                    expect(window.locator('[data-promo-slide]:visible')).to_have_count(1)
-                window.hover()
-                fallback.clock.fast_forward(7100)
-                active(1)
-                fallback.clock.fast_forward(7100)
-                active(2)
-                fallback.clock.fast_forward(7100)
-                active(0)
-                # 圆点选页，定时器继续走（没有暂停键）。
-                window.locator('[data-action="home-slide"][data-index="1"]').click()
-                active(1)
-                fallback.clock.fast_forward(7100)
-                active(2)
-                fallback.screenshot(path=str(output/'home-desktop-themes-2.png'))
-                # 一个稳定按钮打开「当前那张」：每张 slide 带自己的地址，
-                # 点开落到自己的频道页，而不是所有入口都回到同一个商品流。
-                window.locator('[data-action="home-slide"][data-index="1"]').click()
-                active(1)
-                window.locator('[data-action="home-promo-open"]').click()
+                carousel = fallback.locator('.mint-carousel')
+                active = carousel.locator('.el-carousel__item.is-active .mint-topic-link')
+                expect(active).to_have_attribute('data-go','home/living')
+                fallback.clock.fast_forward(8100)
+                expect(active).to_have_attribute('data-go','home/living')
+                # 手动箭头和指示器都切换专题，减少动态效果时仍能手动切换。
+                carousel.locator('.el-carousel__arrow--right').click()
+                expect(active).to_have_attribute('data-go','home/books')
+                fallback.emulate_media(reduced_motion='reduce')
+                carousel.locator('.el-carousel__indicator').nth(2).click()
+                expect(active).to_have_attribute('data-go','forum/wants')
+                expect(fallback.locator('.mint-play')).to_have_count(0)
+                carousel.locator('.el-carousel__indicator').nth(1).click()
+                expect(active).to_have_attribute('data-go','home/books')
+                active.click()
                 expect(fallback).to_have_url(base+'/#home/books')
                 expect(fallback.locator('.home-feed h2')).to_contain_text('教材书籍')
-                expect(fallback.locator('.home-channel[data-value="books"]')).to_have_attribute('aria-pressed','true')
-                # 浏览器返回键能把用户送回上一个页面，说明它们真的是两个页面。
+                fallback.locator('.mint-side [data-go="home/free"]').click()
+                expect(fallback).to_have_url(base+'/#home/free')
+                expect(fallback.locator('.browse-free-price')).to_have_text('免费送')
+                fallback.go_back()
+                expect(fallback).to_have_url(base+'/#home/books')
                 fallback.go_back()
                 expect(fallback).to_have_url(base+'/#home')
                 expect(fallback.locator('.product-card')).to_have_count(24)
-                # 另一张卡的去处不同：宿舍卡第二张去论坛求购，不落在商品流上。
-                living=fallback.locator('[data-home-carousel="living"]')
-                living.locator('[data-action="home-slide"][data-index="2"]').click()
-                expect(living.locator('[data-promo-slide="2"]')).to_be_visible()
-                assert living.locator('[data-promo-slide="2"]').get_attribute('data-go')=='forum/wants'
-                # 只在卡片内部切换，不点开——游客点求购要登录，登录守卫另有测试覆盖。
+                # 主轮播资源加载失败时，静态专题和快捷路由仍然可以点击。
+                without_carousel=browser.new_page()
+                without_carousel.route('**/assets/home-mint/carousel.js*', lambda route: route.abort())
+                without_carousel.goto(base+'/#home',wait_until='networkidle')
+                expect(without_carousel.locator('.mint-fallback-links [data-go="forum/wants"]')).to_be_visible()
+                without_carousel.locator('.mint-side [data-go="home/books"]').click()
+                expect(without_carousel).to_have_url(base+'/#home/books')
+                without_carousel.close()
                 fallback.locator('[data-action="load-more"]').click()
                 expect(fallback.locator('.product-card')).to_have_count(48)
                 # 首页保留一个「发布闲置」CTA（与主视觉同屏），但顶栏那个仍然拦住未登录用户。
@@ -233,7 +248,7 @@ def run():
                 expect(fallback.get_by_role('dialog')).to_be_visible()
                 assert not errors, errors
                 browser.close()
-                print('PASS: two hero cards with their own destinations, seven colored channels (six product views + forum wants), no 小转推荐 rail, per-channel URLs and back navigation, paging/favorites, stale isolation, three mobile widths, centered five-slot nav, retained community hub and owner/staff functions')
+                print('PASS: Element Plus carousel and topic shortcuts, fallback links, seven channels (six product views + forum wants), no 小转推荐 rail, per-channel URLs and back navigation, paging/favorites, stale isolation, three mobile widths, centered five-slot nav, retained community hub and owner/staff functions')
                 print('Screenshots: '+str(output))
         finally:
             server.shutdown()

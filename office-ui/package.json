@@ -2,7 +2,7 @@
   "name": "huali-office-ui",
   "private": true,
   "type": "module",
-  "scripts": {"build": "vite build && node scripts/notices.mjs"},
+  "scripts": {"build": "vite build && node scripts/notices.mjs", "build:mint": "vite build --config vite.mint.config.js && node scripts/notices.mjs home-mint"},
   "dependencies": {"element-plus": "2.14.7", "vue": "3.5.44"},
   "devDependencies": {"@vitejs/plugin-vue": "6.0.10", "vite": "8.3.5"}
 }

@@ -77,12 +77,6 @@ export const clicks = {
   // 排序只改查询条件，不改频道：留在当前地址上重画，教材频道里排序仍是教材。
   'feed-sort': b => { state.filter.sort = b.dataset.value; state.homeLimit = 40; go(location.hash.slice(1) || 'home'); },
   'load-more': () => state.homeView?.next(),
-  'home-slide': b => state.homeView?.slide(b),
-  // 主视觉整卡是一个按钮，按「当前可见的那张」跳它自己的去处。
-  'home-promo-open': b => {
-    const slide = b.querySelector('[data-promo-slide]:not([hidden])');
-    if (slide?.dataset.go) go(slide.dataset.go);
-  },
   'home-top': () => state.homeView?.top(),
 
   async favorite(b, id){

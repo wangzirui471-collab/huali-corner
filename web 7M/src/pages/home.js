@@ -13,7 +13,7 @@ import { state } from '../core/state.js';
 import { api } from '../core/http.js';
 import { shell, empty } from '../core/shell.js';
 import { createProductFeed } from '../core/product-feed.js';
-import { card } from '../components/product-card.js';
+import { browseCard, card } from '../components/product-card.js';
 import { mountHomeFeed } from '../actions/home-feed.js';
 import { homeHero } from '../components/home-hero.js';
 
@@ -67,7 +67,7 @@ function pageIdentity(favorite,free,category){
   if(favorite) return {title:'我的收藏',context:'喜欢的好物，先收藏再慢慢挑',channel:''};
   if(free) return {title:'免费好物',context:'物品免费，送货费请查看详情',channel:'free'};
   if(category) return {title:CATEGORY_LABEL[category],context:`正在看${CATEGORY_LABEL[category]} · 换一个频道看看别的`,channel:category};
-  return {title:'转角发现',context:'真正来自同学的闲置好物',channel:''};
+  return {title:'同学刚上架',context:'校园自提，见面交接更方便。',channel:''};
 }
 
 // 处在频道里时给一条可返回的路径，避免用户被筛选困住。
@@ -118,16 +118,17 @@ export async function home(favorite=false){
   const {title,context,channel:active}=pageIdentity(favorite,free,category);
   // 收藏页没有主视觉和频道条：它不是一个可以换频道的商品流。
   const head=favorite?'':homeHero();
+  const renderCard=favorite?card:browseCard;
 
-  shell(`<div class="home-page">${head}${favorite?'':navigation()}
+  shell(`<div class="home-page${favorite ? '' : ' mint-browse'}">${head}${favorite?'':navigation()}
     <section class="home-feed" aria-label="${e(title)}">
       ${crumbBar(active)}
       <header class="home-feed-heading"><div class="home-feed-title">${favorite?`<h1>${e(title)}</h1>`:`<h2>${e(title)}</h2>`}<p class="home-feed-sub">${e(context)}<small data-feed-count>已展示 ${initial.length} 件商品</small></p></div>${feedTools(filter)}</header>
-      <div class="product-grid" aria-busy="false">${initial.map(card).join('')}</div>
+      <div class="product-grid" aria-busy="false">${initial.map(renderCard).join('')}</div>
       ${!initial.length?empty(free?'暂时没有免费转让的物品':'暂时没有匹配的商品','可以换个关键词，或去社区发布求购需求。'):''}
       <div class="home-feed-end"><p data-feed-status role="status" aria-live="polite">${feed.hasMore?'继续向下，发现更多好物':initial.length?'已经看到全部好物了':''}</p><button class="btn secondary load-more" data-action="load-more" ${feed.hasMore?'':'hidden'}>加载更多好物</button></div>
     </section>
     ${favorite?'':`<section class="home-cta"><div class="home-cta-copy"><small>GOOD THINGS GO AROUND</small><strong>你闲置的，正是别人需要的。</strong><p>发布一本旧书、一盏台灯，让好物在校园里继续传递。</p></div><button class="btn primary" data-go="publish">${icon('plus')}发布我的闲置</button>${CTA_ART}</section>`}
     <button class="home-back-top" data-action="home-top" aria-label="回到顶部" hidden>↑<span>顶部</span></button></div>`,'home');
-  mountHomeFeed({root:$('.home-page'),feed,favorite});
+  mountHomeFeed({root:$('.home-page'),feed,favorite,renderCard});
 }

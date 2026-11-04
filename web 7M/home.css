@@ -117,66 +117,9 @@ body:has(.home-page) { background: #faf9f6; }
 .home-page [hidden] { display: none !important; }
 
 /* --- 3. 主视觉双卡 -------------------------------------------------------- */
-.home-hero { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 0 0 18px; }
-.home-hero-card {
-  position: relative; border-radius: 24px; overflow: hidden;
-  transition: transform .3s var(--ease), box-shadow .3s var(--ease);
-}
-.home-hero-card[data-tone="books"] { background: linear-gradient(122deg, #eaf3ed 0%, #dcece1 56%, #d1e5d9 100%); }
-.home-hero-card[data-tone="living"] { background: linear-gradient(122deg, #fbf2e7 0%, #f6e5d2 56%, #f1d9c3 100%); }
-/* 右上角一枚极淡的圆盘，给纯色块一点纵深，不引入图片。 */
-.home-hero-card::after {
-  content: ''; position: absolute; z-index: 0; right: -70px; top: -90px;
-  width: 240px; height: 240px; border-radius: 50%; background: rgba(255, 255, 255, .38);
-  pointer-events: none;
-}
-.home-hero-card:hover { transform: translateY(-2px); box-shadow: 0 20px 38px -26px rgba(30, 58, 51, .5); }
-
-.home-hero-open { position: relative; z-index: 1; display: block; width: 100%; text-align: left; padding: 0; background: transparent; }
-.home-hero-slide {
-  display: grid; grid-template-columns: minmax(0, 1fr) 172px; align-items: center; gap: 10px;
-  min-height: 236px; padding: 28px 22px 40px 30px;
-}
-.home-hero-copy { position: relative; z-index: 2; display: block; min-width: 0; }
-.home-hero-eyebrow {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 11px; font-weight: 600; letter-spacing: .2px; color: var(--ho-ink-2); opacity: .66;
-}
-.home-hero-eyebrow::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--ho-accent); }
-.home-hero-title {
-  display: block; margin: 10px 0 8px;
-  font-size: clamp(21px, 1.95vw, 29px); line-height: 1.28; font-weight: 800;
-  letter-spacing: -1px; color: var(--ho-ink);
-}
-.home-hero-desc { display: block; font-size: 12px; line-height: 1.8; color: var(--ho-ink-2); opacity: .78; }
-.home-hero-link {
-  display: inline-flex; align-items: center; gap: 7px; margin-top: 16px;
-  padding: 9px 15px; border-radius: var(--r-pill);
-  background: var(--ho-accent); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .2px;
-  box-shadow: 0 12px 22px -14px rgba(235, 117, 77, 1);
-  transition: background .2s var(--ease), gap .2s var(--ease);
-}
-.home-hero-open:hover .home-hero-link { background: var(--ho-accent-2); gap: 10px; }
-.home-hero-link .icon { width: 12px; height: 12px; }
-.home-hero-art { position: relative; z-index: 1; display: block; justify-self: end; width: 100%; max-width: 172px; }
-.home-hero-art-svg { display: block; width: 100%; height: auto; filter: drop-shadow(0 16px 20px rgba(30, 58, 51, .13)); }
-
-.home-hero-dots { position: absolute; z-index: 3; right: 20px; bottom: 14px; display: flex; align-items: center; gap: 5px; }
-.home-hero-dots button { width: 18px; height: 18px; padding: 0; display: grid; place-items: center; border-radius: 50%; background: transparent; }
-.home-hero-dots button::after {
-  content: ''; width: 5px; height: 5px; border-radius: 4px;
-  background: rgba(30, 58, 51, .22); transition: width .2s var(--ease), background .2s var(--ease);
-}
-.home-hero-dots button[aria-pressed="true"]::after { width: 16px; background: var(--ho-ink); opacity: .75; }
-.home-hero-card[data-tone="living"] .home-hero-dots button::after { background: rgba(120, 86, 60, .22); }
-.home-hero-card[data-tone="living"] .home-hero-dots button[aria-pressed="true"]::after { background: #8a5f3d; }
-
-/* --- 4. 频道条 ------------------------------------------------------------ */
-/* 参考图里频道是一排横向页签，不是七块彩色磁贴：磁贴像应用宫格，
-   和「筛选商品」这件事其实无关，占地方还抢主视觉的戏。 */
 .home-channels {
   display: flex; align-items: center; gap: 2px; overflow-x: auto;
-  margin: 0 0 22px; padding: 5px;
+  margin: 0 0 24px; padding: 5px;
   background: #fff; border: 1px solid var(--ho-line); border-radius: 16px;
   scrollbar-width: none;
 }
@@ -190,7 +133,7 @@ body:has(.home-page) { background: #faf9f6; }
 .home-channel .icon { width: 18px; height: 18px; opacity: .66; }
 .home-channel:hover { background: var(--ho-mint-2); color: var(--ho-ink); }
 .home-channel:hover .icon { opacity: 1; }
-.home-channel[aria-pressed="true"] { background: var(--ho-mint); color: var(--ho-ink); font-weight: 750; }
+.home-channel[aria-pressed="true"] { background: var(--ho-mint); color: var(--ho-ink); font-weight: 750; box-shadow: inset 0 0 0 1px #2e5b4324; }
 .home-channel[aria-pressed="true"] .icon { opacity: 1; stroke-width: 2.1; }
 
 /* --- 5. 转角发现 ---------------------------------------------------------- */
@@ -199,8 +142,7 @@ body:has(.home-page) { background: #faf9f6; }
 .home-feed h1,
 .home-feed h2 { margin: 0; font-size: 25px; font-weight: 800; letter-spacing: -.9px; color: var(--ho-ink); }
 .home-feed-sub { margin: 7px 0 0; font-size: 12px; color: var(--ho-mute); }
-.home-feed-sub small { margin-left: 4px; font-size: 11.5px; color: var(--ho-faint); }
-.home-feed-sub small::before { content: '·'; margin-right: 8px; }
+.home-feed-sub small { display: inline-block; margin-left: 8px; padding: 2px 7px; border-radius: var(--r-pill); background: var(--ho-mint-2); font-size: 11px; color: var(--ho-ink-2); }
 
 .home-feed-tools { display: flex; align-items: center; gap: 2px; flex: none; }
 .home-feed-tools > button {
@@ -261,6 +203,7 @@ body:has(.home-page) { background: #faf9f6; }
 .home-page .price-line { margin: 8px 0 0; min-height: 26px; gap: 2px; color: var(--ho-price); }
 .home-page .price-line b { font-size: 21px; font-weight: 800; letter-spacing: -.6px; }
 .home-page .price-line .cur { font-size: 12.5px; font-weight: 700; }
+.home-page .price-line .browse-free-price { font-size: 15px; letter-spacing: 0; color: var(--ho-ink); }
 .home-page .price-line em { padding: 0; background: transparent; font-size: 10px; font-weight: 600; color: #bf6a52; }
 .home-page .price-line s { font-size: 10px; color: var(--ho-faint); }
 /* 送货方式 + 地点压成一行小字：参考图里只有一枚定位图标加地点。 */
@@ -338,9 +281,6 @@ body:has(.home-page) { background: #faf9f6; }
   .home-page .product-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
 @media (max-width: 1180px) {
-  .home-hero-slide { grid-template-columns: minmax(0, 1fr) 150px; min-height: 220px; padding: 24px 18px 36px 24px; }
-  .home-hero-art { max-width: 150px; }
-  .home-hero-title { font-size: clamp(20px, 2.1vw, 25px); }
   .home-channel { font-size: 12.5px; padding: 9px 12px; }
   /* 窄到放不下左侧校区说明时收掉，别和居中的试用提示叠在一起。 */
   .market-header-home + .simulation-bar::before { display: none; }
@@ -349,9 +289,6 @@ body:has(.home-page) { background: #faf9f6; }
 @media (max-width: 850px) {
   .market-header-home .header-inner { padding: 12px 20px; }
   .market-main-home { padding: 16px 20px 46px; }
-  .home-hero { grid-template-columns: 1fr; gap: 12px; }
-  .home-hero-slide { grid-template-columns: minmax(0, 1fr) 168px; min-height: 190px; padding: 22px 18px 34px 22px; }
-  .home-hero-art { max-width: 168px; }
   .home-feed h1,
   .home-feed h2 { font-size: 22px; }
   .home-page .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 12px; }
@@ -379,13 +316,6 @@ body:has(.home-page) { background: #faf9f6; }
   .market-header-home .market-search button { padding: 8px 16px; font-size: 12px; }
   .market-header-home .desktop-navigation .btn { padding: 8px 15px; font-size: 12px; }
   .market-main-home { padding: 12px 15px 40px; }
-  .home-hero-slide { grid-template-columns: minmax(0, 1fr) 116px; min-height: 168px; padding: 20px 12px 30px 18px; }
-  .home-hero-title { font-size: 19px; margin: 8px 0 6px; }
-  .home-hero-eyebrow { font-size: 9.5px; }
-  .home-hero-desc { font-size: 10.5px; line-height: 1.7; }
-  .home-hero-link { margin-top: 12px; padding: 7px 12px; font-size: 10.5px; }
-  .home-hero-art { max-width: 116px; }
-  .home-hero-dots { right: 12px; bottom: 10px; }
   /* 七个频道在 390 宽下排不进一行；横向滚动会把「免费送 / 校园求购」藏到屏幕外，
      没人知道右边还有。这里折成四列两行，全部可见。 */
   .home-channels {
@@ -421,10 +351,9 @@ body:has(.home-page) { background: #faf9f6; }
   .market-header-home .header-inner { gap: 6px; }
   .market-header-home .brand { gap: 6px; font-size: 18px; }
   .market-header-home .brand-mark { width: 32px; height: 32px; border-radius: 9px; }
-  .market-header-home .header-ai { display: none; }
-  .home-hero-slide { grid-template-columns: minmax(0, 1fr) 92px; }
-  .home-hero-title { font-size: 17px; }
-  .home-hero-art { max-width: 92px; opacity: .92; }
+  /* 320 宽仍保留小转入口，视觉收为图标，读屏名称由原按钮提供。 */
+  .market-header-home .header-ai { width: 34px; height: 34px; min-width: 34px; padding: 0; justify-content: center; }
+  .market-header-home .header-ai > span { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .home-page *, .market-header-home * { transition: none !important; animation: none !important; }

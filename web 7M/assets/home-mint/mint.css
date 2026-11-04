@@ -1,0 +1,74 @@
+/* 逛逛页 · 薄荷双专题，沿用站点顶栏、产品卡动作和五槽手机导航。 */
+html:has(.mint-browse), body:has(.mint-browse) { background: #f8fbf8; }
+.mint-browse { --mint-ink: #1d352e; --mint-accent: #27674e; --mint-muted: #506b60; }
+.mint-hero { color: var(--mint-ink); margin-bottom: 16px; }
+.mint-opening { display: flex; justify-content: space-between; align-items: end; gap: 12px; margin-bottom: 15px; }
+.mint-opening h1 { margin: 4px 0 0; font-size: clamp(25px, 3vw, 38px); line-height: 1.22; letter-spacing: -.035em; }
+.mint-opening small, .mint-slide-copy small { color: var(--mint-accent); font-size: 11px; font-weight: 750; letter-spacing: .11em; }
+.mint-opening p { color: var(--mint-muted); margin: 0 0 3px; font-size: 13px; }
+.mint-topics { --mint-height: 254px; display: grid; grid-template-columns: minmax(0, 2.25fr) minmax(0, 1fr); gap: 15px; }
+.mint-carousel-frame { position: relative; }
+.mint-carousel { --el-color-white: #fff; --el-carousel-indicator-width: 16px; --el-carousel-indicator-height: 4px; }
+.mint-carousel .el-carousel__container { height: var(--mint-height); overflow: hidden; border-radius: 22px; }
+.mint-carousel .el-carousel__arrow { width: 32px; height: 32px; background: #ffffffe6; color: var(--mint-ink); box-shadow: 0 3px 10px #172b2424; }
+.mint-carousel .el-carousel__arrow:hover { background: #fff; }
+.mint-carousel .el-carousel__arrow--left { left: 10px; }
+.mint-carousel .el-carousel__arrow--right { right: 10px; }
+.mint-carousel .el-carousel__indicators { margin: 0; padding: 0; }
+.mint-carousel .el-carousel__indicator button { border-radius: 8px; background: #76887f; }
+.mint-carousel .el-carousel__indicator.is-active button { width: 24px; background: var(--mint-accent); }
+.mint-play { position: absolute; bottom: 0; right: 0; padding: 3px 8px; background: #e6f1e9; color: #275240; border-radius: 20px; font-size: 10px; line-height: 1.35; }
+.mint-hero button:focus-visible, .mint-browse .home-channel:focus-visible { outline: 2px solid #27674e; outline-offset: -2px; }
+.mint-slide { position: relative; min-width: 0; height: var(--mint-height); display: flex; align-items: center; overflow: hidden; border-radius: 22px; background: #e1eee3; }
+.mint-slide[data-art="books"] { background: #e7eef8; }
+.mint-slide[data-art="camera"] { background: #f9edda; }
+.mint-slide[data-art="bag"] { background: #efe8f9; }
+.mint-slide-copy { position: relative; z-index: 1; width: 52%; padding: 12px 8px 12px 52px; }
+.mint-slide-copy h2 { font-size: clamp(24px, 2.8vw, 38px); line-height: 1.16; letter-spacing: -.04em; margin: 7px 0 9px; max-width: 9em; white-space: pre-line; }
+.mint-slide-copy p { margin: 0 0 14px; color: var(--mint-muted); font-size: 13px; line-height: 1.55; }
+.mint-topic-link { display: inline-flex; align-items: center; gap: 11px; border-radius: 20px; padding: 9px 13px; background: var(--mint-accent); color: #fff; font-size: 13px; font-weight: 700; }
+.mint-topic-link:hover { background: #20513f; }
+.mint-slide-photo, .mint-side-photo { position: absolute; inset: 0 0 0 53%; container-type: size; overflow: hidden; }
+.mint-slide-photo::before, .mint-side-photo::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: max(102cqw, 102cqh); aspect-ratio: 1; background: url('./campus.webp') var(--art-x, 0%) var(--art-y, 0%)/300% 200% no-repeat; }
+.mint-hero [data-art="dorm"] { --art-x: 50%; }
+.mint-hero [data-art="books"] { --art-x: 100%; --art-y: 100%; }
+.mint-hero [data-art="camera"] { --art-x: 100%; }
+.mint-side { display: grid; grid-template-rows: repeat(2,minmax(0,1fr)); gap: 12px; height: var(--mint-height); }
+.mint-side > button { position: relative; min-width: 0; overflow: hidden; padding: 11px 14px; text-align: left; border-radius: 18px; background: #e9effa; }
+.mint-side > button + button { background: #fff0d7; }
+.mint-side > button > :not(.mint-side-photo) { position: relative; z-index: 1; display: block; }
+.mint-side-photo { left: 59%; }
+.mint-side small { font-size: 10px; letter-spacing: .08em; color: #405d56; }
+.mint-side strong { font-size: 20px; margin: 3px 0; }
+.mint-side span:not(.mint-side-photo) { font-size: 11px; color: #3d584f; }
+.mint-fallback-links { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 3px 8px; }
+.mint-fallback-links button { color: var(--mint-accent); font-size: 11px; text-decoration: underline; padding: 3px; }
+.mint-browse .home-channels { gap: 8px; padding: 0; border: 0; background: transparent; }
+.mint-browse .home-channel { background: #fff; border: 1px solid #e3ece6; border-radius: 11px; }
+.mint-browse .home-channel[aria-pressed="true"] { background: #e0f1e8; border-color: #cfe5d8; box-shadow: none; }
+.mint-browse .product-grid { gap: 16px; }
+.mint-browse .product-card { background: #fff; border: 1px solid #e3ece6; overflow: hidden; border-radius: 16px; }
+.mint-browse .product-card:hover { border: 1px solid #cfe4d6; box-shadow: 0 5px 18px #24463612; }
+.mint-browse .card-photo { aspect-ratio: 1.57; border-radius: 0; }
+.mint-browse .card-content { padding: 10px 12px; }
+.mint-browse .card-title { min-height: 0; }
+.mint-browse .price-line, .mint-browse .price-line b { color: #27674e; }
+@media (max-width: 760px) {
+  .mint-topics { --mint-height: 212px; grid-template-columns: minmax(0,1fr); gap: 8px; }
+  .mint-opening { display: block; margin-bottom: 10px; }
+  .mint-opening p { font-size: 11px; margin: 2px 0 0; }
+  .mint-slide-copy { padding-left: 31px; width: 55%; }
+  .mint-slide-copy h2 { font-size: clamp(20px, 5.65vw, 27px); }
+  .mint-slide-copy p, .mint-slide-copy small { font-size: 10px; }
+  .mint-slide-photo { left: 56%; }
+  .mint-topic-link { font-size: 11px; padding: 7px 9px; gap: 6px; }
+  .mint-carousel .el-carousel__arrow { width: 24px; height: 24px; }
+  .mint-carousel .el-carousel__arrow--left { left: 4px; }
+  .mint-carousel .el-carousel__arrow--right { right: 4px; }
+  .mint-side { grid-template-columns: repeat(2,minmax(0,1fr)); grid-template-rows: 1fr; height: 77px; gap: 7px; }
+  .mint-side > button { border-radius: 12px; padding: 7px 8px; }
+  .mint-side strong { font-size: 14px; }
+  .mint-side small, .mint-side span:not(.mint-side-photo) { font-size: 9px; }
+  .mint-browse .product-grid { gap: 10px; }
+  .mint-browse .card-content { padding: 8px; }
+}

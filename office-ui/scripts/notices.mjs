@@ -4,7 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
-const notices = ['华立转角办公面板 · 开源依赖许可', '由 npm 锁文件生成，仅收录生产依赖。'];
+const asset = process.argv[2] === 'home-mint' ? 'home-mint' : 'office';
+const notices = [asset === 'office' ? '华立转角办公面板 · 开源依赖许可' : '华立转角逛逛轮播 · 开源依赖许可', '由 npm 锁文件生成，仅收录生产依赖。'];
 for (const [relative, entry] of Object.entries(lock.packages)){
   if (!relative || entry.dev) continue;
   const directory = path.join(root, relative);
@@ -15,4 +16,4 @@ for (const [relative, entry] of Object.entries(lock.packages)){
   if (license) notices.push(fs.readFileSync(path.join(directory, license), 'utf8'));
   else notices.push(metadata.repository ? JSON.stringify(metadata.repository) : '请参阅 npm 包元数据中的上游项目。');
 }
-fs.writeFileSync(path.join(root, '../web 7M/assets/office/THIRD-PARTY-NOTICES.txt'), notices.join('\n'), 'utf8');
+fs.writeFileSync(path.join(root, `../web 7M/assets/${asset}/THIRD-PARTY-NOTICES.txt`), notices.join('\n'), 'utf8');
