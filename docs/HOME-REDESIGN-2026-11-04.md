@@ -93,3 +93,42 @@ git checkout 422d902 -- "web 7M/home.css" "web 7M/src/pages/home.js" \
 1. 先出 1–3 个**静态方案**（截图或可点 HTML），在聊天里让用户挑；
 2. 用户选定后再改仓库代码；
 3. 改完只做预览、不推 main，拿到一句明确的「可以」再提交推送。
+
+---
+
+## 三、部署记录（2026-11-04 11:13）
+
+| 项 | 值 |
+| --- | --- |
+| 部署时间 | 2026-11-04T03:13:42Z（北京时间 11:13） |
+| 代码版本 | `f2f366a`（工作树干净，`git status` 为空） |
+| Version ID | `6f56228f-7890-4558-a78f-7a2d87dc4167` |
+| 部署消息 | `home v3 f2f366a` |
+| 上传 | 6 个静态文件（`index.html` / `home.css` / `home.js` / `home-hero.js` / `ai-pet.js` / `ai-pet.css`），191 个已存在跳过；Worker 14312.94 KiB，gzip 5104.73 KiB |
+| Worker 启动 | 1046 ms |
+| 线上地址 | https://zhuanjiao.wangzirui471.workers.dev |
+
+部署前已跑 `wrangler deploy --dry-run`（215 个资源文件、294 个 Python 模块、D1/R2/KV/ASSETS 绑定齐全），并用 `whoami` 确认授权仍在（`wangzirui471@gmail.com`，account `824c84ca…`）。上一次线上是 2026-11-02 07:39Z 的 `home redesign restore 422d902`（`e5477a3b`），本次把它覆盖了。
+
+### 上线验收（真实线上，不是本地）
+
+| 项 | 结果 |
+| --- | --- |
+| `/api/health` | `{"ok": true, "trial": true}` |
+| `/` 首页资源版本号 | `home.css?v=20261104-home-v3b`、`main.js?v=20261104-home-v3b`、`ai-pet.css?v=20261104-pet-fix` |
+| `/home.css` 内容 | 含 36 处 `--ho-ink`（v3 令牌），确认不是旧版 |
+| `/src/pages/home.js` | 含「转角发现」 |
+| `/src/components/ai-pet.js` | 含 `reanchor`（桌宠修复已上线） |
+| 浏览器（1440×950，走本机代理） | 24 张商品卡、1 个主视觉、7 个频道；`pageerror` 0 条；4xx/5xx 0 条 |
+
+说明：`*.workers.dev` 在国内被 DNS 污染，本次验证全程走本机代理（`127.0.0.1:53414`），不代表校园网直连可用；正式对外仍需自有域名 + 备案。
+
+### 回滚方式
+
+```bash
+cd "Backend mission"
+node node_modules/wrangler/bin/wrangler.js rollback 6f56228f-7890-4558-a78f-7a2d87dc4167 --name zhuanjiao   # 先看历史
+node node_modules/wrangler/bin/wrangler.js deployments list --name zhuanjiao                              # 找到要回的那一版
+```
+
+Cloudflare 控制台的 Deployments 页面也能一键回滚到 `e5477a3b`（= `422d902` 那版前端）。回滚只换 Worker/Assets 版本，不动 D1 数据。
