@@ -7,7 +7,6 @@ html:has(.mint-browse), body:has(.mint-browse) { background: #f8fbf8; }
 .mint-opening small, .mint-slide-copy small { color: var(--mint-accent); font-size: 11px; font-weight: 750; letter-spacing: .11em; }
 .mint-opening p { color: var(--mint-muted); margin: 0 0 3px; font-size: 13px; }
 .mint-topics { --mint-height: 254px; display: grid; grid-template-columns: minmax(0, 2.25fr) minmax(0, 1fr); gap: 15px; }
-.mint-carousel-frame { position: relative; }
 .mint-carousel { --el-color-white: #fff; --el-carousel-indicator-width: 16px; --el-carousel-indicator-height: 4px; }
 .mint-carousel .el-carousel__container { height: var(--mint-height); overflow: hidden; border-radius: 22px; }
 .mint-carousel .el-carousel__arrow { width: 32px; height: 32px; background: #ffffffe6; color: var(--mint-ink); box-shadow: 0 3px 10px #172b2424; }
@@ -17,22 +16,22 @@ html:has(.mint-browse), body:has(.mint-browse) { background: #f8fbf8; }
 .mint-carousel .el-carousel__indicators { margin: 0; padding: 0; }
 .mint-carousel .el-carousel__indicator button { border-radius: 8px; background: #76887f; }
 .mint-carousel .el-carousel__indicator.is-active button { width: 24px; background: var(--mint-accent); }
-.mint-play { position: absolute; bottom: 0; right: 0; padding: 3px 8px; background: #e6f1e9; color: #275240; border-radius: 20px; font-size: 10px; line-height: 1.35; }
 .mint-hero button:focus-visible, .mint-browse .home-channel:focus-visible { outline: 2px solid #27674e; outline-offset: -2px; }
 .mint-slide { position: relative; min-width: 0; height: var(--mint-height); display: flex; align-items: center; overflow: hidden; border-radius: 22px; background: #e1eee3; }
 .mint-slide[data-art="books"] { background: #e7eef8; }
-.mint-slide[data-art="camera"] { background: #f9edda; }
-.mint-slide[data-art="bag"] { background: #efe8f9; }
+.mint-slide[data-art="swap"] { background: #f9edda; }
+.mint-slide[data-art="dorm"] { background: #e9edf5; }
 .mint-slide-copy { position: relative; z-index: 1; width: 52%; padding: 12px 8px 12px 52px; }
 .mint-slide-copy h2 { font-size: clamp(24px, 2.8vw, 38px); line-height: 1.16; letter-spacing: -.04em; margin: 7px 0 9px; max-width: 9em; white-space: pre-line; }
 .mint-slide-copy p { margin: 0 0 14px; color: var(--mint-muted); font-size: 13px; line-height: 1.55; }
 .mint-topic-link { display: inline-flex; align-items: center; gap: 11px; border-radius: 20px; padding: 9px 13px; background: var(--mint-accent); color: #fff; font-size: 13px; font-weight: 700; }
 .mint-topic-link:hover { background: #20513f; }
 .mint-slide-photo, .mint-side-photo { position: absolute; inset: 0 0 0 53%; container-type: size; overflow: hidden; }
-.mint-slide-photo::before, .mint-side-photo::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: max(102cqw, 102cqh); aspect-ratio: 1; background: url('./campus.webp') var(--art-x, 0%) var(--art-y, 0%)/300% 200% no-repeat; }
-.mint-hero [data-art="dorm"] { --art-x: 50%; }
-.mint-hero [data-art="books"] { --art-x: 100%; --art-y: 100%; }
-.mint-hero [data-art="camera"] { --art-x: 100%; }
+.mint-slide-photo::before, .mint-side-photo::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: max(102cqw, 102cqh); aspect-ratio: 1; background: url('./campus-posters.webp') var(--art-x, 0%) var(--art-y, 0%)/200% 200% no-repeat; }
+/* 四张原创插画对应同一张本地图片的四个等分，避免每次切换重新加载。 */
+.mint-hero [data-art="books"] { --art-x: 100%; }
+.mint-hero [data-art="dorm"] { --art-y: 100%; }
+.mint-hero [data-art="swap"] { --art-x: 100%; --art-y: 100%; }
 .mint-side { display: grid; grid-template-rows: repeat(2,minmax(0,1fr)); gap: 12px; height: var(--mint-height); }
 .mint-side > button { position: relative; min-width: 0; overflow: hidden; padding: 11px 14px; text-align: left; border-radius: 18px; background: #e9effa; }
 .mint-side > button + button { background: #fff0d7; }
@@ -58,7 +57,7 @@ html:has(.mint-browse), body:has(.mint-browse) { background: #f8fbf8; }
   .mint-opening { display: block; margin-bottom: 10px; }
   .mint-opening p { font-size: 11px; margin: 2px 0 0; }
   .mint-slide-copy { padding-left: 31px; width: 55%; }
-  .mint-slide-copy h2 { font-size: clamp(20px, 5.65vw, 27px); }
+  .mint-slide-copy h2 { font-size: clamp(20px, 5.65vw, 27px); text-wrap: balance; }
   .mint-slide-copy p, .mint-slide-copy small { font-size: 10px; }
   .mint-slide-photo { left: 56%; }
   .mint-topic-link { font-size: 11px; padding: 7px 9px; gap: 6px; }

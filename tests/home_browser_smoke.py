@@ -57,7 +57,8 @@ def run():
                 expect(page.locator('.mint-carousel .el-carousel__item')).to_have_count(4)
                 expect(page.locator('.mint-carousel .el-carousel__item.is-active')).to_have_count(1)
                 expect(page.locator('.mint-side button')).to_have_count(2)
-                expect(page.locator('.mint-play')).to_have_count(0)
+                expect(page.get_by_role('button', name='播放轮播', exact=True)).to_have_count(0)
+                expect(page.get_by_role('button', name='暂停轮播', exact=True)).to_have_count(0)
                 # 参考图的版面顺序：主视觉 → 频道条 → 转角发现（商品流）。
                 assert page.locator('.home-hero').bounding_box()['y'] < page.locator('.home-channels').bounding_box()['y'] < page.locator('.home-feed').bounding_box()['y']
                 # 九格快捷宫格整行删掉：其中六个和频道行、顶栏跳同一页。
@@ -207,16 +208,16 @@ def run():
                 expect(fallback.locator('.product-card')).to_have_count(24)
                 carousel = fallback.locator('.mint-carousel')
                 active = carousel.locator('.el-carousel__item.is-active .mint-topic-link')
-                expect(active).to_have_attribute('data-go','home/living')
+                expect(active).to_have_attribute('data-go','publish')
                 fallback.clock.fast_forward(8100)
-                expect(active).to_have_attribute('data-go','home/living')
+                expect(active).to_have_attribute('data-go','publish')
                 # 手动箭头和指示器都切换专题，减少动态效果时仍能手动切换。
                 carousel.locator('.el-carousel__arrow--right').click()
                 expect(active).to_have_attribute('data-go','home/books')
                 fallback.emulate_media(reduced_motion='reduce')
-                carousel.locator('.el-carousel__indicator').nth(2).click()
+                carousel.locator('.el-carousel__indicator').nth(3).click()
                 expect(active).to_have_attribute('data-go','forum/wants')
-                expect(fallback.locator('.mint-play')).to_have_count(0)
+                expect(fallback.get_by_role('button', name='播放轮播', exact=True)).to_have_count(0)
                 carousel.locator('.el-carousel__indicator').nth(1).click()
                 expect(active).to_have_attribute('data-go','home/books')
                 active.click()

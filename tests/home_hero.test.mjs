@@ -14,7 +14,7 @@ test('mint home keeps topic destinations available before the carousel mounts', 
   for (const go of ['home/living', 'home/books', 'home/free', 'forum/wants', 'publish']) {
     assert.ok(html.includes(`data-go="${go}"`), go);
   }
-  assert.deepEqual(heroSlides.map(slide => slide.go), ['home/living', 'home/books', 'forum/wants', 'publish']);
+  assert.deepEqual(heroSlides.map(slide => slide.go), ['publish', 'home/books', 'home/living', 'forum/wants']);
 });
 
 test('homes no longer ship the 小转推荐 rail', () => {
