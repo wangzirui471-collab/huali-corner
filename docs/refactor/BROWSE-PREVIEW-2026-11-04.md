@@ -54,3 +54,10 @@ AI 验证范围是入口和面板开关。本轮没有调用外部模型、推�
 前端提交 `ea5b584`，首次实拍上线版本 `979112f4-b828-40a0-a35c-111ec40395b6`。线上复测发现手机一度读到旧分栏样式，提交 `2dbd1c5` 使用独立的 `mint-photos.css` 路径。北京时间 2026-11-04 20:01 完成修正发布，版本 `9b02bf74-0352-47d7-89b6-8533e9ba7f8d` 承接 100% 流量。原插画版 `f1fe74b9-459b-444e-9d21-15230c97aabe` 可作回滚点。
 
 52 项前端测试通过，60 个模块可加载，两次 dry-run 均通过。最终线上 Chrome 桌面和 390px 手机逐张验证四张实拍全幅呈现、专题入口、教材跳转、商品卡、小转入口与健康检查，四张实拍哈希与发布文件一致。
+
+
+## 轮播加载与好物照片
+
+用户报告轮播空白。改用站内 WebP 图片元素直接加载，并为新版样式和组件单独命名，旧模板仍能通过 CSS 显示同一照片。首张保留已获授权的校门实拍。其余三张分别来自 [Suzy Hazelwood 的旧书](https://www.pexels.com/photo/stacks-of-old-books-6554538/)、[cottonbro studio 的台灯](https://www.pexels.com/photo/a-desk-lamp-beside-an-indoor-plant-6789634/)和[cottonbro studio 的衣物分享](https://www.pexels.com/photo/person-holding-a-brown-box-with-clothing-6591155/)，按 [Pexels 许可](https://www.pexels.com/legal-pages/license/)使用。两张快捷卡复用后者中的旧书与衣物分享照片。
+
+构建、52 项前端测试、60 个模块检查、首页浏览器回归和发布演练均通过。北京时间 2026-11-04 20:11 发布提交 `6dfc54a`，版本 `eea0e99c-d11c-4bb8-8f8a-c187961d6b5c` 接管 100% 流量，回滚点 `9b02bf74-0352-47d7-89b6-8533e9ba7f8d`。线上桌面及手机逐张验证四张图片已解码并铺满轮播，两个快捷卡图片来自好物素材，免费好物跳转和小转入口通过。四张线上图片哈希与发布文件一致。
