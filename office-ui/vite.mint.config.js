@@ -8,7 +8,7 @@ export default defineConfig({
   build: {
     outDir: fileURLToPath(new URL('../web 7M/assets/home-mint/', import.meta.url)),
     emptyOutDir: false,
-    lib: { entry: 'src/mint-carousel.js', formats: ['es'], fileName: () => 'carousel.js', cssFileName: 'carousel' },
+    lib: { entry: 'src/mint-carousel.js', formats: ['es'], fileName: () => 'carousel-market.js', cssFileName: 'carousel' },
   },
   define: { 'process.env.NODE_ENV': '"production"' }
 });

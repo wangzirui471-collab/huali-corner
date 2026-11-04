@@ -17,7 +17,9 @@ function selectSlide(next) {
       :autoplay="false" @change="selectSlide">
       <el-carousel-item v-for="(slide, i) in slides" :key="slide.title">
         <div class="mint-slide" :data-art="slide.art" :inert="i !== index">
-          <div class="mint-slide-photo" aria-hidden="true"></div>
+          <div class="mint-slide-photo" aria-hidden="true">
+            <img v-if="slide.image" class="mint-cover" :src="slide.image" alt="" decoding="async">
+          </div>
           <div class="mint-slide-copy">
             <small>{{ slide.eyebrow }}</small>
             <h2>{{ slide.title }}</h2>

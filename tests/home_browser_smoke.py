@@ -57,6 +57,10 @@ def run():
                 expect(page.locator('.mint-carousel .el-carousel__item')).to_have_count(4)
                 expect(page.locator('.mint-carousel .el-carousel__item.is-active')).to_have_count(1)
                 expect(page.locator('.mint-side button')).to_have_count(2)
+                # 检查照片真正加载，避免 CSS 或资源返回空白却通过 DOM 数量断言。
+                page.wait_for_function("Array.from(document.querySelectorAll('.mint-cover')).length === 6 && Array.from(document.querySelectorAll('.mint-cover')).every(image => image.complete && image.naturalWidth > 0)")
+                side_photos = page.locator('.mint-side .mint-cover').evaluate_all('(images)=>images.map(image=>image.getAttribute("src"))')
+                assert all('/market-' in photo for photo in side_photos), side_photos
                 expect(page.get_by_role('button', name='播放轮播', exact=True)).to_have_count(0)
                 expect(page.get_by_role('button', name='暂停轮播', exact=True)).to_have_count(0)
                 # 参考图的版面顺序：主视觉 → 频道条 → 转角发现（商品流）。
@@ -233,7 +237,7 @@ def run():
                 expect(fallback.locator('.product-card')).to_have_count(24)
                 # 主轮播资源加载失败时，静态专题和快捷路由仍然可以点击。
                 without_carousel=browser.new_page()
-                without_carousel.route('**/assets/home-mint/carousel.js*', lambda route: route.abort())
+                without_carousel.route('**/assets/home-mint/carousel-market.js*', lambda route: route.abort())
                 without_carousel.goto(base+'/#home',wait_until='networkidle')
                 expect(without_carousel.locator('.mint-fallback-links [data-go="forum/wants"]')).to_be_visible()
                 without_carousel.locator('.mint-side [data-go="home/books"]').click()

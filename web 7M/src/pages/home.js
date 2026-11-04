@@ -14,8 +14,8 @@ import { api } from '../core/http.js';
 import { shell, empty } from '../core/shell.js';
 import { createProductFeed } from '../core/product-feed.js';
 import { browseCard, card } from '../components/product-card.js';
-import { mountHomeFeed } from '../actions/home-feed.js';
-import { homeHero } from '../components/home-hero.js';
+import { mountHomeFeed } from '../actions/home-feed.js?v=market-covers';
+import { homeHero } from '../components/home-hero.js?v=market-covers';
 
 const PAGE_SIZE=24;
 

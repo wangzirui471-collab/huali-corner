@@ -6,7 +6,7 @@
 // 回到顶部的显隐。路由切页前会调用 dispose()，把观察器、计时器和监听全部释放。
 
 import { state } from '../core/state.js';
-import { mountHomeHero } from '../components/home-hero.js';
+import { mountHomeHero } from '../components/home-hero.js?v=market-covers';
 
 /** 路由切页时统一释放分页观察器、滚动监听和专题轮播。 */
 export function mountHomeFeed({root, feed, favorite, renderCard}){
