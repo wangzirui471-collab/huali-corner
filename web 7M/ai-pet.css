@@ -61,8 +61,13 @@
 .ai-pet-reaction{
   position: absolute;
   z-index: 3;
-  left: 50%;
+  /* 水平位置带一个由 JS 算出的补偿量：桌宠贴到屏幕边缘时把它推回视口内。
+     绝对定位的自动宽度只按「包含块右边还剩多少」算，而包含块就是桌宠本身
+     （82px 宽），所以必须显式 width:max-content，否则整句话会被拆成一字一行。 */
+  left: calc(50% + var(--bubble-dx, 0px));
   bottom: calc(100% - 5px);
+  width: max-content;
+  max-width: min(200px, calc(100vw - 32px));
   padding: 7px 11px;
   border: 1px solid #f3e5b3;
   border-radius: 12px 12px 12px 4px;
@@ -71,7 +76,8 @@
   color: #6c578d;
   font-size: 12px;
   line-height: 1.4;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -146,7 +152,9 @@
 .ai-pet-hint{
   position: absolute;
   bottom: calc(100% + 8px);
-  left: 50%;
+  left: calc(50% + var(--hint-dx, 0px));
+  width: max-content;
+  max-width: min(260px, calc(100vw - 24px));
   transform: translateX(-50%);
   padding: 6px 10px;
   border-radius: 10px;
@@ -154,7 +162,8 @@
   color: #fff;
   font-size: 11.5px;
   line-height: 1.4;
-  white-space: nowrap;
+  text-align: center;
+  white-space: normal;
   pointer-events: none;
   box-shadow: 0 8px 20px rgba(24, 24, 28, .22);
 }
@@ -163,7 +172,8 @@
   content: '';
   position: absolute;
   top: 100%;
-  left: 50%;
+  /* 气泡整体被推回视口时，尖角要跟着回到桌宠头顶，不然会指向旁边的商品。 */
+  left: calc(50% - var(--hint-dx, 0px));
   margin-left: -5px;
   border: 5px solid transparent;
   border-top-color: #2b2c30;
@@ -821,8 +831,6 @@ button.ai-pet-link{ cursor: pointer; font-family: inherit; }
   opacity: 1;
   transform: translate(-50%, 0) scale(1);
   animation: pet-say .3s ease-out both;
-  white-space: normal;
-  max-width: 190px;
   text-align: left;
 }
 

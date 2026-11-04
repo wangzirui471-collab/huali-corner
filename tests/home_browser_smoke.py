@@ -57,7 +57,8 @@ def run():
                 expect(page.locator('[data-promo-slide]')).to_have_count(6)
                 expect(page.locator('[data-promo-slide]:visible')).to_have_count(2)
                 expect(page.locator('[data-action="home-pause"]')).to_have_count(0)
-                assert page.locator('.home-channels').bounding_box()['y'] < page.locator('.home-hero').bounding_box()['y'] < page.locator('.home-feed').bounding_box()['y']
+                # 参考图的版面顺序：主视觉 → 频道条 → 转角发现（商品流）。
+                assert page.locator('.home-hero').bounding_box()['y'] < page.locator('.home-channels').bounding_box()['y'] < page.locator('.home-feed').bounding_box()['y']
                 # 九格快捷宫格整行删掉：其中六个和频道行、顶栏跳同一页。
                 expect(page.locator('.home-shortcuts')).to_have_count(0)
                 expect(page.locator('.home-channel')).to_have_count(7)

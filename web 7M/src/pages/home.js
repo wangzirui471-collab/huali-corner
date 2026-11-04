@@ -4,32 +4,34 @@
 // 逛逛页的身份由地址栏决定：`#home` 是全部好物，`#home/books` 是教材频道，
 // `#home/free` 是免费送。这样每个入口都有自己的地址、自己的标题和自己的返回路径，
 // 不再是「点哪个都停在同一个页面」。交互和资源清理由 actions/home-feed 负责。
+//
+// 版面顺序照参考图：主视觉 → 频道条 → 转角发现 → 商品流 → 发布 CTA。
+// 频道条紧贴商品流上方，是因为它就是这一屏的筛选器，放在主视觉和列表之间最顺。
 
 import { $, e, icon } from '../core/dom.js';
 import { state } from '../core/state.js';
 import { api } from '../core/http.js';
-import { shell, heading, empty } from '../core/shell.js';
+import { shell, empty } from '../core/shell.js';
 import { createProductFeed } from '../core/product-feed.js';
 import { card } from '../components/product-card.js';
 import { mountHomeFeed } from '../actions/home-feed.js';
-import { categoryArt } from '../components/category-art.js';
 import { homeHero } from '../components/home-hero.js';
 
 const PAGE_SIZE=24;
 
 // 频道行的唯一数据源：key 同时是地址段和后端分类值（want 例外，它去论坛求购）。
-// tone 只用来上色，和业务无关，所以留在页面层而不是样式里写死七组选择器。
+// 图标走全站同一套线性图标——参考图用的也是细笔画图标，比七张彩色插画更克制。
 const channels=[
-  {key:'',label:'推荐',art:'all',tone:'amber'},
-  {key:'books',label:'教材书籍',art:'books',tone:'coral'},
-  {key:'living',label:'宿舍生活',art:'living',tone:'mint'},
-  {key:'electronics',label:'电子产品',art:'electronics',tone:'blue'},
-  {key:'sports',label:'运动好物',art:'sports',tone:'lilac'},
-  {key:'free',label:'免费送',art:'free',tone:'pink'},
-  {key:'want',label:'校园求购',art:'want',tone:'teal',go:'forum/wants'}
+  {key:'',label:'为你推荐',ic:'home'},
+  {key:'books',label:'教材书籍',ic:'book'},
+  {key:'living',label:'宿舍生活',ic:'chair'},
+  {key:'electronics',label:'电子数码',ic:'device'},
+  {key:'sports',label:'运动好物',ic:'ball'},
+  {key:'free',label:'免费送',ic:'tag'},
+  {key:'want',label:'校园求购',ic:'search',go:'forum/wants'}
 ];
 
-const CATEGORY_LABEL={books:'教材书籍',living:'宿舍生活',electronics:'电子产品',sports:'运动好物'};
+const CATEGORY_LABEL={books:'教材书籍',living:'宿舍生活',electronics:'电子数码',sports:'运动好物'};
 
 // 地址栏里 `#home/<channel>` 的第二段就是这个页面的频道。
 // 收藏页（#favorites）没有频道，返回空串。
@@ -40,13 +42,13 @@ function routeChannel(){
 
 function navigation(){
   return `<nav class="home-channels" aria-label="商品频道">${channels.map(channel=>{
-    const {key,label,art,tone,go}=channel;
+    const {key,label,ic,go}=channel;
     const active=key?state.filter.category===key||(key==='free'&&state.freeShelf):(!state.filter.category&&!state.freeShelf);
     // want 是论坛求购，不是商品分类，所以走真正的页面跳转；
     // 其余六个是本站商品的筛选视角，带上地址段，让每个入口都有自己的页面。
     // 求购是真实页面跳转，不该带 aria-pressed；其余六个才是「当前选中哪个频道」。
     const attrs=go?` data-go="${go}"`:` data-action="home-channel" data-value="${key}" aria-pressed="${active}"`;
-    return `<button class="home-channel" data-tone="${tone}"${attrs}>${categoryArt(art)}<span>${label}</span></button>`;
+    return `<button class="home-channel"${attrs}>${icon(ic)}<span>${label}</span></button>`;
   }).join('')}</nav>`;
 }
 
@@ -62,10 +64,10 @@ export function productsURL(favorite=false){ return '/products?'+homeParams(favo
 
 // 当前页的身份：标题、说明、以及是否处在某个频道里。
 function pageIdentity(favorite,free,category){
-  if(favorite) return {title:'收藏好物',kicker:'MY FINDS',context:'收藏不等于预留，成交前请确认状态',channel:''};
-  if(free) return {title:'免费好物',kicker:'FREE SHELF',context:'物品免费，送货费请查看详情',channel:'free'};
-  if(category) return {title:CATEGORY_LABEL[category],kicker:'CHANNEL',context:`正在看${CATEGORY_LABEL[category]} · 换一个频道看看别的`,channel:category};
-  return {title:'猜你喜欢',kicker:'CAMPUS FINDS',context:'来自同学的闲置，等一个新主人',channel:''};
+  if(favorite) return {title:'我的收藏',context:'喜欢的好物，先收藏再慢慢挑',channel:''};
+  if(free) return {title:'免费好物',context:'物品免费，送货费请查看详情',channel:'free'};
+  if(category) return {title:CATEGORY_LABEL[category],context:`正在看${CATEGORY_LABEL[category]} · 换一个频道看看别的`,channel:category};
+  return {title:'转角发现',context:'真正来自同学的闲置好物',channel:''};
 }
 
 // 处在频道里时给一条可返回的路径，避免用户被筛选困住。
@@ -74,6 +76,20 @@ function crumbBar(channel){
   const label=channel==='free'?'免费送':CATEGORY_LABEL[channel];
   return `<div class="home-crumb"><button class="home-crumb-back" data-action="home-channel" data-value="">${icon('arrow')}全部好物</button><span class="home-crumb-sep">/</span><b>${label}</b></div>`;
 }
+
+// 排序与筛选：参考图把它们放成标题右边的三个纯文字按钮，
+// 选中项加粗并在下方留一条短横线，不用整块胶囊按钮抢视线。
+function feedTools(filter){
+  return `<div class="home-feed-tools" role="group" aria-label="排序与筛选"><button class="${!filter.sort?'active':''}" data-action="feed-sort" data-value="" aria-pressed="${!filter.sort}">最新上架</button><button class="${filter.sort==='price'?'active':''}" data-action="feed-sort" data-value="price" aria-pressed="${filter.sort==='price'}">价格 ↑</button><button class="feed-filter" data-action="open-filter">${icon('filter')}筛选</button></div>`;
+}
+
+// 底部 CTA 的线稿纸箱：不额外请求图片，笔触和全站图标一致。
+const CTA_ART = `<svg class="home-cta-art" viewBox="0 0 168 120" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round">
+  <path d="M34 48h78v54H34z"/><path d="M34 48 48 24h78l-14 24"/><path d="M112 48l14-24"/>
+  <path d="M73 24v24M34 48h78"/><path d="M48 34h42" opacity=".55"/>
+  <path d="M124 82c6-4 12-4 18 0" opacity=".55"/><path d="M130 96h16" opacity=".55"/>
+  <path d="M138 16l2.6 6.4 6.4 2.6-6.4 2.6L138 34l-2.6-6.4L129 25l6.4-2.6z" fill="currentColor" stroke="none" opacity=".8"/>
+</svg>`;
 
 export async function home(favorite=false){
   const epoch=state.renderId, token=state.token;
@@ -99,21 +115,19 @@ export async function home(favorite=false){
     return api('/products?'+query);
   }});
 
-  const {title,kicker,context,channel:active}=pageIdentity(favorite,free,category);
-  const head=favorite
-    ? heading('MY COLLECTION','我的收藏','喜欢的好物，先收藏再慢慢挑。')
-    : navigation()+homeHero();
+  const {title,context,channel:active}=pageIdentity(favorite,free,category);
+  // 收藏页没有主视觉和频道条：它不是一个可以换频道的商品流。
+  const head=favorite?'':homeHero();
 
-  shell(`<div class="home-page">${head}
-    <section class="home-feed" aria-label="${e(title)}">${crumbBar(active)}
-      <div class="home-feed-heading"><div><span class="home-section-kicker">${kicker}</span><h2>${e(title)}<small>好物不闲置，生活有转角</small></h2></div>
-        <div class="home-feed-tools"><button class="${!filter.sort?'active':''}" data-action="feed-sort" data-value="" aria-pressed="${!filter.sort}">最新</button><button class="${filter.sort==='price'?'active':''}" data-action="feed-sort" data-value="price" aria-pressed="${filter.sort==='price'}">价格 ↑</button><button class="feed-filter" data-action="open-filter">${icon('filter')}筛选</button></div></div>
-      <div class="home-feed-context"><span>${e(context)}</span><small data-feed-count>已展示 ${initial.length} 件商品</small></div>
+  shell(`<div class="home-page">${head}${favorite?'':navigation()}
+    <section class="home-feed" aria-label="${e(title)}">
+      ${crumbBar(active)}
+      <header class="home-feed-heading"><div class="home-feed-title">${favorite?`<h1>${e(title)}</h1>`:`<h2>${e(title)}</h2>`}<p class="home-feed-sub">${e(context)}<small data-feed-count>已展示 ${initial.length} 件商品</small></p></div>${feedTools(filter)}</header>
       <div class="product-grid" aria-busy="false">${initial.map(card).join('')}</div>
       ${!initial.length?empty(free?'暂时没有免费转让的物品':'暂时没有匹配的商品','可以换个关键词，或去社区发布求购需求。'):''}
       <div class="home-feed-end"><p data-feed-status role="status" aria-live="polite">${feed.hasMore?'继续向下，发现更多好物':initial.length?'已经看到全部好物了':''}</p><button class="btn secondary load-more" data-action="load-more" ${feed.hasMore?'':'hidden'}>加载更多好物</button></div>
     </section>
-    ${favorite?'':`<section class="home-cta"><div class="home-cta-copy"><strong>让闲置，遇见下一位主人</strong><p>发布你的闲置物品，让好物继续发光，也让校园生活更美好。</p></div><button class="btn primary" data-go="publish">${icon('plus')}发布闲置</button></section>`}
+    ${favorite?'':`<section class="home-cta"><div class="home-cta-copy"><small>GOOD THINGS GO AROUND</small><strong>你闲置的，正是别人需要的。</strong><p>发布一本旧书、一盏台灯，让好物在校园里继续传递。</p></div><button class="btn primary" data-go="publish">${icon('plus')}发布我的闲置</button>${CTA_ART}</section>`}
     <button class="home-back-top" data-action="home-top" aria-label="回到顶部" hidden>↑<span>顶部</span></button></div>`,'home');
   mountHomeFeed({root:$('.home-page'),feed,favorite});
 }

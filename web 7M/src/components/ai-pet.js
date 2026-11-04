@@ -215,6 +215,7 @@ function petReaction(){
   const messages = ['被你摸到啦，好开心！', '转一圈，电量回满！', '嘿嘿，我也摸摸你！'];
   const bubble = $('#ai-pet-reaction');
   if (bubble) bubble.textContent = messages[petReactionIndex++ % messages.length];
+  fitBubble();
   petEl.classList.remove('is-petted');
   // 等一帧再加类，让连续点击也能重启动画。
   requestAnimationFrame(() => {
@@ -243,6 +244,43 @@ function moveTo(x, y){
   petEl.style.left = p.x + 'px';
   petEl.style.top = p.y + 'px';
   return p;
+}
+
+// 气泡、提示条都是 .ai-pet 的绝对定位子元素，而 .ai-pet 只有桌宠那么大
+// （默认 82×100）。绝对定位的自动宽度取「到包含块右边还剩多少」，所以桌宠
+// 贴在屏幕右侧时可用宽度只剩几十像素，整句话会被拆成一字一行，再往外溢出被裁。
+// 解法：CSS 里给它们 width:max-content，这里量出布局宽度后算一个水平补偿，
+// 用 --bubble-dx / --hint-dx 平移回视口内。
+function fitFloating(el, varName){
+  if (!el || !petEl) return;
+  const host = petEl.getBoundingClientRect();
+  const w = el.offsetWidth;           // 布局宽度，不受 transform 的 scale 影响
+  if (!w || !host.width) return;
+  const pad = 8, center = host.left + host.width / 2;
+  const left = center - w / 2;
+  let dx = 0;
+  if (left < pad) dx = pad - left;
+  else if (left + w > window.innerWidth - pad) dx = (window.innerWidth - pad) - (left + w);
+  petEl.style.setProperty(varName, dx ? dx.toFixed(1) + 'px' : '0px');
+}
+
+function fitBubble(){
+  fitFloating($('#ai-pet-reaction'), '--bubble-dx');
+  if (!$('#ai-pet-hint')?.hidden) fitFloating($('#ai-pet-hint'), '--hint-dx');
+}
+
+// 改大小 / 换形象之后盒子尺寸会变，但 left/top 不动：放大时右边和下边会顶出
+// 视口，右下角那只尤其明显（160% 时 29px 在屏幕外）。这里以「底边中点」为
+// 锚点重新贴一次，再夹回视口——放大向上、向左长，缩小时不跑到屏幕中间去。
+function reanchor(prev){
+  if (!petEl || !prev || !prev.width || !petEl.style.left) return;
+  const now = petEl.getBoundingClientRect();
+  if (!now.width) return;
+  if (Math.abs(now.width - prev.width) < .5 && Math.abs(now.height - prev.height) < .5) return;
+  moveTo(prev.left + prev.width / 2 - now.width / 2, prev.bottom - now.height);
+  savePos();
+  placePanel();
+  fitBubble();
 }
 
 // 「回到顶部」按钮的区域。宠物默认位在右下角，正好压住它
@@ -379,7 +417,15 @@ function setPanelMax(on){
   if (on === isMax) return;
   const btn = $('#ai-pet-max');
   if (on){
-    panel.dataset.prev = JSON.stringify(panelSize || { w: panel.offsetWidth, h: panel.offsetHeight });
+    // 连位置一起记：只记尺寸的话，还原时 placePanel() 会按桌宠重新贴一次，
+    // 面板会从原来的地方「跳」到桌宠上方，看起来像放大坏了。
+    // 尺寸只记用户拖过的值；没拖过就记 0，还原时交还给自然高度——
+    // 否则会被 .ai-pet-log 的内容下限撑高三十多像素。
+    const r = panel.getBoundingClientRect();
+    panel.dataset.prev = JSON.stringify({
+      w: panelSize ? panelSize.w : 0, h: panelSize ? panelSize.h : 0,
+      left: r.left, top: r.top,
+    });
     panel.style.width = '';
     panel.style.height = '';
     panel.style.maxHeight = '';
@@ -391,10 +437,18 @@ function setPanelMax(on){
     panel.classList.remove('is-max');
     let prev = null;
     try{ prev = JSON.parse(panel.dataset.prev || 'null'); }catch(_){ prev = null; }
-    if (prev && Number.isFinite(prev.w) && Number.isFinite(prev.h)) applyPanelSize(prev.w, prev.h);
-    else { panel.style.width = ''; panel.style.height = ''; panel.style.maxHeight = ''; }
+    if (prev && Number.isFinite(prev.w) && Number.isFinite(prev.h) && prev.w > 0 && prev.h > 0){
+      applyPanelSize(prev.w, prev.h);
+    }else{
+      panel.style.width = ''; panel.style.height = ''; panel.style.maxHeight = '';
+    }
+    // 还原到放大前的位置；窗口在这期间变小就夹回视口内。
+    if (prev && Number.isFinite(prev.left) && Number.isFinite(prev.top)){
+      const r = panel.getBoundingClientRect(), edge = 12;
+      panel.style.left = Math.min(Math.max(edge, prev.left), Math.max(edge, window.innerWidth - r.width - edge)) + 'px';
+      panel.style.top = Math.min(Math.max(edge, prev.top), Math.max(edge, window.innerHeight - r.height - edge)) + 'px';
+    }else placePanel();
     if (btn){ btn.setAttribute('aria-label', '放大对话窗口'); btn.classList.remove('is-max'); }
-    placePanel();
   }
 }
 
@@ -561,6 +615,7 @@ function petBubble(text, ms = 7000){
   if (!bubble) return;
   bubble.textContent = text;
   bubble.classList.add('is-on');
+  fitBubble();
   clearTimeout(bubbleTimer);
   bubbleTimer = setTimeout(() => bubble.classList.remove('is-on'), ms);
 }
@@ -689,6 +744,8 @@ function applySkin(){
   if (!petEl) return;
   const skin = currentSkin();
   if (!skin) return;
+  // 换皮肤和调大小都走这里：先量旧盒子，贴完新尺寸再按底边中点重新定位。
+  const prev = petEl.getBoundingClientRect();
   applySkinVars(petEl, skin, getScale());
   const avatar = $('#ai-pet-avatar');
   if (avatar) avatar.src = skin.avatar;
@@ -706,6 +763,7 @@ function applySkin(){
   probe.src = skin.atlas;
   petEl.classList.remove('is-ready');
   setPetState('idle');
+  reanchor(prev);
 }
 
 // --- 挂载 ---------------------------------------------------------------
@@ -793,11 +851,15 @@ export function mountPet(){
   pullPetPrefs().then(changed => { if (changed) applySkin(); });
 
   // 第一次来提示一次可以拖，之后不再打扰。
+  // 提示条和问候气泡贴的是同一块地方：同时出现会叠在一起，谁都读不清。
+  // 所以第一次访问时把问候让到提示条收起之后。
+  let greetDelay = 1200;
   try{
     if (!localStorage.getItem(HINT_KEY)){
       const hint = $('#ai-pet-hint');
       if (hint){
-        setTimeout(() => { hint.hidden = false; }, 900);
+        greetDelay = 7000;
+        setTimeout(() => { hint.hidden = false; fitBubble(); }, 900);
         setTimeout(() => { hint.hidden = true; localStorage.setItem(HINT_KEY, '1'); }, 6000);
       }
     }
@@ -806,11 +868,12 @@ export function mountPet(){
   scheduleLife();
   scheduleTalk();
   // 第一次见到这只宠物时打个招呼：按时段问候，赶上节日就换装扮。
-  setTimeout(greetOnce, 1200);
+  setTimeout(greetOnce, greetDelay);
 
   window.addEventListener('resize', () => {
     if (!petEl) return;
     restorePos();
+    fitBubble();      // 视口变了，气泡的左右补偿要重算
     const panel = $('#ai-pet-panel');
     if (!panel || panel.hidden) return;
     if (panel.classList.contains('is-max')) return;   // 最大化由 CSS 的 dvh 自适应
