@@ -61,3 +61,9 @@ AI 验证范围是入口和面板开关。本轮没有调用外部模型、推�
 用户报告轮播空白。改用站内 WebP 图片元素直接加载，并为新版样式和组件单独命名，旧模板仍能通过 CSS 显示同一照片。首张保留已获授权的校门实拍。其余三张分别来自 [Suzy Hazelwood 的旧书](https://www.pexels.com/photo/stacks-of-old-books-6554538/)、[cottonbro studio 的台灯](https://www.pexels.com/photo/a-desk-lamp-beside-an-indoor-plant-6789634/)和[cottonbro studio 的衣物分享](https://www.pexels.com/photo/person-holding-a-brown-box-with-clothing-6591155/)，按 [Pexels 许可](https://www.pexels.com/legal-pages/license/)使用。两张快捷卡复用后者中的旧书与衣物分享照片。
 
 构建、52 项前端测试、60 个模块检查、首页浏览器回归和发布演练均通过。北京时间 2026-11-04 20:11 发布提交 `6dfc54a`，版本 `eea0e99c-d11c-4bb8-8f8a-c187961d6b5c` 接管 100% 流量，回滚点 `9b02bf74-0352-47d7-89b6-8533e9ba7f8d`。线上桌面及手机逐张验证四张图片已解码并铺满轮播，两个快捷卡图片来自好物素材，免费好物跳转和小转入口通过。四张线上图片哈希与发布文件一致。
+
+## 2026-11-10 网页版轮播
+
+线上浏览器实测挂起商品 API 时，旧首页没有轮播节点。放行请求后轮播才出现。新版先渲染专题与快捷入口，商品结果单独更新，失败时在商品区提供重试。参照 [W3C APG 手动控制说明](https://www.w3.org/WAI/ARIA/apg/patterns/carousel/)提供上、下张按钮与专题选择，保留真实照片和同一组业务跳转。
+
+前端 52 项测试通过，60 个模块可加载。首页浏览器回归覆盖商品接口挂起、失败、恢复，首张照片仍在视口，方向键切换和分页、收藏、小转入口通过。Worker 发布演练通过。

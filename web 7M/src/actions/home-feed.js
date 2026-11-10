@@ -2,13 +2,12 @@
 // 事件层 · 逛逛页的商品流、主视觉轮播与回到顶部
 //
 // 页面只负责渲染，这里负责把渲染好的 DOM 挂上行为：
-// 商品流分页（IntersectionObserver + 显式按钮）、薄荷专题轮播的挂载与卸载、
+// 商品流分页（IntersectionObserver + 显式按钮）、
 // 回到顶部的显隐。路由切页前会调用 dispose()，把观察器、计时器和监听全部释放。
 
 import { state } from '../core/state.js';
-import { mountHomeHero } from '../components/home-hero.js?v=market-covers';
 
-/** 路由切页时统一释放分页观察器、滚动监听和专题轮播。 */
+/** 路由切页时统一释放分页观察器和滚动监听。 */
 export function mountHomeFeed({root, feed, favorite, renderCard}){
   const epoch=state.renderId, token=state.token;
   const grid=root.querySelector('.product-grid');
@@ -24,7 +23,6 @@ export function mountHomeFeed({root, feed, favorite, renderCard}){
     target?.addEventListener(event,handler);
     cleanup.push(()=>target?.removeEventListener(event,handler));
   }
-  const disposeHero=mountHomeHero(root, alive);
   /** 公布已渲染数量，失败或取消不会修改计数。 */
   function updateCount(){ count.textContent=`已展示 ${grid.children.length} 件${favorite?'收藏':'商品'}`; }
   async function next(){
@@ -54,7 +52,7 @@ export function mountHomeFeed({root, feed, favorite, renderCard}){
     next,
     top(){ window.scrollTo({top:0,behavior:motion.matches?'instant':'smooth'}); },
     dispose(){
-      disposed=true; feed.dispose(); disposeHero(); observer?.disconnect();
+      disposed=true; feed.dispose(); observer?.disconnect();
       cleanup.forEach(fn=>fn());
       if(state.homeView===view) state.homeView=null;
     }

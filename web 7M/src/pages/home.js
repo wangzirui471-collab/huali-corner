@@ -14,8 +14,8 @@ import { api } from '../core/http.js';
 import { shell, empty } from '../core/shell.js';
 import { createProductFeed } from '../core/product-feed.js';
 import { browseCard, card } from '../components/product-card.js';
-import { mountHomeFeed } from '../actions/home-feed.js?v=market-covers';
-import { homeHero } from '../components/home-hero.js?v=market-covers';
+import { mountHomeFeed } from '../actions/home-feed.js?v=market-carousel-v2';
+import { homeHero, mountHomeHero } from '../components/home-hero.js?v=market-carousel-v2';
 
 const PAGE_SIZE=24;
 
@@ -104,8 +104,34 @@ export async function home(favorite=false){
 
   const filter={...state.filter};
   const params=homeParams(favorite);
-  let products=await api('/products?'+params);
-  if(epoch!==state.renderId || token!==state.token) return;
+  const {title,context,channel:active}=pageIdentity(favorite,free,category);
+  // 收藏页没有主视觉和频道条：它不是一个可以换频道的商品流。
+  const head=favorite?'':homeHero();
+  const renderCard=favorite?card:browseCard;
+
+  shell(`<div class="home-page${favorite ? '' : ' mint-browse'}">${head}${favorite?'':navigation()}
+    <div data-home-catalog aria-busy="true"><p class="loading" role="status">正在加载商品…</p></div>
+    ${favorite?'':`<section class="home-cta"><div class="home-cta-copy"><small>GOOD THINGS GO AROUND</small><strong>你闲置的，正是别人需要的。</strong><p>发布一本旧书、一盏台灯，让好物在校园里继续传递。</p></div><button class="btn primary" data-go="publish">${icon('plus')}发布我的闲置</button>${CTA_ART}</section>`}
+    <button class="home-back-top" data-action="home-top" aria-label="回到顶部" hidden>↑<span>顶部</span></button></div>`,'home');
+  const root = $('.home-page');
+  const catalog = root.querySelector('[data-home-catalog]');
+  mountHomeHero(root);
+
+  // 商品列表慢或请求失败时，首屏专题和频道仍能浏览。
+  let products;
+  try {
+    products = await api('/products?'+params);
+  } catch (error) {
+    if (epoch!==state.renderId || token!==state.token || !root.isConnected) return;
+    if (favorite) throw error;
+    catalog.innerHTML = `<section class="home-feed panel" aria-label="${e(title)}">
+      <h2>商品暂时无法加载</h2><p>可以继续浏览校园专题，或稍后重试。</p>
+      <button type="button" class="btn secondary" data-go="${e(location.hash.slice(1) || 'home')}">重新加载商品</button>
+    </section>`;
+    catalog.setAttribute('aria-busy', 'false');
+    return;
+  }
+  if(epoch!==state.renderId || token!==state.token || !root.isConnected) return;
   if(free) products=products.filter(product=>product.price===0);
   const local=free||favorite;
   const initial=local?products.slice(0,PAGE_SIZE):products;
@@ -115,20 +141,13 @@ export async function home(favorite=false){
     return api('/products?'+query);
   }});
 
-  const {title,context,channel:active}=pageIdentity(favorite,free,category);
-  // 收藏页没有主视觉和频道条：它不是一个可以换频道的商品流。
-  const head=favorite?'':homeHero();
-  const renderCard=favorite?card:browseCard;
-
-  shell(`<div class="home-page${favorite ? '' : ' mint-browse'}">${head}${favorite?'':navigation()}
-    <section class="home-feed" aria-label="${e(title)}">
+  catalog.innerHTML = `<section class="home-feed" aria-label="${e(title)}">
       ${crumbBar(active)}
       <header class="home-feed-heading"><div class="home-feed-title">${favorite?`<h1>${e(title)}</h1>`:`<h2>${e(title)}</h2>`}<p class="home-feed-sub">${e(context)}<small data-feed-count>已展示 ${initial.length} 件商品</small></p></div>${feedTools(filter)}</header>
       <div class="product-grid" aria-busy="false">${initial.map(renderCard).join('')}</div>
       ${!initial.length?empty(free?'暂时没有免费转让的物品':'暂时没有匹配的商品','可以换个关键词，或去社区发布求购需求。'):''}
       <div class="home-feed-end"><p data-feed-status role="status" aria-live="polite">${feed.hasMore?'继续向下，发现更多好物':initial.length?'已经看到全部好物了':''}</p><button class="btn secondary load-more" data-action="load-more" ${feed.hasMore?'':'hidden'}>加载更多好物</button></div>
-    </section>
-    ${favorite?'':`<section class="home-cta"><div class="home-cta-copy"><small>GOOD THINGS GO AROUND</small><strong>你闲置的，正是别人需要的。</strong><p>发布一本旧书、一盏台灯，让好物在校园里继续传递。</p></div><button class="btn primary" data-go="publish">${icon('plus')}发布我的闲置</button>${CTA_ART}</section>`}
-    <button class="home-back-top" data-action="home-top" aria-label="回到顶部" hidden>↑<span>顶部</span></button></div>`,'home');
-  mountHomeFeed({root:$('.home-page'),feed,favorite,renderCard});
+    </section>`;
+  catalog.setAttribute('aria-busy', 'false');
+  mountHomeFeed({root,feed,favorite,renderCard});
 }

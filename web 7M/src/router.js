@@ -9,7 +9,7 @@ import { go, setRenderer } from './core/nav.js';
 import { startProgress, stopProgress } from './core/progress.js';
 import { refreshBadges } from './core/badges.js';
 import { needLogin, loginModal } from './auth/login.js';
-import { home } from './pages/home.js?v=market-covers';
+import { home } from './pages/home.js?v=market-carousel-v2';
 import { product } from './pages/product.js';
 import { publish } from './pages/publish.js';
 import { cartPage } from './pages/cart.js';
