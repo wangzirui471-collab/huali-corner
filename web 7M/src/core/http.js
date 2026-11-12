@@ -95,44 +95,52 @@ export async function api(path, data, opts = {}){
   return body;
 }
 
+/** 请求截止时间覆盖响应头和JSON正文；超时保留会话，不自动重发结果未知的写操作。 */
 async function fetchJson(path, data, opts){
-  const ctrl = opts.timeout ? new AbortController() : null;
-  const timer = ctrl ? setTimeout(() => ctrl.abort(), opts.timeout) : null;
-  let res;
+  const duration = opts.timeout === undefined ? 30000 : opts.timeout;
+  const ctrl = duration ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), duration) : null;
   try{
-    res = await fetch('/api'+path, {
+    const res = await fetch('/api'+path, {
       method: data === undefined ? 'GET' : 'POST',
       headers: {'Content-Type':'application/json', ...(state.token ? {Authorization:'Bearer '+state.token} : {})},
       body: data === undefined ? undefined : JSON.stringify(data),
       signal: ctrl ? ctrl.signal : undefined
     });
+    const type = (res.headers.get('Content-Type') || '').toLowerCase();
+    let body;
+    if (type.includes('application/json') || type.includes('+json')){
+      try { body = await res.json(); }
+      catch(err){
+        if (ctrl && ctrl.signal.aborted) throw err;
+        // JSON损坏仍由协议错误分支统一处理，不能把代理页面当成身份失效。
+      }
+    }
+    if (!body || typeof body !== 'object'){
+      const error = new Error(res.status >= 500
+        ? '服务暂时不可用，请稍后重试；当前登录状态已保留'
+        : '接口响应异常，请刷新页面重试；若仍失败请联系管理员');
+      error.status = res.status;
+      error.code = 'INVALID_API_RESPONSE';
+      throw error;
+    }
+    if (!res.ok){
+      const error = new Error(body.error || '请求失败');
+      error.status = res.status;
+      throw error;
+    }
+    return body;
   }catch(err){
-    if (timer) clearTimeout(timer);
-    if (err && err.name === 'AbortError'){
-      const timeout = new Error('AI 响应超时，请稍后重试');
+    if (ctrl && ctrl.signal.aborted){
+      const timeout = new Error(data === undefined
+        ? '请求超时，请稍后重试；当前登录状态已保留'
+        : '请求超时，操作结果尚未确认；请先查看状态，避免重复提交');
       timeout.status = 504;
+      timeout.code = 'REQUEST_TIMEOUT';
       throw timeout;
     }
     throw err;
+  }finally{
+    if (timer) clearTimeout(timer);
   }
-  if (timer) clearTimeout(timer);
-  const type = (res.headers.get('Content-Type') || '').toLowerCase();
-  let body;
-  if (type.includes('application/json') || type.includes('+json')){
-    try { body = await res.json(); } catch { /* malformed response is handled below */ }
-  }
-  if (!body || typeof body !== 'object'){
-    const error = new Error(res.status >= 500
-      ? '服务暂时不可用，请稍后重试；当前登录状态已保留'
-      : '接口响应异常，请刷新页面重试；若仍失败请联系管理员');
-    error.status = res.status;
-    error.code = 'INVALID_API_RESPONSE';
-    throw error;
-  }
-  if (!res.ok){
-    const error = new Error(body.error || '请求失败');
-    error.status = res.status;
-    throw error;
-  }
-  return body;
 }

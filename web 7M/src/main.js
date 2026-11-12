@@ -103,8 +103,8 @@ function schedulePrefetch(){
     const token = state.token;
     const mePromise = token
       ? api('/me').then(me => ({ me })).catch(err => {
-          // 只有明确的 401 才让会话失效；网络/服务异常保留登录态。
-          if (err.status !== 401) throw err;
+          // 只有本站JSON明确拒绝身份才退出；代理HTML401属于协议故障，不清除会话。
+          if (err.status !== 401 || err.code === 'INVALID_API_RESPONSE') throw err;
           clearAccount();
           return { me: null };
         })

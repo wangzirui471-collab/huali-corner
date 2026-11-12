@@ -50,7 +50,16 @@ function clearPetAccount(){
 }
 subscribeSession(clearPetAccount);
 
+/** 失败只恢复原账号仍在使用的空输入框，不覆盖新草稿或把内容带到另一账号。 */
+function restorePetQuestion(area, text, token, userId){
+  if (area?.isConnected && state.token === token && state.me?.id === userId && !area.value){
+    area.value = text;
+  }
+}
+
+/** 客服提问沿用原知识、订单卡片和人工规则；失败保留本轮问题。 */
 async function petAsk(q, extra){
+  const requestToken = state.token, requestUserId = state.me?.id;
   const text=String(q||'').trim();
   const log=$('#ai-pet-log'); if(!text||!log) return;
   const form=$('#ai-pet-form'), area=form?.querySelector('textarea[name=q]'), send=form?.querySelector('button[type=submit]');
@@ -98,6 +107,7 @@ async function petAsk(q, extra){
     petHistory=petHistory.slice(-4);
     if(transfer) setPetState('wave',1800); else setPetState('idle');   // 要转人工就招手喊客服
   }catch(err){
+    restorePetQuestion(area, text, requestToken, requestUserId);
     // 别再把所有错误盖成同一句：500 那次前端只显示「AI 暂时不可用」，
     // 排查时看不到真因。带出状态码，控制台也留一条。
     if(console && console.warn) console.warn('[ai]', err && err.status, err && err.message);
@@ -112,7 +122,9 @@ async function petAsk(q, extra){
 
 
 // 所有者办公：查询/起草直接答；账号动作返回 proposal，等 L1 二次确认后执行。
+/** 所有者办公继续原工具及确认流程，失败恢复原账号的问题。 */
 async function petOffice(q, mode){
+  const requestToken = state.token, requestUserId = state.me?.id;
   const text=String(q||'').trim();
   const log=$('#ai-pet-log'); if(!text||!log) return;
   const form=$('#ai-pet-form'), area=form?.querySelector('textarea[name=q]'), send=form?.querySelector('button[type=submit]');
@@ -135,6 +147,7 @@ async function petOffice(q, mode){
     setPetState('idle');
     if(r.office_tool==='tickets') await openOfficeTickets(r);
   }catch(err){
+    restorePetQuestion(area, text, requestToken, requestUserId);
     wait.innerHTML=`<div>${petText(err.message||'办公助手暂时不可用')}</div>`;
     setPetState('fail',1600);
   }finally{
@@ -157,7 +170,9 @@ function setPetMode(mode){
       : '问问小转，例如：怎么发布？';
 }
 
+/** 工作模式保留原权限与待确认动作，失败恢复问题且不自动重发。 */
 async function petWork(q){
+  const requestToken = state.token, requestUserId = state.me?.id;
   const text = String(q || '').trim();
   const log = $('#ai-pet-log'); if (!text || !log) return;
   const form = $('#ai-pet-form'), area = form?.querySelector('textarea[name=q]'), send = form?.querySelector('button[type=submit]');
@@ -181,6 +196,7 @@ async function petWork(q){
       ${r.tool ? `<div class="ai-pet-src">工具：${e(r.tool)}</div>` : ''}`;
     setPetState('idle');
   } catch (err) {
+    restorePetQuestion(area, text, requestToken, requestUserId);
     wait.innerHTML = `<div>${petText(err.message || '工作模式暂时不可用')}</div>`;
     setPetState('fail', 1600);
   } finally {
