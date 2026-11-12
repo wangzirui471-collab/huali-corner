@@ -1,3 +1,4 @@
+import {routePath} from '../core/route-path.js';
 'use strict';
 // 页面层 · 逛逛（首页）与收藏模板
 //
@@ -36,7 +37,7 @@ const CATEGORY_LABEL={books:'教材书籍',living:'宿舍生活',electronics:'�
 // 地址栏里 `#home/<channel>` 的第二段就是这个页面的频道。
 // 收藏页（#favorites）没有频道，返回空串。
 function routeChannel(){
-  const [route,id='']=(location.hash.slice(1)||'home').split('/');
+  const [route,id='']=routePath().split('/');
   return route==='home'?id:'';
 }
 
@@ -91,6 +92,7 @@ const CTA_ART = `<svg class="home-cta-art" viewBox="0 0 168 120" aria-hidden="tr
   <path d="M138 16l2.6 6.4 6.4 2.6-6.4 2.6L138 34l-2.6-6.4L129 25l6.4-2.6z" fill="currentColor" stroke="none" opacity=".8"/>
 </svg>`;
 
+/** 保留原首页渲染与加载失败重试，兼容 Vue Router 的频道 hash。 */
 export async function home(favorite=false){
   const epoch=state.renderId, token=state.token;
 
@@ -126,7 +128,7 @@ export async function home(favorite=false){
     if (favorite) throw error;
     catalog.innerHTML = `<section class="home-feed panel" aria-label="${e(title)}">
       <h2>商品暂时无法加载</h2><p>可以继续浏览校园专题，或稍后重试。</p>
-      <button type="button" class="btn secondary" data-go="${e(location.hash.slice(1) || 'home')}">重新加载商品</button>
+      <button type="button" class="btn secondary" data-go="${e(routePath())}">重新加载商品</button>
     </section>`;
     catalog.setAttribute('aria-busy', 'false');
     return;

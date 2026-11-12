@@ -1,3 +1,4 @@
+import {routePath} from '../core/route-path.js';
 'use strict';
 // 事件层 · 逛逛、筛选、收藏、取货清单、出价、上下架
 
@@ -75,7 +76,7 @@ export const clicks = {
     go(state.freeShelf ? 'home/free' : (state.filter.category ? 'home/' + state.filter.category : 'home'));
   },
   // 排序只改查询条件，不改频道：留在当前地址上重画，教材频道里排序仍是教材。
-  'feed-sort': b => { state.filter.sort = b.dataset.value; state.homeLimit = 40; go(location.hash.slice(1) || 'home'); },
+  'feed-sort': b => { state.filter.sort = b.dataset.value; state.homeLimit = 40; go(routePath()); },
   'load-more': () => state.homeView?.next(),
   'home-top': () => state.homeView?.top(),
 

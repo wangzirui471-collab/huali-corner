@@ -1,3 +1,4 @@
+import {routePath} from '../core/route-path.js';
 'use strict';
 // 账号层 · 登录入口、试用版密码登录、恢复码、退出
 // 公开演示版没有账号体系，所有写操作都被这里拦成一段说明而不是表单。
@@ -28,6 +29,7 @@ export function clearAccount(){
   forgetSession();
 }
 
+/** 恢复原会话并依据兼容 hash 检查工作台权限，保留原 AI 挂载行为。 */
 export async function setLogin(r){
   state.token = r.token;
   state.me = r.user;
@@ -38,7 +40,7 @@ export async function setLogin(r){
   // 小转只在登录后挂载：从「小转AI」入口登录进来的用户，登完就该看见宠物，
   // 不然入口点完还是空的（以前要刷新页面才挂上）。重定向分支也要挂。
   mountPet();
-  const target = (location.hash.slice(1) || 'home').split('/')[0];
+  const target = routePath().split('/')[0];
   if ((target === 'staff' && !isStaff(state.me)) || (target === 'admin' && !isAdmin(state.me))){
     go('home');
     return;

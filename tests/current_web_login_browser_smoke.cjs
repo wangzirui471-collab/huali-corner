@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const { chromium } = require(
   process.env.HUALI_PLAYWRIGHT_MODULE || "playwright-core",
 );
-const ROOT = path.resolve(__dirname, "../web 7M");
+const ROOT = path.resolve(process.env.HUALI_WEB_ROOT || path.join(__dirname, "../web 7M/dist"));
 const results = [];
 let mode = "html401";
 /** 原网页静态资源原样提供；身份、登录和商品全部合成，不代理真实API。 */

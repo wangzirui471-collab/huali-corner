@@ -4,7 +4,9 @@
 import { state } from '../core/state.js';
 import { go } from '../core/nav.js';
 
+/** 注册原文件预览与排序监听，卸载应用后可一次释放。 */
 export function registerChangeHandlers(){
+  const controller = new AbortController();
   document.addEventListener('change', ev => {
     if (ev.target.id === 'sort-select'){ state.filter.sort = ev.target.value; state.homeLimit = 40; go('home'); }
     // 选好实拍图先在本地预览，真正上传要等发布表单提交。
@@ -16,5 +18,6 @@ export function registerChangeHandlers(){
       img.onload = () => URL.revokeObjectURL(img.src);
       preview.appendChild(img);
     }
-  });
+  }, {signal: controller.signal});
+  return () => controller.abort();
 }

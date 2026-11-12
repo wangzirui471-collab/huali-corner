@@ -29,7 +29,8 @@ function walk(dir){
                         : (entry.name.endsWith('.js') ? [path.join(dir, entry.name)] : []));
 }
 
-const files = walk(SRC).sort();
+// main.js 的 SFC 依赖通过 npm run build 和真实浏览器检查。
+const files = walk(SRC).filter(file => path.basename(file) !== 'main.js').sort();
 if (!files.length){
   console.error('没找到任何模块：' + SRC);
   process.exit(1);
