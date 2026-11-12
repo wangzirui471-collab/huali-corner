@@ -5,7 +5,7 @@
 ## 一次上传，生成分享链接
 
 1. 下载仓库里的 `artifacts/huali-corner-public-demo.zip`，解压。
-2. 打开解压后的 `huali-corner-public-demo` 文件夹，确认直接能看到 `index.html`、`src` 文件夹、`demo-data.json` 和 `assets` 文件夹。前端已拆成 ES 模块，所以必须有 `src` 这一整层，只拷 `index.html` 会白屏。
+2. 使用当前导出脚本生成文件夹，确认直接能看到 `index.html`、`public-demo.js`、`demo-data.json` 和 `assets/framework` 中已编译的入口。Vue 源码和 `.vue` 文件不作为静态页面直接上传。
 3. 在浏览器打开 <https://app.netlify.com/drop>，按页面提示注册或登录托管账号。
 4. 把第2步的整个文件夹拖入上传区域，等待部署完成。不要上传整个 Python 项目，也不要上传 `var` 或学生表格。
 5. 在部署完成的页面打开平台实际生成的 HTTPS 网址，先用手机浏览器确认首页和商品详情可以打开，再把该网址发给同学。不能把 localhost、Netlify 管理后台地址或 ZIP 下载地址当成网站分享。
@@ -26,7 +26,7 @@
 
 ## 重新生成
 
-在项目根目录，安装原有 Python 依赖后执行：
+先在 `web 7M` 运行 `npm ci` 安装项目锁定依赖，再在项目根目录使用原有 Python 独立环境执行：
 
 ```bash
 python3 scripts/build_public_demo.py --output dist/public-demo

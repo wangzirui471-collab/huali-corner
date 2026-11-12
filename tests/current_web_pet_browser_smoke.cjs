@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const { chromium } = require(
   process.env.HUALI_PLAYWRIGHT_MODULE || "playwright-core",
 );
-const ROOT = path.resolve(__dirname, "../web 7M");
+const ROOT = path.resolve(process.env.HUALI_WEB_ROOT || path.join(__dirname, "../web 7M/dist"));
 const requests = [];
 /** 所有API仅返回合成所有者和空业务数据，AI固定失败以检查输入恢复。 */
 const server = http.createServer((req, res) => {
@@ -101,6 +101,7 @@ async function main() {
       const errors = [];
       page.on("pageerror", (e) => errors.push(e.message));
       await page.goto(origin, { waitUntil: "networkidle" });
+      const initialUrl = page.url();
       await page.locator("#ai-pet-body").waitFor({ state: "visible" });
       await page.locator("#ai-pet-body").click();
       await page.locator("#ai-pet-panel").waitFor({ state: "visible" });
@@ -137,7 +138,7 @@ async function main() {
           question,
           "失败后丢失输入 " + mode,
         );
-        assert.equal(page.url(), origin + "/", "模式切换发生跳页");
+        assert.equal(page.url(), initialUrl, "模式切换发生跳页");
         // 等待过程中写的新草稿不能被失败恢复覆盖，也不能自动发起第二次模型请求。
         const previousCalls = requests.filter((name) =>
           name.startsWith("/api/ai/"),
@@ -171,10 +172,7 @@ async function main() {
         }, size);
         await bounds(page.locator("#ai-pet-body"), width, 900);
       }
-      await page.evaluate(async () => {
-        const settings = await import("/src/components/pet-settings.js");
-        settings.closePetSettings();
-      });
+      await page.locator('.ps-x[data-ps="close"]').click();
       await page.locator("#ai-pet-close").click();
       await page.locator("#ai-pet-panel").waitFor({ state: "hidden" });
       assert.equal(errors.length, 0);

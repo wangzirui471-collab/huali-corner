@@ -24,13 +24,16 @@ const DEMO_CLICK_ALLOWED = ['load-more','home-top','home-channel','feed-sort','c
 const clicks = {...ui.clicks, ...catalog.clicks, ...trade.clicks, ...social.clicks, ...friend.clicks, ...forum.clicks, ...support.clicks, ...account.clicks, ...staff.clicks, ...admin.clicks, ...userProfile.clicks};
 const submits = {...catalog.submits, ...trade.submits, ...social.submits, ...friend.submits, ...forum.submits, ...support.submits, ...account.submits, ...staff.submits, ...admin.submits, ...userProfile.submits};
 
+/** 注册原站事件委托并返回释放函数，供 Vue 生命周期使用。 */
 export function registerActions(){
+  const controller = new AbortController();
+  const {signal} = controller;
   // 头像的两个事件必须在捕获/独立阶段注册：
   //   · change 不能漏：重新选文件后，上一张「确认设为头像」必须立刻失效，
   //     否则用户会确认成上一张图；
   //   · img 的 error 不冒泡，只能在捕获阶段接，用来把裂图退回默认头像。
-  document.addEventListener('change', userProfile.avatarFileChange);
-  document.addEventListener('error', userProfile.avatarImageError, true);
+  document.addEventListener('change', userProfile.avatarFileChange, {signal});
+  document.addEventListener('error', userProfile.avatarImageError, {capture: true, signal});
   document.addEventListener('click', async ev => {
     const goBtn = ev.target.closest('[data-go]');
     if (goBtn){
@@ -51,7 +54,7 @@ export function registerActions(){
       if (handler) await handler(b, id);
     }catch(err){ toast(err.message); }
     finally{ b.disabled = false; }
-  });
+  }, {signal});
 
   document.addEventListener('submit', async ev => {
     const form = ev.target;
@@ -65,5 +68,6 @@ export function registerActions(){
       if (handler) await handler({form, d, fd, button});
     }catch(err){ toast(err.message); }
     finally{ if (button) button.disabled = false; }
-  });
+  }, {signal});
+  return () => controller.abort();
 }

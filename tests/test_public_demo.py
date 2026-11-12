@@ -17,13 +17,17 @@ class PublicDemoTests(unittest.TestCase):
         )
 
     def test_export_contains_only_static_seeded_demo(self):
+        """导出仅包含编译后的公开资源和合成快照，不夹带 Vue 源码或项目配置。"""
         with tempfile.TemporaryDirectory() as tmp:
             output=Path(tmp)/'site'
             result=self.build(output)
             self.assertEqual(result.returncode,0,result.stderr)
             # 用 as_posix：Windows 下 relative_to 会给出 src\main.js，跟断言里的斜杠对不上。
             files=[p.relative_to(output) for p in output.rglob('*') if p.is_file()]
-            self.assertTrue({'index.html','src/main.js','public-demo.js','demo-data.json','_headers'}.issubset({p.as_posix() for p in files}))
+            self.assertTrue({'index.html','public-demo.js','demo-data.json','_headers'}.issubset({p.as_posix() for p in files}))
+            self.assertFalse((output/'src/main.js').exists(), '演示必须使用已编译 Vue 入口')
+            self.assertTrue(list((output/'assets/framework').glob('index-*.js')))
+            self.assertFalse(any(p.suffix == '.vue' or p.name in {'package.json','package-lock.json','vite.config.js'} for p in files))
             self.assertFalse(any(p.suffix in {'.py','.sqlite3','.xlsx','.zip'} or 'var' in p.parts for p in files))
             data=json.loads((output/'demo-data.json').read_text(encoding='utf-8'))
             self.assertTrue(data['config']['public_demo'])
@@ -37,7 +41,7 @@ class PublicDemoTests(unittest.TestCase):
             self.assertIn('./home.css?',html)
             self.assertTrue((output/'home.css').is_file(),'Export must include the homepage stylesheet')
             # 演示快照必须先于主模块执行，否则 api() 拿不到 window.hualiDemoApi。
-            self.assertLess(html.index('public-demo.js'),html.index('src/main.js'))
+            self.assertLess(html.index('public-demo.js'),html.index('assets/framework/index-'))
 
     def test_export_does_not_overwrite_existing_directory(self):
         with tempfile.TemporaryDirectory() as tmp:

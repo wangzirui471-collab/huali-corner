@@ -1,3 +1,4 @@
+import {routePath} from '../core/route-path.js';
 'use strict';
 import { $, e, toast } from '../core/dom.js';
 import { state } from '../core/state.js';
@@ -51,7 +52,7 @@ export const clicks={
 };
 async function search({d}){
   forumState.q=String(d.q||'').trim().slice(0,100);
-  const route=location.hash.slice(1).split('/');
+  const route=routePath().split('/');
   if(route[0]==='forum'&&route[1])await render();else go('forum/latest');
 }
 export const submits={

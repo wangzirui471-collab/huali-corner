@@ -21,7 +21,8 @@
     "HC_AI_DAILY_LIMIT": "30"
   },
   "assets": {
-    "directory": "../web 7M",
+    // Vue/SFC 入口必须先 npm run build，不能把含裸导入的源码直接发布。
+    "directory": "../web 7M/dist",
     "binding": "ASSETS",
     // 只有 API 和图片进 Python（Pyodide 冷启动重，静态资源绝不能绕这一圈）。
     // CSS/JS/HTML 直接由边缘 CDN 输出，毫秒级。

@@ -1,3 +1,4 @@
+import {routePath} from './core/route-path.js';
 'use strict';
 // 路由层 · 把 location.hash 映射到页面模块
 // 对应 Java 里的 Controller：不做业务，只决定调用哪个页面、出错时兜底。
@@ -77,6 +78,7 @@ function renderError(err){
        </section>`, 'home');
 }
 
+/** 通过兼容路由调用原页面，保留权限、资源回收、进度和过期响应保护。 */
 export async function render(){
   // config 未就绪时放弃本次渲染：main.js 的初始化流程拿到 /api/config 之后
   // 还会再渲染一次当前路由。若不放弃，登录框会在 auth_mode 还没到位时被画出
@@ -90,7 +92,7 @@ export async function render(){
   window.scrollTo(0, 0);
   // 路由一变就亮进度条（含浏览器前进/后退触发的 hashchange，不只是点按钮）。
   startProgress();
-  const [route, id] = (location.hash.slice(1) || 'home').split('/');
+  const [route, id] = routePath().split('/');
   try{
     if (window.HUALI_STATIC_DEMO && !DEMO_ROUTES.includes(route)){ publicDemoFeature(route); return; }
     if (!state.me && AUTH_ROUTES.includes(route)){
