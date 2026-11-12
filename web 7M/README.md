@@ -35,7 +35,7 @@ $env:HUALI_BROWSER_EXECUTABLE='你的 Edge 或 Chromium 绝对路径'
 npm run test:browser
 ```
 
-`npm test` 构建后执行全部 16 个前端/小程序脚本，包括 Pinia、路由和 153 原静态资源字节检查。浏览器测试全部使用合成 API，不登录生产账号或调用真实模型；原网页对照样本缺失时，从固定基线提交只读恢复到忽略的 artifacts 目录。`HUALI_DEV_ORIGIN` 可额外检查已运行的 Vite 开发服务。
+`npm test` 构建后执行全部 17 个前端/小程序脚本，包括 Pinia、路由和 153 原静态资源字节检查。浏览器测试全部使用合成 API，不登录生产账号或调用真实模型；原网页对照样本缺失时，从固定基线提交只读恢复到忽略的 artifacts 目录。`HUALI_DEV_ORIGIN` 可额外检查已运行的 Vite 开发服务。
 
 原分享链接 `#staff`、`#home/books` 仍可打开；Vue Router 导航规范为 `#/staff`、`#/home/books`。CSS、原图片地址和样式加载顺序保持不变；现有 CSS 通过静态透传保留浏览器原容错行为。
 
