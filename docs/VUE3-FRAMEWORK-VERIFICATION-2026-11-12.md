@@ -1,5 +1,7 @@
 # 当前网页版 Vue 3 框架接入与验证
 
+> 下文记录框架接入阶段；用户随后明确要求[三端同步](THREE-END-SYNC-2026-11-12.md)，已合并并发布正式e520efa1，保留原AI与后端。下文“未发布”是该阶段历史边界，不能当作当前状态。
+
 ## 版本与实现
 
 基线 `a36cead19ba6ce5548a6fb6d8e6ed8a748da2e8d`；独立工作区 `huali-corner-current-web-20261112`，分支 `refactor/vue3-current-web-20261112`。保留此前上线的登录/超时/AI 草稿修复。
