@@ -87,10 +87,10 @@ function dormContent() {
   </div>
   <div data-campus-view="photos" hidden>
     <div class="campus-photo-groups" role="group" aria-label="选择照片分类">${galleryGroups.map(([id,label])=>`<button type="button" data-campus-gallery="${id}">${label}</button>`).join('')}</div>
-    <figure class="campus-photo-card"><img alt="" data-campus-photo><figcaption data-campus-caption></figcaption></figure>
+    <figure class="campus-photo-card"><img alt="" data-campus-photo><figcaption><span data-campus-caption aria-live="polite"></span><a class="campus-source" data-campus-photo-original target="_blank" rel="noopener noreferrer">查看原图 ↗</a></figcaption></figure>
     <div class="campus-controls campus-photo-choices" aria-label="选择校内照片">${views.map(({title, group}, index) => `<button type="button" data-campus-photo-index="${index}" data-photo-group="${group || 'official'}">${title}</button>`).join('')}</div>
   </div>
-  <div data-campus-view="reference" hidden><div class="campus-photo-groups" role="group" aria-label="选择参考地图">${referenceMaps.map(({title},index)=>`<button type="button" data-reference-index="${index}">${title}</button>`).join('')}</div><figure class="campus-reference-card"><img data-reference-map alt="提供的华立校园导览参考缩略图"><figcaption>参考缩略图 · 楼号和小字有待高清原图核对</figcaption></figure></div>
+  <div data-campus-view="reference" hidden><div class="campus-photo-groups" role="group" aria-label="选择参考地图">${referenceMaps.map(({title},index)=>`<button type="button" data-reference-index="${index}">${title}</button>`).join('')}</div><figure class="campus-reference-card"><img data-reference-map alt=""><figcaption><span>校园导览参考图</span><a class="campus-source" data-reference-original target="_blank" rel="noopener noreferrer">查看原图 ↗</a></figcaption></figure></div>
   <div class="campus-map-sources"><a class="campus-source" href="${views[0].source}" target="_blank" rel="noopener noreferrer">学校官网航拍 ↗</a><a class="campus-source" href="${campusGallery}" target="_blank" rel="noopener noreferrer">教学楼原图集 ↗</a><a class="campus-source" href="${campusTour}" target="_blank" rel="noopener noreferrer">学校全景漫游 ↗</a></div>`;
 }
 
@@ -147,12 +147,13 @@ function bindDorm(dialog, initialMode = 'map') {
   const landmarkTools = dialog.querySelector('[data-campus-landmark-tools]');
   const landmark = dialog.querySelector('[data-campus-landmark]');
   const referenceImage = dialog.querySelector('[data-reference-map]');
+  const referenceOriginal = dialog.querySelector('[data-reference-original]');
   const referenceButtons = [...dialog.querySelectorAll('[data-reference-index]')];
   const modeButtons = [...dialog.querySelectorAll('[data-campus-mode]')];
   const photoButtons = [...dialog.querySelectorAll('[data-campus-photo-index]')];
   const groupButtons = [...dialog.querySelectorAll('[data-campus-gallery]')];
   const photo = dialog.querySelector('[data-campus-photo]');
-  const photoCard = photo.closest('figure');
+  const photoOriginal = dialog.querySelector('[data-campus-photo-original]');
   const caption = dialog.querySelector('[data-campus-caption]');
   let angle = -22;
   let zoom = 1;
@@ -160,19 +161,6 @@ function bindDorm(dialog, initialMode = 'map') {
   let photoIndex = 0;
   let group = 'official';
   let drag = null;
-  let photoMotion;
-  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-  photo.addEventListener('load', () => {
-    if (reducedMotion.matches) return;
-    photoMotion?.cancel();
-    photoMotion = photo.animate([{opacity:.72,scale:'1.045'},{opacity:1,scale:'1'}], {duration:540,easing:'ease-out'});
-  });
-  photoCard.addEventListener('pointermove', event => {
-    if (event.pointerType === 'touch' || reducedMotion.matches) return;
-    const box = photoCard.getBoundingClientRect();
-    photo.style.setProperty('--photo-lean', `${((event.clientX - box.left) / box.width - .5) * 7}deg`);
-  });
-  photoCard.addEventListener('pointerleave', () => photo.style.removeProperty('--photo-lean'));
   /** 用真实三维变换更新地图朝向。 */
   function rotate(next) { angle = next; map.style.setProperty('--map-turn', `${angle}deg`); }
   /** 同步模型与平面控制按钮的选中态。 */
@@ -191,7 +179,8 @@ function bindDorm(dialog, initialMode = 'map') {
   function showReference(index) {
     const view = referenceMaps[index];
     referenceImage.src = view.photo;
-    referenceImage.alt = `${view.title}参考缩略图`;
+    referenceImage.alt = `${view.title}，广州华立学院校园导览参考图`;
+    referenceOriginal.href = view.photo;
     referenceButtons.forEach((button,i)=>button.setAttribute('aria-pressed',String(i===index)));
   }
   /** 切换照片时同步清晰标题，让来源始终可见。 */
@@ -200,7 +189,7 @@ function bindDorm(dialog, initialMode = 'map') {
     const view = views[photoIndex];
     photo.src = view.photo;
     photo.alt = view.group ? view.title : `广州华立学院广州校区${view.title}实景`;
-    photoCard.classList.toggle('is-reference-photo', Boolean(view.group));
+    photoOriginal.href = view.photo;
     caption.textContent = `${view.title} · ${view.group ? '参考照片' : '广州华立学院官网'}`;
     photoButtons.forEach((button, i) => button.setAttribute('aria-pressed', String(i === photoIndex)));
   }

@@ -6,10 +6,10 @@ import {campusAdArt, campusSideArt, mountCampusAds} from './campus-ads.js';
 
 // 模块地址也支持公开演示部署在子目录，图片都从站点自身加载。
 const coverURLs = {
-  gate: new URL('../../assets/home-mint/campus-gate.webp', import.meta.url).pathname,
-  books: new URL('../../assets/home-mint/market-books.webp', import.meta.url).pathname,
-  dorm: new URL('../../assets/home-mint/market-desk.webp', import.meta.url).pathname,
-  swap: new URL('../../assets/home-mint/market-share.webp', import.meta.url).pathname
+  gate: new URL('../../assets/home-mint/campus-hd/campus-gate.jpg', import.meta.url).href,
+  books: new URL('../../assets/home-mint/campus-hd/library-shelves.jpg', import.meta.url).href,
+  dorm: new URL('../../assets/home-mint/campus-hd/dorm-room.jpg', import.meta.url).href,
+  swap: new URL('../../assets/home-mint/market-share.webp', import.meta.url).href
 };
 
 // 轮播与快捷卡使用同一组来源，标题用可缩放的页面文字。

@@ -43,6 +43,8 @@
   transition:transform .26s ease-out;
 }
 .campus-ad-scene { position:relative; width:min(86%,390px); height:77%; transform-style:preserve-3d; }
+/* 两张照片独立合成，景深来自各自的透视，前景整张压在背景之上。 */
+.mint-hero :is([data-campus-ad="dorm"],[data-campus-ad="swap"]) .campus-ad-scene { isolation:isolate; transform-style:flat; }
 .campus-ad-scene::after {
   content:'';
   position:absolute;
@@ -50,7 +52,7 @@
   border-radius:50%;
   background:#080b0a99;
   filter:blur(16px);
-  transform:translateZ(-35px);
+  z-index:0;
 }
 .campus-ad-scene figure { margin:0; }
 .campus-ad-scene img { display:block; width:100%; height:100%; object-fit:cover; }
@@ -110,34 +112,35 @@
   box-shadow:0 7px 0 #324f49,0 15px 25px #071310b3;
 }
 .campus-ad-aerial {
-  inset:1% 5% 18% 4%;
-  transform:translateZ(8px) rotateY(-17deg) rotateZ(7deg);
+  z-index:1;
+  inset:5% 7% 14% 4%;
+  transform:perspective(840px) rotateY(-9deg) rotateZ(-3deg);
   animation:campus-ad-aerial-in .9s ease-out both;
 }
 .campus-ad-map {
-  inset:30% 2% 4% 37%;
-  display:grid;
-  grid-template-rows:minmax(0,1fr) auto;
+  z-index:2;
+  inset:auto 4% 3% auto;
+  width:57%;
   padding:clamp(4px,.7vw,8px);
   background:#f3f0d9;
-  color:#2d4d3f;
-  transform:translateZ(48px) rotateY(16deg) rotateZ(-9deg);
+  transform:perspective(840px) rotateY(7deg) rotateZ(4deg);
   animation:campus-ad-map-float 2.9s .16s ease-in-out 1 both;
 }
-.campus-ad-map img { border-radius:4px; object-fit:contain; background:#e1e7cb; }
-.campus-ad-map figcaption { padding-top:3px; text-align:right; font-size:clamp(7px,1vw,11px); font-weight:700; }
+.campus-ad-map img { height:auto; aspect-ratio:2; border-radius:4px; object-fit:contain; }
 
 /* 求购画面保留完整交接动作，前景教材带出镜头方向。 */
 .campus-ad-handover {
+  z-index:1;
   inset:0 3% 4% 2%;
   border-color:#dcb697;
   background:#3b2a22;
   box-shadow:4px 7px 0 #713f2c,0 17px 30px #130903b3;
-  transform:translateZ(13px) rotateY(-15deg) rotateZ(-5deg);
+  transform:perspective(840px) rotateY(-12deg) rotateZ(-4deg);
   animation:campus-ad-photo-in 1.05s ease-out both;
 }
 .campus-ad-handover img { object-position:64% 56%; }
 .campus-ad-handover-book {
+  z-index:2;
   position:absolute;
   right:8%;
   bottom:0;
@@ -155,7 +158,7 @@
   font-weight:700;
   white-space:nowrap;
   box-shadow:3px 4px 0 #e6c998,5px 6px 0 #694637,2px 12px 16px #120503c9;
-  transform:translateZ(54px) rotate(-13deg);
+  transform:rotate(-13deg);
   animation:campus-ad-book-pass 1.45s .1s cubic-bezier(.2,.7,.15,1) both;
 }
 .campus-ad-handover-book i { height:1px; width:80%; background:#f4ce9a86; }
@@ -177,7 +180,7 @@
   border-radius:9px;
   background:#846854;
   box-shadow:3px 5px 0 #957c66,0 9px 13px #49372266;
-  transform:rotateX(calc(8deg + var(--ad-pitch,0deg))) rotateY(calc(-17deg + var(--ad-yaw,0deg))) rotateZ(-7deg);
+  transform:rotateX(calc(5deg + var(--ad-pitch,0deg))) rotateY(calc(-11deg + var(--ad-yaw,0deg))) rotateZ(-4deg);
   animation:campus-side-print-in .8s ease-out backwards;
   transition:transform .26s ease-out;
 }
@@ -191,17 +194,17 @@
   72% { transform:translateZ(5px) rotateY(-4deg); }
 }
 @keyframes campus-ad-aerial-in {
-  from { transform:translateZ(8px) translateY(15px) rotateY(-29deg) rotateZ(10deg) scale(.94); }
+  from { transform:perspective(840px) translateY(10px) rotateY(-20deg) rotateZ(1deg) scale(.96); }
 }
 @keyframes campus-ad-map-float {
-  0% { transform:translate3d(-16px,12px,14px) rotateY(27deg) rotateZ(-4deg); }
-  48% { transform:translate3d(2px,-5px,56px) rotateY(8deg) rotateZ(-11deg); }
+  0% { transform:perspective(840px) translate(-12px,8px) rotateY(16deg) rotateZ(0deg); }
+  48% { transform:perspective(840px) translate(2px,-4px) rotateY(4deg) rotateZ(3deg); }
 }
 @keyframes campus-ad-photo-in {
-  from { transform:translateZ(13px) translateX(19px) rotateY(-24deg) rotateZ(-8deg) scale(.94); }
+  from { transform:perspective(840px) translateX(13px) rotateY(-19deg) rotateZ(-6deg) scale(.94); }
 }
 @keyframes campus-ad-book-pass {
-  from { transform:translate3d(-45px,19px,26px) rotate(-26deg) scale(.84); }
+  from { transform:translate(-40px,15px) rotate(-22deg) scale(.84); }
 }
 @keyframes campus-side-print-in {
   from { opacity:.62; transform:translateX(11px) rotateX(13deg) rotateY(-28deg) rotateZ(-12deg); }
@@ -221,7 +224,7 @@
   .campus-ad-art { position:relative; grid-row:1; inset:auto; margin:3px 7px 0; }
   .campus-ad-scene { width:min(72%,290px); height:86%; }
   .campus-ad-book { inset:10% 10% 5%; }
-  .campus-ad-map { inset:30% 4% 4% 41%; }
+  .campus-ad-map { width:56%; right:4%; bottom:3%; }
   .campus-side-print { height:70%; border-radius:6px; }
 }
 @media(max-width:360px) {

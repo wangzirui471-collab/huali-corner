@@ -65,18 +65,17 @@
 .campus-view-switch button[aria-pressed="true"] { background:white; color:#194a37; box-shadow:0 1px 4px #244f3b17; font-weight:750; }
 .campus-map-note { margin:0 0 6px; font-size:12px; color:#516a5b; }
 .campus-map-sources { display:flex; gap:12px; flex-wrap:wrap; margin-top:8px; }
-.campus-photo-card { position:relative; margin:0; border-radius:14px; overflow:hidden; background:#1b3d34; perspective:800px; }
-.campus-photo-card img { display:block; width:100%; height:clamp(165px,44vw,300px); object-fit:cover; object-position:center 55%; transform:rotateY(var(--photo-lean,0deg)) scale(1.025); transition:transform .24s ease-out; }
-.campus-photo-card figcaption { position:absolute; inset:auto 0 0; padding:19px 12px 8px; background:linear-gradient(transparent,#122c21ea); color:white; font-size:12px; }
+.campus-photo-card { margin:0; border-radius:14px; overflow:hidden; background:#1b3d34; }
+.campus-photo-card img { display:block; width:100%; height:clamp(180px,48vw,343px); object-fit:contain; }
+.campus-photo-card figcaption,.campus-reference-card figcaption { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px 12px; padding:9px 12px; font-size:12px; }
+.campus-photo-card figcaption,.campus-photo-card .campus-source { color:#fff; }
 .campus-photo-groups { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:9px; }
 .campus-photo-groups button { padding:6px 10px; border:1px solid #ccdfd1; border-radius:15px; background:white; color:#295441; font-size:12px; }
 .campus-photo-groups [aria-pressed="true"] { border-color:#245d48; background:#245d48; color:white; }
 .campus-dialog [hidden] { display:none; }
-.campus-photo-card.is-reference-photo { background:radial-gradient(ellipse,#446759,#1b3d34); }
-.campus-photo-card.is-reference-photo img { object-fit:contain; margin-inline:auto; max-width:365px; object-position:center; }
 .campus-reference-card { margin:0; border:1px solid #d2e4d5; border-radius:14px; overflow:hidden; background:#e3efe3; }
-.campus-reference-card img { display:block; width:min(94%,430px); height:auto; margin:14px auto 0; border-radius:8px; }
-.campus-reference-card figcaption { padding:9px 12px; color:#3c6354; font-size:12px; text-align:center; }
+.campus-reference-card img { display:block; width:100%; height:auto; }
+.campus-reference-card figcaption { color:#3c6354; }
 
 .campus-trade { position:relative; isolation:isolate; min-height:230px; overflow:hidden; border-radius:14px; background:#14362a; perspective:860px; }
 .campus-trade-image { position:absolute; z-index:-1; inset:-4%; background:var(--trade-photo) 64% center / cover; transform:rotateX(var(--scene-pitch,0deg)) rotateY(var(--scene-yaw,0deg)) scale(var(--scene-zoom,1)) translateX(var(--scene-pan,0%)); transform-origin:74% 68%; transition:transform .65s cubic-bezier(.2,.7,.25,1); }
@@ -93,5 +92,5 @@
   .campus-trade[data-step="2"] { --scene-zoom:1.04; --scene-pan:0%; }
 }
 @media (prefers-reduced-motion:reduce) {
-  .campus-trade-image,.campus-photo-card img { animation:none; transition:none; }
+  .campus-trade-image { animation:none; transition:none; }
 }

@@ -1,7 +1,8 @@
 import {e} from '../core/dom.js';
+import {referenceMaps} from './campus-reference.js';
 
-const aerial = new URL('../../assets/home-mint/campus-official/aerial.jpg', import.meta.url).href;
-const campusMap = new URL('../../assets/home-mint/campus-reference/campus-map.jpg', import.meta.url).href;
+const aerial = new URL('../../assets/home-mint/campus-hd/lake-aerial.jpg', import.meta.url).href;
+const campusMap = referenceMaps[0].photo;
 
 /** 把照片和前景放在不同深度，作为首页横幅的一部分直接展示。 */
 export function campusAdArt(topic, image) {
@@ -11,8 +12,8 @@ export function campusAdArt(topic, image) {
       <div class="campus-ad-page campus-ad-page-right"><span>极限</span><b>x → 1</b><i></i><i></i><i></i></div>
       <div class="campus-ad-page campus-ad-page-left"><span>教材试读</span><b>高等数学</b><i></i><i></i></div>
     </div>`,
-    dorm: () => `<figure class="campus-ad-aerial"><img src="${e(aerial)}" alt="" decoding="async"></figure>
-      <figure class="campus-ad-map"><img src="${e(campusMap)}" alt="" decoding="async"><figcaption>广州增城校区</figcaption></figure>`,
+    dorm: () => `<figure class="campus-ad-aerial"><img src="${e(aerial)}" alt="" loading="lazy" decoding="async"></figure>
+      <figure class="campus-ad-map"><img src="${e(campusMap)}" alt="" width="1080" height="540" loading="lazy" decoding="async"></figure>`,
     swap: () => `<figure class="campus-ad-handover"><img src="${e(image)}" alt="" decoding="async"></figure>
       <div class="campus-ad-handover-book"><span>高等数学</span><i></i><i></i></div>`,
   }[topic];
