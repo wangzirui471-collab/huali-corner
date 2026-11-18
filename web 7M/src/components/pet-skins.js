@@ -258,25 +258,57 @@ export function forgetPosition(){
 
 const REDUCE = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 let frameTimer = 0;
+const readyPoses = new Set();
+const loadingPoses = new Map();
+const requestedPose = new WeakMap();
+
+/** 新姿势解码成功后才能替换画面，同一资源的快速重复请求共用一次加载。 */
+function loadPose(src){
+  if (!loadingPoses.has(src)) {
+    const image = new Image();
+    const ready = new Promise(resolve => {
+      image.onload = () => resolve(true);
+      image.onerror = () => resolve(false);
+      image.src = src;
+    }).then(loaded => loaded && (typeof image.decode !== 'function' || image.decode().then(() => true, () => false))).then(decoded => {
+      loadingPoses.delete(src);
+      if (decoded) readyPoses.add(src);
+      return decoded;
+    });
+    loadingPoses.set(src, ready);
+  }
+  return loadingPoses.get(src);
+}
 
 export function stopFrames(){
   clearInterval(frameTimer);
   frameTimer = 0;
 }
 
+/** 姿势图等待解码，图集皮肤继续按格子播放。 */
 export function applySkinFrame(sprite, skin, actName){
   if (!sprite || !skin) return;
   const act = skin.acts[actName] || skin.acts.idle;
   stopFrames();
   if (skin.mode === 'poses'){
-    // 姿势皮肤没有帧：换整张背景图即可。同一张不重复赋值，避免闪一下。
     const src = (actName === 'seasonal' && seasonalSrc(skin)) || act.src || skin.acts.idle.src;
-    if (sprite.dataset.pose !== src){
+    if (requestedPose.get(sprite) === src) return;
+    requestedPose.set(sprite, src);
+    if (sprite.dataset.pose === src) return;
+    /** 快速切回待机或更换皮肤后，迟到的图片不能覆盖当前动作。 */
+    const paint = () => {
+      if (requestedPose.get(sprite) !== src) return;
       sprite.dataset.pose = src;
       sprite.style.backgroundImage = `url("${src}")`;
-    }
+    };
+    if (readyPoses.has(src)) paint();
+    else void loadPose(src).then(decoded => {
+      if (decoded) paint();
+      else if (requestedPose.get(sprite) === src) requestedPose.delete(sprite);
+    });
     return;
   }
+  requestedPose.delete(sprite);
   const [cw, ch] = skin.cell;
   const paint = i => {
     sprite.style.backgroundPosition = `${-i * cw}px ${-act.row * ch}px`;
@@ -315,7 +347,10 @@ export function applySkinVars(el, skin, userScale){
     // 姿势图按「整张 contain、底部对齐」画：各张宽高比不同，切边会缺胳膊。
     sprite.style.backgroundSize = poses ? 'contain' : '';
     sprite.style.backgroundPosition = poses ? 'center bottom' : '';
-    if (!poses) delete sprite.dataset.pose;
+    if (!poses){
+      delete sprite.dataset.pose;
+      sprite.style.backgroundImage = '';
+    }
   }
   applySkinFrame(sprite, skin, 'idle');
 }

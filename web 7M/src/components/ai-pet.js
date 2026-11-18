@@ -522,6 +522,7 @@ export function togglePetPanel(open){
 }
 
 // --- 拖动 ---------------------------------------------------------------
+/** 拖动时按相邻指针位置确定朝向，松手或取消后恢复完整待机姿势。 */
 function bindDrag(body){
   body.addEventListener('pointerdown', ev => {
     if (ev.pointerType === 'mouse' && ev.button !== 0) return;
@@ -529,7 +530,7 @@ function bindDrag(body){
     if (getLocked()) return;
     if (getShiftDrag() && !ev.shiftKey) return;
     const r = petEl.getBoundingClientRect();
-    drag = { id: ev.pointerId, sx: ev.clientX, sy: ev.clientY, ox: r.left, oy: r.top, moved: false, petted: false };
+    drag = { id: ev.pointerId, sx: ev.clientX, sy: ev.clientY, lastX: ev.clientX, ox: r.left, oy: r.top, moved: false, petted: false };
     const activeDrag = drag;
     clearTimeout(petHoldTimer);
     // 轻触继续打开对话；只有静止长按才摸摸，开始拖动时立即取消这个计时。
@@ -549,9 +550,10 @@ function bindDrag(body){
     if (!drag.moved) clearTimeout(petHoldTimer);
     drag.moved = true;
     moveTo(drag.ox + dx, drag.oy + dy);
-    // 只在真的往某一侧移动时换朝向；dx 恰好为 0 时保持当前朝向，不要无端翻面。
-    if (dx > 0) setPetState('right', 0);
-    else if (dx < 0) setPetState('left', 0);
+    const stepX = ev.clientX - drag.lastX;
+    drag.lastX = ev.clientX;
+    const direction = stepX > 0 ? 'right' : stepX < 0 ? 'left' : petEl.dataset.state;
+    if (petEl.dataset.state !== direction) setPetState(direction, 0);
     placePanel();
   });
 
@@ -572,6 +574,7 @@ function bindDrag(body){
   };
   body.addEventListener('pointerup', end);
   body.addEventListener('pointercancel', end);
+  body.addEventListener('lostpointercapture', end);
 
   // 拖动结束后浏览器仍会补一个 click，用时间戳挡掉，避免一松手就弹面板。
   body.addEventListener('click', ev => {

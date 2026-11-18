@@ -5,6 +5,7 @@ import { state } from '../core/state.js';
 import { api } from '../core/http.js';
 import { shell } from '../core/shell.js';
 import { BOARDS,postParts,postRow,wantRow,replyRow,avatar,forumEmpty,forumNotice } from '../components/forum.js';
+import {bindCampusExperiences, wantExperienceBanner} from '../components/campus-experiences.js';
 
 let savedLayout='list';try{savedLayout=localStorage.getItem('hc-forum-layout')==='cards'?'cards':'list';}catch{}
 export const forumState={q:'',sort:'latest',layout:savedLayout,board:'',rows:[],hasMore:false,post:null,replies:[],latest:false};
@@ -19,6 +20,7 @@ function frame(content,active=''){
   shell(`<div class="forum-surface">${nav(active)}${content}</div>`,'forum');
   const search=$('.market-search');
   if(search){search.id='forum-search-form';const input=search.querySelector('input');input.name='q';input.value=forumState.q;input.placeholder='搜索论坛帖子、技能或需求';input.setAttribute('aria-label','搜索论坛帖子');}
+  if (active === 'wants') bindCampusExperiences($('.forum-surface'));
 }
 function aside(){
   return `<aside class="forum-sidebar"><section class="forum-side-card"><h2>我的论坛</h2><a href="#forum/account">${icon('user')}我的帖子${icon('arrow')}</a><a href="#messages/notice">${icon('bell')}回复与通知${icon('arrow')}</a><a href="#me">${icon('user')}个人中心${icon('arrow')}</a></section><section class="forum-side-card forum-guidelines"><h2>交流之前</h2><p>把需求说清楚，让沟通更简单。</p><ul><li>尊重彼此，友善交流</li><li>公开内容中保护个人隐私</li><li>时间、地点和费用先沟通确认</li><li>遇到问题，可举报或联系平台</li></ul><a href="#support">社区帮助 ${icon('arrow')}</a></section></aside>`;
@@ -62,7 +64,7 @@ export async function forum(key=''){
   }else{rows=await api(postsURL());forumState.hasMore=rows.length===PAGE;}
   if(rid!==state.renderId)return;
   forumState.rows=rows;const board=boardOf(key),title=key==='account'?'我的帖子':board?.name||'全部讨论';
-  frame(`<div class="forum-breadcrumb"><a href="#forum">校园论坛</a><span>/</span><span>${title}</span></div>${heading(title,key==='account'?'你发布过的分享，都在这里。':board?.description||'看看同学最近在聊什么。',key==='wants'?'wants':board?.key||'exchange')}<div class="forum-columns"><section class="forum-content-card">${toolbar(key==='wants')}<div class="forum-feed" id="forum-feed" data-layout="${forumState.layout}">${rows.length?rows.map(p=>key==='wants'?wantRow(p,state.me?.id):postRow(p)).join(''):forumEmpty(forumState.q?'没有找到相关内容':'还没有帖子')}</div><div class="forum-load-row">${forumState.hasMore?'<button class="forum-button secondary" data-action="forum-more">加载更多帖子</button>':`<span>${rows.length?'已显示当前内容':'你可以切换板块，或发布第一条分享。'}</span>`}</div></section>${aside()}</div>`,key);
+  frame(`<div class="forum-breadcrumb"><a href="#forum">校园论坛</a><span>/</span><span>${title}</span></div>${heading(title,key==='account'?'你发布过的分享，都在这里。':board?.description||'看看同学最近在聊什么。',key==='wants'?'wants':board?.key||'exchange')}${key === 'wants' ? wantExperienceBanner() : ''}<div class="forum-columns"><section class="forum-content-card">${toolbar(key==='wants')}<div class="forum-feed" id="forum-feed" data-layout="${forumState.layout}">${rows.length?rows.map(p=>key==='wants'?wantRow(p,state.me?.id):postRow(p)).join(''):forumEmpty(forumState.q?'没有找到相关内容':'还没有帖子')}</div><div class="forum-load-row">${forumState.hasMore?'<button class="forum-button secondary" data-action="forum-more">加载更多帖子</button>':`<span>${rows.length?'已显示当前内容':'你可以切换板块，或发布第一条分享。'}</span>`}</div></section>${aside()}</div>`,key);
 }
 export async function forumPost(id){
   const rid=state.renderId;id=Number(id);const posts=await api('/posts?id='+id);

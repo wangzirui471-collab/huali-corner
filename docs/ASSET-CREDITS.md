@@ -42,3 +42,9 @@
 - 改编（本项目仅做了「按姿势切换展示」的用法，未修改图片本身）须以相同许可分享并注明来源。
 
 其余桌宠形象（大乔、小毛、橙团子）为本项目自有或已获授权素材，见各自图集文件注释。
+
+## 首页校园专题
+
+- `web 7M/assets/home-mint/campus-official/` 展示广州增城校区实景。来源是[广州华立学院校园图集](https://www.hualixy.edu.cn/xxgk/xyfg/content_11)和[鸟瞰华立](https://www.hualixy.edu.cn/xxgk/xyfg/content_14)。
+- `web 7M/assets/home-mint/campus-reference/` 收录项目使用者提供的参考地图和校园照片。宿舍楼栋编号来自[学校学生处公示](https://www.hualixy.edu.cn/xsc/xsgl1/sqwh/content_83758)，网页上的坐标为示意。
+- `web 7M/assets/home-mint/campus-handover.webp` 是生成的教材面交演示图。高数试读内容和广告动效随网页实现。

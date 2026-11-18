@@ -1,0 +1,233 @@
+/* 首页三个专题用不同的前景、照片和光线组织成广告镜头。 */
+.mint-hero [data-campus-ad] {
+  --ad-color: #182c22;
+  --ad-color-clear: #182c2266;
+  --ad-photo-focus: 70% 57%;
+  isolation: isolate;
+  background: var(--ad-color);
+}
+.mint-hero [data-campus-ad="dorm"] { --ad-color:#182c30; --ad-color-clear:#182c3066; }
+.mint-hero [data-campus-ad="swap"] { --ad-color:#2d211c; --ad-color-clear:#2d211c42; --ad-photo-focus:65% 51%; }
+.mint-hero [data-campus-ad] .mint-slide-photo img {
+  object-position: var(--ad-photo-focus);
+  opacity: .52;
+  transform: scale(1.06) translateX(var(--ad-shift, 0%));
+  transition: transform .45s ease-out;
+}
+.mint-hero [data-campus-ad] .mint-slide-photo::after {
+  background: linear-gradient(90deg,var(--ad-color) 4%,var(--ad-color) 29%,var(--ad-color-clear) 65%,transparent);
+}
+.mint-hero [data-campus-ad] .mint-slide-copy { z-index:2; width:50%; }
+.campus-ad-art {
+  position:absolute;
+  z-index:1;
+  inset:0 0 0 43%;
+  display:grid;
+  place-items:center;
+  perspective:850px;
+  pointer-events:none;
+}
+.campus-ad-art::before {
+  position:absolute;
+  content:'';
+  inset:11% 4% 7% 0;
+  background:radial-gradient(ellipse,#d6efbf42,transparent 68%);
+}
+.campus-ad-orbit {
+  display:grid;
+  place-items:center;
+  width:100%;
+  height:100%;
+  transform-style:preserve-3d;
+  transform:rotateX(var(--ad-pitch,0deg)) rotateY(var(--ad-yaw,0deg));
+  transition:transform .26s ease-out;
+}
+.campus-ad-scene { position:relative; width:min(86%,390px); height:77%; transform-style:preserve-3d; }
+.campus-ad-scene::after {
+  content:'';
+  position:absolute;
+  inset:80% 7% 0;
+  border-radius:50%;
+  background:#080b0a99;
+  filter:blur(16px);
+  transform:translateZ(-35px);
+}
+.campus-ad-scene figure { margin:0; }
+.campus-ad-scene img { display:block; width:100%; height:100%; object-fit:cover; }
+
+/* 封面、书脊和左右页分开绘制，左页围绕中线翻开。 */
+.campus-ad-book {
+  position:absolute;
+  inset:13% 8% 7%;
+  transform:rotateX(17deg) rotateY(-14deg) rotateZ(-11deg);
+  transform-style:preserve-3d;
+  animation:campus-ad-book-rise .95s cubic-bezier(.2,.65,.2,1) both;
+}
+.campus-ad-book-base {
+  position:absolute;
+  inset:0;
+  border:2px solid #577867;
+  border-radius:9px;
+  background:#203e31;
+  box-shadow:0 8px 0 #14291e,0 15px 25px #07130eb3;
+  transform:translateZ(-8px);
+}
+.campus-ad-page {
+  position:absolute;
+  inset:3% 1.2% 5% 50%;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:clamp(4px,1.1vw,10px);
+  padding:6% 7%;
+  border:1px solid #c6ac7b;
+  border-radius:3px 10px 10px 4px;
+  color:#58492c;
+  background:linear-gradient(90deg,#cab78c,#fae9bf 15%,#fff3d7 88%,#ebd5a7);
+  box-shadow:2px 3px 0 #c9b086,3px 6px 0 #af986e;
+  transform:translateZ(5px) rotateY(-8deg);
+  transform-origin:left;
+}
+.campus-ad-page-left {
+  inset:3% 50% 5% 1.2%;
+  border-radius:10px 3px 3px 10px;
+  background:linear-gradient(90deg,#f5e3b7,#fff0ce 83%,#c6af80);
+  transform:translateZ(5px) rotateY(12deg);
+  transform-origin:right;
+  animation:campus-ad-page-turn 1.45s .2s cubic-bezier(.3,.7,.15,1) both;
+}
+.campus-ad-page span { font-size:clamp(8px,1.05vw,12px); font-weight:700; color:#6d6043; }
+.campus-ad-page b { font:700 clamp(14px,2.1vw,24px)/1.13 Georgia,serif; white-space:nowrap; }
+.campus-ad-page i { display:block; width:100%; height:1px; background:#74694772; }
+.campus-ad-page i:last-child { width:72%; }
+
+/* 宿舍横幅使用校园航拍做底，真实参考图浮在近处。 */
+.campus-ad-aerial,.campus-ad-map,.campus-ad-handover {
+  position:absolute;
+  overflow:hidden;
+  border:1px solid #ffffffe6;
+  border-radius:9px;
+  box-shadow:0 7px 0 #324f49,0 15px 25px #071310b3;
+}
+.campus-ad-aerial {
+  inset:1% 5% 18% 4%;
+  transform:translateZ(8px) rotateY(-17deg) rotateZ(7deg);
+  animation:campus-ad-aerial-in .9s ease-out both;
+}
+.campus-ad-map {
+  inset:30% 2% 4% 37%;
+  display:grid;
+  grid-template-rows:minmax(0,1fr) auto;
+  padding:clamp(4px,.7vw,8px);
+  background:#f3f0d9;
+  color:#2d4d3f;
+  transform:translateZ(48px) rotateY(16deg) rotateZ(-9deg);
+  animation:campus-ad-map-float 2.9s .16s ease-in-out 1 both;
+}
+.campus-ad-map img { border-radius:4px; object-fit:contain; background:#e1e7cb; }
+.campus-ad-map figcaption { padding-top:3px; text-align:right; font-size:clamp(7px,1vw,11px); font-weight:700; }
+
+/* 求购画面保留完整交接动作，前景教材带出镜头方向。 */
+.campus-ad-handover {
+  inset:0 3% 4% 2%;
+  border-color:#dcb697;
+  background:#3b2a22;
+  box-shadow:4px 7px 0 #713f2c,0 17px 30px #130903b3;
+  transform:translateZ(13px) rotateY(-15deg) rotateZ(-5deg);
+  animation:campus-ad-photo-in 1.05s ease-out both;
+}
+.campus-ad-handover img { object-position:64% 56%; }
+.campus-ad-handover-book {
+  position:absolute;
+  right:8%;
+  bottom:0;
+  width:26%;
+  aspect-ratio:1.52;
+  display:grid;
+  align-content:center;
+  gap:4px;
+  padding:0 8%;
+  border:1px solid #f1d3a5;
+  border-radius:5px;
+  color:#ffe7b8;
+  background:linear-gradient(110deg,#803a28,#b97548);
+  font-size:clamp(8px,1vw,13px);
+  font-weight:700;
+  white-space:nowrap;
+  box-shadow:3px 4px 0 #e6c998,5px 6px 0 #694637,2px 12px 16px #120503c9;
+  transform:translateZ(54px) rotate(-13deg);
+  animation:campus-ad-book-pass 1.45s .1s cubic-bezier(.2,.7,.15,1) both;
+}
+.campus-ad-handover-book i { height:1px; width:80%; background:#f4ce9a86; }
+
+.mint-side > [data-campus-side-ad] { isolation:isolate; }
+.mint-side > [data-campus-side-ad] .campus-side-art {
+  left:52%;
+  display:grid;
+  place-items:center;
+  perspective:420px;
+  background:radial-gradient(ellipse at 60% 50%,#785c3638,transparent 68%);
+}
+.campus-side-print {
+  display:block;
+  width:86%;
+  height:75%;
+  overflow:hidden;
+  border:1px solid #fffef1;
+  border-radius:9px;
+  background:#846854;
+  box-shadow:3px 5px 0 #957c66,0 9px 13px #49372266;
+  transform:rotateX(calc(8deg + var(--ad-pitch,0deg))) rotateY(calc(-17deg + var(--ad-yaw,0deg))) rotateZ(-7deg);
+  animation:campus-side-print-in .8s ease-out backwards;
+  transition:transform .26s ease-out;
+}
+.mint-side > button + button .campus-side-print { animation-delay:.12s; }
+
+@keyframes campus-ad-book-rise {
+  from { transform:translateY(18px) rotateX(30deg) rotateY(-30deg) rotateZ(-17deg) scale(.88); }
+}
+@keyframes campus-ad-page-turn {
+  from { transform:translateZ(5px) rotateY(154deg); }
+  72% { transform:translateZ(5px) rotateY(-4deg); }
+}
+@keyframes campus-ad-aerial-in {
+  from { transform:translateZ(8px) translateY(15px) rotateY(-29deg) rotateZ(10deg) scale(.94); }
+}
+@keyframes campus-ad-map-float {
+  0% { transform:translate3d(-16px,12px,14px) rotateY(27deg) rotateZ(-4deg); }
+  48% { transform:translate3d(2px,-5px,56px) rotateY(8deg) rotateZ(-11deg); }
+}
+@keyframes campus-ad-photo-in {
+  from { transform:translateZ(13px) translateX(19px) rotateY(-24deg) rotateZ(-8deg) scale(.94); }
+}
+@keyframes campus-ad-book-pass {
+  from { transform:translate3d(-45px,19px,26px) rotate(-26deg) scale(.84); }
+}
+@keyframes campus-side-print-in {
+  from { opacity:.62; transform:translateX(11px) rotateX(13deg) rotateY(-28deg) rotateZ(-12deg); }
+}
+@media(max-width:760px) {
+  .mint-hero [data-campus-ad]:not([hidden]) {
+    display:grid;
+    grid-template-rows:146px 1fr;
+    align-items:stretch;
+    height:auto;
+    min-height:268px;
+  }
+  .mint-hero [data-campus-ad] .mint-slide-copy { grid-row:2; align-self:end; width:100%; padding-top:6px; }
+  .mint-hero [data-campus-ad] .mint-slide-photo::after {
+    background:linear-gradient(0deg,var(--ad-color) 30%,var(--ad-color-clear) 56%,transparent);
+  }
+  .campus-ad-art { position:relative; grid-row:1; inset:auto; margin:3px 7px 0; }
+  .campus-ad-scene { width:min(72%,290px); height:86%; }
+  .campus-ad-book { inset:10% 10% 5%; }
+  .campus-ad-map { inset:30% 4% 4% 41%; }
+  .campus-side-print { height:70%; border-radius:6px; }
+}
+@media(max-width:360px) {
+  .mint-hero [data-campus-ad]:not([hidden]) { min-height:282px; }
+  .mint-side > [data-campus-side-ad] .campus-side-art { left:56%; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .mint-hero [data-campus-ad] *, .mint-side .campus-side-print { animation:none; transition:none; }
+}

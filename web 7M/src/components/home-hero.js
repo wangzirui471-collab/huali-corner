@@ -1,6 +1,8 @@
 'use strict';
 
 import { e } from '../core/dom.js';
+import {bindCampusExperiences, experienceButton, tradePhoto} from './campus-experiences.js';
+import {campusAdArt, campusSideArt, mountCampusAds} from './campus-ads.js';
 
 // 模块地址也支持公开演示部署在子目录，图片都从站点自身加载。
 const coverURLs = {
@@ -28,7 +30,7 @@ export const heroSlides = [
     eyebrow:'好物循环 · 校园求购', title:'想找的，让同学知道', description:'说清想要的物品和预算，让同学带着好物来找你。',
     cta:'去校园求购', go:'forum/wants', art:'swap', tab:'求购'
   }
-].map(slide => ({ ...slide, image: coverURLs[slide.art] }));
+].map(slide => ({ ...slide, image: slide.art === 'swap' ? tradePhoto : coverURLs[slide.art] }));
 
 /** 首张照片和全部专题随首页渲染，切换只改变各专题的可见性。 */
 export function homeHero(){
@@ -38,11 +40,12 @@ export function homeHero(){
     <div class="mint-topics">
       <section class="mint-carousel" data-mint-carousel aria-label="校园专题" aria-roledescription="轮播">
         <div class="mint-carousel-stage">
-          ${heroSlides.map((slide, index) => `<div class="mint-slide" data-art="${slide.art}" role="group" aria-roledescription="专题"
+          ${heroSlides.map((slide, index) => `<div class="mint-slide" data-art="${slide.art}"${index ? ` data-campus-ad="${slide.art}"` : ''} role="group" aria-roledescription="专题"
               aria-label="${index + 1} / ${total}，${e(slide.tab)}"${index ? ' hidden' : ''}>
             <div class="mint-slide-photo" aria-hidden="true"><img class="mint-cover" src="${e(slide.image)}" alt="" decoding="async"${index ? '' : ' fetchpriority="high"'}></div>
+            ${campusAdArt(slide.art, slide.image)}
             <div class="mint-slide-copy"><small>${e(slide.eyebrow)}</small><h2>${e(slide.title)}</h2><p>${e(slide.description)}</p>
-              <button type="button" class="mint-topic-link" data-go="${slide.go}">${e(slide.cta)} <span aria-hidden="true">↗</span></button>
+              <div class="campus-hero-actions"><button type="button" class="mint-topic-link" data-go="${slide.go}">${e(slide.cta)} <span aria-hidden="true">↗</span></button>${experienceButton(index ? slide.art : 'tour')}</div>
             </div>
           </div>`).join('')}
         </div>
@@ -54,8 +57,8 @@ export function homeHero(){
         </div>
       </section>
       <div class="mint-side">
-        <button type="button" data-go="home/books" data-art="books"><span class="mint-side-photo" aria-hidden="true"><img class="mint-cover" src="${e(coverURLs.books)}" alt=""></span><small>01 / 二手好物</small><strong>二手教材</strong><span>下一本，就在校园 →</span></button>
-        <button type="button" data-go="home/free" data-art="swap"><span class="mint-side-photo" aria-hidden="true"><img class="mint-cover" src="${e(coverURLs.swap)}" alt=""></span><small>02 / 分享</small><strong>免费好物</strong><span>把闲置传给同学 →</span></button>
+        <button type="button" data-go="home/books" data-art="books" data-campus-side-ad>${campusSideArt(coverURLs.books)}<strong>二手教材</strong><span>下一本，就在校园 →</span></button>
+        <button type="button" data-go="home/free" data-art="swap" data-campus-side-ad>${campusSideArt(coverURLs.swap)}<strong>免费好物</strong><span>把闲置传给同学 →</span></button>
       </div>
     </div>
   </section>`;
@@ -65,6 +68,8 @@ export function homeHero(){
 export function mountHomeHero(root){
   const carousel = root.querySelector('[data-mint-carousel]');
   if (!carousel) return;
+  bindCampusExperiences(carousel);
+  mountCampusAds(root);
   const slides = [...carousel.querySelectorAll('.mint-slide')];
   const pages = [...carousel.querySelectorAll('[data-slide-index]')];
   const status = carousel.querySelector('[data-slide-status]');
