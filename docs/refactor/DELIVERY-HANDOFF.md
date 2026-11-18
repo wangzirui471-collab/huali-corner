@@ -1,6 +1,8 @@
 # AI 分支补充交付（2026-10-23）
 
-> 最新交付：Vue 3 + Vite / Vue Router / Pinia 已按用户要求完成[本地/GitHub/正式站三端同步](../THREE-END-SYNC-2026-11-12.md)。保留十一月当前界面与原197后端/AI模块，正式为e520efa1，不能用十月候选覆盖。框架细节见[验证记录](../VUE3-FRAMEWORK-VERIFICATION-2026-11-12.md)。
+> 2026-11-18 已完成[首页立体广告网页正式发布](../CAMPUS-ADS-WEB-RELEASE-2026-11-18.md)，正式 Worker 版本为 `2239eb37`，源码在 GitHub 独立发布分支。
+
+> Vue 3 + Vite / Vue Router / Pinia 于 2026-11-12 完成[本地/GitHub/正式站三端同步](../THREE-END-SYNC-2026-11-12.md)。当时的正式版本为 `e520efa1`。框架细节见[验证记录](../VUE3-FRAMEWORK-VERIFICATION-2026-11-12.md)。
 
 > 最新当前网页保存与修复见 [2026-11-12上下文](../CONTEXT-2026-11-12.md) 和 [验证记录](../WEB-REPAIR-VERIFICATION-2026-11-12.md)。当前使用main的11月页面，不能按下文10月分支或Vue评审稿覆盖。
 
