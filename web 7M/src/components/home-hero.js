@@ -57,7 +57,6 @@ export function homeHero(){
         </div>
         <div class="mint-carousel-controls" role="group" aria-label="切换校园专题">
           <button type="button" class="mint-carousel-arrow" data-slide-step="-1" aria-label="上一张"><span aria-hidden="true">‹</span></button>
-          <div class="mint-carousel-pages">${heroSlides.map((slide, index) => `<button type="button" data-slide-index="${index}" aria-label="第 ${index + 1} 张：${e(slide.tab)}"${index ? '' : ' aria-current="true"'}>${e(slide.tab)}</button>`).join('')}</div>
           <button type="button" class="mint-carousel-arrow" data-slide-step="1" aria-label="下一张"><span aria-hidden="true">›</span></button>
           <span class="mint-carousel-status" data-slide-status role="status">1 / ${total}</span>
         </div>
@@ -70,39 +69,44 @@ export function homeHero(){
   </section>`;
 }
 
-/** 直接切换当前页面里的专题，离开首页时监听随节点一起释放。 */
+/** 每秒自动切换专题；节点离开文档时监听器与定时器一起释放，不留后台轮询。 */
 export function mountHomeHero(root){
   const carousel = root.querySelector('[data-mint-carousel]');
   if (!carousel) return;
   bindCampusExperiences(carousel);
   mountCampusAds(root);
   const slides = [...carousel.querySelectorAll('.mint-slide')];
-  const pages = [...carousel.querySelectorAll('[data-slide-index]')];
   const status = carousel.querySelector('[data-slide-status]');
   let current = 0;
 
-  /** 显示目标专题，同步控制按钮和进度提示。 */
+  /** 显示目标专题，同步进度提示。 */
   function show(index){
     const next = (index + slides.length) % slides.length;
     if (current === next) return;
     slides[next].hidden = false;
     slides[current].hidden = true;
-    pages[current].removeAttribute('aria-current');
-    pages[next].setAttribute('aria-current', 'true');
     current = next;
     status.textContent = `${current + 1} / ${slides.length}`;
   }
 
-  // 鼠标和触屏共用原生按钮，键盘在控制区也可用左右方向键。
+  // 鼠标和触屏共用原生箭头，键盘在控制区也可用左右方向键。
   carousel.addEventListener('click', event => {
     const step = event.target.closest('[data-slide-step]');
-    const page = event.target.closest('[data-slide-index]');
     if (step) show(current + Number(step.dataset.slideStep));
-    if (page) show(Number(page.dataset.slideIndex));
   });
   carousel.querySelector('.mint-carousel-controls').addEventListener('keydown', event => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
     event.preventDefault();
     show(current + (event.key === 'ArrowLeft' ? -1 : 1));
   });
+
+  // 每秒自动切到下一张。节点被换页移除后 isConnected 变 false，定时器自行停止。
+  const timer = setInterval(() => {
+    if (!carousel.isConnected){ clearInterval(timer); return; }
+    show(current + 1);
+  }, 1000);
+  // 尊重系统的「减少动态效果」偏好：不自动轮播，仍可用箭头手动切换。
+  if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches){
+    clearInterval(timer);
+  }
 }

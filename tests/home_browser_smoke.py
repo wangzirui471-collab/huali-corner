@@ -205,7 +205,7 @@ def run():
                 staff.goto(base+'/#staff/products',wait_until='networkidle')
                 expect(staff.locator('[data-action="moderate-product"]').first).to_be_attached()
                 # Progressive enhancement: manual loading works without an observer.
-                fallback=browser.new_page(viewport={'width':1440,'height':1100})
+                fallback=browser.new_page(viewport={'width':1440,'height':1100}, reduced_motion='reduce')
                 fallback.add_init_script('delete window.IntersectionObserver;')
                 fallback.clock.install()
                 fallback.goto(base+'/#home',wait_until='networkidle')
@@ -215,14 +215,17 @@ def run():
                 expect(active).to_have_attribute('data-go','publish')
                 fallback.clock.fast_forward(8100)
                 expect(active).to_have_attribute('data-go','publish')
-                # 手动箭头和指示器都切换专题，减少动态效果时仍能手动切换。
-                carousel.get_by_role('button', name='下一张').click()
+                # 文字标签已移除：箭头手动切换专题，减少动态效果时仍能手动切换。
+                next_button = carousel.get_by_role('button', name='下一张')
+                next_button.click()
                 expect(active).to_have_attribute('data-go','home/books')
                 fallback.emulate_media(reduced_motion='reduce')
-                carousel.locator('[data-slide-index]').nth(3).click()
+                for _ in range(2):
+                    next_button.click()
                 expect(active).to_have_attribute('data-go','forum/wants')
                 expect(fallback.get_by_role('button', name='播放轮播', exact=True)).to_have_count(0)
-                carousel.locator('[data-slide-index]').nth(1).click()
+                for _ in range(2):
+                    next_button.click()
                 expect(active).to_have_attribute('data-go','home/books')
                 active.click()
                 expect(fallback).to_have_url(base+'/#home/books')

@@ -32,9 +32,17 @@ async function serve(dir) {
   return {server,origin:`http://127.0.0.1:${server.address().port}`};
 }
 
-/** 从可见的轮播入口打开真实专题弹窗。 */
+/** 从可见的轮播入口打开真实专题弹窗（文字标签已移除，改用箭头切到目标页）。 */
 async function openTopic(page, index, topic) {
-  await page.locator(`[data-slide-index="${index}"]`).click();
+  const carousel = page.locator('.mint-carousel');
+  const next = carousel.getByRole('button', {name:'下一张'});
+  // reducedMotion 下不自动轮播，箭头是唯一切换方式；最多转一圈，防死循环。
+  for (let guard = 0; guard < 5; guard++) {
+    const current = await carousel.locator('.mint-slide').evaluateAll(
+      nodes => nodes.findIndex(node => !node.hasAttribute('hidden')));
+    if (current === index) break;
+    await next.click();
+  }
   await page.locator(`[data-campus-open="${topic}"]`).click();
   return page.locator('dialog.campus-dialog[open]');
 }
