@@ -101,12 +101,24 @@ export function mountHomeHero(root){
   });
 
   // 每秒自动切到下一张。节点被换页移除后 isConnected 变 false，定时器自行停止。
-  const timer = setInterval(() => {
-    if (!carousel.isConnected){ clearInterval(timer); return; }
-    show(current + 1);
-  }, 1000);
-  // 尊重系统的「减少动态效果」偏好：不自动轮播，仍可用箭头手动切换。
-  if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches){
+  let timer = 0;
+  const reduce = typeof matchMedia === 'function'
+    ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+  function play(){
+    if (timer || (reduce && reduce.matches)) return;
+    timer = setInterval(() => {
+      if (!carousel.isConnected){ clearInterval(timer); timer = 0; return; }
+      show(current + 1);
+    }, 1000);
+  }
+  function stop(){
+    if (!timer) return;
     clearInterval(timer);
+    timer = 0;
+  }
+  play();
+  // 尊重「减少动态效果」偏好：开启即停、关闭即恢复；箭头手动切换始终可用。
+  if (reduce && typeof reduce.addEventListener === 'function'){
+    reduce.addEventListener('change', () => { reduce.matches ? stop() : play(); });
   }
 }

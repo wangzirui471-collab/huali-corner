@@ -31,6 +31,9 @@ test('mint carousel drops text tabs but keeps arrows, progress and autoplay', ()
   assert.match(src, /show\(current \+ 1\)/);
   assert.match(src, /\},\s*1000\s*\)/);
   assert.match(src, /!carousel\.isConnected.*clearInterval\(timer\)/s);
+  // 尊重减少动态效果偏好：监听变化并动态启停。
+  assert.match(src, /prefers-reduced-motion: reduce/);
+  assert.match(src, /addEventListener\('change'/);
 });
 
 test('homes no longer ship the 小转推荐 rail', () => {
