@@ -1,40 +1,28 @@
 /** 校园专题交互只展示样例，通过原导航进入商品和求购业务。 */
-import {mapBlocks, referenceMaps, referencePhotos} from './campus-reference.js';
+import {campusMapSize, campusMapPoints, referenceMaps, referencePhotos} from './campus-reference.js';
+import {chapterSource, chapters} from './calculus-preview.js';
 export const tradePhoto = new URL('../../assets/home-mint/campus-handover.webp', import.meta.url).href;
 
 const topics = {
-  tour: {label: '3D 校园导览', title: '从空中看华立', note: '广州增城校区', route: 'home/living', cta: '逛宿舍生活'},
-  books: {label: '翻开高数', title: '翻一页，高数继续读', note: '原创高数试读 · 3 页', route: 'home/books', cta: '逛二手教材'},
+  tour: {label: '校园地图导览', title: '沿着原图逛华立', note: '广州增城校区', route: 'home/living', cta: '逛宿舍生活'},
+  books: {label: '翻开高数', title: '翻一页，高数继续读', note: '同济第八版上册目录 · 原创试读', route: 'home/books', cta: '逛二手教材'},
   dorm: {label: '探索宿舍地图', title: '宿舍与教学楼', note: '广州增城校区', route: 'home/living', cta: '逛宿舍生活'},
   swap: {label: '看面交演示', title: '一本书，交到下一位同学手里', note: '校园面交情景演示', route: 'forum/wants', cta: '浏览校园求购'},
 };
-
-const pages = [
-  {unit: '01　极限', title: '越来越接近', formula: 'lim (x² − 1) / (x − 1) = 2', body: '当 x 趋近于 1 时，先把分子拆成 (x − 1)(x + 1)，再约去公共因子。', foot: '提示：x 不等于 1，约分后的式子是 x + 1。'},
-  {unit: '02　导数', title: '变化有多快', formula: 'f′(x) = 2x', body: '设 f(x) = x²。把 f(x + h) − f(x) 除以 h，得到 2x + h。让 h 趋近于 0，就得到导数。', foot: '练一练：x = 2 时，切线的斜率是多少？'},
-  {unit: '03　积分', title: '把小块加起来', formula: '∫₀¹ 2x dx = 1', body: '先找到 2x 的一个原函数 x²，再计算两端的差 1² − 0²。它也是直线下方三角形的面积。', foot: '复习：同一条曲线，用导数看斜率，用积分算面积。'},
-];
-
-const dorms = [
-  {name: 'B 区', buildings: 'B1–B4 栋', shape: [6, 33, 12, 16], color: 'b'},
-  {name: 'C 区', buildings: 'C1–C8 栋', shape: [22, 61, 15, 15], color: 'c'},
-  {name: 'D 区', buildings: 'D1–D6 栋', shape: [78, 67, 17, 15], color: 'd'},
-  {name: '教学区', buildings: '可选择建筑查看实景', shape: [58, 57, 17, 16], color: 'study'},
-];
 
 const campusGallery = 'https://www.hualixy.edu.cn/zsb/xxgk/xyfg__xxgk/xyfg/content_11';
 const campusTour = 'https://www.hualixy.edu.cn/yyxy';
 const views = [
   {title:'校园航拍', photo:new URL('../../assets/home-mint/campus-official/aerial.jpg', import.meta.url).href, source:'https://www.hualixy.edu.cn/xxgk/xyfg/content_14'},
-  {title:'图书馆', landmark:6, form:'terrace', photo:new URL('../../assets/home-mint/campus-official/library.jpg', import.meta.url).href},
-  {title:'二教', landmark:7, form:'classroom', photo:new URL('../../assets/home-mint/campus-official/second.jpg', import.meta.url).href},
-  {title:'五教', landmark:8, form:'classroom', photo:new URL('../../assets/home-mint/campus-official/fifth.jpg', import.meta.url).href},
+  {title:'图书馆', photo:new URL('../../assets/home-mint/campus-official/library.jpg', import.meta.url).href},
+  {title:'二教', photo:new URL('../../assets/home-mint/campus-official/second.jpg', import.meta.url).href},
+  {title:'五教', photo:new URL('../../assets/home-mint/campus-official/fifth.jpg', import.meta.url).href},
   ...referencePhotos,
-  {title:'四教', landmark:0, form:'classroom', photo:new URL('../../assets/home-mint/campus-official/fourth.jpg', import.meta.url).href},
-  {title:'六教', landmark:3, form:'classroom', photo:new URL('../../assets/home-mint/campus-official/sixth.jpg', import.meta.url).href},
-  {title:'八号楼与十号楼', landmark:9, form:'towers', photo:new URL('../../assets/home-mint/campus-official/eighth-tenth.jpg', import.meta.url).href},
-  {title:'文体楼', landmark:4, form:'hall', photo:new URL('../../assets/home-mint/campus-official/sports-hall.jpg', import.meta.url).href},
-  {title:'综合楼', landmark:2, form:'terrace', photo:new URL('../../assets/home-mint/campus-official/main-building.jpg', import.meta.url).href},
+  {title:'四教', photo:new URL('../../assets/home-mint/campus-official/fourth.jpg', import.meta.url).href},
+  {title:'六教', photo:new URL('../../assets/home-mint/campus-official/sixth.jpg', import.meta.url).href},
+  {title:'八号楼与十号楼', photo:new URL('../../assets/home-mint/campus-official/eighth-tenth.jpg', import.meta.url).href},
+  {title:'文体楼', photo:new URL('../../assets/home-mint/campus-official/sports-hall.jpg', import.meta.url).href},
+  {title:'综合楼', photo:new URL('../../assets/home-mint/campus-official/main-building.jpg', import.meta.url).href},
 ];
 const galleryGroups = [['official','官网图集'],['learning','学习空间'],['buildings','校园建筑'],['scenery','校园风景'],['life','生活设施']];
 
@@ -49,17 +37,13 @@ export function experienceButton(topic, className = 'campus-experience-button') 
   return `<button type="button" class="${className}" data-campus-open="${topic}" aria-haspopup="dialog">${topics[topic].label} <span aria-hidden="true">↗</span></button>`;
 }
 
-/** 立体校园示意用 CSS 三维面搭建，楼区点击和下方按钮共用状态。 */
+/** 将原图与同坐标热点放在同一个可缩放、可倾斜的平面。 */
 function campusModel() {
-  return `<div class="campus-model" data-campus-model><div class="campus-model-plane">
-    <span class="campus-model-path"></span><span class="campus-model-path campus-model-avenue"></span><span class="campus-model-lawn"></span><span class="campus-model-track"></span><span class="campus-model-trees"></span>
-    ${mapBlocks.map((block,index) => {
-      const building = views.find(view => view.landmark === index);
-      return `<span class="campus-model-building${building ? ' campus-form-'+building.form : ''}" data-landmark="${index}" style="--x:${block.x}%;--y:${block.y}%;--w:${block.w}%;--h:${block.h}%" aria-hidden="true"></span>`;
-    }).join('')}
-    ${dorms.map(({name,color,shape:[x,y,w,h]}, index) => {
-      return `<button type="button" data-campus-dorm="${index}" aria-label="选择${name}" class="campus-block campus-block-${color}" style="--x:${x}%;--y:${y}%;--w:${w}%;--h:${h}%"><i></i><b>${name}</b></button>`;
-    }).join('')}</div></div>`;
+  const [width, height] = campusMapSize;
+  return `<div class="campus-model" data-campus-model role="region" aria-label="可滚动的校园地图" tabindex="0"><div class="campus-model-plane" data-map-plane>
+    <img src="${referenceMaps[0].photo}" width="${width}" height="${height}" alt="广州华立学院广州校区校园平面图，含宿舍、华立湖、教学区和出入口">
+    ${campusMapPoints.map(({name,x,y},index) => `<button type="button" class="campus-pin" data-campus-point="${index}" style="--x:${x / width * 100}%;--y:${y / height * 100}%" aria-label="地图标记：${name}"><span aria-hidden="true">${index + 1}</span></button>`).join('')}
+    </div></div>`;
 }
 
 /** 求购页面与首页共享同一个面交情景。 */
@@ -67,23 +51,21 @@ export function wantExperienceBanner() {
   return `<section class="campus-want-banner" aria-label="校园面交情景" style="--trade-photo:url('${tradePhoto}')"><div><h2>同校面交，先看实物</h2><p>从约地点到验货，看看两位同学怎么交接。</p>${experienceButton('swap')}</div></section>`;
 }
 
-/** 试读页使用可读正文和双面翻页，不引用实际教材扫描页。 */
+/** 试读保留纸页交互，并提供可直接跳转的章节目录。 */
 function bookContent() {
-  return `<div class="campus-book" data-campus-book aria-live="polite"></div><div class="campus-controls"><button type="button" data-book-step="-1">上一页</button><output data-book-position></output><button type="button" data-book-step="1">翻到下一页</button></div>`;
+  return `<div class="campus-book-meta"><label for="campus-book-chapter">试读目录</label><select id="campus-book-chapter" data-book-chapter>${chapters.map(({title},index) => `<option value="${index}">${index + 1}. ${title}</option>`).join('')}</select><a class="campus-source" href="${chapterSource}" target="_blank" rel="noopener noreferrer">出版社目录 ↗</a></div>
+    <div class="campus-book" data-campus-book></div><div class="campus-controls"><button type="button" data-book-step="-1">上一页</button><output data-book-position aria-live="polite"></output><button type="button" data-book-step="1">翻到下一页</button></div>
+    <p class="campus-book-source">参考：同济大学数学科学学院编《高等数学》第八版上册（ISBN 978-7-04-058981-8）。讲解、例题及自测为网站原创试读。</p>`;
 }
 
-/** 宿舍选择与旋转均提供按钮，拖动为额外控制。 */
+/** 地图提供可点的编号和对应地点，原图与实景仍可独立查看。 */
 function dormContent() {
-  return `<div class="campus-view-switch" role="group" aria-label="校园展示方式"><button type="button" data-campus-mode="map">立体示意</button><button type="button" data-campus-mode="photos">校园实景</button><button type="button" data-campus-mode="reference">参考地图</button></div>
+  return `<div class="campus-view-switch" role="group" aria-label="校园展示方式"><button type="button" data-campus-mode="map">校园地图</button><button type="button" data-campus-mode="photos">校园实景</button><button type="button" data-campus-mode="reference">参考原图</button></div>
   <div data-campus-view="map">${campusModel()}
-    <div class="campus-controls campus-map-controls" aria-label="操作校园地图"><button type="button" data-map-turn="-25" aria-label="向左旋转">↶</button><button type="button" data-map-turn="25" aria-label="向右旋转">↷</button><button type="button" data-map-zoom="-.15" aria-label="缩小地图">−</button><button type="button" data-map-zoom=".15" aria-label="放大地图">＋</button><button type="button" data-map-reset>复位</button></div>
-    <div class="campus-controls campus-dorm-choices" aria-label="选择校园分区">${dorms.map(({name}, index) => `<button type="button" data-campus-dorm="${index}">${name}</button>`).join('')}</div>
-    <div class="campus-map-summary"><p class="campus-map-selection" data-map-selection aria-live="polite"></p></div>
-    <div class="campus-landmark-select" data-campus-landmark-tools hidden>
-      <label>建筑 <select data-campus-landmark>${views.map((view,index)=>view.landmark !== undefined ? `<option value="${index}"${index===2?' selected':''}>${view.title}</option>` : '').join('')}</select></label>
-      <button class="campus-source" type="button" data-campus-teaching-photo>查看实景 ↗</button>
-    </div>
-    <p class="campus-map-note">依据参考图绘制湖、道路和楼群。分区位置仅供示意，请以学校导览为准。</p>
+    <div class="campus-controls campus-map-controls" aria-label="操作校园地图"><button type="button" data-map-tilt aria-pressed="false">立体视角</button><button type="button" data-map-zoom="-.25" aria-label="缩小地图">−</button><button type="button" data-map-zoom=".25" aria-label="放大地图">＋</button><button type="button" data-map-reset>复位</button></div>
+    <div class="campus-map-summary"><p class="campus-map-selection" data-map-selection aria-live="polite"></p><button class="campus-source" type="button" data-campus-teaching-photo hidden>查看实景 ↗</button></div>
+    <div class="campus-controls campus-dorm-choices" aria-label="选择地点">${campusMapPoints.map(({label},index) => `<button type="button" data-campus-list="${index}"><span aria-hidden="true">${index + 1} · </span>${label}</button>`).join('')}</div>
+    <p class="campus-map-note">点选编号或地点定位；放大后可滑动查看。底图为校园手绘参考图，现场路线以学校指引为准。</p>
   </div>
   <div data-campus-view="photos" hidden>
     <div class="campus-photo-groups" role="group" aria-label="选择照片分类">${galleryGroups.map(([id,label])=>`<button type="button" data-campus-gallery="${id}">${label}</button>`).join('')}</div>
@@ -104,15 +86,20 @@ function bindBook(dialog) {
   const book = dialog.querySelector('[data-campus-book]');
   const position = dialog.querySelector('[data-book-position]');
   const controls = [...dialog.querySelectorAll('[data-book-step]')];
+  const picker = dialog.querySelector('[data-book-chapter]');
   let current = 0;
-  /** 按页号绘制正文，公式提示 x 的趋近方向。 */
-  function pageMarkup(index) {
-    const page = pages[index];
-    return `<div class="campus-book-paper"><small>${page.unit}</small><h3>${page.title}</h3><p class="campus-formula">${index === 0 ? 'x → 1 · ' : ''}${page.formula}</p><p>${page.body}</p><small>${page.foot}</small></div>`;
+  /** 按章构建公式、例题推导以及可独立展开的答案。 */
+  function pageMarkup(index, active = true) {
+    const chapter = chapters[index];
+    return `<article class="campus-book-paper"><small>上册 · 第 ${index + 1} 章</small><h3>${chapter.title}</h3><p>${chapter.intro}</p>
+      <ul class="campus-book-formulas" aria-label="本章公式">${chapter.formulas.map(formula => `<li>${formula}</li>`).join('')}</ul>
+      <section class="campus-book-example"><h4>例题 · ${chapter.example}</h4><ol>${chapter.steps.map(step => `<li>${step}</li>`).join('')}</ol></section>
+      <p class="campus-book-exercise"><strong>自测</strong> ${chapter.exercise}</p>
+      ${active ? `<details><summary>展开答案</summary><p>${chapter.answer}</p></details>` : ''}</article>`;
   }
   /** 背景页先更新，旧纸叶绕书脊翻过，动画结束后移除。 */
   function show(index, turn = false) {
-    if (index < 0 || index >= pages.length) return;
+    if (index < 0 || index >= chapters.length) return;
     const oldPage = current;
     current = index;
     book.innerHTML = pageMarkup(index);
@@ -120,32 +107,35 @@ function bindBook(dialog) {
       const leaf = document.createElement('div');
       leaf.className = 'campus-leaf';
       leaf.setAttribute('aria-hidden', 'true');
-      leaf.innerHTML = pageMarkup(oldPage);
+      leaf.innerHTML = pageMarkup(oldPage, false);
       book.append(leaf);
       const direction = index > oldPage ? 1 : -1;
       leaf.animate([{transform:'rotateY(0deg)'},{transform:`rotateY(${-178 * direction}deg)`}], {duration:550, easing:'cubic-bezier(.34,.06,.22,1)'}).finished.then(() => leaf.remove(), () => leaf.remove());
     }
-    position.textContent = `${index + 1} / ${pages.length}`;
+    picker.value = String(index);
+    position.textContent = `${index + 1} / ${chapters.length}`;
     controls[0].disabled = index === 0;
-    controls[1].disabled = index === pages.length - 1;
+    controls[1].disabled = index === chapters.length - 1;
   }
+  picker.addEventListener('change', () => show(Number(picker.value), true));
   controls.forEach(button => button.addEventListener('click', () => show(current + Number(button.dataset.bookStep), true)));
   dialog.addEventListener('keydown', event => {
-    if (!['ArrowLeft','ArrowRight'].includes(event.key)) return;
+    if (event.target === picker || !['ArrowLeft','ArrowRight'].includes(event.key)) return;
     event.preventDefault();
     show(current + (event.key === 'ArrowRight' ? 1 : -1), true);
   });
   show(0);
 }
 
-/** 转动俯瞰视角，保留地图和可访问区域选择的一致性。 */
-function bindDorm(dialog, initialMode = 'map') {
+/** 地图、地点列表和实景照片共用原图锚点。 */
+function bindDorm(dialog) {
   const map = dialog.querySelector('[data-campus-model]');
-  const choices = [...dialog.querySelectorAll('[data-campus-dorm]')];
+  const plane = dialog.querySelector('[data-map-plane]');
+  const tilt = dialog.querySelector('[data-map-tilt]');
+  const pins = [...map.querySelectorAll('[data-campus-point]')];
+  const choices = [...dialog.querySelectorAll('[data-campus-list]')];
   const selection = dialog.querySelector('[data-map-selection]');
   const teachingPhoto = dialog.querySelector('[data-campus-teaching-photo]');
-  const landmarkTools = dialog.querySelector('[data-campus-landmark-tools]');
-  const landmark = dialog.querySelector('[data-campus-landmark]');
   const referenceImage = dialog.querySelector('[data-reference-map]');
   const referenceOriginal = dialog.querySelector('[data-reference-original]');
   const referenceButtons = [...dialog.querySelectorAll('[data-reference-index]')];
@@ -155,25 +145,27 @@ function bindDorm(dialog, initialMode = 'map') {
   const photo = dialog.querySelector('[data-campus-photo]');
   const photoOriginal = dialog.querySelector('[data-campus-photo-original]');
   const caption = dialog.querySelector('[data-campus-caption]');
-  let angle = -22;
   let zoom = 1;
   let mode = 'map';
   let photoIndex = 0;
   let group = 'official';
-  let drag = null;
-  /** 用真实三维变换更新地图朝向。 */
-  function rotate(next) { angle = next; map.style.setProperty('--map-turn', `${angle}deg`); }
-  /** 同步模型与平面控制按钮的选中态。 */
-  function select(index) {
-    choices.forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.campusDorm) === index)));
-    selection.textContent = `已选 ${dorms[index].name} · ${dorms[index].buildings}`;
-    landmarkTools.hidden = dorms[index].color !== 'study';
-    highlightLandmark();
+  let selected = -1;
+  /** 放大时把所选锚点移入视野，不滚动弹窗或背景页面。 */
+  function centerSelected() {
+    if (selected < 0 || zoom === 1) return;
+    const pin = pins[selected].getBoundingClientRect();
+    const frame = map.getBoundingClientRect();
+    map.scrollLeft += pin.left + pin.width / 2 - frame.left - map.clientWidth / 2;
+    map.scrollTop += pin.top + pin.height / 2 - frame.top - map.clientHeight / 2;
   }
-  /** 只突出当前选中的建筑体量，位置仍按参考图作示意。 */
-  function highlightLandmark() {
-    const id = views[Number(landmark.value)].landmark;
-    map.querySelectorAll('[data-landmark]').forEach(item=>item.classList.toggle('is-landmark', !landmarkTools.hidden && Number(item.dataset.landmark) === id));
+  /** 两处控件同步选中态，并仅为有实景的地点提供照片入口。 */
+  function select(index, center = true) {
+    selected = index;
+    const point = campusMapPoints[index];
+    [pins, choices].forEach(items => items.forEach((button,i) => button.setAttribute('aria-pressed', String(i === index))));
+    selection.textContent = `${index + 1} · ${point.name}`;
+    teachingPhoto.hidden = !point.photo;
+    if (center) centerSelected();
   }
   /** 参考图保持完整画幅，分别查看手绘地图和带图例的版式。 */
   function showReference(index) {
@@ -208,21 +200,32 @@ function bindDorm(dialog, initialMode = 'map') {
     if (mode === 'photos' && !photo.hasAttribute('src')) showGallery('official');
     if (mode === 'reference' && !referenceImage.hasAttribute('src')) showReference(0);
   }
-  /** 限制缩放范围，保证场景在窄屏里仍容易操作。 */
+  const zoomButtons = [...dialog.querySelectorAll('[data-map-zoom]')];
+  /** 缩放只改变地图滚动区的内容尺寸，原图与标记一起缩放。 */
   function scale(next) {
-    zoom = Math.max(.75, Math.min(1.3, next));
-    map.style.setProperty('--map-zoom', String(zoom));
+    zoom = Math.max(1, Math.min(2.5, next));
+    plane.style.width = `${zoom * 100}%`;
+    zoomButtons[0].disabled = zoom === 1;
+    zoomButtons[1].disabled = zoom === 2.5;
+    if (zoom === 1) map.scrollTo(0, 0);
+    else centerSelected();
+  }
+  /** 倾斜完整底图作为立体展示，平面模式可随时复位。 */
+  function setTilt(enabled) {
+    tilt.setAttribute('aria-pressed', String(enabled));
+    map.classList.toggle('is-tilted', enabled);
+    centerSelected();
   }
   modeButtons.forEach(button => button.addEventListener('click', () => showMode(button.dataset.campusMode)));
   groupButtons.forEach(button => button.addEventListener('click', () => showGallery(button.dataset.campusGallery)));
   referenceButtons.forEach((button,index) => button.addEventListener('click', () => showReference(index)));
-  landmark.addEventListener('change', highlightLandmark);
   teachingPhoto.addEventListener('click', () => {
+    const index = views.findIndex(view => view.title === campusMapPoints[selected]?.photo);
+    if (index < 0) return;
     showMode('photos');
-    if (group !== 'official') showGallery('official');
-    const selected = Number(landmark.value);
-    showPhoto(selected);
-    photoButtons[selected].focus({preventScroll:true});
+    showGallery(views[index].group || 'official');
+    showPhoto(index);
+    photoButtons[index].focus({preventScroll:true});
   });
   photoButtons.forEach((button,i) => button.addEventListener('click', () => showPhoto(i)));
   dialog.addEventListener('keydown', event => {
@@ -232,21 +235,14 @@ function bindDorm(dialog, initialMode = 'map') {
     const step = event.key === 'ArrowRight' ? 1 : -1;
     showPhoto(indexes[(indexes.indexOf(photoIndex) + step + indexes.length) % indexes.length]);
   });
-  choices.forEach(button => button.addEventListener('click', () => select(Number(button.dataset.campusDorm))));
-  dialog.querySelectorAll('[data-map-turn]').forEach(button => button.addEventListener('click', () => rotate(angle + Number(button.dataset.mapTurn))));
-  dialog.querySelectorAll('[data-map-zoom]').forEach(button => button.addEventListener('click', () => scale(zoom + Number(button.dataset.mapZoom))));
-  dialog.querySelector('[data-map-reset]').addEventListener('click', () => { rotate(-22); scale(1); });
-  map.addEventListener('pointerdown', event => {
-    if (event.button !== 0 || event.target.closest('button')) return;
-    drag = {id:event.pointerId, x:event.clientX, angle};
-    map.setPointerCapture(event.pointerId);
-  });
-  map.addEventListener('pointermove', event => {
-    if (drag?.id === event.pointerId) rotate(drag.angle + (event.clientX - drag.x) * .55);
-  });
-  map.addEventListener('lostpointercapture', () => { drag = null; });
-  select(0);
-  showMode(initialMode);
+  pins.forEach((button,index) => button.addEventListener('click', () => select(index, false)));
+  choices.forEach((button,index) => button.addEventListener('click', () => select(index)));
+  zoomButtons.forEach(button => button.addEventListener('click', () => scale(zoom + Number(button.dataset.mapZoom))));
+  tilt.addEventListener('click', () => setTilt(tilt.getAttribute('aria-pressed') !== 'true'));
+  dialog.querySelector('[data-map-reset]').addEventListener('click', () => { scale(1); setTilt(false); });
+  scale(1);
+  select(0, false);
+  showMode('map');
 }
 
 /** 只有用户操作才播放镜头，离开、关闭或手动选步都会停止计时。 */
@@ -308,7 +304,7 @@ export function bindCampusExperiences(root) {
     const content = mapTopic ? dormContent() : key === 'books' ? bookContent() : tradeContent();
     dialog.innerHTML = `<header><div><small>${topic.note}</small><h2>${topic.title}</h2></div><button class="campus-close" type="button" aria-label="关闭专题" autofocus>×</button></header>${content}<footer>${location.hash.replace(/^#\/?/,'') === topic.route ? '' : `<button type="button" data-go="${topic.route}" class="campus-topic-cta">${topic.cta} ↗</button>`}</footer>`;
     root.append(dialog);
-    const dispose = mapTopic ? bindDorm(dialog, key === 'tour' ? 'photos' : 'map') : key === 'books' ? bindBook(dialog) : bindTrade(dialog);
+    const dispose = mapTopic ? bindDorm(dialog) : key === 'books' ? bindBook(dialog) : bindTrade(dialog);
     const observer = new MutationObserver(() => {if (!dialog.isConnected) cleanup();});
     /** 释放定时和路由观察，正常关闭时将焦点交还原按钮。 */
     function cleanup() {

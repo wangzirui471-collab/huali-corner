@@ -35,10 +35,22 @@ export const referencePhotos = [
   {group:'life',title:'卫浴参考',photo:new URL('../../assets/home-mint/campus-hd/washroom.jpg', import.meta.url).href},
 ];
 
-// 按参考图能辨认的湖、南北通道和红砖街区重画地形。各区内的楼栋几何仅用于表现体量。
-export const mapBlocks = [
-  {x:19,y:26,w:8,h:16},{x:27,y:46,w:10,h:10},{x:17,y:59,w:9,h:16},
-  {x:17,y:78,w:20,h:8},{x:38,y:54,w:9,h:18},{x:44,y:78,w:9,h:8},
-  {x:61,y:19,w:9,h:14},{x:66,y:41,w:10,h:9},{x:79,y:42,w:9,h:14},
-  {x:89,y:54,w:6,h:12},{x:49,y:30,w:5,h:11},{x:8,y:63,w:5,h:15},
+/** 手绘原图的像素锚点，均按同一张 1080 × 540 图片核对。 */
+export const campusMapSize = [1080, 540];
+export const campusMapPoints = [
+  {label:'A 区', name:'A1–A4 栋', x:109, y:194},
+  {label:'B1–B4', name:'B1–B4 栋', x:652, y:112},
+  {label:'B9', name:'B9 栋', x:550, y:52},
+  {label:'C 区', name:'C1–C8 栋', x:916, y:224},
+  {label:'D1', name:'D1 栋', x:872, y:74},
+  {label:'D2 / D5 / D6', name:'D2、D5、D6 栋', x:222, y:181},
+  {label:'G 区', name:'G1–G4 栋', x:117, y:403},
+  {label:'L1–L9', name:'L1–L9 栋', x:404, y:299},
+  {label:'L10–L13', name:'L10–L13 栋', x:172, y:258},
+  {label:'L15–L18', name:'L15–L18 栋', x:535, y:445},
+  {label:'华立湖', name:'华立湖', x:412, y:154, photo:'湖与球场航拍'},
+  {label:'图书馆', name:'本科图书馆', x:755, y:275, photo:'图书馆正面'},
+  {label:'五教', name:'第五教学楼', x:623, y:353, photo:'第五教学楼入口'},
+  {label:'文体楼', name:'文体楼', x:627, y:272, photo:'文体楼侧面'},
+  {label:'校门', name:'本科校门', x:751, y:491, photo:'校园正门'},
 ];

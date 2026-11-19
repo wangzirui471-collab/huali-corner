@@ -1,0 +1,68 @@
+/** 依据出版社公开目录安排章节；所有讲解、例题与自测均为原创。 */
+export const chapterSource = 'https://xuanshu.hep.com.cn/front/book/findBookDetails?bookId=62cdab46938b7cc2960eedb1';
+
+export const chapters = [
+  {
+    title:'函数与极限',
+    intro:'极限描述的是靠近某点时的趋势。连续则还要求该点有定义，而且函数值等于极限。',
+    formulas:['lim<sub>x→0</sub> (sin x)/x = 1（弧度）','lim<sub>x→0</sub> (1 − cos x)/x² = 1/2','f 在 a 连续 ⇔ lim<sub>x→a</sub> f(x) = f(a)'],
+    example:'求 lim<sub>x→0</sub> (1 − cos 3x)/x²',
+    steps:['用 1 − cos 3x = 2 sin²(3x/2) 把分子改成平方项。','整理为 (9/2) · [sin(3x/2)/(3x/2)]²。','括号内趋于 1，所以极限是 9/2。'],
+    exercise:'求 lim<sub>x→0</sub> (sin 5x)/x。',
+    answer:'5。把式子写成 5 · sin(5x)/(5x)，第二项趋于 1。',
+  },
+  {
+    title:'导数与微分',
+    intro:'导数给出切线斜率；微分给出函数增量关于自变量增量的线性部分。',
+    formulas:['f′(x) = lim<sub>h→0</sub> [f(x+h) − f(x)]/h','[f(g(x))]′ = f′(g(x)) · g′(x)','dy = f′(x) dx'],
+    example:'求 y = √(1 + x²) 在 x = 1 的切线',
+    steps:['令 u = 1 + x²，外层 √u 的导数为 1/(2√u)。','链式法则给出 y′ = x/√(1 + x²)，代入 x = 1 得斜率 1/√2。','切点为 (1, √2)，所以切线是 y − √2 = (x − 1)/√2。'],
+    exercise:'求 y = cos(x²) 的微分。',
+    answer:'dy = −2x sin(x²) dx。外层导数是 −sin u，内层导数是 2x。',
+  },
+  {
+    title:'微分中值定理与导数的应用',
+    intro:'中值定理把区间上的平均变化率和某点导数联系起来。考察导数正负，可判断函数单调性及极值。',
+    formulas:['f′(ξ) = [f(b) − f(a)]/(b − a)，a &lt; ξ &lt; b','f′(x) &gt; 0 ⇒ 在该区间严格递增','f′ 从正变负 ⇒ 局部极大；从负变正 ⇒ 局部极小'],
+    example:'判断 f(x) = x³ − 3x 的增减区间和极值',
+    steps:['f′(x) = 3(x − 1)(x + 1)，驻点为 −1 与 1。','导数从左到右的符号为正、负、正；所以外侧两段递增，中间递减。','x = −1 处取局部极大值 2；x = 1 处取局部极小值 −2。'],
+    exercise:'对 f(x) = x² 在 [1, 3] 应用拉格朗日中值定理，求 ξ。',
+    answer:'ξ = 2。该函数在闭区间连续、开区间可导；平均变化率为 (9 − 1)/(3 − 1) = 4，因此 2ξ = 4。',
+  },
+  {
+    title:'不定积分',
+    intro:'不定积分求的是一族原函数。看到复合项及其导数可尝试换元；看到多项式乘指数也可尝试分部积分。',
+    formulas:['F′ = f ⇒ ∫ f(x) dx = F(x) + C','∫ f(g(x))g′(x) dx = F(g(x)) + C','∫ u dv = uv − ∫ v du'],
+    example:'计算 ∫ x e<sup>2x</sup> dx',
+    steps:['取 u = x，dv = e<sup>2x</sup> dx，则 du = dx，v = e<sup>2x</sup>/2。','分部积分得到 x e<sup>2x</sup>/2 − (1/2)∫ e<sup>2x</sup> dx。','整理为 (2x − 1)e<sup>2x</sup>/4 + C；求导可以验算。'],
+    exercise:'计算 ∫ 2x cos(x²) dx。',
+    answer:'sin(x²) + C。令 u = x²，就有 du = 2x dx。',
+  },
+  {
+    title:'定积分',
+    intro:'定积分是区间上有符号的累积量。被积函数连续时，可以用原函数在两个端点的差计算。',
+    formulas:['∫<sub>a</sub><sup>b</sup> f(x) dx = F(b) − F(a)，其中 F′ = f','d/dx [∫<sub>a</sub><sup>x</sup> f(t) dt] = f(x)','∫<sub>−a</sub><sup>a</sup> f(x) dx = 0（f 为奇函数且积分存在）'],
+    example:'计算 ∫<sub>0</sub><sup>1</sup> 2x/(1 + x²) dx',
+    steps:['令 u = 1 + x²，du = 2x dx。','下限 x = 0 对应 u = 1，上限 x = 1 对应 u = 2。','计算 ∫<sub>1</sub><sup>2</sup> du/u = ln 2。'],
+    exercise:'计算 ∫<sub>−2</sub><sup>2</sup> (x³ + 1) dx。',
+    answer:'4。x³ 的积分由奇对称性抵消，常数 1 的积分等于区间长度。',
+  },
+  {
+    title:'定积分的应用',
+    intro:'先用交点确定区间，再按几何量写出微元：面积取上减下，旋转体圆环取外圆面积减内圆面积。',
+    formulas:['A = ∫<sub>a</sub><sup>b</sup> [f<sub>上</sub>(x) − f<sub>下</sub>(x)] dx','V = π∫<sub>a</sub><sup>b</sup> [R(x)² − r(x)²] dx','L = ∫<sub>a</sub><sup>b</sup> √(1 + [f′(x)]²) dx'],
+    example:'求 y = x 与 y = x² 在 [0, 1] 围成的面积',
+    steps:['解 x = x²，交点横坐标为 0 和 1。','在区间内 x ≥ x²，因此每条竖直窄条的高度是 x − x²。','积分得 [x²/2 − x³/3]<sub>0</sub><sup>1</sup> = 1/6。'],
+    exercise:'将例题中的区域绕 x 轴旋转一周，求体积。',
+    answer:'2π/15。外半径为 x，内半径为 x²，所以体积是 π∫₀¹(x² − x⁴) dx = π(1/3 − 1/5)。',
+  },
+  {
+    title:'微分方程',
+    intro:'微分方程把未知函数和它的导数联系起来。先识别方程形式，再用初值确定常数。',
+    formulas:['y′ = p(x)q(y) ⇒ dy/q(y) = p(x) dx（q(y) ≠ 0）','y′ + P(x)y = Q(x) 的积分因子：μ(x) = e<sup>∫ P(x) dx</sup>','乘以上述积分因子后：(μy)′ = μQ'],
+    example:'解 y′ + 2y = 4，已知 y(0) = 1',
+    steps:['取积分因子 μ(x) = e<sup>2x</sup>，得到 (e<sup>2x</sup>y)′ = 4e<sup>2x</sup>。','积分得 e<sup>2x</sup>y = 2e<sup>2x</sup> + C，所以 y = 2 + Ce<sup>−2x</sup>。','代入初值得 C = −1，解为 y = 2 − e<sup>−2x</sup>。'],
+    exercise:'求 y′ = 3y 且 y(0) = 2 的解。',
+    answer:'y = 2e<sup>3x</sup>。验证：y′ = 6e<sup>3x</sup> = 3y，且 y(0) = 2。',
+  },
+];

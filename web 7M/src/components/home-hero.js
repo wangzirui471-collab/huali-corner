@@ -12,7 +12,13 @@ const coverURLs = {
   swap: new URL('../../assets/home-mint/market-share.webp', import.meta.url).href
 };
 
-// 轮播与快捷卡使用同一组来源，标题用可缩放的页面文字。
+// 快捷卡用用户提供的高清校园照片，轮播主视觉独立保留。
+const sidePhotos = {
+  books: new URL('../../assets/home-mint/campus-hd/reading-room.jpg', import.meta.url).href,
+  free: new URL('../../assets/home-mint/campus-hd/dorm-room.jpg', import.meta.url).href,
+};
+
+// 轮播标题用可缩放的页面文字。
 export const heroSlides = [
   {
     eyebrow:'广州校区 · 校门', title:'好物，从华立出发', description:'把闲置留在校园，交给刚好需要的同学。',
@@ -57,8 +63,8 @@ export function homeHero(){
         </div>
       </section>
       <div class="mint-side">
-        <button type="button" data-go="home/books" data-art="books" data-campus-side-ad>${campusSideArt(coverURLs.books)}<strong>二手教材</strong><span>下一本，就在校园 →</span></button>
-        <button type="button" data-go="home/free" data-art="swap" data-campus-side-ad>${campusSideArt(coverURLs.swap)}<strong>免费好物</strong><span>把闲置传给同学 →</span></button>
+        <button type="button" data-go="home/books" data-art="books" data-campus-side-ad>${campusSideArt(sidePhotos.books)}<strong>二手教材</strong><span>下一本，就在校园 →</span></button>
+        <button type="button" data-go="home/free" data-art="swap" data-campus-side-ad>${campusSideArt(sidePhotos.free)}<strong>免费好物</strong><span>把闲置传给同学 →</span></button>
       </div>
     </div>
   </section>`;
