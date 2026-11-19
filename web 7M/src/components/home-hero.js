@@ -15,7 +15,7 @@ const coverURLs = {
 // 快捷卡用用户提供的高清校园照片，轮播主视觉独立保留。
 const sidePhotos = {
   books: new URL('../../assets/home-mint/campus-hd/reading-room.jpg', import.meta.url).href,
-  free: new URL('../../assets/home-mint/campus-hd/dorm-room.jpg', import.meta.url).href,
+  free: new URL('../../assets/home-mint/campus-hd/shaded-garden.jpg', import.meta.url).href,
 };
 
 // 轮播标题用可缩放的页面文字。

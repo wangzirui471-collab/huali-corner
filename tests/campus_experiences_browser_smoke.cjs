@@ -114,7 +114,7 @@ async function checkBook(dialog) {
 /** 验证两张高清快照、原卡片的路由及页面可返回。 */
 async function checkSideCards(page, width) {
   const side = page.locator('.mint-side');
-  const cards = [['books','reading-room.jpg'],['free','dorm-room.jpg']];
+  const cards = [['books','reading-room.jpg'],['free','shaded-garden.jpg']];
   for (const [channel, file] of cards) {
     const image = side.locator(`[data-go="home/${channel}"] img`);
     await image.evaluate(node => node.decode());
